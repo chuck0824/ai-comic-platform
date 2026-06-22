@@ -1,0 +1,175 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: aicp-backend
+  profiles:
+    active: dev
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: Asia/Shanghai
+    default-property-inclusion: non_null
+
+# MyBatis-Plus (全局)
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: isDeleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# JWT (dev 默认值，prod/mysql 通过环境变量覆盖)
+jwt:
+  secret: ${JWT_SECRET:aicp-jwt-secret-key-2026-very-long-secret-key-for-hs256}
+  access-token-expire: 7200
+  refresh-token-expire: 2592000
+
+---
+# ================================================================
+# DEV Profile：H2 内存数据库，零依赖即可启动后端
+# 启动方式：保持 spring.profiles.active: dev（默认）
+# ================================================================
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:h2:mem:aicp;MODE=MySQL;DB_CLOSE_DELAY=-1
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-h2.sql
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      timeout: 3000ms
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+# dev 环境不连外部 AI/存储，全部走 mock
+new-api:
+  base-url: http://localhost:3000
+  api-key: dev-mock-key
+  timeout: 120000
+
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin123
+  bucket: aicp-assets
+
+logging:
+  level:
+    com.aicp: DEBUG
+
+---
+# ================================================================
+# MYSQL Profile：MySQL 持久化，需要 docker-compose 启动数据库
+# 启动方式：--spring.profiles.active=mysql
+# 先启动 docker compose：cd aicp-backend && docker compose up -d
+# ================================================================
+spring:
+  config:
+    activate:
+      on-profile: mysql
+  datasource:
+    url: jdbc:mysql://localhost:3307/aicp?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai&createDatabaseIfNotExist=true
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME:aicp}
+    password: ${DB_PASSWORD:aicp123}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 3
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema-mysql.sql
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6380}
+      timeout: 3000ms
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+new-api:
+  base-url: ${NEW_API_URL:http://localhost:3000}
+  api-key: ${NEW_API_KEY:}
+  timeout: 120000
+
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9010}
+  access-key: ${MINIO_ACCESS_KEY:minioadmin}
+  secret-key: ${MINIO_SECRET_KEY:minioadmin123}
+  bucket: aicp-assets
+
+logging:
+  level:
+    com.aicp: DEBUG
+
+---
+# ================================================================
+# PROD Profile：生产环境，所有配置通过环境变量注入
+# 启动方式：--spring.profiles.active=prod
+# ================================================================
+spring:
+  config:
+    activate:
+      on-profile: prod
+  datasource:
+    url: jdbc:mysql://${DB_HOST}:3306/aicp?useUnicode=true&characterEncoding=utf8mb4&serverTimezone=Asia/Shanghai
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expire: 7200
+  refresh-token-expire: 2592000
+
+new-api:
+  base-url: ${NEW_API_URL}
+  api-key: ${NEW_API_KEY}
+  timeout: 120000
+
+minio:
+  endpoint: ${MINIO_ENDPOINT}
+  access-key: ${MINIO_ACCESS_KEY}
+  secret-key: ${MINIO_SECRET_KEY}
+  bucket: aicp-assets
+
+logging:
+  level:
+    com.aicp: INFO

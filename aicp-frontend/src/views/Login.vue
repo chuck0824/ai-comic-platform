@@ -1,0 +1,182 @@
+<template>
+  <div class="login-page">
+    <div class="login-card">
+      <div style="text-align:center;margin-bottom:24px">
+        <div style="width:48px;height:48px;border-radius:12px;background:var(--accent);display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px">
+          <el-icon :size="24" color="#fff"><VideoCamera /></el-icon>
+        </div>
+        <h1>AI漫剧中转平台</h1>
+        <p class="sub">从创意到成片，一个画布搞定</p>
+      </div>
+
+      <el-tabs v-model="loginType" class="mb-lg" style="margin-bottom:20px">
+        <el-tab-pane label="短信登录" name="sms" />
+        <el-tab-pane label="密码登录" name="pwd" />
+      </el-tabs>
+
+      <template v-if="loginType === 'sms'">
+        <el-input v-model="phone" placeholder="请输入手机号" size="large" style="margin-bottom:12px" />
+        <el-input v-model="smsCode" placeholder="6位验证码" size="large" style="margin-bottom:12px">
+          <template #append>
+            <el-button size="small" :disabled="countdown > 0" @click="sendSms">
+              {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
+            </el-button>
+          </template>
+        </el-input>
+        <el-button type="primary" size="large" class="w-full mt-md" @click="handleSmsLogin" :loading="loading">
+          登 录
+        </el-button>
+      </template>
+
+      <template v-else>
+        <el-input v-model="account" placeholder="手机号 / 邮箱" size="large" style="margin-bottom:12px" />
+        <el-input v-model="password" type="password" placeholder="请输入密码" size="large" style="margin-bottom:12px" show-password />
+        <el-button type="primary" size="large" class="w-full mt-md" @click="handlePasswordLogin" :loading="loading">
+          登 录
+        </el-button>
+      </template>
+
+      <div class="flex gap-sm items-center justify-center mt-md text-sm text-muted">
+        <span>其他方式：</span>
+        <el-button link type="primary" @click="handleWechatLogin">微信扫码</el-button>
+        <span>·</span>
+        <el-button link type="primary" @click="showRegister = true">注册账号</el-button>
+      </div>
+      <p class="text-center text-sm text-muted mt-md">
+        <el-button link type="primary">企业SSO登录 →</el-button>
+      </p>
+    </div>
+
+    <!-- 注册弹窗 -->
+    <el-dialog v-model="showRegister" title="注册账号" width="420px" :close-on-click-modal="false">
+      <el-form :model="registerForm" label-position="top">
+        <el-form-item label="手机号">
+          <el-input v-model="registerForm.phone" placeholder="请输入手机号" />
+        </el-form-item>
+        <el-form-item label="验证码">
+          <el-input v-model="registerForm.code" placeholder="6位验证码">
+            <template #append><el-button size="small" @click="sendRegCode" :disabled="regCountdown>0">{{ regCountdown>0?`${regCountdown}s`:'获取验证码' }}</el-button></template>
+          </el-input>
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input v-model="registerForm.password" type="password" placeholder="8-20位，含大小写字母+数字+特殊字符" show-password />
+        </el-form-item>
+        <el-form-item label="昵称">
+          <el-input v-model="registerForm.nickname" placeholder="2-20字符" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button size="small" @click="showRegister = false">取消</el-button>
+        <el-button size="small" type="primary" @click="handleRegister" :loading="regLoading">注册</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup>
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
+import { authApi } from '@/api/auth'
+import { ElMessage } from 'element-plus'
+import { VideoCamera } from '@element-plus/icons-vue'
+
+const router = useRouter()
+const authStore = useAuthStore()
+
+const loginType = ref('sms')
+const loading = ref(false)
+
+// 短信登录
+const phone = ref('13800000001')
+const smsCode = ref('123456')
+const countdown = ref(0)
+
+// 密码登录
+const account = ref('13800000001')
+const password = ref('Abc@123456')
+
+// 注册
+const showRegister = ref(false)
+const regLoading = ref(false)
+const regCountdown = ref(0)
+const registerForm = ref({ phone: '', code: '', password: '', nickname: '' })
+
+async function sendSms() {
+  if (!phone.value) {
+    ElMessage.warning('请输入手机号')
+    return
+  }
+  countdown.value = 60
+  const timer = setInterval(() => { countdown.value--; if (countdown.value <= 0) clearInterval(timer) }, 1000)
+  try {
+    await authApi.sendCode(phone.value, 'sms', 'login')
+    ElMessage.success('验证码已发送')
+  } catch (e) {
+    countdown.value = 0
+  }
+}
+
+async function sendRegCode() {
+  if (!registerForm.value.phone) {
+    ElMessage.warning('请输入手机号')
+    return
+  }
+  regCountdown.value = 60
+  const timer = setInterval(() => { regCountdown.value--; if (regCountdown.value <= 0) clearInterval(timer) }, 1000)
+  try {
+    await authApi.sendCode(registerForm.value.phone, 'sms', 'register')
+    ElMessage.success('验证码已发送')
+  } catch (e) {
+    regCountdown.value = 0
+  }
+}
+
+async function handleSmsLogin() {
+  loading.value = true
+  try {
+    await authStore.loginBySms(phone.value, smsCode.value)
+    ElMessage.success('欢迎回来！')
+    router.push('/dashboard')
+  } catch (e) {
+    ElMessage.error('登录失败，请检查手机号或验证码')
+  } finally { loading.value = false }
+}
+
+async function handlePasswordLogin() {
+  loading.value = true
+  try {
+    const accountType = account.value.includes('@') ? 'email' : 'phone'
+    await authStore.login({
+      account: account.value,
+      accountType,
+      password: password.value
+    })
+    ElMessage.success('欢迎回来！')
+    router.push('/dashboard')
+  } catch (e) {
+    ElMessage.error('登录失败，请检查账号或密码')
+  } finally { loading.value = false }
+}
+
+function handleWechatLogin() { ElMessage.info('微信登录功能开发中') }
+
+async function handleRegister() {
+  regLoading.value = true
+  try {
+    await authStore.register({
+      account: registerForm.value.phone,
+      accountType: 'phone',
+      password: registerForm.value.password,
+      verifyCode: registerForm.value.code,
+      accountCategory: 'personal',
+      nickname: registerForm.value.nickname
+    })
+    ElMessage.success('注册成功！')
+    showRegister.value = false
+    router.push('/dashboard')
+  } catch (e) {
+    ElMessage.error('注册失败，请重试')
+  } finally { regLoading.value = false }
+}
+</script>

@@ -1,0 +1,502 @@
+-- ============================================================
+-- AICP V1.5 Database Schema (MySQL 8.0)
+-- AI漫剧与视频内容工业化生产工作台
+-- ============================================================
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- === 1. 用户与账户 (user-svc) ===
+CREATE TABLE IF NOT EXISTS users (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    phone VARCHAR(20) UNIQUE, email VARCHAR(255) UNIQUE,
+    wechat_openid VARCHAR(128) UNIQUE, password_hash VARCHAR(255),
+    nickname VARCHAR(100) NOT NULL, avatar_url VARCHAR(500),
+    account_type ENUM('personal','enterprise') DEFAULT 'personal',
+    real_name_status ENUM('unverified','pending','verified') DEFAULT 'unverified',
+    member_level ENUM('free','creator','enterprise') DEFAULT 'free',
+    member_expire_at DATETIME,
+    status ENUM('active','disabled','deleted') DEFAULT 'active',
+    last_login_at DATETIME, last_login_ip VARCHAR(45),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+
+CREATE TABLE IF NOT EXISTS enterprises (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    owner_user_id BIGINT NOT NULL, name VARCHAR(200) NOT NULL,
+    license_number VARCHAR(100), license_image_url VARCHAR(500),
+    verify_status ENUM('unverified','pending','verified','rejected') DEFAULT 'unverified',
+    member_limit INT DEFAULT 10,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业表';
+
+CREATE TABLE IF NOT EXISTS enterprise_members (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    enterprise_id BIGINT NOT NULL, user_id BIGINT NOT NULL,
+    role VARCHAR(50) DEFAULT 'writer', permissions JSON,
+    department VARCHAR(100),
+    purchase_budget_monthly DECIMAL(10,2) DEFAULT 0,
+    purchase_budget_single DECIMAL(10,2) DEFAULT 0,
+    status ENUM('pending','active','disabled') DEFAULT 'active',
+    joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (enterprise_id) REFERENCES enterprises(id) ON DELETE CASCADE,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE KEY uk_ent_user (enterprise_id, user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业成员表';
+
+CREATE TABLE IF NOT EXISTS api_keys (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL, enterprise_id BIGINT,
+    key_hash VARCHAR(255) NOT NULL, name VARCHAR(100) NOT NULL,
+    key_prefix VARCHAR(10), scopes JSON,
+    rate_limit INT DEFAULT 1000,
+    status ENUM('active','disabled') DEFAULT 'active',
+    last_used_at DATETIME, expires_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='API Key表';
+
+-- === 2. 剧本生成 (script-gen-svc) ===
+CREATE TABLE IF NOT EXISTS gen_tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL, project_id VARCHAR(50),
+    gen_type ENUM('topic','synopsis','outline','episode','storyboard','promotion','quick') NOT NULL,
+    storyboard_tier ENUM('A','B','C'),
+    input_params JSON, output_data JSON, prompt_used TEXT,
+    model_used VARCHAR(100),
+    status ENUM('pending','processing','completed','failed','cancelled') DEFAULT 'pending',
+    tokens_used INT DEFAULT 0, duration_ms INT DEFAULT 0,
+    error_msg TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生成任务表';
+
+-- === 3. 剧本仓库 (script-repo-svc) ===
+CREATE TABLE IF NOT EXISTS scripts (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE, project_id VARCHAR(50),
+    title VARCHAR(200) NOT NULL,
+    author_user_id BIGINT, owner_user_id BIGINT,
+    owner_type ENUM('personal','enterprise') DEFAULT 'personal',
+    enterprise_id BIGINT,
+    episode_count INT DEFAULT 0, completed_episodes INT DEFAULT 0,
+    total_words INT DEFAULT 0, cover_image_url VARCHAR(500),
+    synopsis TEXT,
+    genre_tag VARCHAR(50), plot_tags JSON, tone_tags JSON, setting_tag VARCHAR(50),
+    source ENUM('ai_generated','purchased','uploaded') DEFAULT 'ai_generated',
+    status ENUM('draft','pending_review','listed','sold','delisted','archived') DEFAULT 'draft',
+    current_version VARCHAR(20) DEFAULT 'v0.1',
+    maturity_level ENUM('L0','L1','L2','L3','L4') DEFAULT 'L0',
+    plugin_pack JSON,
+    rating DECIMAL(2,1) DEFAULT 0, review_count INT DEFAULT 0, sales_count INT DEFAULT 0,
+    is_deleted TINYINT(1) DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='剧本表';
+
+CREATE TABLE IF NOT EXISTS script_episodes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT NOT NULL, episode_number INT NOT NULL,
+    title VARCHAR(200), content LONGTEXT,
+    storyboard_tier ENUM('A','B','C'), word_count INT DEFAULT 0,
+    status ENUM('draft','completed') DEFAULT 'draft',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_script_ep (script_id, episode_number)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='剧本分集表';
+
+CREATE TABLE IF NOT EXISTS script_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT NOT NULL, version VARCHAR(20) NOT NULL,
+    content LONGTEXT, change_summary VARCHAR(500),
+    created_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='剧本版本表';
+
+CREATE TABLE IF NOT EXISTS repo_assets (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    asset_id VARCHAR(50) NOT NULL UNIQUE,
+    asset_type ENUM('character','scene','prop','voice','style') NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    script_id BIGINT, project_id VARCHAR(50),
+    owner_user_id BIGINT, enterprise_id BIGINT,
+    description TEXT,
+    face_id VARCHAR(50), costume_id VARCHAR(50), voice_id VARCHAR(50),
+    location_id VARCHAR(50),
+    maturity_level ENUM('L0','L1','L2','L3','L4') DEFAULT 'L0',
+    is_locked TINYINT(1) DEFAULT 0,
+    short_anchor TEXT, long_anchor TEXT,
+    reference_image_urls JSON, consistency_prompt TEXT,
+    seed_value BIGINT, metadata JSON,
+    is_public TINYINT(1) DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='仓库资产表';
+
+CREATE TABLE IF NOT EXISTS continuity_states (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id VARCHAR(50) NOT NULL, script_id BIGINT,
+    episode_id VARCHAR(20),
+    state_type ENUM('character','relation','prop','foreshadow','info','voice','scene','asset') NOT NULL,
+    target_id VARCHAR(100),
+    start_state TEXT, end_state TEXT,
+    must_inherit TINYINT(1) DEFAULT 0, risk VARCHAR(200),
+    data JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='连续性状态表';
+
+-- === 4. 画布工作台 (canvas-svc) — V1.5 核心 ===
+CREATE TABLE IF NOT EXISTS canvas_projects (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL, enterprise_id BIGINT,
+    name VARCHAR(200) NOT NULL DEFAULT '未命名画布项目',
+    script_id BIGINT, episode_index INT DEFAULT 1,
+    style_config JSON,
+    status ENUM('editing','generating','composing','exporting','completed','archived') DEFAULT 'editing',
+    canvas_version INT DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='画布项目表';
+
+CREATE TABLE IF NOT EXISTS canvas_nodes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    type ENUM('text','image','video','audio','script','storyboard','character','scene','prompt','reference','workflow') NOT NULL,
+    name VARCHAR(200),
+    x INT NOT NULL DEFAULT 0, y INT NOT NULL DEFAULT 0,
+    width INT DEFAULT 200, height INT DEFAULT 180,
+    input_data JSON, output_data JSON,
+    status ENUM('ready','processing','completed','failed','locked') DEFAULT 'ready',
+    group_id BIGINT, locked_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES canvas_projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='画布节点表';
+
+CREATE TABLE IF NOT EXISTS canvas_edges (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    source_node_id BIGINT NOT NULL, source_port VARCHAR(50) DEFAULT 'out',
+    target_node_id BIGINT NOT NULL, target_port VARCHAR(50) DEFAULT 'in',
+    edge_type ENUM('data','flow','reference') DEFAULT 'data',
+    metadata JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES canvas_projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_node_id) REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+    FOREIGN KEY (target_node_id) REFERENCES canvas_nodes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='画布连线表';
+
+CREATE TABLE IF NOT EXISTS canvas_groups (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL DEFAULT '未命名分组',
+    node_ids JSON, workflow_template_id BIGINT, color VARCHAR(20),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES canvas_projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='画布节点分组表';
+
+CREATE TABLE IF NOT EXISTS storyboard_shots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    storyboard_id BIGINT NOT NULL, project_id BIGINT NOT NULL,
+    shot_no INT NOT NULL, scene_no INT NOT NULL,
+    duration INT DEFAULT 3000,
+    shot_size VARCHAR(50), camera_motion VARCHAR(50),
+    visual_description TEXT, characters JSON, scene_asset_id VARCHAR(50),
+    dialogue JSON,
+    image_prompt TEXT, video_prompt TEXT,
+    keyframe_start JSON, keyframe_end JSON,
+    image_status ENUM('pending','generating','completed','failed') DEFAULT 'pending',
+    video_status ENUM('pending','generating','completed','failed') DEFAULT 'pending',
+    metadata JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (storyboard_id) REFERENCES canvas_nodes(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES canvas_projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜表';
+
+CREATE TABLE IF NOT EXISTS canvas_timelines (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    data JSON, duration_ms INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES canvas_projects(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_timeline_project (project_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='画布时间线表';
+
+CREATE TABLE IF NOT EXISTS canvas_workflows (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL DEFAULT '未命名工作流',
+    description TEXT, node_ids JSON, config JSON,
+    status ENUM('draft','published','archived') DEFAULT 'draft',
+    template_version VARCHAR(20),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES canvas_projects(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='画布工作流表';
+
+CREATE TABLE IF NOT EXISTS workflow_templates (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    owner_id BIGINT, name VARCHAR(200) NOT NULL, description TEXT,
+    category VARCHAR(50), config JSON, variables JSON,
+    thumbnail_url VARCHAR(500),
+    usage_count INT DEFAULT 0, rating DECIMAL(2,1) DEFAULT 0,
+    visibility ENUM('private','team','public') DEFAULT 'private',
+    status ENUM('draft','published','archived') DEFAULT 'draft',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工作流模板表';
+
+-- === 5. 生成任务 (generation-svc) ===
+CREATE TABLE IF NOT EXISTS generation_tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT, node_id BIGINT, shot_id BIGINT,
+    type ENUM('image','video','audio','compose','export','quality','agent','skill') NOT NULL,
+    sub_type VARCHAR(50),
+    provider VARCHAR(50), model_id VARCHAR(100),
+    parameters JSON,
+    status ENUM('pending','running','succeeded','failed','canceled') DEFAULT 'pending',
+    progress INT DEFAULT 0, credit_cost INT DEFAULT 0,
+    error_code VARCHAR(50), error_message TEXT,
+    output_assets JSON,
+    started_at DATETIME, completed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生成任务表';
+
+CREATE TABLE IF NOT EXISTS generation_variants (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    parent_task_id BIGINT NOT NULL, variant_index INT NOT NULL,
+    parameters JSON, output_data JSON,
+    quality_score DECIMAL(3,2), selected TINYINT(1) DEFAULT 0,
+    task_uuid VARCHAR(36),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (parent_task_id) REFERENCES generation_tasks(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='多副本变体表';
+
+CREATE TABLE IF NOT EXISTS credit_transactions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL, enterprise_id BIGINT, task_id BIGINT,
+    amount INT NOT NULL,
+    type ENUM('charge','consumption','refund','bonus','gift') NOT NULL,
+    balance_before INT NOT NULL, balance_after INT NOT NULL,
+    description VARCHAR(500),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='积分交易表';
+
+-- === 6. 平台资产库 ===
+CREATE TABLE IF NOT EXISTS platform_assets (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT, source_node_id BIGINT, source_task_id BIGINT,
+    type ENUM('image','video','audio','model','other') NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    file_url VARCHAR(500), thumbnail_url VARCHAR(500),
+    prompt TEXT, model_id VARCHAR(100), parameters JSON,
+    file_size BIGINT DEFAULT 0, duration_ms INT,
+    width INT, height INT, metadata JSON, tags JSON,
+    favorite TINYINT(1) DEFAULT 0,
+    owner_user_id BIGINT NOT NULL, enterprise_id BIGINT,
+    visibility ENUM('private','team','public') DEFAULT 'private',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (project_id) REFERENCES canvas_projects(id) ON DELETE SET NULL,
+    FOREIGN KEY (owner_user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='平台资产库表';
+
+-- === 7. 交易支付 (trade-svc) ===
+CREATE TABLE IF NOT EXISTS script_listings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT NOT NULL, seller_id BIGINT NOT NULL,
+    license_types JSON,
+    status ENUM('active','sold','delisted') DEFAULT 'active',
+    listed_at DATETIME DEFAULT CURRENT_TIMESTAMP, delisted_at DATETIME,
+    FOREIGN KEY (script_id) REFERENCES scripts(id),
+    UNIQUE KEY uk_listing_script (script_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='剧本上架表';
+
+CREATE TABLE IF NOT EXISTS orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL UNIQUE,
+    buyer_id BIGINT NOT NULL, buyer_enterprise_id BIGINT,
+    seller_id BIGINT NOT NULL, script_id BIGINT NOT NULL,
+    license_type ENUM('normal','exclusive','buyout') NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    platform_fee DECIMAL(10,2) DEFAULT 0, seller_income DECIMAL(10,2) DEFAULT 0,
+    status ENUM('pending','paid','refunded','expired') DEFAULT 'pending',
+    payment_method VARCHAR(50), paid_at DATETIME, expire_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (buyer_id) REFERENCES users(id),
+    FOREIGN KEY (seller_id) REFERENCES users(id),
+    FOREIGN KEY (script_id) REFERENCES scripts(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';
+
+CREATE TABLE IF NOT EXISTS purchase_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    enterprise_id BIGINT NOT NULL, requester_id BIGINT NOT NULL,
+    script_id BIGINT NOT NULL,
+    license_type ENUM('normal','exclusive','buyout') NOT NULL,
+    amount DECIMAL(10,2) NOT NULL, reason TEXT,
+    status ENUM('pending','approved','rejected') DEFAULT 'pending',
+    approver_id BIGINT, approval_note TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='采购申请表';
+
+CREATE TABLE IF NOT EXISTS withdrawals (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL, amount DECIMAL(10,2) NOT NULL,
+    status ENUM('pending','completed','rejected') DEFAULT 'pending',
+    payment_method VARCHAR(50), account_info JSON,
+    processed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提现记录表';
+
+-- === 8. AI资产市场 (asset-market-svc) ===
+CREATE TABLE IF NOT EXISTS market_assets (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    asset_type ENUM('checkpoint','lora','style_pack','character','scene','prompt','voice','sound') NOT NULL,
+    name VARCHAR(200) NOT NULL, author_id BIGINT NOT NULL,
+    description TEXT, preview_urls JSON, tags JSON,
+    price DECIMAL(10,2) DEFAULT 0, recommended_params JSON,
+    use_count INT DEFAULT 0, rating DECIMAL(2,1) DEFAULT 0, review_count INT DEFAULT 0,
+    status ENUM('listed','unlisted','removed') DEFAULT 'listed',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (author_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI资产市场表';
+
+CREATE TABLE IF NOT EXISTS asset_favorites (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL, asset_id BIGINT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (asset_id) REFERENCES market_assets(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_fav_user_asset (user_id, asset_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产收藏表';
+
+CREATE TABLE IF NOT EXISTS asset_downloads (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL, asset_id BIGINT NOT NULL,
+    downloaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    FOREIGN KEY (asset_id) REFERENCES market_assets(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产下载表';
+
+-- === 9. Agent与Skill (agent-svc) — V1.5 新增 ===
+CREATE TABLE IF NOT EXISTS agent_sessions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL, project_id BIGINT,
+    title VARCHAR(200) DEFAULT '新会话', agent_config JSON,
+    status ENUM('active','completed','failed','canceled') DEFAULT 'active',
+    estimated_seconds INT, total_credit_cost INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP, completed_at DATETIME,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Agent会话表';
+
+CREATE TABLE IF NOT EXISTS agent_messages (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    role ENUM('user','assistant','system','tool') NOT NULL,
+    content TEXT, tool_calls JSON, tool_results JSON,
+    confidence DECIMAL(3,2), tokens_used INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Agent消息表';
+
+CREATE TABLE IF NOT EXISTS agent_executions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    session_id BIGINT NOT NULL, skill_id BIGINT,
+    tool_name VARCHAR(100),
+    status ENUM('pending','running','succeeded','failed') DEFAULT 'pending',
+    inputs JSON, outputs JSON, logs JSON,
+    duration_ms INT DEFAULT 0, credit_cost INT DEFAULT 0,
+    error_message TEXT,
+    started_at DATETIME, completed_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES agent_sessions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Agent执行记录表';
+
+CREATE TABLE IF NOT EXISTS skills (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    name VARCHAR(200) NOT NULL UNIQUE, description TEXT,
+    content TEXT NOT NULL,
+    type ENUM('script','storyboard','image','video','audio','compose','quality','meta') NOT NULL,
+    version VARCHAR(20) DEFAULT '1.0.0', variables JSON,
+    visibility ENUM('private','team','public') DEFAULT 'private',
+    owner_id BIGINT,
+    usage_count INT DEFAULT 0, rating DECIMAL(2,1) DEFAULT 0,
+    status ENUM('draft','published','archived') DEFAULT 'draft',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (owner_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Skill配置表';
+
+CREATE TABLE IF NOT EXISTS skill_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    skill_id BIGINT NOT NULL, version VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL, change_summary VARCHAR(500),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (skill_id) REFERENCES skills(id) ON DELETE CASCADE,
+    UNIQUE KEY uk_skill_version (skill_id, version)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Skill版本表';
+
+-- === 10. SOP与通知 ===
+CREATE TABLE IF NOT EXISTS sop_audits (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id VARCHAR(50) NOT NULL, canvas_project_id BIGINT,
+    shot_id VARCHAR(50), check_item VARCHAR(200) NOT NULL,
+    issue_type VARCHAR(100),
+    severity ENUM('P0','P1','P2','P3') NOT NULL DEFAULT 'P2',
+    quality_grade ENUM('S','A','B','C','D','E'),
+    description TEXT, fix_suggestion TEXT, responsible_role VARCHAR(50),
+    status ENUM('open','fixing','fixed','verified','ignored') DEFAULT 'open',
+    fixed_by BIGINT, verified_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='SOP审计表';
+
+CREATE TABLE IF NOT EXISTS sop_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id VARCHAR(50) NOT NULL,
+    from_version VARCHAR(20), to_version VARCHAR(20) NOT NULL,
+    comment TEXT, promoted_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生产版本记录表';
+
+CREATE TABLE IF NOT EXISTS notifications (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    type ENUM('script_generated','script_listed','order_paid','export_completed','audit_failed','asset_published','agent_completed','system') NOT NULL,
+    title VARCHAR(200) NOT NULL, content TEXT,
+    is_read TINYINT(1) DEFAULT 0, action_url VARCHAR(500),
+    source_type VARCHAR(50), source_id VARCHAR(100),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知表';
+
+SET FOREIGN_KEY_CHECKS = 1;

@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+aicp-frontend/node_modules/
+
+# Build output
+dist/
+aicp-frontend/dist/
+aicp-backend/target/
+
+# IDE
+.idea/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+logs/
+
+# Temp
+tmp/
+*.tmp
+
+# Vite
+aicp-frontend/.vite/
+
+# Java
+aicp-backend/*.jar
+aicp-backend/*.war
