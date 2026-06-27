@@ -44,7 +44,7 @@ public class SecurityConfig {
     private final Environment environment;
 
     /** 生产环境 CORS 允许的前端域名（可通过环境变量覆盖） */
-    @Value("${app.cors.allowed-origins:http://localhost:8080,http://localhost:3001}")
+    @Value("${app.cors.allowed-origins:http://localhost:8080,http://localhost:5173}")
     private String allowedOrigins;
 
     @Bean

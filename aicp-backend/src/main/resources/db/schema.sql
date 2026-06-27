@@ -136,13 +136,73 @@ CREATE TABLE script_episodes (
     title VARCHAR(200) COMMENT '单集标题',
     content LONGTEXT COMMENT '单集剧本内容',
     storyboard_data JSON COMMENT '分镜数据(A/B/C档)',
+    storyboard_tier VARCHAR(10) COMMENT '分镜档位 A/B/C',
     word_count INT DEFAULT 0,
+    opening_hook TEXT COMMENT '开场钩子',
+    closing_hook TEXT COMMENT '结尾悬念',
+    hook_score_avg DECIMAL(3,2) COMMENT '钩子平均分',
+    hook_count INT DEFAULT 0 COMMENT '钩子数量',
     status ENUM('draft','completed') DEFAULT 'draft',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
     UNIQUE KEY uk_script_ep (script_id, episode_number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='剧本分集表';
+
+CREATE TABLE episode_review_reports (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    episode_id BIGINT,
+    episode_number INT,
+    overall_status ENUM('pass','needs_revision','approved') DEFAULT 'needs_revision',
+    overall_score DECIMAL(4,2),
+    hook_score DECIMAL(4,2),
+    showrunner_score DECIMAL(4,2),
+    director_score DECIMAL(4,2),
+    report_json JSON COMMENT '钩子/编导/导演联合审核报告',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+    FOREIGN KEY (episode_id) REFERENCES script_episodes(id) ON DELETE CASCADE,
+    INDEX idx_episode_review (episode_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='每集联合审核报告表';
+
+CREATE TABLE chapter_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    episode_id BIGINT,
+    chapter_number INT COMMENT '章节/集序号',
+    title VARCHAR(200),
+    content LONGTEXT COMMENT '单章正文版本内容',
+    content_format VARCHAR(30) DEFAULT 'novel' COMMENT 'novel/screenplay/tvc',
+    version_no VARCHAR(30),
+    change_summary VARCHAR(500),
+    source VARCHAR(30) DEFAULT 'manual_edit',
+    created_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+    FOREIGN KEY (episode_id) REFERENCES script_episodes(id) ON DELETE CASCADE,
+    INDEX idx_chapter_version (episode_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='单章正文版本表';
+
+CREATE TABLE adaptation_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    source_chapter_version_id BIGINT,
+    source_project_version_id BIGINT,
+    target_type ENUM('ai_comic','short_drama','web_drama','tvc') DEFAULT 'ai_comic',
+    version_no VARCHAR(30),
+    title VARCHAR(200),
+    content LONGTEXT COMMENT '改编脚本文本或结构化JSON',
+    hook_strategy_json JSON COMMENT '继承和重构后的钩子策略',
+    status ENUM('draft','needs_sync','reviewing','locked') DEFAULT 'draft',
+    created_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_chapter_version_id) REFERENCES chapter_versions(id) ON DELETE SET NULL,
+    INDEX idx_adaptation_script (script_id, target_type, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='源头文本改编脚本版本表';
 
 -- ============================================================
 -- 7. 资产表
@@ -287,7 +347,7 @@ CREATE TABLE gen_tasks (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL,
     script_id BIGINT COMMENT '关联剧本',
-    gen_type ENUM('topic','synopsis','outline','episode','storyboard','promotion','quick') NOT NULL,
+    gen_type ENUM('topic','synopsis','outline','episode','adaptation','storyboard','promotion','quick') NOT NULL,
     storyboard_tier ENUM('A','B','C') COMMENT '分镜档位',
     input_params JSON COMMENT '输入参数',
     output_data JSON COMMENT '生成结果',

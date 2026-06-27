@@ -7,6 +7,7 @@ export const scriptApi = {
   genSynopsis: (data) => request.post('/script/gen/synopsis', data),
   genOutline: (data) => request.post('/script/gen/outline', data),
   genEpisode: (data) => request.post('/script/gen/episode', data),
+  genAdaptation: (data) => request.post('/script/gen/adaptation', data),
   genStoryboard: (data) => request.post('/script/gen/storyboard', data),
   genPromotion: (data) => request.post('/script/gen/promotion', data),
   upgradeStoryboard: (data) => request.post('/script/gen/storyboard/upgrade', data),
@@ -24,6 +25,19 @@ export const scriptApi = {
   getVersions: (id) => request.get(`/script/repo/scripts/${id}/versions`),
   createVersion: (id, data) => request.post(`/script/repo/scripts/${id}/versions`, data),
   restoreVersion: (id, vid) => request.post(`/script/repo/scripts/${id}/versions/${vid}/restore`),
+
+  // 单章正文版本
+  getChapters: (scriptId) => request.get(`/script/repo/scripts/${scriptId}/chapters`),
+  updateChapter: (chapterId, data) => request.patch(`/script/repo/chapters/${chapterId}`, data),
+  getChapterVersions: (chapterId) => request.get(`/script/repo/chapters/${chapterId}/versions`),
+  createChapterVersion: (chapterId, data) => request.post(`/script/repo/chapters/${chapterId}/versions`, data),
+
+  // 源头文本改编脚本
+  getAdaptations: (params) => request.get('/script/repo/adaptations', { params }),
+  createAdaptation: (data) => request.post('/script/repo/adaptations', data),
+  getAdaptation: (id) => request.get(`/script/repo/adaptations/${id}`),
+  updateAdaptation: (id, data) => request.patch(`/script/repo/adaptations/${id}`, data),
+  lockAdaptation: (id) => request.post(`/script/repo/adaptations/${id}/lock`),
 
   // 资产
   getAssets: (params) => request.get('/script/repo/assets', { params }),
@@ -46,6 +60,12 @@ export const scriptApi = {
   generateAllHooks: (scriptId) =>
     request.post(`/script/repo/scripts/${scriptId}/hooks/generate-all`),
   updateHook: (hookId, data) => request.put(`/script/repo/hooks/${hookId}`, data),
+
+  // 每集联合审核：钩子 Agent + 编导 Agent + 导演 Agent
+  reviewEpisodePreview: (data) => request.post('/script/review/preview', data),
+  reviewEpisode: (episodeId, data = {}) => request.post(`/script/review/episodes/${episodeId}`, data),
+  getEpisodeReview: (episodeId) => request.get(`/script/review/episodes/${episodeId}`),
+  approveEpisodeReview: (episodeId) => request.post(`/script/review/episodes/${episodeId}/approve`),
 
   // 角色提取
   extractCharacters: (scriptId) => request.get(`/script/repo/scripts/${scriptId}/characters`),

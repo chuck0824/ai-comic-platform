@@ -215,6 +215,37 @@ CREATE TABLE IF NOT EXISTS script_versions (
     created_by BIGINT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS chapter_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    episode_id BIGINT,
+    chapter_number INT,
+    title VARCHAR(200),
+    content VARCHAR(16000),
+    content_format VARCHAR(30) DEFAULT 'novel',
+    version_no VARCHAR(30),
+    change_summary VARCHAR(500),
+    source VARCHAR(30) DEFAULT 'manual_edit',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS adaptation_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    source_chapter_version_id BIGINT,
+    source_project_version_id BIGINT,
+    target_type VARCHAR(30) DEFAULT 'ai_comic',
+    version_no VARCHAR(30),
+    title VARCHAR(200),
+    content VARCHAR(16000),
+    hook_strategy_json VARCHAR(8000),
+    status VARCHAR(30) DEFAULT 'draft',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS script_episodes (
     id BIGINT AUTO_INCREMENT PRIMARY KEY, script_id BIGINT NOT NULL,
     episode_number INT, title VARCHAR(200), content VARCHAR(16000),
@@ -277,6 +308,22 @@ ALTER TABLE script_episodes ADD COLUMN IF NOT EXISTS opening_hook VARCHAR(4000);
 ALTER TABLE script_episodes ADD COLUMN IF NOT EXISTS closing_hook VARCHAR(4000);
 ALTER TABLE script_episodes ADD COLUMN IF NOT EXISTS hook_score_avg DECIMAL(3,2);
 ALTER TABLE script_episodes ADD COLUMN IF NOT EXISTS hook_count INT DEFAULT 0;
+
+-- 每集联合审核报告表（钩子 Agent + 编导 Agent + 导演 Agent）
+CREATE TABLE IF NOT EXISTS episode_review_reports (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    episode_id BIGINT,
+    episode_number INT,
+    overall_status VARCHAR(30),
+    overall_score DECIMAL(4,2),
+    hook_score DECIMAL(4,2),
+    showrunner_score DECIMAL(4,2),
+    director_score DECIMAL(4,2),
+    report_json VARCHAR(16000),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
 
 -- Prompt 模板表
 CREATE TABLE IF NOT EXISTS prompt_templates (

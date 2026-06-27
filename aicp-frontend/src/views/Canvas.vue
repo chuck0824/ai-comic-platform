@@ -380,135 +380,277 @@
 
     <!-- Director Desk -->
     <div v-if="directorDeskVisible" class="director-overlay">
-      <div class="director-shell" @mousedown.stop>
+      <div :class="['director-shell', { fullscreen: directorFullscreen }]" @mousedown.stop>
         <div class="director-topbar">
-          <div>
-            <strong>🎥 导演台</strong>
-            <span>轻量3D构图 · 多视角机位 · 截图回传画布</span>
+          <strong>3D导演台</strong>
+          <div class="director-view-switch">
+            <button :class="{ active: directorView !== 'camera' }" @click="directorView = 'director'">导演视角</button>
+            <button :class="{ active: directorView === 'camera' }" @click="directorView = 'camera'">机位视角</button>
           </div>
-          <div class="director-top-actions">
-            <el-radio-group v-model="directorMode" size="small">
-              <el-radio-button label="move">移动 V</el-radio-button>
-              <el-radio-button label="rotate">旋转 R</el-radio-button>
-              <el-radio-button label="scale">缩放 S</el-radio-button>
-            </el-radio-group>
-            <el-select v-model="directorAspect" size="small" style="width:92px" @change="persistDirectorDesk">
-              <el-option label="9:16" value="9:16" />
-              <el-option label="16:9" value="16:9" />
-              <el-option label="1:1" value="1:1" />
-              <el-option label="4:3" value="4:3" />
-            </el-select>
-            <el-button size="small" @click="directorGridSnap = !directorGridSnap">吸附 X: {{ directorGridSnap ? '开' : '关' }}</el-button>
-            <el-button type="primary" size="small" @click="captureDirectorShot()">截图</el-button>
-            <el-button size="small" @click="sendDirectorShotToCanvas()">发送到画布</el-button>
-            <el-button size="small" @click="closeDirectorDesk">关闭</el-button>
+          <div class="director-window-actions">
+            <button title="帮助" @click="ElMessage.info('可通过底部工具栏添加素体、全景、机位、比例和截图')">?</button>
+            <button title="关闭" @click="closeDirectorDesk">×</button>
           </div>
         </div>
 
         <div class="director-workspace">
           <aside class="director-panel director-left">
-            <div class="director-panel-title">添加模型</div>
-            <div class="director-add-grid">
-              <button @click="addDirectorElement('human')">人体素模</button>
-              <button @click="addDirectorElement('geometry')">基础几何</button>
-              <button @click="addDirectorElement('crowd')">群众阵列</button>
-              <button @click="addDirectorElement('upload')">本地上传</button>
+            <div class="director-panel-title">场景</div>
+            <div class="director-search">
+              <input placeholder="请输入搜索内容" />
+              <span>⌕</span>
             </div>
-            <div class="director-panel-title">元素列表</div>
             <div class="director-element-list">
+              <button :class="{ active: !directorSelectedElementId }" @click="directorSelectedElementId = ''">
+                <span>▣</span>
+                <strong>3D场景</strong>
+                <small>{{ directorElements.length }} 个元素</small>
+              </button>
+              <button :class="{ active: directorSelectedElementId === directorCamera.id }" @click="directorSelectedElementId = directorCamera.id">
+                <span>▰</span>
+                <strong>{{ directorCamera.name }}</strong>
+                <small>摄像机 · FOV {{ directorCamera.fov }}°</small>
+              </button>
               <button v-for="item in directorElements" :key="item.id"
                       :class="{ active: directorSelectedElementId === item.id, hidden: item.hidden }"
                       @click="directorSelectedElementId = item.id">
-                <span>{{ directorElementIcon(item.type) }}</span>
+                <span>{{ directorElementIcon(item.type, item.subType) }}</span>
                 <strong>{{ item.name }}</strong>
-                <small>{{ item.group || '未分组' }}</small>
+                <small>{{ item.group || directorElementTypeLabel(item.type) }}</small>
               </button>
             </div>
             <div class="director-list-actions">
-              <el-button size="small" @click="renameDirectorElement">重命名</el-button>
-              <el-button size="small" @click="toggleDirectorElement">{{ selectedDirectorElement?.hidden ? '显示' : '隐藏' }}</el-button>
-              <el-button size="small" @click="groupDirectorElement">编组</el-button>
-              <el-button size="small" @click="ungroupDirectorElement">解组</el-button>
-              <el-button size="small" type="danger" @click="deleteDirectorElement">删除</el-button>
+              <el-button size="small" @click="renameDirectorElement" :disabled="!selectedDirectorElement">重命名</el-button>
+              <el-button size="small" @click="toggleDirectorElement" :disabled="!selectedDirectorElement">{{ selectedDirectorElement?.hidden ? '显示' : '隐藏' }}</el-button>
+              <el-button size="small" @click="groupDirectorElement" :disabled="!selectedDirectorElement">打组</el-button>
+              <el-button size="small" @click="ungroupDirectorElement" :disabled="!selectedDirectorElement">解组</el-button>
+              <el-button size="small" type="danger" @click="deleteDirectorElement" :disabled="!selectedDirectorElement">删除</el-button>
             </div>
           </aside>
 
-          <main class="director-stage-wrap">
-            <div class="director-viewbar">
-              <button :class="{ active: directorView === 'top' }" @click="directorView = 'top'">顶视 T</button>
-              <button :class="{ active: directorView === 'front' }" @click="directorView = 'front'">正视 Y</button>
-              <button :class="{ active: directorView === 'director' }" @click="directorView = 'director'">导演视角</button>
-              <button :class="{ active: directorView === 'camera' }" @click="directorView = 'camera'">相机视角</button>
-              <button @click="resetDirectorView">重置 Q</button>
-            </div>
-            <div ref="directorStageRef" :class="['director-stage', 'view-' + directorView]">
-              <div :class="['director-camera-frame', 'aspect-' + directorAspect.replace(':','-')]">
-                <span>Camera {{ directorAspect }} · FOV {{ directorCamera.fov }}°</span>
+          <main class="director-stage-wrap" @mousedown.self="directorActiveMenu = ''">
+            <div ref="directorStageRef" :class="['director-stage', 'view-' + directorView]" :style="directorStageStyle">
+              <div class="director-orientation">
+                <span></span><span></span><span></span><span></span>
+                <button @click="resetDirectorView">重置视角</button>
+              </div>
+              <div v-if="directorAspect !== 'Auto'" :class="['director-camera-frame', 'aspect-' + directorAspect.replace(':','-')]">
+                <span>{{ directorCamera.name }} · {{ directorAspect }} · FOV {{ directorCamera.fov }}°</span>
               </div>
               <button v-for="item in visibleDirectorElements" :key="item.id"
-                      :class="['director-object', 'director-object-' + item.type, { selected: directorSelectedElementId === item.id }]"
+                      :class="['director-object', 'director-object-' + item.type, 'subtype-' + item.subType, { selected: directorSelectedElementId === item.id }]"
                       :style="directorObjectStyle(item)"
-                      @click="directorSelectedElementId = item.id"
+                      @click.stop="directorSelectedElementId = item.id"
                       @pointerdown.stop.prevent="startDirectorObjectTransform($event, item)">
-                <span>{{ directorElementIcon(item.type) }}</span>
-                <strong>{{ item.name }}</strong>
+                <span>{{ directorElementIcon(item.type, item.subType) }}</span>
+                <strong v-if="directorScene.characterLabelVisible">{{ item.name }}</strong>
               </button>
-              <div class="director-ground"></div>
+              <div v-if="directorScene.groundVisible" class="director-ground" :style="{ opacity: directorScene.groundOpacity }"></div>
             </div>
-            <div class="director-shortcuts">
-              <span>V移动</span><span>R旋转</span><span>S缩放</span><span>Shift等比缩放</span>
-              <span>X网格吸附</span><span>Delete删除</span><span>Ctrl+G编组</span>
+
+            <div class="director-bottom-toolbar">
+              <button :class="{ active: directorActiveMenu === 'mode' }" title="移动" @click="toggleDirectorMenu('mode')">⌁</button>
+              <button :class="{ active: directorActiveMenu === 'model' }" title="添加模型" @click="toggleDirectorMenu('model')">♙</button>
+              <button :class="{ active: directorActiveMenu === 'panorama' }" title="全景" @click="toggleDirectorMenu('panorama')">720</button>
+              <button :class="{ active: directorActiveMenu === 'camera' }" title="机位预设" @click="toggleDirectorMenu('camera')">▰</button>
+              <button :class="{ active: directorActiveMenu === 'aspect' }" title="比例" @click="toggleDirectorMenu('aspect')">▢</button>
+              <button title="截图" @click="captureDirectorShot()">▣</button>
+              <button title="AI识图导入" @click="openDirectorAiImport">▧</button>
+              <button title="全屏" @click="directorFullscreen = !directorFullscreen">↗</button>
+
+              <div v-if="directorActiveMenu === 'mode'" class="director-popover mode-popover">
+                <button :class="{ active: directorMode === 'move' }" @click="setDirectorMode('move')"><span>⌁</span>移动 <kbd>V</kbd></button>
+                <button :class="{ active: directorMode === 'rotate' }" @click="setDirectorMode('rotate')"><span>↻</span>旋转 <kbd>R</kbd></button>
+                <button :class="{ active: directorMode === 'scale' }" @click="setDirectorMode('scale')"><span>↙</span>缩放 <kbd>S</kbd></button>
+              </div>
+
+              <div v-if="directorActiveMenu === 'model'" class="director-popover model-popover">
+                <button @click="addDirectorElement('upload')"><span>⇧</span>本地上传</button>
+                <button v-for="preset in directorHumanPresets" :key="preset.key" @click="addDirectorElement('human', preset.key)">
+                  <span>♙</span>{{ preset.label }}
+                </button>
+                <button class="has-sub" @click.stop="directorActiveMenu = 'crowd'"><span>♙</span>群众（3x3） <b>›</b></button>
+                <button class="has-sub" @click.stop="directorActiveMenu = 'geometry'"><span>◇</span>几何模型 <b>›</b></button>
+              </div>
+
+              <div v-if="directorActiveMenu === 'geometry'" class="director-popover geometry-popover">
+                <button @click="addDirectorElement('upload')"><span>⇧</span>上传文件</button>
+                <button v-for="preset in directorGeometryPresets" :key="preset.key" @click="addDirectorElement('geometry', preset.key)">
+                  <span>{{ directorElementIcon('geometry', preset.key) }}</span>{{ preset.label }}
+                </button>
+              </div>
+
+              <div v-if="directorActiveMenu === 'crowd'" class="director-popover crowd-popover">
+                <div class="popover-title">添加群众阵列 <small>共{{ directorCrowdForm.rows * directorCrowdForm.cols }}人</small></div>
+                <label>行数 <input v-model.number="directorCrowdForm.rows" type="number" min="1" max="20" /></label>
+                <label>列数 <input v-model.number="directorCrowdForm.cols" type="number" min="1" max="20" /></label>
+                <label>间距 <input v-model.number="directorCrowdForm.spacing" type="number" min="0.2" max="10" step="0.1" /></label>
+                <div class="popover-actions">
+                  <button @click="directorActiveMenu = 'model'">取消</button>
+                  <button class="primary" @click="addDirectorCrowd">添加</button>
+                </div>
+              </div>
+
+              <div v-if="directorActiveMenu === 'panorama'" class="director-popover panorama-popover">
+                <button @click="setDirectorPanorama('本地上传')"><span>⇧</span>本地上传</button>
+                <button @click="setDirectorPanorama('历史记录')"><span>◷</span>历史记录</button>
+                <button @click="setDirectorPanorama('AI生成')"><span>720</span>AI生成</button>
+              </div>
+
+              <div v-if="directorActiveMenu === 'camera'" class="director-popover camera-popover">
+                <div class="popover-title">选择机位视角</div>
+                <button v-for="preset in directorCameraPresets" :key="preset.key" @click="applyDirectorCameraPreset(preset.key)">
+                  <span>▰</span>{{ preset.label }}
+                </button>
+              </div>
+
+              <div v-if="directorActiveMenu === 'aspect'" class="director-popover aspect-popover">
+                <div class="popover-title">比例</div>
+                <button v-for="aspect in directorAspectOptions" :key="aspect" :class="{ active: directorAspect === aspect }" @click="setDirectorAspect(aspect)">
+                  <span>{{ aspect === 'Auto' ? '▢' : aspect }}</span>{{ aspect }}
+                </button>
+              </div>
             </div>
           </main>
 
           <aside class="director-panel director-right">
-            <div class="director-panel-title">对象属性</div>
-            <div v-if="selectedDirectorElement" class="director-form">
-              <label>名称</label>
-              <el-input v-model="selectedDirectorElement.name" size="small" @change="persistDirectorDesk" />
-              <label>类型</label>
-              <el-input :model-value="directorElementTypeLabel(selectedDirectorElement.type)" size="small" disabled />
-              <label>位置 X/Y/Z</label>
-              <div class="director-number-row">
-                <el-input-number v-model="selectedDirectorElement.x" :step="10" size="small" @change="persistDirectorDesk" />
-                <el-input-number v-model="selectedDirectorElement.y" :step="10" size="small" @change="persistDirectorDesk" />
-                <el-input-number v-model="selectedDirectorElement.z" :step="10" size="small" @change="persistDirectorDesk" />
+            <template v-if="directorSelectedElementId === directorCamera.id">
+              <div class="director-panel-title">摄像机</div>
+              <div class="director-panel-tabs"><button class="active">属性</button><button>摄像机截图</button></div>
+              <div class="camera-preview">
+                <strong>FOV {{ directorCamera.fov }}°</strong>
+                <span>♙</span>
+                <button>↗</button>
               </div>
-              <label>旋转</label>
-              <el-slider v-model="selectedDirectorElement.rotate" :min="-180" :max="180" @change="persistDirectorDesk" />
-              <label>缩放</label>
-              <el-slider v-model="selectedDirectorElement.scale" :min="40" :max="180" @change="persistDirectorDesk" />
-            </div>
-            <div class="director-panel-title">相机属性</div>
-            <div class="director-form">
-              <label>视场 FOV</label>
-              <el-slider v-model="directorCamera.fov" :min="18" :max="90" @change="persistDirectorDesk" />
-              <label>焦点绑定</label>
-              <el-select v-model="directorCamera.focus" size="small" @change="persistDirectorDesk">
-                <el-option label="不绑定" value="" />
-                <el-option v-for="item in directorElements" :key="item.id" :label="item.name" :value="item.id" />
-              </el-select>
-              <label>全景设置</label>
-              <div class="director-panorama-actions">
-                <button @click="ElMessage.info('本地上传全景图入口待接入上传组件')">本地上传</button>
-                <button @click="ElMessage.info('从生成历史选择全景图，待接入历史接口')">生成历史</button>
-                <button @click="ElMessage.info('将场景图转全景，待接入图像生成服务')">场景转全景</button>
+              <div class="director-form">
+                <label>名称</label>
+                <el-input v-model="directorCamera.name" size="small" @change="persistDirectorDesk" />
+                <label>切换机位</label>
+                <el-select :model-value="directorCamera.preset || 'current'" size="small" @change="applyDirectorCameraPreset">
+                  <el-option v-for="preset in directorCameraPresets" :key="preset.key" :label="preset.label" :value="preset.key" />
+                </el-select>
+                <label>位置</label>
+                <div class="director-number-row">
+                  <el-input-number v-model="directorCamera.x" :step="0.1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="directorCamera.y" :step="0.1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="directorCamera.z" :step="0.1" size="small" @change="persistDirectorDesk" />
+                </div>
+                <label>注视目标</label>
+                <el-select v-model="directorCamera.focus" size="small" @change="persistDirectorDesk">
+                  <el-option label="手动坐标" value="" />
+                  <el-option v-for="item in directorElements" :key="item.id" :label="item.name" :value="item.id" />
+                </el-select>
+                <label>注视坐标</label>
+                <div class="director-number-row">
+                  <el-input-number v-model="directorCamera.lookAtX" :step="0.1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="directorCamera.lookAtY" :step="0.1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="directorCamera.lookAtZ" :step="0.1" size="small" @change="persistDirectorDesk" />
+                </div>
+                <label>视野角度（FOV）</label>
+                <el-slider v-model="directorCamera.fov" :min="10" :max="120" @change="persistDirectorDesk" />
               </div>
-            </div>
-            <div class="director-panel-title">机位截图</div>
-            <div class="director-shot-list">
-              <div v-for="shot in directorShots" :key="shot.id" class="director-shot-item">
-                <button @click="directorSelectedShotId = shot.id">
-                  <img v-if="shot.preview_url" :src="shot.preview_url" alt="机位截图" />
-                  <strong>{{ shot.name }}</strong>
-                  <span>{{ shot.aspect }} · {{ shot.view }}</span>
-                </button>
-                <el-button size="small" @click="sendDirectorShotToCanvas(null, shot)">发送</el-button>
-                <el-button size="small" type="danger" @click="deleteDirectorShot(shot.id)">删除</el-button>
+              <div class="director-panel-title">相机截图</div>
+              <div class="director-shot-list">
+                <div v-for="shot in directorShots" :key="shot.id" class="director-shot-item">
+                  <button @click="directorSelectedShotId = shot.id">
+                    <img v-if="shot.preview_url" :src="shot.preview_url" alt="机位截图" />
+                    <strong>{{ shot.name }}</strong>
+                    <span>{{ shot.aspect }} · {{ shot.view }}</span>
+                  </button>
+                  <el-button size="small" @click="sendDirectorShotToCanvas(null, shot)">发送</el-button>
+                  <el-button size="small" type="danger" @click="deleteDirectorShot(shot.id)">删除</el-button>
+                </div>
+                <div v-if="!directorShots.length" class="director-empty">暂无截图，点击底部相机按钮创建。</div>
               </div>
-              <div v-if="!directorShots.length" class="director-empty">暂无截图，点击顶部“截图”创建当前机位。</div>
-            </div>
+            </template>
+
+            <template v-else-if="selectedDirectorElement">
+              <div class="director-panel-title">{{ selectedDirectorElement.type === 'human' ? '角色' : '元素' }}</div>
+              <div class="director-form">
+                <label>名称</label>
+                <el-input v-model="selectedDirectorElement.name" size="small" @change="persistDirectorDesk" />
+                <label>类型</label>
+                <el-input :model-value="directorElementTypeLabel(selectedDirectorElement.type, selectedDirectorElement.subType)" size="small" disabled />
+                <label>位置 X/Y/Z</label>
+                <div class="director-number-row">
+                  <el-input-number v-model="selectedDirectorElement.x" :step="1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="selectedDirectorElement.y" :step="1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="selectedDirectorElement.z" :step="1" size="small" @change="persistDirectorDesk" />
+                </div>
+                <label>旋转</label>
+                <el-slider v-model="selectedDirectorElement.rotate" :min="-180" :max="180" @change="persistDirectorDesk" />
+                <label>缩放</label>
+                <el-slider v-model="selectedDirectorElement.scale" :min="40" :max="180" @change="persistDirectorDesk" />
+                <label>颜色</label>
+                <el-color-picker v-model="selectedDirectorElement.color" size="small" @change="persistDirectorDesk" />
+              </div>
+            </template>
+
+            <template v-else>
+              <div class="director-panel-title">3D场景</div>
+              <div class="director-form">
+                <label>场景缩放</label>
+                <el-slider v-model="directorScene.zoom" :min="50" :max="500" @change="persistDirectorDesk" />
+                <label>场景平移</label>
+                <div class="director-number-row">
+                  <el-input-number v-model="directorScene.pan.x" :step="1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="directorScene.pan.y" :step="1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="directorScene.pan.z" :step="1" size="small" @change="persistDirectorDesk" />
+                </div>
+                <label>场景旋转</label>
+                <div class="director-number-row">
+                  <el-input-number v-model="directorScene.rotation.x" :step="1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="directorScene.rotation.y" :step="1" size="small" @change="persistDirectorDesk" />
+                  <el-input-number v-model="directorScene.rotation.z" :step="1" size="small" @change="persistDirectorDesk" />
+                </div>
+                <label>全景背景</label>
+                <div class="director-empty compact">{{ directorScene.panoramaStatus }}</div>
+                <label>天空颜色</label>
+                <el-color-picker v-model="directorScene.skyColor" size="small" @change="persistDirectorDesk" />
+                <label>全景球</label>
+                <el-slider v-model="directorScene.panoramaRotation" :min="0" :max="360" @change="persistDirectorDesk" />
+                <el-slider v-model="directorScene.panoramaRadius" :min="10" :max="120" @change="persistDirectorDesk" />
+                <label><input v-model="directorScene.characterLabelVisible" type="checkbox" @change="persistDirectorDesk" /> 角色标签</label>
+                <label><input v-model="directorGridSnap" type="checkbox" @change="persistDirectorDesk" /> 网格吸附</label>
+                <label><input v-model="directorScene.groundVisible" type="checkbox" @change="persistDirectorDesk" /> 地面</label>
+                <el-slider v-model="directorScene.groundOpacity" :min="0" :max="1" :step="0.05" @change="persistDirectorDesk" />
+                <el-slider v-model="directorScene.groundHeight" :min="-20" :max="20" @change="persistDirectorDesk" />
+              </div>
+            </template>
           </aside>
+        </div>
+      </div>
+
+      <div v-if="directorAiImport.visible" class="director-ai-dialog" @mousedown.stop>
+        <div class="director-ai-card">
+          <header><strong>AI 识图导入</strong><button @click="directorAiImport.visible = false">×</button></header>
+          <div class="director-ai-tabs">
+            <button :class="{ active: directorAiImport.tab === 'local' }" @click="directorAiImport.tab = 'local'">本地上传</button>
+            <button :class="{ active: directorAiImport.tab === 'history' }" @click="directorAiImport.tab = 'history'">历史记录</button>
+          </div>
+          <label class="ai-upload-box">
+            <input type="file" accept="image/*" @change="onDirectorAiFileChange" />
+            <strong>{{ directorAiImport.fileName || '点击上传图片 或 拖拽本地图片至此上传' }}</strong>
+            <span>上传后画布将新建一个图片节点并自动替换当前图源</span>
+          </label>
+          <div class="director-ai-mode">
+            <label :class="{ active: directorAiImport.mode === 'insert' }">
+              <input v-model="directorAiImport.mode" type="radio" value="insert" />
+              <strong>插入当前导演台</strong>
+              <span>作为站位参考层插入，不覆盖当前全景、角色和机位</span>
+            </label>
+            <label :class="{ active: directorAiImport.mode === 'overwrite' }">
+              <input v-model="directorAiImport.mode" type="radio" value="overwrite" />
+              <strong>覆盖当前导演台</strong>
+              <span>覆盖当前全景、角色和机位</span>
+            </label>
+          </div>
+          <footer>
+            <span>退出不会中断生成过程，全景图生成成功后，会自动加载到背景</span>
+            <button :disabled="directorAiImport.running" @click="runDirectorAiImport">
+              {{ directorAiImport.running ? '导入中...' : '识图导入场景' }}
+            </button>
+          </footer>
         </div>
       </div>
     </div>
@@ -551,7 +693,72 @@ const directorSelectedElementId = ref('')
 const directorSelectedShotId = ref('')
 const directorElements = ref(defaultDirectorElements())
 const directorShots = ref([])
-const directorCamera = reactive({ fov: 35, focus: '', x: 0, y: 160, z: 520 })
+const directorActiveMenu = ref('')
+const directorFullscreen = ref(false)
+const directorAspectOptions = ['Auto', '21:9', '16:9', '4:3', '1:1', '3:4', '9:16']
+const directorHumanPresets = [
+  { key: 'male', label: '男性素体' },
+  { key: 'female', label: '女性素体' },
+  { key: 'broad', label: '宽厚素体' },
+  { key: 'strong', label: '健壮素体' },
+  { key: 'slim', label: '纤细素体' },
+  { key: 'teen', label: '少年素体' },
+  { key: 'child', label: '儿童素体' },
+  { key: 'chibi', label: '二头身' }
+]
+const directorGeometryPresets = [
+  { key: 'cube', label: '立方体' },
+  { key: 'sphere', label: '球体' },
+  { key: 'cylinder', label: '圆柱体' },
+  { key: 'torus', label: '环状体' },
+  { key: 'cone', label: '圆锥' },
+  { key: 'pyramid', label: '棱锥' }
+]
+const directorCameraPresets = [
+  { key: 'current', label: '当前视角' },
+  { key: 'front_medium', label: '正面中景' },
+  { key: 'front_close', label: '正面特写' },
+  { key: 'front_wide', label: '正面全景' },
+  { key: 'side_follow', label: '侧面跟拍' },
+  { key: 'side_near', label: '侧面近景' }
+]
+const directorCrowdForm = reactive({ rows: 3, cols: 3, spacing: 1.2 })
+const directorScene = reactive({
+  zoom: 300,
+  pan: { x: 0, y: 0, z: 0 },
+  rotation: { x: 0, y: 0, z: 0 },
+  skyColor: '#060608',
+  panoramaAssetId: '',
+  panoramaStatus: '未连接全景图',
+  panoramaRotation: 0,
+  panoramaRadius: 60,
+  characterLabelVisible: true,
+  groundVisible: true,
+  groundOpacity: 0.4,
+  groundHeight: 0
+})
+const directorCamera = reactive({
+  id: 'camera_1',
+  name: '机位1',
+  fov: 50,
+  focus: '',
+  x: 0,
+  y: 2.2,
+  z: 10,
+  lookAtMode: 'manual',
+  lookAtX: 0,
+  lookAtY: 1.2,
+  lookAtZ: 0,
+  preset: 'current'
+})
+const directorAiImport = reactive({
+  visible: false,
+  tab: 'local',
+  mode: 'insert',
+  fileName: '',
+  running: false,
+  historySelected: ''
+})
 const directorTransformDrag = ref({
   active: false,
   elementId: '',
@@ -692,6 +899,12 @@ const selectedDirectorElement = computed(() =>
 const visibleDirectorElements = computed(() =>
   directorElements.value.filter(item => !item.hidden)
 )
+
+const directorStageStyle = computed(() => ({
+  backgroundColor: directorScene.skyColor,
+  '--director-scene-zoom': directorScene.zoom / 300,
+  '--director-ground-offset': `${directorScene.groundHeight}px`
+}))
 
 const presetGroupFrames = computed(() => {
   const groups = new Map()
@@ -1095,15 +1308,58 @@ async function handleBatchFromEditor(shotIds, config) {
 // ===== Director Desk =====
 function defaultDirectorElements() {
   return [
-    { id: 'human_1', type: 'human', name: '角色素模', group: '角色', x: 42, y: 46, z: 0, rotate: 0, scale: 100, hidden: false },
-    { id: 'geometry_1', type: 'geometry', name: '场景方块', group: '场景', x: 58, y: 58, z: 0, rotate: 0, scale: 100, hidden: false },
-    { id: 'crowd_1', type: 'crowd', name: '群众阵列', group: '群演', x: 28, y: 68, z: 0, rotate: 0, scale: 86, hidden: false }
+    { id: 'human_1', type: 'human', subType: 'male', name: '角色A', group: '角色', x: 45, y: 48, z: 0, rotate: 0, scale: 100, color: '#8fb4cc', hidden: false },
+    { id: 'geometry_1', type: 'geometry', subType: 'cylinder', name: '圆柱体1', group: '场景', x: 56, y: 60, z: 0, rotate: 0, scale: 96, color: '#6b7b75', hidden: false }
   ]
+}
+
+function defaultDirectorScene() {
+  return {
+    zoom: 300,
+    pan: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    skyColor: '#060608',
+    panoramaAssetId: '',
+    panoramaStatus: '未连接全景图',
+    panoramaRotation: 0,
+    panoramaRadius: 60,
+    characterLabelVisible: true,
+    groundVisible: true,
+    groundOpacity: 0.4,
+    groundHeight: 0
+  }
+}
+
+function defaultDirectorCamera() {
+  return {
+    id: 'camera_1',
+    name: '机位1',
+    fov: 50,
+    focus: '',
+    x: 0,
+    y: 2.2,
+    z: 10,
+    lookAtMode: 'manual',
+    lookAtX: 0,
+    lookAtY: 1.2,
+    lookAtZ: 0,
+    preset: 'current'
+  }
 }
 
 function cloneDirectorElements(items) {
   const source = Array.isArray(items) && items.length ? items : defaultDirectorElements()
   return source.map(item => ({ ...item }))
+}
+
+function cloneDirectorScene(scene) {
+  const base = defaultDirectorScene()
+  return {
+    ...base,
+    ...(scene || {}),
+    pan: { ...base.pan, ...(scene?.pan || {}) },
+    rotation: { ...base.rotation, ...(scene?.rotation || {}) }
+  }
 }
 
 function getDirectorData(node) {
@@ -1112,7 +1368,8 @@ function getDirectorData(node) {
   return {
     elements: cloneDirectorElements(director.elements),
     shots: Array.isArray(director.shots) ? director.shots : [],
-    camera: { fov: 35, focus: '', x: 0, y: 160, z: 520, ...(director.camera || {}) },
+    scene: cloneDirectorScene(director.scene),
+    camera: { ...defaultDirectorCamera(), ...(director.camera || {}) },
     aspect: director.aspect || data.aspect_ratio || '16:9'
   }
 }
@@ -1124,9 +1381,12 @@ function loadDirectorDeskFromNode(node) {
   directorElements.value = cloneDirectorElements(data.elements)
   directorShots.value = data.shots.map(shot => ({ ...shot }))
   directorAspect.value = data.aspect
+  Object.assign(directorScene, data.scene)
+  directorGridSnap.value = data.scene.gridSnap ?? true
   Object.assign(directorCamera, data.camera)
   directorSelectedElementId.value = directorElements.value[0]?.id || ''
   directorSelectedShotId.value = directorShots.value.at(-1)?.id || ''
+  directorActiveMenu.value = ''
 }
 
 function openDirectorDesk(node) {
@@ -1151,6 +1411,12 @@ async function persistDirectorDesk() {
         director: {
           elements: directorElements.value.map(item => ({ ...item })),
           shots: directorShots.value.map(shot => ({ ...shot })),
+          scene: {
+            ...directorScene,
+            pan: { ...directorScene.pan },
+            rotation: { ...directorScene.rotation },
+            gridSnap: directorGridSnap.value
+          },
           camera: { ...directorCamera },
           aspect: directorAspect.value
         },
@@ -1165,20 +1431,42 @@ async function persistDirectorDesk() {
   }
 }
 
-function directorElementIcon(type) {
-  return { human: '人', geometry: '几何', crowd: '群', upload: '本地' }[type] || '物'
+function directorElementIcon(type, subType = '') {
+  if (type === 'human') return '♙'
+  if (type === 'crowd') return '♙'
+  if (type === 'upload') return '⇧'
+  return {
+    cube: '□',
+    sphere: '◯',
+    cylinder: '▯',
+    torus: '◎',
+    cone: '△',
+    pyramid: '◇'
+  }[subType] || '◇'
 }
 
-function directorElementTypeLabel(type) {
-  return { human: '人体素模', geometry: '基础几何体', crowd: '群众阵列', upload: '本地上传模型/图片' }[type] || '元素'
+function directorElementTypeLabel(type, subType = '') {
+  if (type === 'human') {
+    return directorHumanPresets.find(item => item.key === subType)?.label || '人体素模'
+  }
+  if (type === 'geometry') {
+    return directorGeometryPresets.find(item => item.key === subType)?.label || '基础几何体'
+  }
+  return { crowd: '群众阵列', upload: '本地上传模型/图片' }[type] || '元素'
 }
 
-function addDirectorElement(type) {
-  const labels = { human: '人体素模', geometry: '基础几何', crowd: '群众阵列', upload: '本地上传' }
+function addDirectorElement(type, subType = '') {
+  const presetLabel = type === 'human'
+    ? directorHumanPresets.find(item => item.key === subType)?.label
+    : type === 'geometry'
+      ? directorGeometryPresets.find(item => item.key === subType)?.label
+      : ''
+  const labels = { human: presetLabel || '人体素模', geometry: presetLabel || '基础几何', crowd: '群众阵列', upload: '本地上传' }
   const index = directorElements.value.filter(item => item.type === type).length + 1
   const item = {
     id: `${type}_${Date.now()}`,
     type,
+    subType,
     name: `${labels[type] || '元素'} ${index}`,
     group: type === 'human' ? '角色' : type === 'crowd' ? '群演' : '场景',
     x: Math.min(82, 24 + index * 12),
@@ -1186,10 +1474,12 @@ function addDirectorElement(type) {
     z: 0,
     rotate: 0,
     scale: type === 'crowd' ? 82 : 100,
+    color: type === 'human' ? '#8fb4cc' : type === 'geometry' ? '#6b7b75' : '#334155',
     hidden: false
   }
   directorElements.value.push(item)
   directorSelectedElementId.value = item.id
+  directorActiveMenu.value = ''
   persistDirectorDesk()
 }
 
@@ -1242,6 +1532,128 @@ function deleteDirectorElement() {
 function resetDirectorView() {
   directorView.value = 'director'
   directorMode.value = 'move'
+  directorActiveMenu.value = ''
+}
+
+function toggleDirectorMenu(menu) {
+  directorActiveMenu.value = directorActiveMenu.value === menu ? '' : menu
+}
+
+function setDirectorMode(mode) {
+  directorMode.value = mode
+  directorActiveMenu.value = ''
+}
+
+function setDirectorAspect(aspect) {
+  directorAspect.value = aspect
+  directorActiveMenu.value = ''
+  persistDirectorDesk()
+}
+
+function addDirectorCrowd() {
+  const rows = clampDirectorValue(Number(directorCrowdForm.rows || 3), 1, 20)
+  const cols = clampDirectorValue(Number(directorCrowdForm.cols || 3), 1, 20)
+  const spacing = clampDirectorValue(Number(directorCrowdForm.spacing || 1.2), 0.2, 10)
+  const count = rows * cols
+  const index = directorElements.value.filter(item => item.type === 'crowd').length + 1
+  const item = {
+    id: `crowd_${Date.now()}`,
+    type: 'crowd',
+    subType: 'array',
+    name: `群众（${rows}x${cols}） ${index}`,
+    group: '群演',
+    rows,
+    cols,
+    spacing,
+    count,
+    x: 52,
+    y: 62,
+    z: 0,
+    rotate: 0,
+    scale: 88,
+    color: '#334155',
+    hidden: false
+  }
+  directorElements.value.push(item)
+  directorSelectedElementId.value = item.id
+  directorActiveMenu.value = ''
+  persistDirectorDesk()
+}
+
+function applyDirectorCameraPreset(presetKey) {
+  const preset = directorCameraPresets.find(item => item.key === presetKey)
+  directorCamera.preset = presetKey
+  directorCamera.name = preset?.label || '机位1'
+  const subject = selectedDirectorElement.value || directorElements.value.find(item => item.type === 'human') || directorElements.value[0]
+  directorCamera.focus = subject?.id || ''
+  if (presetKey === 'front_close') {
+    directorCamera.fov = 35
+    directorCamera.z = 4.2
+  } else if (presetKey === 'front_wide') {
+    directorCamera.fov = 68
+    directorCamera.z = 12
+  } else if (presetKey === 'side_follow') {
+    directorCamera.fov = 50
+    directorCamera.x = 4.5
+    directorCamera.z = 6.8
+  } else if (presetKey === 'side_near') {
+    directorCamera.fov = 42
+    directorCamera.x = 3.2
+    directorCamera.z = 4.6
+  } else {
+    directorCamera.fov = 50
+    directorCamera.x = 0
+    directorCamera.z = 8
+  }
+  directorView.value = 'camera'
+  directorSelectedElementId.value = directorCamera.id
+  directorActiveMenu.value = ''
+  persistDirectorDesk()
+}
+
+function setDirectorPanorama(action) {
+  directorScene.panoramaStatus = action === 'AI生成'
+    ? 'AI 全景生成中，完成后自动加载到背景'
+    : `${action}已选择，等待接入资源`
+  directorActiveMenu.value = ''
+  persistDirectorDesk()
+  ElMessage.success(`已选择${action}`)
+}
+
+function openDirectorAiImport() {
+  directorActiveMenu.value = ''
+  directorAiImport.visible = true
+}
+
+function onDirectorAiFileChange(e) {
+  const file = e.target.files?.[0]
+  directorAiImport.fileName = file?.name || ''
+}
+
+async function runDirectorAiImport() {
+  directorAiImport.running = true
+  // TODO: 当前为 mock 实现 + 后端桩调用。待接入真实 AI 识图服务后替换。
+  try {
+    await canvasApi.aiImportDirectorDesk(state.projectId.value, nodeKey(directorDeskNode.value), {
+      source_asset_id: directorAiImport.fileName || `local_${Date.now()}`,
+      mode: directorAiImport.mode
+    })
+  } catch {
+    // 后端未就绪时使用本地模拟（700ms 延迟模拟 AI 处理）
+    await new Promise(resolve => window.setTimeout(resolve, 700))
+  }
+  directorScene.panoramaStatus = directorAiImport.mode === 'overwrite'
+    ? 'AI 识图已覆盖当前全景背景'
+    : 'AI 识图已插入为站位参考层'
+  directorScene.panoramaAssetId = `ai_import_${Date.now()}`
+  if (directorAiImport.mode === 'overwrite') {
+    directorElements.value = cloneDirectorElements(defaultDirectorElements())
+    directorSelectedElementId.value = directorElements.value[0]?.id || ''
+  }
+  directorAiImport.running = false
+  directorAiImport.visible = false
+  await persistDirectorDesk()
+  ElMessage.success('AI 识图导入完成')
 }
 
 function directorObjectStyle(item) {
@@ -1251,7 +1663,8 @@ function directorObjectStyle(item) {
   return {
     left: `${x}%`,
     top: `${y}%`,
-    transform: `translate(-50%, -50%) rotate(${item.rotate || 0}deg) scale(${scale})`
+    transform: `translate(-50%, -50%) rotate(${item.rotate || 0}deg) scale(${scale})`,
+    backgroundColor: item.color || undefined
   }
 }
 
@@ -1348,9 +1761,11 @@ function cleanupDirectorTransformListeners() {
 }
 
 function directorShotDimensions(aspect) {
+  if (aspect === '21:9') return { width: 840, height: 360 }
   if (aspect === '9:16') return { width: 360, height: 640 }
   if (aspect === '1:1') return { width: 520, height: 520 }
   if (aspect === '4:3') return { width: 560, height: 420 }
+  if (aspect === '3:4') return { width: 420, height: 560 }
   return { width: 640, height: 360 }
 }
 
@@ -1362,8 +1777,8 @@ function escapeSvgText(text) {
     .replace(/"/g, '&quot;')
 }
 
-function directorElementFill(type) {
-  return { human: '#4f46e5', geometry: '#059669', crowd: '#334155', upload: '#c2410c' }[type] || '#475569'
+function directorElementFill(type, color) {
+  return color || { human: '#8fb4cc', geometry: '#6b7b75', crowd: '#334155', upload: '#c2410c' }[type] || '#475569'
 }
 
 function buildDirectorShotPreview(shot) {
@@ -1375,11 +1790,11 @@ function buildDirectorShotPreview(shot) {
     const scale = clampDirectorValue(Number(item.scale || 100), 40, 180) / 100
     const baseW = item.type === 'crowd' ? 92 : item.type === 'human' ? 42 : 66
     const baseH = item.type === 'human' ? 98 : 54
-    const fill = directorElementFill(item.type)
+    const fill = directorElementFill(item.type, item.color)
     return `
       <g transform="translate(${x} ${y}) rotate(${Number(item.rotate || 0)}) scale(${scale})">
         <rect x="${-baseW / 2}" y="${-baseH / 2}" width="${baseW}" height="${baseH}" rx="10" fill="${fill}" stroke="#cbd5e1" stroke-width="2"/>
-        <text x="0" y="5" text-anchor="middle" font-size="14" fill="#f8fafc" font-family="Arial, sans-serif">${escapeSvgText(directorElementIcon(item.type))}</text>
+        <text x="0" y="5" text-anchor="middle" font-size="14" fill="#f8fafc" font-family="Arial, sans-serif">${escapeSvgText(directorElementIcon(item.type, item.subType))}</text>
       </g>`
   }).join('')
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
@@ -1413,11 +1828,15 @@ async function captureDirectorShot(node = null, options = {}) {
     view: directorView.value === 'camera' ? '相机视角' : directorView.value === 'top' ? '顶视图' : directorView.value === 'front' ? '正视图' : '导演视角',
     fov: directorCamera.fov,
     focus: directorCamera.focus,
+    camera_name: directorCamera.name,
+    camera_preset: directorCamera.preset,
     created_at: new Date().toLocaleString('zh-CN', { hour12: false }),
     elements: directorElements.value.filter(item => !item.hidden).map(item => ({
       id: item.id,
       name: item.name,
       type: item.type,
+      subType: item.subType,
+      color: item.color,
       x: item.x,
       y: item.y,
       z: item.z,
@@ -1430,6 +1849,10 @@ async function captureDirectorShot(node = null, options = {}) {
   directorSelectedShotId.value = shot.id
   const saved = await persistDirectorDesk()
   if (saved === false) return null
+  // 同步到后端（异步，不阻塞用户操作）
+  canvasApi.captureDirectorDesk(state.projectId.value, nodeKey(directorDeskNode.value), {
+    aspect_ratio: shot.aspect
+  }).catch(() => { /* 后端未就绪时静默降级 */ })
   if (!options.silent) ElMessage.success('已创建当前机位截图')
   return shot
 }
@@ -1454,6 +1877,10 @@ async function sendDirectorShotToCanvas(node = null, shot = null) {
     await canvas.connectNodes(nodeKey(source), nodeKey(created)).catch(() => {})
     state.selectNode(nodeKey(created))
     state.markSaved()
+    // 同步到后端（异步，不阻塞用户操作）
+    canvasApi.sendDirectorScreenshotToCanvas(state.projectId.value, nodeKey(source), targetShot.id, {
+      target_position: { x: created.x, y: created.y }
+    }).catch(() => { /* 后端未就绪时静默降级 */ })
     ElMessage.success('导演台截图已发送到画布图片节点')
   }
 }
@@ -1595,17 +2022,26 @@ function onCanvasKeydown(e) {
   if (['input', 'textarea', 'select'].includes(tag)) return
   if (directorDeskVisible.value) {
     const key = e.key.toLowerCase()
+    if (key === 'escape') {
+      if (directorAiImport.visible) directorAiImport.visible = false
+      else if (directorActiveMenu.value) directorActiveMenu.value = ''
+      else closeDirectorDesk()
+      return
+    }
     if (key === 'v') directorMode.value = 'move'
     if (key === 'r') directorMode.value = 'rotate'
     if (key === 's') directorMode.value = 'scale'
-    if (key === 'x') directorGridSnap.value = !directorGridSnap.value
+    if (key === 'x') {
+      directorGridSnap.value = !directorGridSnap.value
+      persistDirectorDesk()
+    }
     if (key === 't') directorView.value = 'top'
     if (key === 'y') directorView.value = 'front'
     if (key === 'q') resetDirectorView()
-    if (e.ctrlKey && key === 'g' && e.shiftKey) {
+    if ((e.ctrlKey || e.metaKey) && key === 'g' && e.shiftKey) {
       e.preventDefault()
       ungroupDirectorElement()
-    } else if (e.ctrlKey && key === 'g') {
+    } else if ((e.ctrlKey || e.metaKey) && key === 'g') {
       e.preventDefault()
       groupDirectorElement()
     }
@@ -2500,7 +2936,8 @@ function defaultNodeData(type) {
       director: {
         elements: defaultDirectorElements(),
         shots: [],
-        camera: { fov: 35, focus: '', x: 0, y: 160, z: 520 },
+        scene: defaultDirectorScene(),
+        camera: defaultDirectorCamera(),
         aspect: '16:9'
       }
     }
@@ -2727,75 +3164,130 @@ function nodeActions(type) {
 .node-context-menu button { border:0; background:transparent; color:#e5e7eb; text-align:left; padding:9px 12px; cursor:pointer; font-size:12px; }
 .node-context-menu button:hover { background:#1f2937; }
 .node-context-menu button.danger { color:#fca5a5; }
-.director-overlay { position:fixed; inset:0; z-index:1200; background:rgba(2,6,23,.78); display:flex; align-items:center; justify-content:center; padding:20px; }
-.director-shell { width:min(1440px, 96vw); height:min(860px, 92vh); background:#0b1120; border:1px solid #334155; border-radius:10px;
-  box-shadow:0 24px 80px rgba(0,0,0,.62); color:#e5e7eb; display:flex; flex-direction:column; overflow:hidden; }
-.director-topbar { height:58px; flex-shrink:0; display:flex; align-items:center; justify-content:space-between; gap:16px;
-  padding:10px 14px; border-bottom:1px solid #263244; background:#111827; }
-.director-topbar strong { display:block; font-size:15px; line-height:1.2; }
-.director-topbar span { color:#94a3b8; font-size:12px; }
-.director-top-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
-.director-workspace { flex:1; min-height:0; display:grid; grid-template-columns:260px minmax(420px, 1fr) 320px; }
-.director-panel { min-height:0; overflow:auto; background:#111827; padding:12px; border-color:#263244; }
+.director-overlay { position:fixed; inset:0; z-index:1200; background:#05070b; display:flex; align-items:center; justify-content:center; padding:0; }
+.director-shell { width:100vw; height:100vh; background:#101010; border:1px solid #2c2c2c; color:#e5e5e5; display:flex; flex-direction:column; overflow:hidden; }
+.director-shell.fullscreen { border:0; }
+.director-topbar { height:46px; flex-shrink:0; display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:16px;
+  padding:0 14px; border-bottom:1px solid #2b2b2b; background:#1d1d1d; }
+.director-topbar strong { display:block; font-size:14px; line-height:1.2; color:#d9d9d9; }
+.director-view-switch { display:flex; padding:3px; background:#0f0f0f; border:1px solid #383838; border-radius:18px; }
+.director-view-switch button { border:0; background:transparent; color:#9d9d9d; border-radius:14px; padding:4px 12px; cursor:pointer; font-size:12px; }
+.director-view-switch button.active { background:#333; color:#fff; }
+.director-window-actions { justify-self:end; display:flex; gap:10px; }
+.director-window-actions button { width:22px; height:22px; border:0; background:transparent; color:#bfbfbf; font-size:18px; cursor:pointer; border-radius:50%; }
+.director-window-actions button:hover { background:#333; color:#fff; }
+.director-workspace { flex:1; min-height:0; display:grid; grid-template-columns:178px minmax(420px, 1fr) 220px; }
+.director-panel { min-height:0; overflow:auto; background:#1f1f1f; padding:10px; border-color:#2d2d2d; }
 .director-left { border-right:1px solid #263244; }
 .director-right { border-left:1px solid #263244; }
-.director-panel-title { margin:2px 0 8px; color:#cbd5e1; font-size:12px; font-weight:800; }
-.director-add-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
-.director-add-grid button, .director-panorama-actions button, .director-viewbar button {
-  border:1px solid #334155; background:#0f172a; color:#cbd5e1; border-radius:6px; padding:7px 8px; font-size:12px; cursor:pointer;
-}
-.director-add-grid button:hover, .director-panorama-actions button:hover, .director-viewbar button:hover,
-.director-viewbar button.active { border-color:#818cf8; color:#e0e7ff; background:#1e1b4b; }
+.director-panel-title { margin:8px 0 12px; color:#d4d4d4; font-size:12px; font-weight:800; }
+.director-search { height:28px; display:flex; align-items:center; gap:6px; background:#303030; border-radius:6px; padding:0 8px; margin-bottom:12px; }
+.director-search input { flex:1; min-width:0; border:0; outline:0; background:transparent; color:#ddd; font-size:12px; }
+.director-search span { color:#aaa; }
 .director-element-list { display:grid; gap:6px; margin-bottom:10px; }
-.director-element-list button { display:grid; grid-template-columns:32px 1fr; grid-template-rows:auto auto; column-gap:8px;
-  align-items:center; text-align:left; border:1px solid #273449; background:#0f172a; color:#e5e7eb; border-radius:8px; padding:8px; cursor:pointer; }
+.director-element-list button { display:grid; grid-template-columns:26px 1fr; grid-template-rows:auto auto; column-gap:7px;
+  align-items:center; text-align:left; border:1px solid transparent; background:transparent; color:#d7d7d7; border-radius:5px; padding:7px 8px; cursor:pointer; }
 .director-element-list button span { grid-row:1 / span 2; display:flex; align-items:center; justify-content:center; height:28px;
-  border-radius:6px; background:#1f2937; color:#a5b4fc; font-size:11px; font-weight:800; }
-.director-element-list button small { color:#94a3b8; font-size:10px; }
-.director-element-list button.active { border-color:#818cf8; background:#1e1b4b; }
+  border-radius:6px; color:#bfbfbf; font-size:14px; font-weight:800; }
+.director-element-list button strong { font-size:12px; font-weight:600; }
+.director-element-list button small { color:#8a8a8a; font-size:10px; }
+.director-element-list button.active { border-color:#3d3d3d; background:#333; }
 .director-element-list button.hidden { opacity:.45; }
 .director-list-actions { display:grid; grid-template-columns:1fr 1fr; gap:6px; }
 .director-list-actions .el-button { margin-left:0; width:100%; }
-.director-stage-wrap { position:relative; min-width:0; min-height:0; background:#0b1120; display:flex; flex-direction:column; }
-.director-viewbar { height:42px; display:flex; gap:8px; align-items:center; padding:8px 10px; border-bottom:1px solid #1f2937; background:#0f172a; }
-.director-stage { flex:1; position:relative; overflow:hidden;
-  background:radial-gradient(circle at 50% 26%, rgba(129,140,248,.18), transparent 34%), #0b1120; }
-.director-stage::before { content:''; position:absolute; left:6%; right:6%; bottom:9%; height:48%; opacity:.66;
-  background-image:linear-gradient(#243244 1px,transparent 1px),linear-gradient(90deg,#243244 1px,transparent 1px);
-  background-size:42px 42px; transform:perspective(420px) rotateX(62deg); transform-origin:bottom; }
+.director-stage-wrap { position:relative; min-width:0; min-height:0; background:#07090f; display:flex; flex-direction:column; overflow:hidden; }
+.director-stage { flex:1; position:relative; overflow:hidden; background:radial-gradient(circle at 50% 32%, rgba(13,55,84,.22), transparent 38%), #080b12; }
+.director-stage::before { content:''; position:absolute; left:-12%; right:-12%; bottom:-8%; height:66%; opacity:.72;
+  background-image:linear-gradient(#0e324b 1px,transparent 1px),linear-gradient(90deg,#0e324b 1px,transparent 1px);
+  background-size:42px 42px; transform:perspective(520px) rotateX(62deg) scale(var(--director-scene-zoom, 1)); transform-origin:bottom; }
 .director-stage.view-top::before { transform:none; inset:50px 8% 56px; height:auto; }
 .director-stage.view-front::before { transform:none; left:0; right:0; bottom:12%; height:1px; background:#334155; }
-.director-ground { position:absolute; left:0; right:0; bottom:0; height:18%; background:linear-gradient(180deg, transparent, rgba(15,23,42,.9)); pointer-events:none; }
-.director-camera-frame { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); border:2px solid rgba(245,158,11,.95);
-  box-shadow:0 0 0 999px rgba(2,6,23,.32); z-index:2; pointer-events:none; }
-.director-camera-frame span { position:absolute; left:8px; top:8px; color:#fbbf24; font-size:11px; background:rgba(15,23,42,.85); padding:3px 6px; border-radius:4px; }
+.director-ground { position:absolute; left:0; right:0; bottom:var(--director-ground-offset, 0); height:22%; background:linear-gradient(180deg, transparent, rgba(21,27,35,.9)); pointer-events:none; }
+.director-orientation { position:absolute; right:20px; top:16px; z-index:7; display:grid; justify-items:center; gap:6px; }
+.director-orientation span { display:block; width:58px; height:58px; border-radius:50%; background:radial-gradient(circle,#6b7280 0 5px,transparent 6px), conic-gradient(from 0deg,#4b5563,#111827,#4b5563); opacity:.85; }
+.director-orientation button { border:0; border-radius:5px; background:#333; color:#bfbfbf; padding:4px 10px; cursor:pointer; font-size:11px; }
+.director-camera-frame { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); border:1px solid rgba(59,130,246,.48);
+  box-shadow:0 0 0 999px rgba(2,6,23,.13); z-index:2; pointer-events:none; }
+.director-camera-frame span { position:absolute; left:8px; top:8px; color:#e5e7eb; font-size:11px; background:rgba(20,20,20,.85); padding:3px 6px; border-radius:4px; }
+.director-camera-frame.aspect-21-9 { width:72%; aspect-ratio:21 / 9; }
 .director-camera-frame.aspect-16-9 { width:62%; aspect-ratio:16 / 9; }
 .director-camera-frame.aspect-9-16 { height:72%; aspect-ratio:9 / 16; }
 .director-camera-frame.aspect-1-1 { width:46%; aspect-ratio:1 / 1; }
 .director-camera-frame.aspect-4-3 { width:54%; aspect-ratio:4 / 3; }
+.director-camera-frame.aspect-3-4 { height:68%; aspect-ratio:3 / 4; }
 .director-object { position:absolute; z-index:4; min-width:68px; height:54px; border:1px solid #475569; border-radius:8px;
   color:#e5e7eb; background:#1f2937; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
   cursor:pointer; box-shadow:0 12px 24px rgba(0,0,0,.35); transform-origin:center; touch-action:none; user-select:none; }
 .director-object span { font-size:11px; color:#0f172a; background:#c7d2fe; border-radius:999px; padding:2px 6px; font-weight:800; }
 .director-object strong { font-size:11px; max-width:86px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.director-object.selected { border-color:#f59e0b; box-shadow:0 0 0 3px rgba(245,158,11,.24), 0 16px 30px rgba(0,0,0,.42); }
-.director-object-human { height:86px; border-radius:24px 24px 10px 10px; background:#4338ca; }
-.director-object-geometry { background:#047857; }
+.director-object.selected { border-color:#60a5fa; box-shadow:0 0 0 3px rgba(96,165,250,.24), 0 16px 30px rgba(0,0,0,.42); }
+.director-object-human { width:48px; min-width:48px; height:86px; border-radius:24px 24px 10px 10px; background:#8fb4cc; }
+.director-object-geometry { background:#6b7b75; }
 .director-object-crowd { min-width:98px; background:repeating-linear-gradient(90deg,#1f2937 0 16px,#334155 16px 28px); }
 .director-object-upload { background:#7c2d12; }
-.director-shortcuts { height:34px; display:flex; align-items:center; gap:8px; padding:0 12px; color:#94a3b8; font-size:11px; border-top:1px solid #1f2937; overflow-x:auto; }
-.director-shortcuts span { white-space:nowrap; }
+.director-bottom-toolbar { position:absolute; left:50%; bottom:12px; transform:translateX(-50%); z-index:20; display:flex; align-items:center; gap:18px; height:44px; padding:0 18px; background:#1d1d1d; border:1px solid #3d3d3d; border-radius:15px; box-shadow:0 18px 48px rgba(0,0,0,.45); }
+.director-bottom-toolbar > button { width:34px; height:34px; border:0; background:transparent; color:#f3f3f3; font-size:18px; border-radius:12px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+.director-bottom-toolbar > button:hover, .director-bottom-toolbar > button.active { background:#343434; }
+.director-bottom-toolbar > button:nth-child(3) { font-weight:800; font-size:16px; }
+.director-popover { position:absolute; bottom:54px; min-width:210px; background:#1d1d1d; border:1px solid #454545; border-radius:14px; padding:10px; box-shadow:0 20px 60px rgba(0,0,0,.52); display:grid; gap:6px; color:#ddd; }
+.director-popover button { border:0; background:transparent; color:#d9d9d9; border-radius:10px; padding:10px 12px; text-align:left; cursor:pointer; font-size:15px; display:flex; align-items:center; gap:14px; }
+.director-popover button:hover, .director-popover button.active { background:#333; color:#fff; }
+.director-popover button span { min-width:28px; color:#f1f1f1; font-weight:800; text-align:center; }
+.director-popover button kbd { margin-left:auto; color:#8f8f8f; font-family:inherit; }
+.director-popover .has-sub b { margin-left:auto; color:#aaa; }
+.mode-popover { left:0; min-width:176px; }
+.model-popover { left:46px; min-width:250px; }
+.geometry-popover, .crowd-popover { left:280px; min-width:220px; }
+.panorama-popover { left:118px; min-width:236px; }
+.camera-popover { left:170px; min-width:420px; grid-template-columns:1fr 1fr; }
+.aspect-popover { left:300px; min-width:420px; grid-template-columns:repeat(4, 1fr); }
+.popover-title { grid-column:1 / -1; color:#9d9d9d; font-size:14px; padding:4px 8px 8px; display:flex; justify-content:space-between; }
+.crowd-popover label { display:grid; grid-template-columns:52px 1fr; align-items:center; gap:10px; color:#a9a9a9; font-size:15px; padding:4px 12px; }
+.crowd-popover input { width:78px; border:0; border-radius:10px; background:#343434; color:#fff; padding:10px; font-size:16px; }
+.popover-actions { display:grid; grid-template-columns:1fr 1fr; gap:12px; padding:8px 12px 4px; }
+.popover-actions button { justify-content:center; background:#333; }
+.popover-actions button.primary { background:#fff; color:#111; }
+.director-panel-tabs { display:flex; gap:8px; margin-bottom:12px; }
+.director-panel-tabs button { border:0; background:#333; color:#aaa; border-radius:8px; padding:7px 10px; cursor:pointer; }
+.director-panel-tabs button.active { color:#fff; background:#3d3d3d; }
+.camera-preview { height:106px; border-radius:8px; background:linear-gradient(180deg,#030303 0 48%,#10151c 48%); border:1px solid #262626; padding:10px; display:grid; position:relative; margin-bottom:16px; overflow:hidden; }
+.camera-preview strong { color:#aaa; font-size:12px; }
+.camera-preview span { align-self:center; justify-self:center; color:#aab6c8; font-size:26px; }
+.camera-preview button { position:absolute; right:8px; bottom:8px; border:0; border-radius:8px; background:#2f3440; color:#eee; width:24px; height:24px; cursor:pointer; }
 .director-form { display:grid; gap:8px; margin-bottom:16px; }
-.director-form label { color:#94a3b8; font-size:11px; font-weight:700; }
+.director-form label { color:#8e8e8e; font-size:11px; font-weight:700; }
+.director-form input[type="checkbox"] { vertical-align:-2px; }
 .director-number-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px; }
 .director-panorama-actions { display:grid; grid-template-columns:1fr; gap:6px; }
 .director-shot-list { display:grid; gap:8px; }
-.director-shot-item { display:grid; grid-template-columns:1fr auto auto; gap:6px; align-items:center; border:1px solid #273449; background:#0f172a; border-radius:8px; padding:6px; }
+.director-shot-item { display:grid; grid-template-columns:1fr auto auto; gap:6px; align-items:center; border:1px solid #333; background:#161616; border-radius:8px; padding:6px; }
 .director-shot-item > button:first-child { border:0; background:transparent; color:#e5e7eb; text-align:left; cursor:pointer; padding:0; }
-.director-shot-item img { display:block; width:100%; height:54px; object-fit:cover; border-radius:6px; margin-bottom:6px; border:1px solid #334155; }
+.director-shot-item img { display:block; width:100%; height:54px; object-fit:cover; border-radius:6px; margin-bottom:6px; border:1px solid #333; }
 .director-shot-item strong { display:block; font-size:12px; }
-.director-shot-item span { color:#94a3b8; font-size:10px; }
-.director-empty { color:#94a3b8; font-size:12px; padding:10px; border:1px dashed #334155; border-radius:8px; text-align:center; }
+.director-shot-item span { color:#8f8f8f; font-size:10px; }
+.director-empty { color:#8f8f8f; font-size:12px; padding:10px; border:1px dashed #3f3f3f; border-radius:8px; text-align:center; }
+.director-empty.compact { text-align:left; }
+.director-ai-dialog { position:fixed; inset:0; z-index:1300; background:rgba(0,0,0,.62); display:flex; align-items:center; justify-content:center; }
+.director-ai-card { width:min(1120px, 78vw); background:#1f1f1f; border:1px solid #3b3b3b; border-radius:16px; box-shadow:0 24px 80px rgba(0,0,0,.62); color:#e5e5e5; overflow:hidden; }
+.director-ai-card header { height:72px; display:flex; align-items:center; justify-content:space-between; padding:0 28px; border-bottom:1px solid #343434; }
+.director-ai-card header strong { font-size:20px; }
+.director-ai-card header button { border:0; background:transparent; color:#cfcfcf; font-size:34px; cursor:pointer; }
+.director-ai-tabs { display:flex; gap:34px; padding:22px 28px 10px; }
+.director-ai-tabs button { border:0; background:transparent; color:#8e8e8e; font-size:18px; font-weight:800; cursor:pointer; }
+.director-ai-tabs button.active { color:#fff; }
+.ai-upload-box { display:flex; flex-direction:column; justify-content:center; align-items:center; height:410px; margin:0 28px 22px; border:1px dashed #555; border-radius:14px; cursor:pointer; gap:14px; color:#8f8f8f; }
+.ai-upload-box input { display:none; }
+.ai-upload-box strong { color:#f5f5f5; font-size:20px; }
+.ai-upload-box span { font-size:15px; }
+.director-ai-mode { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:0 28px 24px; }
+.director-ai-mode label { border:1px solid #444; border-radius:10px; padding:14px 18px; display:grid; grid-template-columns:26px 1fr; column-gap:8px; cursor:pointer; color:#8e8e8e; }
+.director-ai-mode label.active { border-color:#8f8f8f; color:#fff; }
+.director-ai-mode input { grid-row:1 / span 2; }
+.director-ai-mode strong { font-size:18px; }
+.director-ai-mode span { grid-column:2; font-size:14px; margin-top:6px; }
+.director-ai-card footer { min-height:84px; border-top:1px solid #343434; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:18px 28px; color:#aaa; font-size:15px; }
+.director-ai-card footer button { border:0; border-radius:12px; background:#f5f5f5; color:#111; padding:14px 28px; font-size:18px; cursor:pointer; }
+.director-ai-card footer button:disabled { opacity:.55; cursor:not-allowed; }
 .flex { display:flex; } .gap-sm { gap:8px; } .gap-md { gap:12px; }
 .items-center { align-items:center; } .font-bold { font-weight:600; }
 .text-sm { font-size:12px; } .text-xs { font-size:11px; }

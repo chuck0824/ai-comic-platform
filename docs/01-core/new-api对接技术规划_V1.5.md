@@ -73,7 +73,7 @@ V1.5 中，new-api 不再只是模型调用代理，而是 AI 视频工业化生
 
 | 字段 | 用途 | 示例 |
 |---|---|---|
-| `type` | 执行层大类，用于路由到 image / video / audio / compose / agent / skill 执行器 | `image` |
+| `type` | 执行层大类，用于路由到 image / video / audio / quality / agent / skill 执行器 | `image` |
 | `sub_type` | 业务动作，用于产品解释、测试断言、计费细分和数据分析 | `storyboard_image`、`image_to_video`、`video_reference` |
 
 成本控制按三个阶段实现：
@@ -107,7 +107,7 @@ LibTV 指南中暴露的生成能力需要在 AI Router 层抽象为“模型能
 | 主体库 | 仅对支持主体一致性的模型开放；主体描述需拼接进 Prompt | `subject_ids`、`subject_prompt_injection=true` |
 | 真人/合规素材 | 真人素材必须通过合规校验，未通过禁止提交到受限模型 | `compliance_status=verified` |
 | 图像全景/多角度/焦点编辑 | 路由到图像工具模型或 mock provider，结果统一为图片资产 | `image_tool_type`、`camera_params`、`selected_regions` |
-| 视频解析/剪辑/分离 | 解析走视觉理解或视频工具，剪辑/分离可走媒体处理队列 | `video_tool_type`、`time_range`、`separate_target` |
+| 视频解析/音频分离 | 解析走视觉理解模型；音频分离走独立媒体工具队列 | `video_tool_type`、`separate_target` |
 | 音色克隆 | 样本时长、清晰度和试听状态必须满足最低要求 | `voice_sample_asset_ids`、`voice_quality_scores` |
 
 ### 1.1 核心原则
@@ -132,6 +132,7 @@ new-api = 模型供应商的“聚合层 + 计费层 + 渠道层”
 | **多副本并行** | ❌ 不感知 | ✅ 画布多副本创建、参数差异化、结果选择 | 我们并行调用 new-api N 次 |
 | **全能参考视频** | ❌ 不感知 | ✅ 多模态素材组合、权重配置、Seedance 路由 | 我们组装请求，调 new-api 视频接口 |
 | **画布节点引擎** | ❌ 不感知 | ✅ 节点 CRUD、连线、状态机、版本历史、结果回写 | 纯业务逻辑 |
+| **素材交付** | ❌ 不感知 | ✅ 镜头采用版本、素材清单、ZIP 打包与下载 | 不请求模型；不执行视频剪辑或合成 |
 | **剧本/资产/交易** | ❌ 不感知 | ✅ 8 个微服务全部业务逻辑 | — |
 
 ### 1.4 V1.5 P0 调用场景
@@ -214,6 +215,70 @@ new-api = 模型供应商的“聚合层 + 计费层 + 渠道层”
     │  │  (资产市场)       │ (质检)  │ (通知)     │ (Agent/Skill)                   │ │
     │  └─────────────────────────────────────────────────────────────────────────────┘ │
     └──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### 2.1 跨端与模型调用流程图集
+
+#### 2.1.1 总流程图
+
+```mermaid
+flowchart LR
+    U["8080 用户端"] --> API["平台业务 API"]
+    A["3001 new-api 管理端"] --> NA["new-api 渠道 / 模型 / 配额"]
+    API --> C["canvas-svc / generation-svc"]
+    C --> R["AI Router"]
+    R --> NA
+    NA --> P["上游模型供应商"]
+    P --> W["任务结果回写"]
+    W --> S["节点 / 分镜 / 资产库"]
+    S --> D["采用版本 / 素材包"]
+```
+
+#### 2.1.2 用户旅程图
+
+```mermaid
+journey
+    title 模型调用与素材交付旅程
+    section 创作
+      在 8080 配置镜头生成参数: 5: 创作者
+      查看积分预估并确认: 4: 创作者, 平台
+    section 调用
+      平台创建任务并由 new-api 路由模型: 4: 平台, new-api
+      结果回写节点和资产库: 5: 平台
+    section 交付
+      质检并选定镜头采用版本: 5: 创作者
+      导出原始素材包: 5: 创作者
+```
+
+#### 2.1.3 页面跳转图
+
+```mermaid
+flowchart TD
+    L["共享身份登录"] --> U["8080 用户端"]
+    U --> C["画布 / 生成任务 / 资产库"]
+    L --> A["3001 管理端"]
+    A --> CH["渠道管理"]
+    A --> MO["模型管理"]
+    A --> QU["分组与配额"]
+    CH --> G["new-api 模型网关"]
+    MO --> G
+    QU --> G
+    C -. "仅通过平台服务调用，不直接跳转管理页面" .-> G
+```
+
+#### 2.1.4 状态流转图
+
+```mermaid
+stateDiagram-v2
+    [*] --> estimated
+    estimated --> pending: 用户确认 / 冻结积分
+    pending --> running: AI Router 提交 new-api
+    running --> succeeded: 回写资产
+    running --> failed: 上游失败
+    failed --> pending: 重试或切换渠道
+    pending --> canceled: 用户取消
+    succeeded --> settled: 成功结算
+    failed --> refunded: 失败退还
 ```
 
 ---
@@ -370,6 +435,7 @@ CREATE TABLE ai_model_capabilities (
 | 画布任务 | 任务类型 | 优先模型 (new-api 渠道) | 备选模型 | 降级模型 |
 |---|---|---|---|---|
 | 剧本生成/分镜分析 | `llm_chat` | DeepSeek-V3 | GPT-4o | Claude 3.5 Sonnet |
+| 钩子/编导/导演联合审核 | `llm_chat` / `rule_review` | DeepSeek-V3 | GPT-4o | 规则引擎 |
 | 文生图 | `txt2img` | Seedream 5.0 | Flux.1 Pro | SD 3.5 |
 | 图生图/重绘 | `img2img` | Seedream 5.0 | Flux.1 Pro | SD 3.5 |
 | 抠图 | `remove_bg` | 自建模型 | remove.bg API | — |
@@ -388,7 +454,7 @@ CREATE TABLE ai_model_capabilities (
 
 | 微服务 | 需要 AI 能力 | 调用路径 | 说明 |
 |---|---|---|---|
-| **script-gen-svc** | LLM 文本生成 | `script-gen-svc` → AI Router → new-api `/v1/chat/completions` | 剧本生成6步向导、分镜分析、Prompt优化 |
+| **script-gen-svc** | LLM 文本生成 + 规则审核 | `script-gen-svc` → AI Router → new-api `/v1/chat/completions` | 源头文本生成、钩子策略、单章正文版本、AI漫剧/短剧/网剧/TVC改编脚本、可选分镜、Prompt优化 |
 | **script-repo-svc** | — | 不直接调 AI | 仅存储剧本和资产 |
 | **canvas-svc** | 图像/视频/音频生成 | `canvas-svc` → AI Router → new-api 多种端点 | **调用量最大的服务** |
 | **agent-svc** | LLM Agent对话 + Tool调用 | `agent-svc` → AI Router → new-api `/v1/chat/completions` | AI 导演决策、Skill 执行 |
@@ -403,6 +469,7 @@ CREATE TABLE ai_model_capabilities (
 | 服务 | AI 调用类型 | 预估日调用量 | 峰值 QPS |
 |---|---|---|---|
 | script-gen-svc | LLM Chat | 3,000-10,000 | 10 |
+| script-gen-svc | Episode Review | 5,000-20,000 | 20 |
 | canvas-svc | Image Gen | 10,000-50,000 | 50 |
 | canvas-svc | Video Gen | 1,000-5,000 | 10 |
 | canvas-svc | TTS | 5,000-20,000 | 30 |
@@ -660,22 +727,32 @@ AI Router.CostEstimator 预估费用
   └── 余额不足 → 阻止生成，引导充值
 ```
 
-### 9.3 new-api 用户映射
+### 9.3 统一账号与 new-api 影子用户映射
 
 ```
-我们的用户体系            new-api 体系
-─────────────            ────────────
-user_id (our)    ←──→   new-api user_id
-member_level     ←──→   new-api user_group (配额模板)
-enterprise_id    ←──→   new-api user_group (企业共享额度)
+平台统一身份（事实源）          new-api 影子记录（能力侧）
+──────────────────          ───────────────────
+platform_user_id     ←──→   new_api_user_id
+member_level         ───→   new-api user_group（配额模板）
+enterprise_id        ───→   new-api group / enterprise quota
+platform_role        ───→   new-api role（仅管理员可登录管理端）
 ```
 
-用户在 new-api 中统一充值，我们的平台通过 API 查询余额：
+账号共用规则：
+
+1. `user-svc` 是账号、密码、手机、邮箱、企业和平台角色的唯一事实源。
+2. new-api 不开放独立业务注册，不保存第二套平台密码；其用户表仅作为配额、令牌和账单归属的影子记录。
+3. `8080` 登录后，普通用户只进入漫剧生产功能；具备 `platform_admin` 或 `operator` 角色的账号可通过短时 SSO 票据进入 `3001`。
+4. 平台账号禁用、企业成员移除或角色变更时，必须同步吊销 new-api 会话和令牌。
+
+充值与会员入口由 `8080` 提供，平台通过内部 API 查询和同步 new-api 底层余额：
 
 ```
-GET new-api/api/user/balance?user_id=our_user_12345
+GET new-api/api/user/balance?platform_user_id=our_user_12345
 → { "balance": 50.00, "quota": { "gpt-4o": 1000, "seedance": 50 } }
 ```
+
+> 当前状态（2026-06-27）：端口和服务已拆分，但统一登录票据、角色映射、影子用户自动创建及双向禁用同步尚未实现。new-api 本地管理员只用于初始化和调试。
 
 ---
 
@@ -689,12 +766,12 @@ GET new-api/api/user/balance?user_id=our_user_12345
 │  │  new-api (1 Pod)     │  │  我们的平台                      │   │
 │  │                      │  │                                  │   │
 │  │  · Go Gin 服务       │  │  API Gateway (APISIX) ×2        │   │
-│  │  · 端口 3000         │  │  BFF (Gin) ×3                   │   │
+│  │  · 本地入口 3001     │  │  BFF (Gin) ×3                   │   │
 │  │  · MySQL (共享/独立) │  │                                  │   │
 │  │  · Redis (共享/独立) │  │  AI Router ×3                    │   │
 │  │                      │  │  ├── TaskRouter                  │   │
-│  │  管理界面: 3000      │  │  ├── CostEstimator               │   │
-│  │  API端点: 3000       │  │  ├── Adapter层                   │   │
+│  │  管理界面: 3001      │  │  ├── CostEstimator               │   │
+│  │  API端点: 3001       │  │  ├── Adapter层                   │   │
 │  │                      │  │  └── ResultWriter                │   │
 │  └──────────┬──────────┘  │                                  │   │
 │             │              │  微服务 Pods (每个 2-5 副本)      │   │
@@ -719,8 +796,11 @@ GET new-api/api/user/balance?user_id=our_user_12345
 | 数据库 | 与平台共享 MySQL（不同 database）| `new_api` database |
 | Redis | 可共享或独立 | 推荐独立 Redis 实例 |
 | 供应商 Key | 在 new-api 管理后台配置 | 不暴露给我们的平台 |
-| 用户体系 | new-api 自建 | 我们的平台通过 API 管理 new-api 用户 |
-| 内部调用 | 仅允 K8s 内网访问 | 不暴露 new-api 管理端口到公网 |
+| 用户体系 | 平台账号统一认证，new-api 保存影子用户 | 不允许形成第二套业务账号密码 |
+| 管理端权限 | 仅 `platform_admin` / `operator` | 普通创作者不得访问管理界面 |
+| 内部调用 | 生产环境仅允许网关/AI Router 访问 API | 本地联调管理与 API 入口均为 `3001` |
+
+本地端口固定为：`3001` new-api 管理端与模型网关、`8080` AICP 用户端、`5173` AICP Vite 调试入口。生产环境可使用容器内部端口映射，但对外职责不得混用。
 
 ---
 
@@ -732,8 +812,8 @@ GET new-api/api/user/balance?user_id=our_user_12345
 |---|---|
 | 部署 new-api（Docker/K8s） | new-api 运行，配置 3-5 个 LLM 渠道 |
 | 搭建 AI Router 骨架 | TaskRouter + 基础 Adapter（LLM + 文生图） |
-| 实现用户映射 | 我们的 user_id ↔ new-api user_id |
-| script-gen-svc 对接 | 剧本生成走 new-api `/v1/chat/completions` |
+| 实现统一身份与影子用户同步 | `platform_user_id ↔ new_api_user_id`、短时 SSO 票据、角色映射、禁用同步 |
+| script-gen-svc 对接 | 源头文本生成、改编脚本、钩子策略、分阶段审核走 AI Router；MVP 可规则引擎降级 |
 | 计费联调 | 确认 new-api 扣费 + 我们平台余额查询通 |
 
 ### 第二阶段（3-4周）：画布核心对接
@@ -779,7 +859,8 @@ GET new-api/api/user/balance?user_id=our_user_12345
 
 ---
 
-> **文档状态**：V1.0 初稿  
+> **文档状态**：V1.5 已修订；端口拆分已落地，统一账号与角色映射待实现
 > **编写日期**：2026-06-15  
+> **最后修订**：2026-06-27
 > **依赖文档**：《后端产品功能设计_V1.5.md》  
-> **后续步骤**：技术选型评审 → AI Router 详细设计 → new-api 视频渠道扩展方案 → 第一阶段开发排期
+> **后续步骤**：统一登录票据 → 影子用户同步 → 角色映射与双端禁用 → AI Router 联调 → new-api 视频渠道扩展

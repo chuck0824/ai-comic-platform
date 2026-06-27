@@ -20,7 +20,7 @@
         <div :class="['mode-card', { active: genMode === 'quick' }]" @click="genMode = 'quick'">
           <div class="mode-icon"><el-icon><Lightning /></el-icon></div>
           <strong>快速模式</strong>
-          <p class="text-xs text-muted mt-sm">输入一句话创意，AI 自动完成选题→梗概→大纲→剧本→分镜→投流全流程</p>
+          <p class="text-xs text-muted mt-sm">输入一句话创意，默认生成可继续修改的小说/故事源头文本资产</p>
           <span class="badge badge-accent mt-sm">适合验证脑洞</span>
         </div>
         <!-- 精细模式 -->
@@ -34,11 +34,16 @@
 
       <!-- ===== 快速模式 ===== -->
       <div v-if="genMode === 'quick'" class="card">
-        <h3 class="font-bold mb-md"><el-icon><Lightning /></el-icon> 快速模式 — 一键生成完整剧本</h3>
+        <h3 class="font-bold mb-md"><el-icon><Lightning /></el-icon> 快速模式 — 生成源头文本资产</h3>
         <el-input v-model="quickIdea" type="textarea" :rows="4"
                   placeholder="描述你的故事创意，比如：一个外卖小哥其实是隐藏的豪门继承人…" />
 
         <div class="grid3 gap-md mt-md">
+          <el-select v-model="quickSourceType" size="small">
+            <el-option label="小说/故事文本" value="novel" />
+            <el-option label="产品故事" value="product_story" />
+            <el-option label="品牌叙事" value="brand_story" />
+          </el-select>
           <el-select v-model="quickPlatform" size="small">
             <el-option label="抖音" value="douyin" /><el-option label="快手" value="kuaishou" />
             <el-option label="视频号" value="wechat" /><el-option label="TikTok" value="tiktok" />
@@ -53,13 +58,24 @@
           </el-select>
         </div>
 
+        <div class="decision-strip mt-md">
+          <el-checkbox v-model="quickWithAdaptation">同时生成改编脚本</el-checkbox>
+          <el-select v-model="quickTargetType" size="small" style="width:160px" :disabled="!quickWithAdaptation">
+            <el-option label="AI漫剧" value="ai_comic" />
+            <el-option label="短剧" value="short_drama" />
+            <el-option label="网剧" value="web_drama" />
+            <el-option label="TVC" value="tvc" />
+          </el-select>
+          <el-checkbox v-model="quickWithStoryboard">同时生成A档分镜</el-checkbox>
+        </div>
+
         <div class="mt-md">
           <label class="text-sm font-bold mb-sm" style="display:block">4轴标签（控制题材、情节、情绪、时空）</label>
           <FourAxisTags v-model="quickTags" />
         </div>
 
         <el-button type="primary" size="large" class="w-full mt-lg" @click="doQuickGen" :loading="loading">
-          {{ loading ? 'AI正在创作中...' : '一键生成完整剧本' }}
+          {{ loading ? 'AI正在创作中...' : '生成源头文本资产' }}
         </el-button>
         <el-progress v-if="loading" :percentage="progress" :stroke-width="6" class="mt-md" />
 
@@ -67,9 +83,13 @@
           <el-alert type="success" title="生成完成！" :closable="false" show-icon />
           <div class="mt-md text-sm"><strong>剧本标题：</strong>{{ genResult.title || '未命名' }}</div>
           <div class="mt-sm text-sm text-muted">{{ genResult.synopsis || '' }}</div>
+          <div class="decision-note mt-md">
+            源头文本已生成。你可以先保存到仓库继续单章修改，也可以在精细模式中进入改编脚本和分镜生产。
+          </div>
           <div class="flex gap-sm mt-lg">
             <el-button size="small" type="primary" @click="saveAndGoWarehouse" :loading="saving"><el-icon><FolderAdd /></el-icon> 保存并查看仓库</el-button>
-            <el-button size="small" @click="saveAndGoCanvas"><el-icon><Brush /></el-icon> 送入画布工作台</el-button>
+            <el-button size="small" @click="genMode = 'fine'; currentStep = 0"><el-icon><Aim /></el-icon> 进入精细编辑</el-button>
+            <el-button size="small" @click="saveAndGoCanvas" :disabled="!quickWithStoryboard"><el-icon><Brush /></el-icon> 送入画布工作台</el-button>
           </div>
         </div>
       </div>
@@ -88,13 +108,22 @@
 
         <!-- ===== STEP 0: 输入创意与参数 ===== -->
         <div v-show="currentStep === 0" class="card">
-          <h3 class="font-bold mb-md">Step 1: 输入创意与设置参数</h3>
+          <h3 class="font-bold mb-md">Step 1: 源头文本与钩子策略</h3>
           <el-input v-model="fineIdea" type="textarea" :rows="4"
                     placeholder="描述你的故事创意、核心冲突、人物关系…&#10;比如：被家族抛弃的私生女，意外成为商业帝王唯一在意的女人…" />
           <div class="grid3 gap-md mt-md">
+            <el-select v-model="fineSourceType" size="small">
+              <el-option label="小说/故事文本" value="novel" />
+              <el-option label="产品故事" value="product_story" />
+              <el-option label="品牌叙事" value="brand_story" />
+            </el-select>
             <el-select v-model="finePlatform" size="small"><el-option label="抖音" value="douyin" /><el-option label="快手" value="kuaishou" /><el-option label="视频号" value="wechat" /></el-select>
             <el-select v-model="fineAudience" size="small"><el-option label="女频" value="female" /><el-option label="男频" value="male" /><el-option label="全年龄" value="all" /></el-select>
             <el-select v-model="fineEpisodes" size="small"><el-option label="20集" :value="20" /><el-option label="40集" :value="40" /><el-option label="80集" :value="80" /></el-select>
+          </div>
+          <div class="hook-strategy-card mt-md">
+            <strong>钩子策略前置</strong>
+            <span>系统将在选题、大纲、章节正文和章尾留白阶段持续检查钩子，不再等到分镜前才审核。</span>
           </div>
           <div class="mt-md"><label class="text-sm font-bold mb-sm" style="display:block">4轴标签（精确控制创作方向）</label><FourAxisTags v-model="fineTags" /></div>
           <el-button type="primary" size="large" class="w-full mt-lg" @click="doGenTopic" :loading="stepLoading">
@@ -189,21 +218,125 @@
             <div class="ep-nav-col">
               <div v-for="(ep, i) in outlineEpisodes" :key="i" :class="['ep-nav-row', { active: scriptEpIdx === i }]" @click="scriptEpIdx = i">第{{ i+1 }}集 · {{ ep.title }}</div>
             </div>
-            <div><div class="script-toolbar"><span class="text-xs text-muted">第{{ scriptEpIdx+1 }}集 · {{ scriptText.length }}字</span><el-button size="small" @click="doGenEpisode"><el-icon><Cpu /></el-icon> AI续写</el-button></div>
-            <el-input v-model="scriptText" type="textarea" :rows="16" class="script-input" placeholder="[场景1]&#10;△ 动作描述&#10;角色名：对白&#10;【旁白】：内容" /></div>
+            <div>
+              <div class="script-toolbar">
+                <span class="text-xs text-muted">第{{ scriptEpIdx+1 }}集 · {{ scriptText.length }}字</span>
+                <div class="flex gap-sm">
+                  <el-button size="small" @click="reviewCurrentEpisode" :loading="reviewLoading"><el-icon><DataAnalysis /></el-icon> 联合审核本集</el-button>
+                  <el-button size="small" @click="doGenEpisode"><el-icon><Cpu /></el-icon> AI续写</el-button>
+                </div>
+              </div>
+              <el-input v-model="scriptText" type="textarea" :rows="16" class="script-input" placeholder="[场景1]&#10;△ 动作描述&#10;角色名：对白&#10;【旁白】：内容" />
+              <div v-if="episodeReview" class="episode-review-panel mt-md">
+                <div class="review-head">
+                  <div>
+                    <strong>第{{ episodeReview.episode_number || scriptEpIdx + 1 }}集联合审核</strong>
+                    <span :class="['review-status', episodeReview.overall_status === 'pass' ? 'pass' : 'warn']">
+                      {{ episodeReview.overall_status === 'pass' ? '可进入分镜' : '建议优化' }}
+                    </span>
+                  </div>
+                  <span class="review-score">总分 {{ Math.round((episodeReview.overall_score || 0) * 100) }}%</span>
+                </div>
+                <div class="review-score-grid">
+                  <div class="review-score-card"><span>钩子 Agent</span><strong>{{ Math.round((episodeReview.hook_score || 0) * 100) }}%</strong></div>
+                  <div class="review-score-card"><span>编导 Agent</span><strong>{{ Math.round((episodeReview.showrunner_score || 0) * 100) }}%</strong></div>
+                  <div class="review-score-card"><span>导演 Agent</span><strong>{{ Math.round((episodeReview.director_score || 0) * 100) }}%</strong></div>
+                </div>
+                <div class="review-agent-list">
+                  <div v-for="agent in (episodeReview.agent_reviews || [])" :key="agent.agent_type" class="review-agent-card">
+                    <div class="review-agent-title">
+                      <strong>{{ agent.agent_name }}</strong>
+                      <span>{{ agent.score_text || Math.round((agent.score || 0) * 100) + '%' }}</span>
+                    </div>
+                    <p>{{ agent.summary }}</p>
+                    <div v-if="agent.issues?.length" class="review-issues">
+                      <div v-for="(issue, idx) in agent.issues" :key="idx" :class="['review-issue', issue.severity]">
+                        {{ issue.message }}
+                      </div>
+                    </div>
+                    <div v-if="agent.suggestions?.length" class="review-suggestions">
+                      <span v-for="(s, idx) in agent.suggestions" :key="idx">{{ s }}</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="review-actions">
+                  <el-button size="small" @click="reviewCurrentEpisode" :loading="reviewLoading">重新审核</el-button>
+                  <el-button size="small" type="primary" @click="currentStep = 5">保存正文并选择下一步</el-button>
+                </div>
+              </div>
+            </div>
           </div>
           <div v-else class="text-center py-xl text-muted">点击"生成剧本"</div>
           <div class="flex gap-sm mt-lg">
             <el-button size="large" @click="currentStep = 3">← 上一步</el-button>
             <el-button size="large" @click="doGenEpisode" :loading="stepLoading">🔄 重新生成</el-button>
-            <el-button type="primary" size="large" @click="doGenStoryboard" :loading="stepLoading">下一步：生成分镜 →</el-button>
+            <el-button size="large" type="success" @click="saveChapterDraft" :loading="saving">保存单章正文版本</el-button>
+            <el-button type="primary" size="large" @click="currentStep = 5">正文完成：选择下一步 →</el-button>
           </div>
         </div>
 
-        <!-- ===== STEP 5: 分镜 ===== -->
+        <!-- ===== STEP 5: 正文完成页 ===== -->
         <div v-show="currentStep === 5" class="card">
+          <h3 class="font-bold mb-md">Step 6: 正文完成页</h3>
+          <p class="text-sm text-muted mb-md">源头文本已生成。这里不再强制进入分镜，用户可以继续修改正文、保存仓库、改编脚本、生成分镜或生成投流素材。</p>
+          <div class="decision-grid">
+            <div class="decision-card" @click="currentStep = 4">
+              <strong>继续修改正文</strong>
+              <span>回到单章正文编辑器，继续润色、扩写、增强钩子。</span>
+            </div>
+            <div class="decision-card" @click="saveToWarehouse">
+              <strong>保存到仓库</strong>
+              <span>只保存源头文本资产，分镜和投流素材允许为空。</span>
+            </div>
+            <div class="decision-card primary" @click="currentStep = 6">
+              <strong>改编为脚本</strong>
+              <span>将小说/故事文本改编为 AI漫剧、短剧、网剧或 TVC。</span>
+            </div>
+            <div class="decision-card" @click="doGenStoryboard">
+              <strong>选择章节生成分镜</strong>
+              <span>用户主动进入 A/B/C 档分镜生产，不覆盖正文。</span>
+            </div>
+            <div class="decision-card" @click="doGenPromotion">
+              <strong>生成投流素材</strong>
+              <span>基于源头文本或改编脚本生成标题、封面和 3 秒钩子。</span>
+            </div>
+          </div>
+          <div class="flex gap-sm mt-lg">
+            <el-button size="large" @click="currentStep = 4">← 返回正文</el-button>
+          </div>
+        </div>
+
+        <!-- ===== STEP 6: 改编脚本 ===== -->
+        <div v-show="currentStep === 6" class="card">
+          <h3 class="font-bold mb-md">Step 7: 改编脚本</h3>
+          <div class="grid3 gap-md mb-md">
+            <el-select v-model="adaptationTargetType" size="small">
+              <el-option label="AI漫剧" value="ai_comic" />
+              <el-option label="短剧" value="short_drama" />
+              <el-option label="网剧" value="web_drama" />
+              <el-option label="TVC" value="tvc" />
+            </el-select>
+            <el-button type="primary" @click="doGenAdaptation" :loading="stepLoading">生成改编脚本</el-button>
+            <el-button @click="saveAdaptationVersion" :loading="saving" :disabled="!adaptationText">保存改编版本</el-button>
+          </div>
+          <div v-if="stepLoading" class="text-center py-xl"><el-icon :size="40"><Loading /></el-icon><p class="mt-md">AI正在生成改编脚本...</p></div>
+          <template v-else>
+            <div class="hook-strategy-card mb-md">
+              <strong>继承源头钩子</strong>
+              <span>改编脚本会继承小说/故事文本的开场钩子、章尾留白和阶段性大钩子。</span>
+            </div>
+            <el-input v-model="adaptationText" type="textarea" :rows="16" class="script-input" placeholder="这里展示 AI漫剧/短剧/网剧/TVC 改编脚本，可继续人工修改。" />
+          </template>
+          <div class="flex gap-sm mt-lg">
+            <el-button size="large" @click="currentStep = 5">← 返回正文完成页</el-button>
+            <el-button type="primary" size="large" @click="doGenStoryboard" :loading="stepLoading" :disabled="!adaptationText">基于改编脚本生成分镜 →</el-button>
+          </div>
+        </div>
+
+        <!-- ===== STEP 7: 分镜 ===== -->
+        <div v-show="currentStep === 7" class="card">
           <div class="flex items-center gap-md mb-md">
-            <h3 class="font-bold">Step 6: 分镜脚本</h3>
+            <h3 class="font-bold">Step 8: 分镜脚本</h3>
             <div class="tier-tabs"><span :class="['tier-tab',{active:tier==='A'}]" @click="tier='A'">A档·编导速看</span><span :class="['tier-tab',{active:tier==='B'}]" @click="tier='B'">B档·导演确认</span><span :class="['tier-tab',{active:tier==='C'}]" @click="tier='C'">C档·生产交付</span></div>
           </div>
           <div v-if="stepLoading" class="text-center py-xl"><el-icon :size="40"><Loading /></el-icon><p class="mt-md">AI正在生成分镜...</p></div>
@@ -220,15 +353,15 @@
           <div v-else-if="tier !== 'A'" class="text-center py-xl"><p class="font-bold">{{tier==='B'?'B档·导演确认版':'C档·生产交付版'}}</p><p class="text-sm text-muted mt-sm">{{tier==='B'?'导演意图标注·人物调度·信息差控制·声画设计':'AI抽卡表·AI视频表·配音字幕交付表'}}</p><p class="text-xs text-muted mt-lg">将在后续版本上线</p></div>
           <div v-else class="text-center py-xl text-muted">点击"生成分镜"</div>
           <div class="flex gap-sm mt-lg">
-            <el-button size="large" @click="currentStep = 4">← 上一步</el-button>
+            <el-button size="large" @click="currentStep = adaptationText ? 6 : 5">← 上一步</el-button>
             <el-button size="large" @click="doGenStoryboard" :loading="stepLoading">🔄 重新生成</el-button>
             <el-button type="primary" size="large" @click="doGenPromotion" :loading="stepLoading">下一步：生成投流素材 →</el-button>
           </div>
         </div>
 
-        <!-- ===== STEP 6: 投流 ===== -->
-        <div v-show="currentStep === 6" class="card">
-          <h3 class="font-bold mb-md">Step 7: 投流素材</h3>
+        <!-- ===== STEP 8: 投流 ===== -->
+        <div v-show="currentStep === 8" class="card">
+          <h3 class="font-bold mb-md">Step 9: 投流素材</h3>
           <div v-if="stepLoading" class="text-center py-xl"><el-icon :size="40"><Loading /></el-icon><p class="mt-md">AI正在生成投流素材...</p></div>
           <template v-else-if="promoData">
             <div class="section"><h4 class="sec-title"><el-icon><TrendCharts /></el-icon> 爆款标题 (5选1)</h4><div class="grid2 gap-sm"><div v-for="(t,i) in (promoData.titles||[])" :key="i" class="title-card" :class="{picked:promoPicks.title===i}" @click="promoPicks.title=i">{{ ['悬念式','反转式','痛点式','数据式','对比式'][i] }}<p class="text-sm mt-sm">{{ t }}</p></div></div></div>
@@ -238,15 +371,15 @@
           </template>
           <div v-else class="text-center py-xl text-muted">点击"生成投流素材"</div>
           <div class="flex gap-sm mt-lg">
-            <el-button size="large" @click="currentStep = 5">← 上一步</el-button>
+            <el-button size="large" @click="currentStep = storyboardShots.length ? 7 : 5">← 上一步</el-button>
             <el-button size="large" @click="doGenPromotion" :loading="stepLoading">🔄 重新生成</el-button>
             <el-button type="success" size="large" @click="saveToWarehouse" :loading="saving"><el-icon><FolderAdd /></el-icon> 保存到仓库</el-button>
           </div>
         </div>
 
-        <!-- ===== STEP 7: 入库 ===== -->
-        <div v-show="currentStep === 7" class="card">
-          <h3 class="font-bold mb-md"><el-icon><FolderAdd /></el-icon> Step 8: 保存与入库</h3>
+        <!-- ===== STEP 9: 入库 ===== -->
+        <div v-show="currentStep === 9" class="card">
+          <h3 class="font-bold mb-md"><el-icon><FolderAdd /></el-icon> Step 10: 保存与入库</h3>
           <div class="text-center py-lg">
             <el-icon :size="48" color="var(--success)"><CircleCheck /></el-icon>
             <p class="font-bold mt-md text-lg">🎉 创作流程已完成！</p>
@@ -264,7 +397,7 @@
             </table>
           </div>
           <div class="flex gap-sm mt-lg">
-            <el-button size="large" @click="currentStep = 6">← 上一步</el-button>
+            <el-button size="large" @click="currentStep = 8">← 上一步</el-button>
             <el-button type="primary" size="large" @click="$router.push('/warehouse')"><el-icon><FolderOpened /></el-icon> 前往剧本仓库</el-button>
             <el-button type="success" size="large" @click="$router.push('/canvas')"><el-icon><Brush /></el-icon> 送入画布工作台</el-button>
           </div>
@@ -319,6 +452,10 @@ const savedScriptId = ref(null)  // 跟踪已保存的剧本 ID，避免重复�
 
 // ===== 快速模式 =====
 const quickIdea = ref('')
+const quickSourceType = ref('novel')
+const quickTargetType = ref('ai_comic')
+const quickWithAdaptation = ref(false)
+const quickWithStoryboard = ref(false)
 const quickPlatform = ref('douyin'); const quickAudience = ref('female'); const quickEpisodes = ref(40)
 const quickTags = reactive({ genre: '言情', plots: ['重生', '先婚后爱'], tones: ['甜宠', '打脸'], setting: '现代' })
 const genResult = ref(null)
@@ -328,7 +465,20 @@ async function doQuickGen() {
   loading.value = true; progress.value = 0; genResult.value = null
   const t = setInterval(() => { if (progress.value < 90) progress.value += Math.random() * 10 }, 500)
   try {
-    const res = await scriptApi.genQuick({ idea: quickIdea.value, genre_tag: quickTags.genre, plot_tags: quickTags.plots, tone_tags: quickTags.tones, setting_tag: quickTags.setting, platform: quickPlatform.value, audience: quickAudience.value, episode_count: quickEpisodes.value })
+    const res = await scriptApi.genQuick({
+      idea: quickIdea.value,
+      source_type: quickSourceType.value,
+      target_type: quickTargetType.value,
+      with_adaptation: quickWithAdaptation.value,
+      with_storyboard: quickWithStoryboard.value,
+      genre_tag: quickTags.genre,
+      plot_tags: quickTags.plots,
+      tone_tags: quickTags.tones,
+      setting_tag: quickTags.setting,
+      platform: quickPlatform.value,
+      audience: quickAudience.value,
+      episode_count: quickEpisodes.value
+    })
     const taskId = res.data?.task_id
     if (taskId) {
       for (let i = 0; i < 30; i++) {
@@ -354,7 +504,7 @@ async function doQuickGen() {
 async function saveAndGoWarehouse() {
   saving.value = true
   try {
-    const r = await scriptApi.createScript({ title: genResult.value?.title || '未命名', synopsis: genResult.value?.synopsis || '', episode_count: quickEpisodes.value, genre_tag: quickTags.genre, plot_tags: quickTags.plots, tone_tags: quickTags.tones, setting_tag: quickTags.setting, source: 'ai_generated', status: 'draft' })
+    const r = await scriptApi.createScript({ title: genResult.value?.title || '未命名', synopsis: genResult.value?.synopsis || '', episode_count: quickEpisodes.value, source_type: quickSourceType.value, genre_tag: quickTags.genre, plot_tags: quickTags.plots, tone_tags: quickTags.tones, setting_tag: quickTags.setting, source: 'ai_generated', status: 'draft' })
     savedScriptId.value = r.data?.id || r.data?.script_id
     ElMessage.success('已保存'); $router.push('/warehouse')
   } catch { ElMessage.error('保存失败') }
@@ -367,6 +517,7 @@ async function saveAndGoCanvas() {
       title: genResult.value?.title || '未命名',
       synopsis: genResult.value?.synopsis || '',
       episode_count: quickEpisodes.value,
+      source_type: quickSourceType.value,
       genre_tag: quickTags.genre, plot_tags: quickTags.plots,
       tone_tags: quickTags.tones, setting_tag: quickTags.setting,
       source: 'ai_generated', status: 'draft'
@@ -379,9 +530,9 @@ async function saveAndGoCanvas() {
 }
 
 // ===== 精细模式 =====
-const fineSteps = ['输入创意', '选题', '梗概', '大纲', '剧本', '分镜', '投流', '入库']
+const fineSteps = ['源头设置', '选题', '梗概', '大纲', '正文', '去向', '改编', '分镜', '投流', '入库']
 const currentStep = ref(0)
-const fineIdea = ref(''); const finePlatform = ref('douyin'); const fineAudience = ref('female'); const fineEpisodes = ref(40)
+const fineIdea = ref(''); const fineSourceType = ref('novel'); const finePlatform = ref('douyin'); const fineAudience = ref('female'); const fineEpisodes = ref(40)
 const fineTags = reactive({ genre: '', plots: [], tones: [], setting: '' })
 const stepLoading = ref(false); const stepProgress = ref(0)
 const selectedTopic = ref(-1)
@@ -391,9 +542,14 @@ const fineTopics = ref([])
 const synopsisData = ref(null)
 const outlineEpisodes = ref([])
 const scriptText = ref(''); const scriptEpIdx = ref(0)
+const adaptationTargetType = ref('ai_comic')
+const adaptationText = ref('')
+const adaptationId = ref(null)
 const tier = ref('A'); const storyboardShots = ref([])
 const promoData = ref(null)
 const promoPicks = reactive({ title: 0 })
+const episodeReview = ref(null)
+const reviewLoading = ref(false)
 
 function goToStep(n) { if (n >= 0 && n < fineSteps.length) currentStep.value = n }
 function selectTopic(i) { selectedTopic.value = i }
@@ -420,7 +576,18 @@ async function runStep(apiFn, params, onDone) {
   finally { clearInterval(t); stepProgress.value = 100; stepLoading.value = false }
 }
 
-const baseParams = () => ({ idea: fineIdea.value, genre_tag: fineTags.genre, plot_tags: fineTags.plots, tone_tags: fineTags.tones, setting_tag: fineTags.setting, platform: finePlatform.value, audience: fineAudience.value, episode_count: fineEpisodes.value })
+const baseParams = () => ({
+  idea: fineIdea.value,
+  source_type: fineSourceType.value,
+  target_type: adaptationTargetType.value,
+  genre_tag: fineTags.genre,
+  plot_tags: fineTags.plots,
+  tone_tags: fineTags.tones,
+  setting_tag: fineTags.setting,
+  platform: finePlatform.value,
+  audience: fineAudience.value,
+  episode_count: fineEpisodes.value
+})
 
 async function doGenTopic() {
   if (!fineIdea.value.trim()) { ElMessage.warning('请输入创意'); return }
@@ -451,27 +618,132 @@ async function doGenOutline() {
 async function doGenEpisode() {
   await runStep(scriptApi.genEpisode, baseParams(), (data) => {
     scriptText.value = data.raw || data.script || data.content || data.output_data?.raw || ''
+    episodeReview.value = null
     if (currentStep.value === 3) currentStep.value = 4
   })
 }
 
+async function saveChapterDraft() {
+  if (!scriptText.value.trim()) {
+    ElMessage.warning('请先生成或填写正文')
+    return
+  }
+  saving.value = true
+  try {
+    if (!savedScriptId.value) await saveToWarehouse(false)
+    const ep = outlineEpisodes.value[scriptEpIdx.value] || {}
+    await scriptApi.createChapterVersion(0, {
+      script_id: savedScriptId.value,
+      chapter_number: ep.number || scriptEpIdx.value + 1,
+      title: ep.title || '第' + (scriptEpIdx.value + 1) + '章',
+      content: scriptText.value,
+      content_format: fineSourceType.value === 'novel' ? 'novel' : 'screenplay',
+      change_summary: '保存源头文本单章版本',
+      source: 'manual_edit'
+    })
+    ElMessage.success('已保存单章正文版本')
+  } catch (e) {
+    ElMessage.error('保存正文版本失败: ' + (e?.message || ''))
+  } finally {
+    saving.value = false
+  }
+}
+
+async function reviewCurrentEpisode() {
+  if (!scriptText.value.trim()) {
+    ElMessage.warning('请先生成或填写本集剧本')
+    return
+  }
+  const ep = outlineEpisodes.value[scriptEpIdx.value] || {}
+  reviewLoading.value = true
+  try {
+    const res = await scriptApi.reviewEpisodePreview({
+      script_id: savedScriptId.value,
+      episode_number: ep.number || scriptEpIdx.value + 1,
+      title: ep.title || '第' + (scriptEpIdx.value + 1) + '集',
+      content: scriptText.value,
+      opening_hook: ep.openingHook || '',
+      closing_hook: ep.closingHook || '',
+      core_event: ep.coreEvent || '',
+      next_episode_promise: ep.nextEpisodePromise || ep.next_episode_promise || '',
+      genre_tag: fineTags.genre,
+      audience_mode: fineAudience.value,
+      platform: finePlatform.value
+    })
+    episodeReview.value = res.data || null
+    if (episodeReview.value?.overall_status === 'pass') ElMessage.success('本集联合审核通过')
+    else ElMessage.warning('本集仍有优化建议')
+  } catch (e) {
+    ElMessage.error('联合审核失败: ' + (e?.message || ''))
+  } finally {
+    reviewLoading.value = false
+  }
+}
+
 async function doGenStoryboard() {
-  await runStep(scriptApi.genStoryboard, baseParams(), (data) => {
+  await runStep(scriptApi.genStoryboard, {
+    ...baseParams(),
+    source_text: adaptationText.value || scriptText.value,
+    adaptation_version_id: adaptationId.value,
+    tier: tier.value
+  }, (data) => {
     storyboardShots.value = data.shots || data.storyboard || data.output_data?.shots || []
     if (!storyboardShots.value.length) storyboardShots.value = defaultShots()
-    if (currentStep.value === 4) currentStep.value = 5
+    currentStep.value = 7
   })
 }
 
 async function doGenPromotion() {
-  await runStep(scriptApi.genPromotion, baseParams(), (data) => {
+  await runStep(scriptApi.genPromotion, { ...baseParams(), source_text: adaptationText.value || scriptText.value }, (data) => {
     promoData.value = { titles: data.titles || [], coverCopy: data.coverCopy || data.cover_copy || [], threeSecHooks: data.threeSecHooks || data.three_sec_hooks || [], clipScripts: data.clipScripts || data.clip_scripts || [], commentGuides: data.commentGuides || data.comment_guides || [] }
     if (!promoData.value.titles.length) promoData.value = { titles: ['悬念式标题A', '反转式标题B', '痛点式标题C'], coverCopy: ['封面方案1', '封面方案2'], threeSecHooks: ['开场3秒抓住注意力', '悬疑开场'], clipScripts: ['切片脚本示例'], commentGuides: ['评论区引导'] }
-    if (currentStep.value === 5) currentStep.value = 6
+    currentStep.value = 8
   })
 }
 
-async function saveToWarehouse() {
+async function doGenAdaptation() {
+  await runStep(scriptApi.genAdaptation, {
+    ...baseParams(),
+    target_type: adaptationTargetType.value,
+    source_text: scriptText.value,
+    opening_hook: outlineEpisodes.value[scriptEpIdx.value]?.openingHook || '',
+    closing_hook: outlineEpisodes.value[scriptEpIdx.value]?.closingHook || ''
+  }, (data) => {
+    adaptationText.value = data.content || data.raw || data.output_data?.content || ''
+    if (!adaptationText.value) adaptationText.value = '# 改编脚本\n\n请在这里继续编辑 AI 生成的改编脚本。'
+  })
+}
+
+async function saveAdaptationVersion() {
+  if (!adaptationText.value.trim()) {
+    ElMessage.warning('请先生成或填写改编脚本')
+    return
+  }
+  saving.value = true
+  try {
+    if (!savedScriptId.value) await saveToWarehouse(false)
+    const res = await scriptApi.createAdaptation({
+      script_id: savedScriptId.value,
+      target_type: adaptationTargetType.value,
+      title: adaptationTitle(adaptationTargetType.value),
+      content: adaptationText.value,
+      source_text: scriptText.value,
+      hook_strategy: {
+        inherit_source_hook: true,
+        opening_hook: outlineEpisodes.value[scriptEpIdx.value]?.openingHook || '',
+        closing_hook: outlineEpisodes.value[scriptEpIdx.value]?.closingHook || ''
+      }
+    })
+    adaptationId.value = res.data?.id
+    ElMessage.success('已保存改编脚本版本')
+  } catch (e) {
+    ElMessage.error('保存改编脚本失败: ' + (e?.message || ''))
+  } finally {
+    saving.value = false
+  }
+}
+
+async function saveToWarehouse(moveToDone = true) {
   saving.value = true
   try {
     // 构建完整的分集数据
@@ -493,6 +765,7 @@ async function saveToWarehouse() {
         title: fineTopics.value[selectedTopic.value]?.title || synopsisData.value?.synopsis?.slice(0, 20) || '未命名剧本',
         synopsis: synopsisData.value?.synopsis || '',
         episode_count: fineEpisodes.value,
+        source_type: fineSourceType.value,
         genre_tag: fineTags.genre, plot_tags: fineTags.plots,
         tone_tags: fineTags.tones, setting_tag: fineTags.setting,
         status: 'draft'
@@ -502,6 +775,7 @@ async function saveToWarehouse() {
         title: fineTopics.value[selectedTopic.value]?.title || synopsisData.value?.synopsis?.slice(0, 20) || '未命名剧本',
         synopsis: synopsisData.value?.synopsis || '',
         episode_count: fineEpisodes.value,
+        source_type: fineSourceType.value,
         episodes: episodes,
         content: scriptText.value,
         genre_tag: fineTags.genre, plot_tags: fineTags.plots,
@@ -511,7 +785,7 @@ async function saveToWarehouse() {
       savedScriptId.value = res.data?.id || res.data?.script_id
     }
     ElMessage.success('已保存到仓库！')
-    currentStep.value = 7
+    if (moveToDone) currentStep.value = 9
   } catch { ElMessage.error('保存失败') }
   finally { saving.value = false }
 }
@@ -544,6 +818,13 @@ async function optimizeHooks() {
 }
 
 function defaultShots() { return [{ shotNo: 'SH001', duration: '3s', shotSize: 'MS', cameraMove: '跟拍', visual: '苏小晚端咖啡进办公室', dialogue: '—', function: '进入' }, { shotNo: 'SH002', duration: '5s', shotSize: 'MCU', cameraMove: '固定', visual: '林默抬头看', dialogue: '林默：之前在哪工作？', function: '试探' }, { shotNo: 'SH003', duration: '4s', shotSize: 'CU', cameraMove: '特写', visual: '手指紧握咖啡杯', dialogue: '苏小晚：一家小公司', function: '隐藏' }, { shotNo: 'SH004', duration: '6s', shotSize: 'MS', cameraMove: '缓推', visual: '视线落在手腕伤疤', dialogue: '林默：手腕上的伤…', function: '发现' }, { shotNo: 'SH005', duration: '5s', shotSize: 'MS', cameraMove: '固定', visual: '苏小晚退出，林默看门口', dialogue: '—', function: '钩子' }] }
+
+function adaptationTitle(type) {
+  if (type === 'short_drama') return '短剧改编脚本'
+  if (type === 'web_drama') return '网剧改编脚本'
+  if (type === 'tvc') return 'TVC改编脚本'
+  return 'AI漫剧改编脚本'
+}
 
 // ===== 用户上传 =====
 const uploadFile = ref(null); const uploadTitle = ref(''); const uploadLoading = ref(false); const uploadProgress = ref(0); const uploadResult = ref(null)
@@ -620,6 +901,27 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 .ep-nav-row.active { background:var(--accent-bg); color:var(--accent); font-weight:600; }
 .script-toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; color:var(--text-secondary); }
 .script-input :deep(textarea) { font-family:'SF Mono',monospace; font-size:12px; line-height:1.8; }
+.episode-review-panel { border:1px solid var(--border-light); background:var(--bg-surface-hover); border-radius:8px; padding:12px; color:var(--text-primary); }
+.review-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:10px; }
+.review-status { display:inline-flex; margin-left:8px; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+.review-status.pass { color:var(--success); background:var(--success-bg); }
+.review-status.warn { color:#b45309; background:#fef3c7; }
+.review-score { font-weight:700; color:var(--accent); }
+.review-score-grid { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px; margin-bottom:10px; }
+.review-score-card { padding:8px; border-radius:6px; background:var(--bg-surface); border:1px solid var(--border-light); display:flex; align-items:center; justify-content:space-between; font-size:12px; }
+.review-score-card span { color:var(--text-secondary); }
+.review-agent-list { display:grid; gap:8px; }
+.review-agent-card { border:1px solid var(--border-light); background:var(--bg-surface); border-radius:6px; padding:10px; }
+.review-agent-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:4px; font-size:13px; }
+.review-agent-title span { color:var(--accent); font-weight:700; }
+.review-agent-card p { margin:0 0 6px; color:var(--text-secondary); font-size:12px; }
+.review-issues { display:grid; gap:4px; margin-bottom:6px; }
+.review-issue { padding:6px 8px; border-radius:5px; font-size:12px; background:var(--warning-bg); color:#92400e; }
+.review-issue.high { background:#fee2e2; color:#991b1b; }
+.review-issue.medium { background:#fef3c7; color:#92400e; }
+.review-suggestions { display:flex; gap:6px; flex-wrap:wrap; }
+.review-suggestions span { font-size:11px; color:var(--text-secondary); background:var(--bg-app); border-radius:999px; padding:4px 8px; }
+.review-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
 
 /* ===== Tier Tabs ===== */
 .tier-tabs { display:flex; gap:4px; font-size:11px; }
@@ -641,6 +943,17 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms))
 .hook-line { padding:8px 12px; background:var(--bg-surface-hover); border-radius:6px; margin-bottom:4px; font-size:13px; color:var(--text-primary); }
 .cover-card { padding:10px; background:var(--bg-surface-hover); border-radius:6px; margin-bottom:4px; font-size:12px; color:var(--text-primary); }
 .gen-result { padding:16px; background:var(--success-bg); border-radius:8px; border:1px solid #a7f3d0; color:var(--text-primary); }
+.decision-strip { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:10px 12px; border:1px solid var(--border-light); border-radius:8px; background:var(--bg-surface-hover); }
+.decision-note { padding:10px 12px; border:1px solid var(--border-light); border-radius:8px; background:var(--bg-surface); color:var(--text-secondary); font-size:12px; }
+.decision-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px; }
+.decision-card { padding:14px; border:1px solid var(--border-light); border-radius:8px; background:var(--bg-surface); cursor:pointer; transition:all .15s; display:flex; flex-direction:column; gap:6px; min-height:110px; }
+.decision-card:hover { border-color:var(--accent-border); box-shadow:var(--shadow-sm); transform:translateY(-1px); }
+.decision-card.primary { border-color:var(--accent); background:var(--accent-bg); }
+.decision-card strong { color:var(--text-primary); }
+.decision-card span { color:var(--text-secondary); font-size:12px; line-height:1.5; }
+.hook-strategy-card { display:flex; align-items:flex-start; gap:10px; padding:10px 12px; border:1px solid var(--accent-border); border-radius:8px; background:var(--accent-bg); font-size:12px; }
+.hook-strategy-card strong { color:var(--accent); white-space:nowrap; }
+.hook-strategy-card span { color:var(--text-secondary); line-height:1.5; }
 
 /* ===== Utilities ===== */
 .table-wrap { overflow-x:auto; }

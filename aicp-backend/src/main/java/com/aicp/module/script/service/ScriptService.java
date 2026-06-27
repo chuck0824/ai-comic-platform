@@ -20,6 +20,8 @@ public class ScriptService {
     private final ScriptEpisodeMapper episodeMapper;
     private final ScriptVersionMapper versionMapper;
     private final RepoAssetMapper repoAssetMapper;
+    private final ChapterVersionMapper chapterVersionMapper;
+    private final AdaptationVersionMapper adaptationVersionMapper;
 
     // ===== Script CRUD =====
     @Transactional
@@ -126,6 +128,111 @@ public class ScriptService {
         versionMapper.insert(version);
     }
 
+    // ===== Chapter text versions =====
+    public List<ScriptEpisode> getChapters(Long scriptId) {
+        return episodeMapper.selectList(new LambdaQueryWrapper<ScriptEpisode>()
+                .eq(ScriptEpisode::getScriptId, scriptId)
+                .orderByAsc(ScriptEpisode::getEpisodeNumber));
+    }
+
+    @Transactional
+    public ScriptEpisode updateChapter(Long chapterId, Map<String, Object> body) {
+        ScriptEpisode episode = episodeMapper.selectById(chapterId);
+        if (episode == null) return null;
+        if (body.containsKey("title")) episode.setTitle(String.valueOf(body.get("title")));
+        if (body.containsKey("content")) {
+            String content = String.valueOf(body.getOrDefault("content", ""));
+            episode.setContent(content);
+            episode.setWordCount(content.length());
+        }
+        if (body.containsKey("opening_hook")) episode.setOpeningHook(String.valueOf(body.get("opening_hook")));
+        if (body.containsKey("closing_hook")) episode.setClosingHook(String.valueOf(body.get("closing_hook")));
+        if (body.containsKey("status")) episode.setStatus(String.valueOf(body.get("status")));
+        episodeMapper.updateById(episode);
+
+        if (Boolean.TRUE.equals(body.get("create_version"))) {
+            createChapterVersion(episode.getScriptId(), chapterId, body);
+        }
+        return episode;
+    }
+
+    public List<ChapterVersion> getChapterVersions(Long chapterId) {
+        return chapterVersionMapper.selectList(new LambdaQueryWrapper<ChapterVersion>()
+                .eq(ChapterVersion::getEpisodeId, chapterId)
+                .orderByDesc(ChapterVersion::getCreatedAt));
+    }
+
+    public ChapterVersion createChapterVersion(Long scriptId, Long chapterId, Map<String, Object> body) {
+        ScriptEpisode episode = chapterId == null ? null : episodeMapper.selectById(chapterId);
+        ChapterVersion version = new ChapterVersion();
+        Long bodyScriptId = toLong(body.get("script_id"));
+        version.setScriptId(scriptId != null ? scriptId : (bodyScriptId != null ? bodyScriptId : (episode == null ? null : episode.getScriptId())));
+        version.setEpisodeId(chapterId);
+        version.setChapterNumber(toInt(body.get("chapter_number"), episode == null ? 1 : episode.getEpisodeNumber()));
+        version.setTitle(String.valueOf(body.getOrDefault("title", episode == null ? "未命名章节" : episode.getTitle())));
+        version.setContent(String.valueOf(body.getOrDefault("content", episode == null ? "" : episode.getContent())));
+        version.setContentFormat(String.valueOf(body.getOrDefault("content_format", "novel")));
+        version.setVersionNo(String.valueOf(body.getOrDefault("version_no", "v" + System.currentTimeMillis())));
+        version.setChangeSummary(String.valueOf(body.getOrDefault("change_summary", "保存单章正文版本")));
+        version.setSource(String.valueOf(body.getOrDefault("source", "manual_edit")));
+        version.setCreatedBy(SecurityUtil.requireCurrentUserId());
+        chapterVersionMapper.insert(version);
+        return version;
+    }
+
+    // ===== Adaptation versions =====
+    public List<AdaptationVersion> getAdaptations(Long scriptId, Long chapterVersionId, String targetType) {
+        LambdaQueryWrapper<AdaptationVersion> query = new LambdaQueryWrapper<>();
+        if (scriptId != null) query.eq(AdaptationVersion::getScriptId, scriptId);
+        if (chapterVersionId != null) query.eq(AdaptationVersion::getSourceChapterVersionId, chapterVersionId);
+        if (targetType != null && !targetType.isBlank()) query.eq(AdaptationVersion::getTargetType, targetType);
+        query.orderByDesc(AdaptationVersion::getCreatedAt);
+        return adaptationVersionMapper.selectList(query);
+    }
+
+    public AdaptationVersion getAdaptation(Long id) {
+        return adaptationVersionMapper.selectById(id);
+    }
+
+    public AdaptationVersion createAdaptation(Map<String, Object> body) {
+        AdaptationVersion version = new AdaptationVersion();
+        version.setScriptId(toLong(body.get("script_id")));
+        version.setSourceChapterVersionId(toLong(body.get("source_chapter_version_id")));
+        version.setSourceProjectVersionId(toLong(body.get("source_project_version_id")));
+        version.setTargetType(String.valueOf(body.getOrDefault("target_type", "ai_comic")));
+        version.setVersionNo(String.valueOf(body.getOrDefault("version_no", "v" + System.currentTimeMillis())));
+        version.setTitle(String.valueOf(body.getOrDefault("title", defaultAdaptationTitle(version.getTargetType()))));
+        version.setContent(String.valueOf(body.getOrDefault("content", buildAdaptationContent(body, version.getTargetType()))));
+        version.setHookStrategyJson(toJson(body.getOrDefault("hook_strategy", Map.of(
+                "inherit_source_hook", true,
+                "opening_hook", body.getOrDefault("opening_hook", ""),
+                "closing_hook", body.getOrDefault("closing_hook", "")
+        ))));
+        version.setStatus(String.valueOf(body.getOrDefault("status", "draft")));
+        version.setCreatedBy(SecurityUtil.requireCurrentUserId());
+        adaptationVersionMapper.insert(version);
+        return version;
+    }
+
+    public AdaptationVersion updateAdaptation(Long id, Map<String, Object> body) {
+        AdaptationVersion version = adaptationVersionMapper.selectById(id);
+        if (version == null) return null;
+        if (body.containsKey("title")) version.setTitle(String.valueOf(body.get("title")));
+        if (body.containsKey("content")) version.setContent(String.valueOf(body.get("content")));
+        if (body.containsKey("hook_strategy")) version.setHookStrategyJson(toJson(body.get("hook_strategy")));
+        if (body.containsKey("status")) version.setStatus(String.valueOf(body.get("status")));
+        adaptationVersionMapper.updateById(version);
+        return version;
+    }
+
+    public AdaptationVersion lockAdaptation(Long id) {
+        AdaptationVersion version = adaptationVersionMapper.selectById(id);
+        if (version == null) return null;
+        version.setStatus("locked");
+        adaptationVersionMapper.updateById(version);
+        return version;
+    }
+
     // ===== Assets =====
     public List<RepoAsset> getAssets(String type, String maturity) {
         LambdaQueryWrapper<RepoAsset> query = new LambdaQueryWrapper<>();
@@ -230,8 +337,39 @@ public class ScriptService {
         catch (NumberFormatException e) { return fallback; }
     }
 
+    private Long toLong(Object value) {
+        if (value instanceof Number n) return n.longValue();
+        try { return value == null || String.valueOf(value).isBlank() ? null : Long.parseLong(String.valueOf(value)); }
+        catch (NumberFormatException e) { return null; }
+    }
+
     private String asString(Object primary, Object fallback) {
         Object value = primary != null ? primary : fallback;
         return value == null ? null : String.valueOf(value);
+    }
+
+    private String defaultAdaptationTitle(String targetType) {
+        return switch (targetType == null ? "" : targetType) {
+            case "short_drama" -> "短剧改编脚本";
+            case "web_drama" -> "网剧改编脚本";
+            case "tvc" -> "TVC改编脚本";
+            default -> "AI漫剧改编脚本";
+        };
+    }
+
+    private String buildAdaptationContent(Map<String, Object> body, String targetType) {
+        String source = String.valueOf(body.getOrDefault("source_text", body.getOrDefault("content", "")));
+        String label = defaultAdaptationTitle(targetType);
+        return """
+                # %s
+
+                ## 来源文本摘要
+                %s
+
+                ## 改编结构
+                - 开场钩子：继承源头文本的强冲突或强情绪点。
+                - 主体推进：按目标媒介拆成场次、对白、动作和转场。
+                - 结尾留白：保留下一集/下一镜头/转化动作。
+                """.formatted(label, source.isBlank() ? "待补充源头文本。" : source);
     }
 }

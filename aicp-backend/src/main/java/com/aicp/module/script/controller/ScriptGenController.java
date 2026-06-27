@@ -44,6 +44,11 @@ public class ScriptGenController {
         return ApiResponse.success(genService.createGenTask("storyboard", body));
     }
 
+    @PostMapping("/adaptation")
+    public ApiResponse<Map<String, Object>> genAdaptation(@RequestBody Map<String, Object> body) {
+        return ApiResponse.success(genService.createGenTask("adaptation", body));
+    }
+
     @PostMapping("/promotion")
     public ApiResponse<Map<String, Object>> genPromotion(@RequestBody Map<String, Object> body) {
         return ApiResponse.success(genService.createGenTask("promotion", body));

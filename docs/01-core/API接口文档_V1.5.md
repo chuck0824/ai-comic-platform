@@ -3,9 +3,9 @@
 > 基于《用户端产品功能设计.md》v0.6+《后端产品功能设计_V1.5.md》+《流程图文档.md》+《AI漫剧与视频内容工业化生产工作台 PRD V1.5》  
 > 文档版本：v1.5  
 > API版本：v1  
-> 接口总数：260+ 个  
+> 接口总数：210+ 个
 > 文档格式：OpenAPI 3.0 风格 Markdown  
-> **V1.5 更新**：以 AI 视频工业化生产工作台为口径，补强画布节点、素材拖入、分镜解析、批量生图/视频、全能参考、多副本并行、资产历史、时间线合成、算力预估、Agent 会话与 Skill 执行接口。详见 Section 10 画布章节、Section 11 Agent章节及本节 V1.5 接口补强。
+> **V1.5 更新**：以 AI 视频工业化生产工作台为口径，补强画布节点、素材拖入、分镜解析、批量生图/视频、全能参考、多副本并行、资产历史、镜头采用版本、素材包导出、算力预估、Agent 会话与 Skill 执行接口。平台不提供视频剪辑、视频拼接、转场特效、音视频混合或多轨编辑接口。
 
 ---
 
@@ -49,6 +49,18 @@
 | **认证方式** | JWT Bearer Token（`Authorization: Bearer <token>`） |
 | **时间格式** | ISO 8601（`2026-06-08T15:30:00+08:00`） |
 | **日期格式** | `YYYY-MM-DD`（`2026-06-08`） |
+
+#### 本地双端入口与认证边界
+
+| 入口 | 用途 | 认证口径 |
+|---|---|---|
+| `http://localhost:8080` | AICP 用户端及业务 API | 平台 JWT，账号主数据由 `user-svc` 管理 |
+| `http://localhost:3001` | new-api 管理端及模型网关 | 复用平台统一身份；仅平台管理员/运维角色可进入管理功能 |
+| `http://localhost:5173` | AICP Vite 调试入口 | 仅开发调试，调用 `8080` 业务 API |
+
+双端“账号共用”不等于“功能共用”。`8080` 与 `3001` 使用同一平台用户标识和登录身份，但分别执行创作业务与模型供应商管理。new-api 中的用户记录仅承载 `new_api_user_id`、分组、配额和令牌映射，不保存第二套平台密码。
+
+> 当前联调状态（2026-06-27）：端口与服务已分离；统一登录票据、角色映射和账号自动同步尚未完成，暂不得把 new-api 本地管理员登录视为正式共用账号方案。
 
 ### 1.2 服务路由
 
@@ -98,15 +110,83 @@ V1.5 接口设计以“项目生产闭环”为主线，所有生成结果必须
 | 算力 | `/api/v1/credits/estimate` | POST | 预估算力消耗，Agent 执行前必须调用 |
 | 资产 | `/api/v1/assets/history` | GET | 查询历史生成和手动资产 |
 | 资产 | `/api/v1/assets/{assetId}/send-to-canvas` | POST | 将资产拖回画布并创建节点 |
-| 时间线 | `/api/v1/canvas/projects/{projectId}/timeline/full` | GET/PUT | 获取或保存完整多轨时间线 |
-| 导出 | `/api/v1/canvas/projects/{projectId}/export` | POST | 创建导出任务 |
+| 采用版本 | `/api/v1/canvas/projects/{projectId}/shots/{shotId}/adopted-assets` | PUT | 设置镜头采用的图片、视频、音频、字幕版本 |
+| 素材清单 | `/api/v1/canvas/projects/{projectId}/delivery-manifest` | GET | 获取按镜头排序的交付素材清单 |
+| 导出 | `/api/v1/canvas/projects/{projectId}/export` | POST | 创建项目素材包导出任务 |
+| AI 模型 | `/api/v1/ai/models` | GET | 按节点类型和 Agent 类型返回可用模型，用于文本节点模型下拉等场景 |
 | Agent | `/api/v1/agent/sessions` | POST | 创建 Agent 会话 |
 | Agent | `/api/v1/agent/sessions/{sessionId}/messages` | POST | 发送自然语言任务，生成执行计划 |
+| 文本节点 Agent | `/api/v1/canvas/projects/{projectId}/text-node-agent/plan` | POST | 基于当前文本、用户指令和模型生成修改方案 |
+| 文本节点 Agent | `/api/v1/canvas/projects/{projectId}/text-node-agent/apply` | POST | 用户确认后把修改结果写回文本节点 |
 | Skill | `/api/v1/skills/{skillId}/execute` | POST | 执行 Skill，结果回写画布和资产库 |
+
+#### 1.3.1 总流程图
+
+```mermaid
+flowchart LR
+    U["8080 用户端"] --> B["业务 API / JWT"]
+    A["3001 管理端"] --> M["new-api 管理 API / 管理角色"]
+    B --> C["canvas-svc"]
+    C --> T["generation task"]
+    T --> N["new-api 模型网关"]
+    N --> R["节点 / 分镜 / 资产回写"]
+    R --> Q["质检与采用版本"]
+    Q --> E["delivery manifest / ZIP"]
+    M --> N
+```
+
+#### 1.3.2 用户旅程图
+
+```mermaid
+journey
+    title API 支撑的创作者旅程
+    section 身份与项目
+      登录并取得 JWT: 5: 用户端, user-svc
+      创建项目与画布: 5: 用户端, canvas-svc
+    section 生成与确认
+      拆分镜头并创建批量任务: 4: 用户端, canvas-svc
+      路由模型并回写资产: 4: generation-svc, new-api
+      质检并设置采用版本: 5: 用户端, sop-svc
+    section 交付
+      生成素材清单和 ZIP: 5: canvas-svc
+      下载并进入外部后期: 5: 用户端
+```
+
+#### 1.3.3 页面与接口跳转图
+
+```mermaid
+flowchart TD
+    L["登录页"] --> P["8080 项目列表"]
+    P --> C["画布页"]
+    C --> AS["资产库 API"]
+    C --> GT["生成任务 API"]
+    C --> QC["质检 API"]
+    C --> EX["素材包导出 API"]
+    L --> AD["3001 管理控制台"]
+    AD --> CH["渠道 / 模型 / 配额管理 API"]
+    CH -. "配置供模型网关使用" .-> GT
+```
+
+#### 1.3.4 状态流转图
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> running
+    running --> succeeded
+    running --> failed
+    pending --> canceled
+    failed --> pending: retry
+    succeeded --> adopted: set adopted asset
+    adopted --> packaging: export asset package
+    packaging --> delivered
+    packaging --> package_failed
+    package_failed --> packaging: retry
+```
 
 ### 1.4 V1.5 任务状态要求
 
-所有生图、生视频、TTS、BGM、音效、合成、导出、Agent/Skill 执行都必须进入统一任务模型。
+所有生图、生视频、TTS、BGM、音效、素材打包导出、Agent/Skill 执行都必须进入统一任务模型。
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
@@ -114,7 +194,7 @@ V1.5 接口设计以“项目生产闭环”为主线，所有生成结果必须
 | `project_id` | string | 项目 ID |
 | `node_id` | string | 关联节点，可为空 |
 | `shot_id` | string | 关联分镜，可为空 |
-| `type` | string | image / video / audio / compose / export / agent / skill |
+| `type` | string | image / video / audio / asset_package / agent / skill |
 | `provider` | string | 服务商 |
 | `model_id` | string | 模型 ID |
 | `parameters` | object | 输入参数 |
@@ -196,7 +276,7 @@ V1.5 接口设计以“项目生产闭环”为主线，所有生成结果必须
     "node_output": true,
     "asset_library": true,
     "storyboard_shot": true,
-    "timeline": false
+    "delivery_manifest": false
   }
 }
 ```
@@ -207,9 +287,9 @@ V1.5 接口设计以“项目生产闭环”为主线，所有生成结果必须
 |---|---|---|---|---|
 | 脚本节点 | “AI拆分分镜” | 按 LLM Token 或镜头数预估 | `storyboard_parse` | 脚本全屏表格、分镜行、右侧任务日志 |
 | 图片节点 | “生成图片”“重新生成”“生成多副本” | 按模型、尺寸、张数、多副本数预估 | `image` / `image_variants` | 图片节点预览、资产库、历史生成 |
-| 视频节点 | “图生视频”“首尾帧生成”“全能参考生成” | 按模型、时长、分辨率、参考素材数预估 | `video` / `video_reference` | 视频节点播放器、资产库、时间线候选 |
-| 音频节点 | “生成配音”“生成BGM”“生成音效” | 按字数、时长或模型单价预估 | `audio` | 音频节点波形、资产库、时间线音轨 |
-| 合成节点 | “合成预览”“导出成片” | 按时长、分辨率、轨道数预估 | `compose` / `export` | 合成节点、导出中心、下载地址 |
+| 视频节点 | “图生视频”“首尾帧生成”“全能参考生成” | 按模型、时长、分辨率、参考素材数预估 | `video` / `video_reference` | 视频节点播放器、资产库、镜头采用候选 |
+| 音频节点 | “生成配音”“生成BGM”“生成音效” | 按字数、时长或模型单价预估 | `audio` | 音频节点波形、资产库、镜头/项目素材关联 |
+| 素材交付 | “设为采用版本”“导出素材包” | 生成任务按原模型计费；文件打包按存储策略计费 | `asset_package` | 素材清单、导出中心、ZIP 下载地址 |
 | Agent/Skill | “执行计划”“运行Skill” | 先预估，执行前二次确认 | `agent` / `skill` | Agent会话、画布新增/更新节点、资产库 |
 
 #### 1.5.4 LibTV式节点显示与生成器字段
@@ -359,6 +439,161 @@ POST /api/v1/canvas/projects/{projectId}/nodes/{nodeId}/preset-actions
 | `image_to_prompt` | 图片反推提示词预设组 | 图片节点、文本节点 | `image.asset -> text.prompt` | `预设 - 图片反推提示词` |
 | `text_to_music` | 文字生音乐预设组 | 文本节点、音频节点 | `text.output -> audio.prompt` | `预设 - 文字生音乐` |
 
+#### 1.5.5.1 文本节点 Agent 交互接口
+
+文本节点 Agent 是一期当前落地的节点级自然语言修改能力，入口由用户点击画布中的文本节点触发。当前版本仅支持文本节点，后续图片、视频、音频节点根据各自能力再扩展独立 Agent。
+
+**获取文本节点可用模型**
+
+```
+GET /api/v1/ai/models?node_type=text&agent_type=text_agent
+```
+
+请求参数：
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `node_type` | string | 否 | 当前固定传 `text`；后续可扩展 `image`、`video`、`audio` |
+| `agent_type` | string | 否 | 当前固定传 `text_agent` |
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "models": [
+      {
+        "model_id": "deepseek-v3",
+        "model_name": "DeepSeek V3",
+        "description": "快速文本模型",
+        "provider": "new-api",
+        "capabilities": ["text", "json_output", "long_context"],
+        "estimated_latency": "10s",
+        "context_window": 128000,
+        "input_token_price": 0.001,
+        "output_token_price": 0.001,
+        "status": "available",
+        "priority": 1
+      }
+    ]
+  }
+}
+```
+
+前端展示规则：
+
+| 字段 | 展示位置 | 规则 |
+|---|---|---|
+| `model_name` | 模型下拉主标题 | 必须展示 |
+| `description` | 模型下拉副标题 | 为空时展示“文本模型” |
+| `estimated_latency` | 右侧耗时标签 | 为空时不展示 |
+| `status` | 可用状态 | 非 `available` 时置灰且不可选 |
+| `priority` | 默认排序 | 数字越小越靠前 |
+
+**生成文本修改方案**
+
+```
+POST /api/v1/canvas/projects/{projectId}/text-node-agent/plan
+```
+
+请求体：
+
+```json
+{
+  "node_id": "node_62d1552f",
+  "model_id": "deepseek-v3",
+  "instruction": "把这段角色设定扩写得更有悬念，适合漫剧开场",
+  "current_content": "一个来自未来的机器人，在城市屋顶看星星。",
+  "billing_mode": "token"
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `node_id` | string | 是 | 当前文本节点 ID，可使用节点 `uuid` |
+| `model_id` | string | 是 | 模型下拉选中的 `model_id` |
+| `instruction` | string | 是 | 用户自然语言修改指令 |
+| `current_content` | string | 否 | 当前文本节点内容；为空时以 `instruction` 作为初始写作方向 |
+| `billing_mode` | string | 否 | 默认 `token`；本地可操作模式为 `local` |
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "agent_type": "text_agent",
+    "selected_model": {
+      "model_id": "deepseek-v3",
+      "model_name": "DeepSeek V3",
+      "estimated_latency": "10s"
+    },
+    "usage_estimate": {
+      "input_tokens_estimated": 42,
+      "output_tokens_estimated": 180,
+      "estimated_cost": 0.0003,
+      "estimated_credits": 1,
+      "billing_mode": "token"
+    },
+    "original_content": "一个来自未来的机器人，在城市屋顶看星星。",
+    "revised_content": "一个来自未来的机器人，在城市屋顶看星星。\n\n修改要求：把这段角色设定扩写得更有悬念，适合漫剧开场",
+    "need_confirm": true
+  }
+}
+```
+
+业务规则：
+
+| 规则 | 说明 |
+|---|---|
+| 必须确认 | `need_confirm=true` 时前端必须展示结果对比，不得直接覆盖节点内容 |
+| 计费口径 | 按 `instruction + current_content` 估算输入 Token，按返回文本估算输出 Token |
+| 不重复扣费 | `apply` 仅保存结果，不再次发起模型调用，不重复计费 |
+| 本地模式 | 后端不可用时前端可进入本地预览，`billing_mode=local`、`estimated_credits=0`，不得写入真实消耗流水 |
+| 错误保留 | 规划失败时保留用户输入和当前模型，不清空 Agent 面板 |
+
+**应用修改结果**
+
+```
+POST /api/v1/canvas/projects/{projectId}/text-node-agent/apply
+```
+
+请求体：
+
+```json
+{
+  "node_id": "node_62d1552f",
+  "model_id": "deepseek-v3",
+  "revised_content": "一个来自未来的机器人，在城市屋顶看星星。\n\n修改要求：把这段角色设定扩写得更有悬念，适合漫剧开场"
+}
+```
+
+响应要求：
+
+| 字段 | 说明 |
+|---|---|
+| `type` | 必须仍为 `text` |
+| `status` | 应更新为 `ready` |
+| `width` / `height` | 可扩展到适合展示长文本的尺寸 |
+| `input_data.text_mode` | 建议写入 `prompt` |
+| `input_data.prompt` / `input_data.content` | 写入 `revised_content` |
+| `input_data.source` | 固定 `text_node_agent` |
+| `input_data.agent_type` | 固定 `text_agent` |
+| `input_data.model_id` | 写入用户实际选择模型 |
+
+错误码建议：
+
+| 场景 | HTTP/业务码 | message |
+|---|---|---|
+| 未登录 | 401 / 40101 | 未登录 |
+| 节点为空 | 200 / 40002 | 文本节点不能为空 |
+| 指令为空 | 200 / 40002 | 请输入你想如何修改当前文本 |
+| 节点不存在 | 200 / 46011 | 画布节点不存在 |
+| 模型不可用 | 200 / 47001 | 当前模型不可用，请切换模型 |
+
 #### 1.5.6 LibTV PDF 融合增强接口矩阵
 
 以下接口用于承接《LibTV使用指南.pdf》中确认的生产级功能。接口可按阶段实现，但路径、任务类型和结果回写位置需要保持稳定。
@@ -382,9 +617,9 @@ POST /api/v1/canvas/projects/{projectId}/nodes/{nodeId}/preset-actions
 | 摄像机控制 | PATCH | `/api/v1/canvas/projects/{projectId}/image-nodes/{nodeId}/camera-control` | 保存相机、镜头、焦距、光圈 | 写入 `input_data.generator.camera_control` |
 | 视频高清 | POST | `/api/v1/canvas/projects/{projectId}/video-nodes/{nodeId}/upscale` | 放大 2/4/6 倍、帧率 30/60/90fps | `video_upscale` |
 | 视频解析 | POST | `/api/v1/canvas/projects/{projectId}/video-nodes/{nodeId}/parse` | 分镜拆解为表格 | `video_parse`，可创建脚本节点 |
-| 视频剪辑 | POST | `/api/v1/canvas/projects/{projectId}/video-nodes/{nodeId}/trim` | 入点/出点裁剪 | `video_trim` |
 | 人声/背景声分离 | POST | `/api/v1/canvas/projects/{projectId}/video-nodes/{nodeId}/separate-audio` | 分离人声或背景声 | `audio_separate`，创建音频节点 |
-| 视频合成 | POST | `/api/v1/canvas/projects/{projectId}/compose-nodes` | 视频/音频连线创建合成节点 | 创建 compose 节点 |
+| 镜头采用版本 | PUT | `/api/v1/canvas/projects/{projectId}/shots/{shotId}/adopted-assets` | 选择镜头交付使用的图片、视频、音频与字幕版本 | 回写 adopted asset IDs |
+| 素材包导出 | POST | `/api/v1/canvas/projects/{projectId}/export` | 按素材清单收集原文件并生成 ZIP | `asset_package` |
 | 导演台 | POST/PUT | `/api/v1/canvas/projects/{projectId}/director-desk/{nodeId}` | 保存 3D 元素、摄像机、截图、全景 | 回写导演台节点 |
 | 主体库 | POST | `/api/v1/subjects` | 从图片/视频创建主体，支持智能补全、音色绑定 | 创建 subject asset |
 | 合规校验 | POST | `/api/v1/compliance/assets/verify` | 真人/素材合规校验 | 回写 `compliance_status` |
@@ -440,7 +675,7 @@ POST /api/v1/canvas/projects/{projectId}/nodes/{nodeId}/preset-actions
     "node_output": true,
     "asset_library": true,
     "history": true,
-    "timeline": false
+    "delivery_manifest": false
   },
   "expires_at": 1717843800
 }
@@ -506,6 +741,9 @@ GET /api/v1/canvas/projects/{projectId}/events?cursor={cursor}
 |---|---|
 | 刷新恢复 | `GET /nodes` 返回 `style_config`、`input_data`、`output_data`、`status`、`ui_flags` |
 | 文本节点手写 | `preset-actions` 返回 `card_variant=text_editor`，不得创建 `generation_tasks` |
+| 文本节点 Agent 模型 | `GET /api/v1/ai/models?node_type=text&agent_type=text_agent` 返回 `models[]`，可用模型 `status=available` |
+| 文本节点 Agent 规划 | `POST /text-node-agent/plan` 返回 `original_content`、`revised_content`、`usage_estimate`、`need_confirm=true` |
+| 文本节点 Agent 应用 | `POST /text-node-agent/apply` 后 `GET /nodes` 返回更新后的 `input_data.prompt/content` |
 | 自动预设组 | `preset-actions` 返回 group、nodes、edges，`run_policy.requires_credit_estimate=true` |
 | 余额不足 | `credits/estimate.can_execute=false`，提交按钮禁用且不创建任务 |
 | 任务成功 | `generation/tasks/{taskId}` 或事件返回 `status=success`、资产 ID、实际扣费 |
@@ -861,7 +1099,7 @@ GET /api/v1/user/profile
     "status": "active",
     "stats": {
       "scripts_generated": 45,
-      "videos_exported": 12,
+      "asset_packages_exported": 12,
       "scripts_in_repo": 8,
       "storage_used_mb": 256
     },
@@ -1110,7 +1348,7 @@ GET /api/v1/enterprise/dashboard
     "overview": {
       "member_count": 12,
       "scripts_generated_this_month": 45,
-      "videos_exported_this_month": 28,
+      "asset_packages_exported_this_month": 28,
       "total_assets": 86
     },
     "financial": {
@@ -1131,7 +1369,7 @@ GET /api/v1/enterprise/dashboard
     "recent_activity": [
       {
         "user": "王五",
-        "action": "export_video",
+        "action": "export_asset_package",
         "target": "重生之商业帝国 第3集",
         "time": "2026-06-08T14:30:00+08:00"
       }
@@ -1152,12 +1390,16 @@ GET /api/v1/enterprise/dashboard
 POST /api/v1/script/gen/quick
 ```
 
-> 快速模式返回的是“剧本资产初稿”，不是最终可生产稿。用户仍需在剧本资产工作台完成章节修订、故事圣经补全、分镜脚本Master确认后，才能锁稿送入画布。
+> 快速模式默认返回“源头文本资产初稿”，不是最终可生产稿。用户仍需在内容资产工作台完成单章正文修订、钩子检查、可选改编脚本和可选分镜后，才能进入画布生产。分镜和投流素材允许为空。
 
 **请求体**：
 ```json
 {
   "idea": "一个外卖小哥其实是隐藏的豪门继承人",
+  "source_type": "novel",
+  "target_type": "ai_comic",
+  "with_adaptation": false,
+  "with_storyboard": false,
   "tags": {
     "genre": "言情",
     "plot": ["重生", "先婚后爱"],
@@ -1204,6 +1446,7 @@ POST /api/v1/script/gen/quick
     "rules": []
   },
   "outline_episodes": [],
+  "adaptation_versions": [],
   "storyboard_shots": [],
   "promotion_materials": {
     "titles": [],
@@ -1222,8 +1465,10 @@ POST /api/v1/script/gen/topic          # Step1: 爆款选题
 POST /api/v1/script/gen/synopsis       # Step2: 故事梗概
 POST /api/v1/script/gen/outline        # Step3: 分集大纲
 POST /api/v1/script/gen/episode        # Step4: 单集剧本
-POST /api/v1/script/gen/storyboard     # Step5: 分镜脚本(A/B/C档)
-POST /api/v1/script/gen/promotion      # Step6: 投流素材 (V1.2)
+POST /api/v1/script/gen/adaptation     # Step5: 源头文本改编为AI漫剧/短剧/网剧/TVC脚本
+POST /api/v1/script/gen/storyboard     # Step6: 分镜脚本(A/B/C档，可选)
+POST /api/v1/script/gen/promotion      # Step7: 投流素材 (V1.2，可选)
+POST /api/v1/script/review/preview     # 单集预览审核：钩子Agent+编导Agent+导演Agent
 ```
 
 **Step1 请求示例**：
@@ -1268,9 +1513,210 @@ POST /api/v1/script/gen/promotion      # Step6: 投流素材 (V1.2)
 }
 ```
 
-> Step2-6必须接收用户已修改后的上一阶段内容。例如用户修改了梗概或章节正文，后续大纲、分镜、投流都以修订版为准，不能仅以AI原始生成结果为准。
+> Step2-7必须接收用户已修改后的上一阶段内容。例如用户修改了梗概或章节正文，后续大纲、改编脚本、分镜、投流都以修订版为准，不能仅以AI原始生成结果为准。
+> Step3 分集/分章大纲必须返回章节钩子结构；Step4 源头正文生成必须接收当前章节钩子结构作为硬约束；Step5 改编脚本必须继承源头文本钩子；Step6 分镜生成必须继承改编脚本或正文版本。
+
+**Step3 分集大纲输出需包含钩子结构**：
+```json
+{
+  "episodes": [
+    {
+      "number": 4,
+      "title": "旧疤暴露",
+      "core_event": "男主追问女主手腕旧疤来历",
+      "macro_hook_ref": "身份秘密",
+      "previous_episode_question": "男主是否发现女主旧疤？",
+      "opening_hook": "男主盯着女主手腕旧疤，脸色瞬间变了。",
+      "midpoint_escalation": "女主撒谎掩盖，男主拿出旧案照片。",
+      "closing_hook": "男主低声说：那晚救我的人，是不是你？",
+      "next_episode_promise": "男主将调查旧案照片，女主身份即将暴露。",
+      "hook_segments": [
+        { "key": "S1", "name": "强钩", "target_strength": 5, "content": "旧疤特写" },
+        { "key": "S2", "name": "人物", "target_strength": 3, "content": "女主回避" },
+        { "key": "S3", "name": "冲突", "target_strength": 4, "content": "男主追问" },
+        { "key": "S4", "name": "升级", "target_strength": 4, "content": "旧案照片" },
+        { "key": "S5", "name": "爽点", "target_strength": 3, "content": "女主反问" },
+        { "key": "S6", "name": "留白", "target_strength": 5, "content": "救命真相逼近" }
+      ]
+    }
+  ]
+}
+```
 
 ---
+
+### 6.2B 源头正文版本与改编脚本接口
+
+#### 6.2B.1 单章正文列表与版本
+
+```
+GET   /api/v1/script/repo/scripts/{scriptId}/chapters
+PATCH /api/v1/script/repo/chapters/{chapterId}
+GET   /api/v1/script/repo/chapters/{chapterId}/versions
+POST  /api/v1/script/repo/chapters/{chapterId}/versions
+```
+
+`PATCH /chapters/{chapterId}` 请求体：
+
+```json
+{
+  "title": "第4章 旧疤暴露",
+  "content": "单章小说/剧本文本...",
+  "opening_hook": "男主盯着女主手腕旧疤，脸色瞬间变了。",
+  "closing_hook": "男主低声说：那晚救我的人，是不是你？",
+  "create_version": true,
+  "change_summary": "强化章尾留白"
+}
+```
+
+`POST /chapters/{chapterId}/versions` 请求体：
+
+```json
+{
+  "script_id": 12345,
+  "chapter_number": 4,
+  "title": "旧疤暴露",
+  "content": "单章正文版本内容",
+  "content_format": "novel",
+  "change_summary": "AI润色后人工修改",
+  "source": "manual_edit"
+}
+```
+
+业务规则：
+
+| 规则 | 说明 |
+|---|---|
+| 正文可独立保存 | 单章正文版本不要求已有分镜 |
+| 不自动覆盖 | 正文更新后，只标记关联改编脚本/分镜需同步 |
+| 钩子前置 | 正文版本应保存开场钩子、章尾留白或钩子报告引用 |
+
+#### 6.2B.2 源头文本改编脚本
+
+```
+POST /api/v1/script/gen/adaptation
+GET  /api/v1/script/repo/adaptations?script_id=&chapter_version_id=&target_type=
+POST /api/v1/script/repo/adaptations
+GET  /api/v1/script/repo/adaptations/{adaptationId}
+PATCH /api/v1/script/repo/adaptations/{adaptationId}
+POST /api/v1/script/repo/adaptations/{adaptationId}/lock
+```
+
+生成请求：
+
+```json
+{
+  "script_id": 12345,
+  "source_type": "chapter",
+  "source_text": "源头小说/故事文本...",
+  "source_chapter_version_id": 987,
+  "target_type": "ai_comic",
+  "inherit_hook_strategy": true,
+  "opening_hook": "旧疤特写开场",
+  "closing_hook": "救命真相逼近"
+}
+```
+
+保存改编版本请求：
+
+```json
+{
+  "script_id": 12345,
+  "source_chapter_version_id": 987,
+  "target_type": "ai_comic",
+  "title": "AI漫剧改编脚本",
+  "content": "[第1集 开场] ...",
+  "hook_strategy": {
+    "inherit_source_hook": true,
+    "opening_hook": "旧疤特写开场",
+    "closing_hook": "救命真相逼近"
+  },
+  "status": "draft"
+}
+```
+
+业务规则：
+
+| 规则 | 说明 |
+|---|---|
+| 改编不覆盖源头 | AI漫剧、短剧、网剧、TVC 脚本保存为 `adaptation_versions` |
+| 保留来源版本 | 必须尽量保存 `source_chapter_version_id` 或 `source_project_version_id` |
+| 分镜可选 | 分镜可从源头正文生成，也可从改编脚本生成；存在改编版本时优先用改编脚本 |
+
+---
+
+### 6.2A 每集联合审核接口（script-review）
+
+> 路由前缀：`/api/v1/script/review` | 认证要求：JWT | 说明：服务于 Step4 剧本编辑器和 Step5 分镜前准入。
+
+#### 6.2A.1 预览审核：未入库文本
+
+```
+POST /api/v1/script/review/preview
+```
+
+**请求体**：
+```json
+{
+  "script_id": 12345,
+  "episode_number": 4,
+  "title": "旧疤暴露",
+  "content": "[场景1 办公室 日 内]\n△ 男主盯着女主手腕旧疤...\n男主：那晚救我的人，是不是你？",
+  "opening_hook": "男主盯着女主手腕旧疤，脸色瞬间变了。",
+  "closing_hook": "男主低声说：那晚救我的人，是不是你？",
+  "core_event": "男主追问女主旧疤来历",
+  "next_episode_promise": "男主将调查旧案照片，女主身份即将暴露。",
+  "genre_tag": "都市言情",
+  "audience_mode": "female"
+}
+```
+
+**成功响应**：
+```json
+{
+  "code": 0,
+  "data": {
+    "overall_status": "needs_revision",
+    "overall_score": 0.76,
+    "hook_score": 0.82,
+    "showrunner_score": 0.74,
+    "director_score": 0.70,
+    "agent_reviews": [
+      {
+        "agent_type": "hook",
+        "agent_name": "钩子 Agent",
+        "score": 0.82,
+        "score_text": "★★★★☆",
+        "status": "pass",
+        "summary": "开场和结尾钩子较强，承接关系成立。",
+        "issues": [],
+        "suggestions": ["中段可继续强化冲突升级。"]
+      }
+    ],
+    "actions": ["optimize_hook", "optimize_dialogue", "compress_scenes", "approve"]
+  }
+}
+```
+
+#### 6.2A.2 已入库分集审核与报告查询
+
+```
+POST /api/v1/script/review/episodes/{episodeId}
+GET  /api/v1/script/review/episodes/{episodeId}
+POST /api/v1/script/review/episodes/{episodeId}/approve
+```
+
+| 接口 | 行为 |
+|---|---|
+| `POST /episodes/{episodeId}` | 读取 `script_episodes`，执行钩子/编导/导演联合审核，并写入 `episode_review_reports` |
+| `GET /episodes/{episodeId}` | 获取该集最新审核报告 |
+| `POST /episodes/{episodeId}/approve` | 用户确认本集审核通过，允许进入分镜 |
+
+错误码：
+
+| code | message |
+|---|---|
+| 47020 | 分集不存在 |
 
 ### 6.3 分镜升档 `V1.1`
 
@@ -1796,7 +2242,7 @@ GET /api/v1/asset/market/my/downloads       # 我下载的
 ## 10. 画布视频工作台接口（canvas）`V1.3`
 
 > 路由前缀：`/api/v1/canvas` | 认证要求：JWT | 限流：300次/分钟  
-> **V1.3 画布功能增强**：本章涵盖画布基础接口（V1.0-V1.2）与V1.3增强API（节点引擎、下游处理节点、去重、时间轴添加节点、合成变体、图像节点操作、视频节点操作、音频节点操作等）。详细V1.3画布API设计参见 **[《后端产品功能设计_V1.5.md》Section 9.1](../01-core/后端产品功能设计_V1.5.md)**。
+> **V1.3 画布功能增强**：本章涵盖画布基础接口（V1.0-V1.2）与 V1.3 增强 API（节点引擎、下游处理节点、去重、镜头采用版本、素材清单、图像节点操作、视频生成操作、音频素材操作等）。详细设计参见 **[《后端产品功能设计_V1.5.md》Section 9.1](../01-core/后端产品功能设计_V1.5.md)**。
 
 ### 10.1 画布项目
 
@@ -1887,13 +2333,20 @@ POST /api/v1/canvas/projects/:id/import-script      # 从仓库导入剧本
         "layer_state": {}
       }
     ],
-    "timeline": {
-      "video_track": [{"shot_id": "EP01_SC01_SH001", "start_ms": 0, "duration_ms": 3000}],
-      "transition_track": [],
-      "audio_track": [],
-      "subtitle_track": [],
-      "bgm_track": [],
-      "sfx_track": []
+    "delivery_manifest": {
+      "version": 1,
+      "shots": [
+        {
+          "shot_id": "EP01_SC01_SH001",
+          "order": 1,
+          "adopted_image_asset_id": "IMG_001",
+          "adopted_video_asset_id": "VID_001",
+          "voice_asset_id": "AUD_001",
+          "subtitle_asset_id": "SUB_001"
+        }
+      ],
+      "bgm_asset_ids": [],
+      "sfx_asset_ids": []
     }
   },
   "status": "editing",
@@ -1973,51 +2426,52 @@ POST /api/v1/canvas/projects/:id/shots/:shot_id/outpaint      # Outpaint扩图(V
 
 ---
 
-### 10.5 时间轴
+### 10.5 镜头采用版本与配套素材
 
-```
-PUT  /api/v1/canvas/projects/:id/timeline                    # 更新时间轴
-POST /api/v1/canvas/projects/:id/timeline/dub                # 生成配音
-POST /api/v1/canvas/projects/:id/timeline/subtitle            # 生成字幕
+```text
+PUT  /api/v1/canvas/projects/:id/shots/:shot_id/adopted-assets # 设置镜头采用版本
+GET  /api/v1/canvas/projects/:id/delivery-manifest             # 获取交付素材清单
+POST /api/v1/canvas/projects/:id/audio/dub                      # 批量生成镜头配音素材
+POST /api/v1/canvas/projects/:id/subtitles                      # 批量生成 SRT/VTT 字幕素材
 ```
 
-**生成配音请求体**：
+**设置镜头采用版本请求体**：
+
 ```json
 {
-  "shot_ids": ["EP01_SC01_SH001", "EP01_SC01_SH002"],
-  "voice_config": {
-    "CH_LIN": { "voice_id": "VOICE_LIN_V01", "emotion": "平静", "speed": 1.0 },
-    "SU": { "voice_id": "VOICE_SU_V01", "emotion": "紧张", "speed": 1.1 }
-  }
+  "image_asset_id": "IMG_001",
+  "video_asset_id": "VID_001",
+  "voice_asset_id": "AUD_001",
+  "subtitle_asset_id": "SUB_001",
+  "sfx_asset_ids": ["SFX_001"]
 }
 ```
 
+服务端仅保存镜头与素材版本的关联，不对音视频执行裁剪、混合或叠加。
+
 ---
 
-### 10.6 合成与导出
+### 10.6 项目素材包导出
 
-```
-POST /api/v1/canvas/projects/:id/compose                     # 合成视频
-GET  /api/v1/canvas/projects/:id/compose/:task_id            # 查询合成进度
-POST /api/v1/canvas/projects/:id/export                      # 导出成片
-GET  /api/v1/canvas/export/:task_id                          # 查询导出进度
-GET  /api/v1/canvas/export/:task_id/download                 # 下载
+```text
+POST /api/v1/canvas/projects/:id/export                      # 创建 ZIP 素材包任务
+GET  /api/v1/canvas/export/:task_id                          # 查询打包进度
+GET  /api/v1/canvas/export/:task_id/download                 # 下载素材包
 ```
 
 **导出请求体**：
+
 ```json
 {
-  "aspect_ratio": "9:16",
-  "resolution": "1080p",
-  "format": "mp4",
-  "codec": "h264",
-  "quality": "high",
-  "watermark": false,
-  "episodes": [1, 2, 3]
+  "manifest_version": 3,
+  "episodes": [1, 2, 3],
+  "include": ["images", "videos", "voice", "bgm", "sfx", "subtitles", "prompts"],
+  "archive_format": "zip"
 }
 ```
 
 **导出进度响应**：
+
 ```json
 {
   "code": 0,
@@ -2025,27 +2479,27 @@ GET  /api/v1/canvas/export/:task_id/download                 # 下载
     "task_id": "export_xyz",
     "status": "processing",
     "progress": 65,
-    "current_stage": "audio_mixing",
-    "estimated_remaining_seconds": 45
+    "current_stage": "copying_assets",
+    "estimated_remaining_seconds": 20
   }
 }
 ```
 
 **导出完成响应**：
+
 ```json
 {
   "code": 0,
   "data": {
     "task_id": "export_xyz",
     "status": "completed",
-    "download_url": "https://cdn.example.com/exports/video_001.mp4?sign=...&expires=...",
+    "download_url": "https://cdn.example.com/exports/project_001_assets.zip?sign=...&expires=...",
     "file_info": {
-      "file_name": "霸道总裁的替身新娘_第1-3集_1080p.mp4",
+      "file_name": "霸道总裁的替身新娘_第1-3集_素材包.zip",
       "file_size_bytes": 125829120,
-      "duration_seconds": 545,
-      "resolution": "1080x1920",
-      "codec": "h264",
-      "bitrate_kbps": 4000
+      "file_count": 96,
+      "manifest_version": 3,
+      "checksum": "sha256:..."
     },
     "expire_at": "2026-07-08T15:30:00+08:00"
   }
@@ -2212,68 +2666,188 @@ POST /api/v1/canvas/projects/:id/slash/:command                  # 执行Slash�
 ### 10.11 🆕 导演台·3D构图 `V1.2`
 
 ```
-POST /api/v1/canvas/projects/:id/director-desk                   # 创建导演台节点
-GET  /api/v1/canvas/projects/:id/director-desk/:deskId           # 获取导演台状态
-PUT  /api/v1/canvas/projects/:id/director-desk/:deskId           # 更新3D场景
-POST /api/v1/canvas/projects/:id/director-desk/:deskId/capture   # 多视角截图
+POST /api/v1/canvas/projects/:id/director-desk                                      # 创建导演台节点
+GET  /api/v1/canvas/projects/:id/director-desk/:deskId                              # 获取导演台状态
+PUT  /api/v1/canvas/projects/:id/director-desk/:deskId                              # 更新3D场景
+POST /api/v1/canvas/projects/:id/director-desk/:deskId/assets/model                 # 上传3D模型
+POST /api/v1/canvas/projects/:id/director-desk/:deskId/capture                      # 创建截图
+POST /api/v1/canvas/projects/:id/director-desk/:deskId/screenshots/:screenshotId/send-to-canvas
+POST /api/v1/canvas/projects/:id/director-desk/:deskId/ai-import                    # AI识图导入场景
 ```
+
+**当前落地说明**：
+
+| 项 | 说明 |
+|---|---|
+| 页面入口 | 最终验收入口为 `http://localhost:8080/canvas`，不是 Vite 开发页 |
+| 前端 API 封装 | `aicp-frontend/src/api/canvas.js` 中 `createDirectorDesk`、`captureDirectorDesk` 等方法 |
+| 后端 Controller | `CanvasController` 相对路径为 `/canvas/projects/...`，经网关前缀后为 `/api/v1/canvas/projects/...` |
+| MVP 状态 | 当前模型上传、截图生成、AI识图为 mock 实现（返回占位 URL/结果）。前端本地生成 SVG 截图预览并同步调用后端 API；后端待接入 MinIO 存储、3D 渲染管线、AI 识图服务后替换为真实实现。前后端均已完成画布节点联动、状态持久化、截图发送闭环。 |
 
 **更新3D场景请求体**：
 ```json
 {
-  "objects": [
-    { "type": "character", "model_id": "CH_LIN", "position": {"x": 0, "y": 0, "z": 2}, "rotation": {"y": 0} },
-    { "type": "prop", "model_id": "PROP_DESK", "position": {"x": 0, "y": 0, "z": 0} }
-  ],
-  "camera": { "position": {"x": 3, "y": 1.5, "z": 5}, "look_at": {"x": 0, "y": 1, "z": 0} }
+  "director": {
+    "scene": {
+      "zoom": 300,
+      "pan": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "skyColor": "#060608",
+      "panoramaStatus": "未连接全景图"
+    },
+    "camera": {
+      "id": "camera_1",
+      "name": "机位1",
+      "x": 0,
+      "y": 2.2,
+      "z": 10,
+      "lookAtX": 0,
+      "lookAtY": 1.2,
+      "lookAtZ": 0,
+      "fov": 50
+    },
+    "objects": [
+      { "id": "director_obj_001", "type": "human", "subType": "male", "name": "男性素体", "x": -60, "y": 0, "z": 0, "rotate": 0, "scale": 100, "color": "#86b7ff" }
+    ],
+    "shots": [],
+    "ai_imports": []
+  }
 }
 ```
 
-**多视角截图响应**：
+**上传3D模型请求**：
+
+```
+POST /api/v1/canvas/projects/:id/director-desk/:deskId/assets/model
+Content-Type: multipart/form-data
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+|---|---|:---:|---|
+| `file` | file | 否 | glb/gltf 文件；当前 MVP 可为空并返回 mock URL |
+| `name` | string | 否 | 文件为空时用于生成 mock 文件名 |
+
+响应示例：
+
 ```json
 {
   "code": 0,
   "data": {
-    "captures": [
-      { "angle": "front", "image_url": "https://cdn.example.com/captures/desk_001_front.png" },
-      { "angle": "side", "image_url": "https://cdn.example.com/captures/desk_001_side.png" },
-      { "angle": "top", "image_url": "https://cdn.example.com/captures/desk_001_top.png" }
+    "asset_id": "asset_model_ab12cd34",
+    "model_url": "/mock/models/local-model.glb",
+    "metadata": {
+      "format": "glb",
+      "size": 0,
+      "triangle_count": 0
+    }
+  }
+}
+```
+
+**创建截图请求**：
+
+```json
+{
+  "aspect_ratio": "16:9",
+  "camera_id": "camera_1",
+  "mode": "camera"
+}
+```
+
+**创建截图响应**：
+```json
+{
+  "code": 0,
+  "data": {
+    "screenshots": [
+      {
+        "id": "shot_ab12cd34",
+        "name": "机位 01",
+        "camera_id": "camera_1",
+        "aspect": "16:9",
+        "aspect_ratio": "16:9",
+        "view": "服务端截图",
+        "fov": 50,
+        "image_url": "/mock/captures/{deskId}_shot_ab12cd34.png",
+        "preview_url": "/mock/captures/{deskId}_shot_ab12cd34.png",
+        "created_at": "Tue Jun 23 13:57:31 CST 2026"
+      }
     ]
   }
 }
 ```
 
-### 10.12 🆕 时间轴多轨编辑器 `V1.2`
+**发送截图到画布请求**：
 
-```
-PUT  /api/v1/canvas/projects/:id/timeline/full                   # 全量更新时间轴(5轨道)
-GET  /api/v1/canvas/projects/:id/timeline/full                   # 获取时间轴完整状态
-POST /api/v1/canvas/projects/:id/timeline/clip                   # 裁取视频片段
-POST /api/v1/canvas/projects/:id/timeline/splice                 # 拼接多片段
-```
-
-**全量更新时间轴请求体**：
 ```json
 {
-  "video_track": [
-    { "shot_id": "SH001", "clip_start_ms": 0, "clip_end_ms": 3000, "order": 1 },
-    { "shot_id": "SH002", "clip_start_ms": 500, "clip_end_ms": 5500, "order": 2 }
-  ],
-  "audio_track": [
-    { "shot_id": "SH001", "voice_id": "VOICE_LIN_V01", "audio_url": "https://cdn.example.com/audio/dub_001.wav", "start_ms": 0 }
-  ],
-  "subtitle_track": [
-    { "shot_id": "SH001", "text": "你之前在哪儿工作？", "start_ms": 0, "end_ms": 3000 }
-  ],
-  "bgm_track": [
-    { "music_id": "MUS_SUSPENSE_V01", "start_ms": 0, "end_ms": 24000, "volume": 0.3, "loop": true }
-  ],
-  "sfx_track": [
-    { "shot_id": "SH001", "sfx_id": "SFX_FOOTSTEP", "start_ms": 500 },
-    { "shot_id": "SH004", "sfx_id": "SFX_DOOR_OPEN", "start_ms": 15000 }
-  ]
+  "target_position": { "x": 1600, "y": 640 },
+  "duplicate": false
 }
 ```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "image_node_id": "node_image_001",
+    "edge_id": "edge_001"
+  }
+}
+```
+
+业务规则：
+
+| 规则 | 说明 |
+|---|---|
+| 图片节点来源 | `input_data.source=director`，并写入 `director_node_id`、`director_shot_id`、`aspect_ratio`、`preview_url` |
+| 位置默认值 | 未传 `target_position` 时，在导演台节点右侧创建图片节点 |
+| 连线 | 自动创建导演台节点 `out` 到图片节点 `in` 的连线 |
+| 截图状态 | 成功后写入 `sent_to_canvas=true`、`target_node_id=image_node_id` |
+
+**AI识图导入请求**：
+
+```json
+{
+  "source_asset_id": "asset_image_001",
+  "mode": "insert",
+  "options": {
+    "generate_panorama": true,
+    "extract_layout": true
+  }
+}
+```
+
+响应示例：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "task_id": "task_ai_import_ab12cd34",
+    "import_id": "import_ab12cd34",
+    "status": "succeeded"
+  }
+}
+```
+
+回写字段：
+
+| 字段 | 说明 |
+|---|---|
+| `director.scene.panoramaStatus` | 更新为“AI 识图导入完成，已生成全景背景候选” |
+| `director.scene.panoramaAssetId` | 写入 mock 全景资产 ID |
+| `director.ai_imports[]` | 追加识图记录，包含 `source_asset_id`、`mode`、`status`、`recognized_scene` |
+
+错误码：
+
+| 场景 | 业务码 | message |
+|---|---:|---|
+| 项目不存在 | 46001 | 画布项目不存在 |
+| 导演台不存在 | 46011 | 导演台不存在 |
+| 截图不存在 | 46021 | 截图不存在 |
 
 ### 10.13 🆕 多模态参考生视频 `V1.2` — 对标 Seedance 2.0
 
@@ -2483,7 +3057,7 @@ POST /api/v1/agent/orchestrate
     "task_id": "agent_task_001",
     "status": "pending",
     "estimated_seconds": 300,
-    "pipeline": ["script", "storyboard", "image_gen", "video_gen", "compose", "review"]
+    "pipeline": ["script", "storyboard", "image_gen", "video_gen", "quality_check", "asset_delivery"]
   }
 }
 ```
@@ -2511,8 +3085,8 @@ GET /api/v1/agent/task/:id
       "storyboard": "completed",
       "image_gen": "processing",
       "video_gen": "pending",
-      "compose": "pending",
-      "review": "pending"
+      "quality_check": "pending",
+      "asset_delivery": "pending"
     },
     "result": null,
     "created_at": "2026-06-15T10:00:00+08:00",
@@ -2680,10 +3254,9 @@ POST /api/v1/agent/orchestrate/canvas
       "duration_per_shot": 5,
       "audio_sync": true
     },
-    "compose": {
-      "mode": "hybrid",
-      "add_transitions": true,
-      "add_bgm": true
+    "asset_delivery": {
+      "set_latest_success_as_adopted": false,
+      "include": ["images", "videos", "voice", "bgm", "sfx", "subtitles", "prompts"]
     }
   },
   "auto_quality_check": true
@@ -2698,7 +3271,7 @@ POST /api/v1/agent/orchestrate/canvas
   "data": {
     "task_id": "agent_canvas_task_001",
     "status": "pending",
-    "pipeline_stages": ["image_gen", "video_gen", "compose", "quality_check"],
+    "pipeline_stages": ["image_gen", "video_gen", "quality_check", "asset_delivery"],
     "estimated_seconds": 600
   }
 }
@@ -2759,12 +3332,12 @@ GET /api/v1/agent/tools
         }
       },
       {
-        "name": "compose_video",
-        "description": "合成最终视频（含配音/BGM/字幕/转场）",
-        "category": "compose",
+        "name": "export_asset_package",
+        "description": "按镜头采用版本生成项目素材包",
+        "category": "asset_delivery",
         "parameters": {
           "project_id": { "type": "string", "required": true },
-          "mode": { "type": "string", "required": false, "default": "hybrid" }
+          "manifest_version": { "type": "integer", "required": false }
         }
       },
       {
@@ -2915,7 +3488,7 @@ GET /api/v1/sop/projects/:id/capacity
 ```
 POST /api/v1/sop/canvas/:project_id/check-before-generate
 POST /api/v1/sop/canvas/:project_id/check-before-video
-POST /api/v1/sop/canvas/:project_id/check-before-compose
+POST /api/v1/sop/canvas/:project_id/check-before-adopt
 POST /api/v1/sop/canvas/:project_id/check-before-export
 GET  /api/v1/sop/canvas/:project_id/risk-report
 POST /api/v1/sop/canvas/:project_id/auto-fix
@@ -3171,28 +3744,25 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 }
 ```
 
-### 16.4 时间轴对象
+### 16.4 交付素材清单对象
 
 ```json
 {
-  "video_track": [
-    { "shot_id": "EP01_SC01_SH001", "start_ms": 0, "duration_ms": 3000 }
+  "manifest_version": 3,
+  "shots": [
+    {
+      "shot_id": "EP01_SC01_SH001",
+      "order": 1,
+      "adopted_image_asset_id": "IMG_001",
+      "adopted_video_asset_id": "VID_001",
+      "voice_asset_id": "AUD_001",
+      "subtitle_asset_id": "SUB_001",
+      "sfx_asset_ids": ["SFX_DOOR_KNOCK"]
+    }
   ],
-  "transition_track": [
-    { "from_shot_id": "EP01_SC01_SH001", "to_shot_id": "EP01_SC01_SH002", "type": "fade" }
-  ],
-  "audio_track": [
-    { "shot_id": "EP01_SC01_SH001", "voice_id": "VOICE_LIN_V01", "audio_url": "https://cdn.example.com/audio/xxx.wav" }
-  ],
-  "subtitle_track": [
-    { "shot_id": "EP01_SC01_SH001", "text": "你之前在哪儿工作？", "start_ms": 0, "end_ms": 3000 }
-  ],
-  "bgm_track": [
-    { "music_id": "MUS_SUSPENSE_V01", "start_ms": 0, "end_ms": 30000, "volume": 0.3 }
-  ],
-  "sfx_track": [
-    { "shot_id": "EP01_SC01_SH002", "sfx_id": "SFX_DOOR_KNOCK", "start_ms": 1500 }
-  ]
+  "global_assets": {
+    "bgm_asset_ids": ["MUS_SUSPENSE_V01"]
+  }
 }
 ```
 
@@ -3296,14 +3866,14 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `C` | 不建议生产 |
 | `D` | 需要重写 |
 
-### 17.11 画布合成模式
+### 17.11 视频生成模式
 
 | 值 | 说明 |
 |------|------|
-| `static_kb` | 图文漫剧（静态图+Ken Burns运镜） |
+| `text_to_video` | 文生视频 |
 | `img_to_video` | 图生视频 |
 | `keyframe_video` | 首尾帧AI插值视频 |
-| `hybrid` | 混合模式 |
+| `omni_reference_video` | 多图/视频/音频/文本作为生成参考 |
 
 ### 17.12 导出画幅
 
@@ -3401,7 +3971,7 @@ A B C D E
 | 错误码 | 说明 |
 |--------|------|
 | `46001` | 画布项目不存在 |
-| `46002` | 分镜未完成，无法合成 |
+| `46002` | 分镜或采用素材未完成，无法导出素材包 |
 | `46003` | 渲染失败 |
 | `46004` | 导出队列已满 |
 | `46005` | 无水印导出需要会员 |
@@ -3434,14 +4004,15 @@ A B C D E
 |------|:---:|:---:|------|
 | **V1.0** | 58 | 58 | auth(8) + user(5) + script-gen(9) + script-repo(14) + canvas(19) + notify(3) |
 | **V1.1** | 42 | 100 | enterprise(9) + trade(12) + asset-market(15) + sop(6) |
-| **V1.2** | 80 | 180 | SSO(1) + API Key(3) + batch-generate(1) + outpaint(1) + L4 lock(2) + continuity(2) + failure(2) + capacity(1) + promotion(1) + export advanced(4) + 🆕 nodes CRUD(5) + connections(3) + workflows(3) + script pipeline(4) + slash commands(1) + director-desk(3) + timeline full(4) + multimodal(1) + 🆕 agent orchestrate(5) + memory CRUD(5) + skill files(5) + providers(5) + event-graph(4) |
-| **V1.3** | 45+ | 220+ | 🆕 独立Agent服务(7) + 画布增强API(12+) + 画布质量巡检(6) + canvas V1.3增强（node engine/downstream/duplicates/timeline-add-node/compose variants/image node ops/video node ops/audio node ops等） |
+| **V1.2** | 76 | 176 | SSO(1) + API Key(3) + batch-generate(1) + outpaint(1) + L4 lock(2) + continuity(2) + failure(2) + capacity(1) + promotion(1) + export advanced(4) + 🆕 nodes CRUD(5) + connections(3) + workflows(3) + script pipeline(4) + slash commands(1) + director-desk(3) + multimodal(1) + 🆕 agent orchestrate(5) + memory CRUD(5) + skill files(5) + providers(5) + event-graph(4) |
+| **V1.3** | 40+ | 210+ | 🆕 独立Agent服务(7) + 画布增强API + 画布质量巡检 + node engine/downstream/duplicates/adopted-assets/delivery-manifest/asset-package/image node ops/video generation ops/audio asset ops |
+| **V1.5** | 范围调整 | 210+ | 取消视频剪辑、视频合成、多轨时间轴接口；统一为 adopted-assets、delivery-manifest、asset-package export 契约 |
 
-> **总计**：V1.0 = 58 | V1.1 = +42 | V1.2 = +80 | V1.3 = +45+ = **220+个API端点**
+> **总计**：V1.0 = 58 | V1.1 = +42 | V1.2 = +76 | V1.3 = +40+ = **210+个有效 API 端点**。已取消的视频剪辑、视频合成和多轨编辑接口不计入有效接口。
 
 ---
 
-> **文档状态**：v1.3  
-> **编写日期**：2026-06-15  
+> **文档状态**：v1.5 范围修订版
+> **最后修订**：2026-06-27
 > **文档用途**：供前端开发、后端开发、测试工程师、第三方集成使用  
 > **后续步骤**：生成 OpenAPI 3.0 YAML 文件 → 导入 Swagger/Apifox → Mock Server → 联调

@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS api_keys (
 CREATE TABLE IF NOT EXISTS gen_tasks (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     user_id BIGINT NOT NULL, project_id VARCHAR(50),
-    gen_type ENUM('topic','synopsis','outline','episode','storyboard','promotion','quick') NOT NULL,
+    gen_type ENUM('topic','synopsis','outline','episode','adaptation','storyboard','promotion','quick') NOT NULL,
     storyboard_tier ENUM('A','B','C'),
     input_params JSON, output_data JSON, prompt_used TEXT,
     model_used VARCHAR(100),
@@ -103,12 +103,34 @@ CREATE TABLE IF NOT EXISTS script_episodes (
     script_id BIGINT NOT NULL, episode_number INT NOT NULL,
     title VARCHAR(200), content LONGTEXT,
     storyboard_tier ENUM('A','B','C'), word_count INT DEFAULT 0,
+    opening_hook TEXT,
+    closing_hook TEXT,
+    hook_score_avg DECIMAL(3,2),
+    hook_count INT DEFAULT 0,
     status ENUM('draft','completed') DEFAULT 'draft',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
     UNIQUE KEY uk_script_ep (script_id, episode_number)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='剧本分集表';
+
+CREATE TABLE IF NOT EXISTS episode_review_reports (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    episode_id BIGINT,
+    episode_number INT,
+    overall_status ENUM('pass','needs_revision','approved') DEFAULT 'needs_revision',
+    overall_score DECIMAL(4,2),
+    hook_score DECIMAL(4,2),
+    showrunner_score DECIMAL(4,2),
+    director_score DECIMAL(4,2),
+    report_json JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_episode_review (episode_id, created_at),
+    FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+    FOREIGN KEY (episode_id) REFERENCES script_episodes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='每集联合审核报告表';
 
 CREATE TABLE IF NOT EXISTS script_versions (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -118,6 +140,43 @@ CREATE TABLE IF NOT EXISTS script_versions (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='剧本版本表';
+
+CREATE TABLE IF NOT EXISTS chapter_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    episode_id BIGINT,
+    chapter_number INT,
+    title VARCHAR(200),
+    content LONGTEXT,
+    content_format VARCHAR(30) DEFAULT 'novel',
+    version_no VARCHAR(30),
+    change_summary VARCHAR(500),
+    source VARCHAR(30) DEFAULT 'manual_edit',
+    created_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_chapter_version (episode_id, created_at),
+    FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+    FOREIGN KEY (episode_id) REFERENCES script_episodes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='单章正文版本表';
+
+CREATE TABLE IF NOT EXISTS adaptation_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT,
+    source_chapter_version_id BIGINT,
+    source_project_version_id BIGINT,
+    target_type ENUM('ai_comic','short_drama','web_drama','tvc') DEFAULT 'ai_comic',
+    version_no VARCHAR(30),
+    title VARCHAR(200),
+    content LONGTEXT,
+    hook_strategy_json JSON,
+    status ENUM('draft','needs_sync','reviewing','locked') DEFAULT 'draft',
+    created_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_adaptation_script (script_id, target_type, created_at),
+    FOREIGN KEY (script_id) REFERENCES scripts(id) ON DELETE CASCADE,
+    FOREIGN KEY (source_chapter_version_id) REFERENCES chapter_versions(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='源头文本改编脚本版本表';
 
 CREATE TABLE IF NOT EXISTS repo_assets (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

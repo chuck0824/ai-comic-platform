@@ -107,6 +107,18 @@ public class ScriptGenService {
             // 尝试解析选题列表，失败则用简单拆分
             List<Map<String, Object>> suggestions = parseTopicSuggestions(content);
             result.put("suggestions", suggestions);
+        } else if (genType.equals("adaptation")) {
+            String targetType = String.valueOf(params.getOrDefault("target_type", "ai_comic"));
+            result.put("target_type", targetType);
+            result.put("title", params.getOrDefault("title", defaultAdaptationTitle(targetType)));
+            result.put("content", content);
+            result.put("raw", content);
+            result.put("hook_strategy", Map.of(
+                    "inherit_source_hook", true,
+                    "opening_hook", params.getOrDefault("opening_hook", ""),
+                    "closing_hook", params.getOrDefault("closing_hook", "")
+            ));
+            result.put("status", "draft");
         } else {
             // 通用：将 AI 返回文本填入对应字段
             result.put("title", params.getOrDefault("title",
@@ -265,6 +277,18 @@ public class ScriptGenService {
                     【旁白】：有些秘密越想藏，越会在细节里发光。
                     """);
         }
+        if (genType.equals("adaptation")) {
+            String targetType = String.valueOf(params.getOrDefault("target_type", "ai_comic"));
+            result.put("target_type", targetType);
+            result.put("title", defaultAdaptationTitle(targetType));
+            result.put("content", buildAdaptationMock(targetType, params));
+            result.put("hook_strategy", Map.of(
+                    "inherit_source_hook", true,
+                    "opening_hook", "用源头小说第一章的强冲突作为开场。",
+                    "closing_hook", "保留章尾秘密，改编为下一集/下一镜头期待。"
+            ));
+            result.put("status", "draft");
+        }
         if (genType.equals("quick") || genType.equals("storyboard") || tier != null) {
             result.put("tier", tier != null ? tier : "A");
             result.put("shot_count", 18);
@@ -305,6 +329,7 @@ public class ScriptGenService {
             case "synopsis" -> "你是一位资深短剧编剧。请根据选题生成500字故事梗概。";
             case "outline" -> "你是一位资深短剧编剧。请根据梗概生成" + params.getOrDefault("episode_count", 40) + "集分集大纲。";
             case "episode" -> "你是一位资深短剧编剧。请根据大纲生成单集完整剧本。";
+            case "adaptation" -> "你是一位资深改编编剧。请先继承源头小说/故事文本的钩子结构，再改编为AI漫剧、短剧、网剧或TVC脚本。";
             case "storyboard" -> "你是一位资深导演。请根据剧本生成分镜脚本。";
             default -> "你是一位AI创作助手。请根据输入生成内容。";
         };
@@ -314,6 +339,47 @@ public class ScriptGenService {
         if (value instanceof Number n) return n.intValue();
         try { return value == null ? fallback : Integer.parseInt(String.valueOf(value)); }
         catch (NumberFormatException e) { return fallback; }
+    }
+
+    private String defaultAdaptationTitle(String targetType) {
+        return switch (targetType == null ? "" : targetType) {
+            case "short_drama" -> "短剧改编脚本";
+            case "web_drama" -> "网剧改编脚本";
+            case "tvc" -> "TVC改编脚本";
+            default -> "AI漫剧改编脚本";
+        };
+    }
+
+    private String buildAdaptationMock(String targetType, Map<String, Object> params) {
+        String source = String.valueOf(params.getOrDefault("source_text", params.getOrDefault("idea", "源头故事文本")));
+        if ("tvc".equals(targetType)) {
+            return """
+                    # TVC改编脚本
+
+                    0-3s：强钩子。用产品故事中的最大痛点开场。
+                    3-8s：问题放大。展示用户困境和情绪压力。
+                    8-18s：产品/品牌介入。用一个清晰动作解决问题。
+                    18-26s：利益证明。呈现结果、记忆点和信任背书。
+                    26-30s：转化收口。口播品牌名和行动指令。
+
+                    来源文本：%s
+                    """.formatted(source);
+        }
+        return """
+                # %s
+
+                [第1集 开场]
+                △ 直接使用源头文本的强冲突切入，保留人物秘密和章尾留白。
+                主角：这件事，不能让任何人知道。
+
+                [中段推进]
+                △ 将小说叙述改为可表演的动作、对白和场景调度。
+
+                [结尾钩子]
+                △ 对方发现关键证据，但真相只露出一半。
+
+                来源文本：%s
+                """.formatted(defaultAdaptationTitle(targetType), source);
     }
 
     public Map<String, Object> getTaskStatus(String taskId) {

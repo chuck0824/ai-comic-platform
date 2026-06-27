@@ -82,6 +82,59 @@ public class ScriptRepoController {
         return ApiResponse.success();
     }
 
+    // ===== 章节正文与版本 =====
+    @GetMapping("/scripts/{id}/chapters")
+    public ApiResponse<?> getChapters(@PathVariable Long id) {
+        return ApiResponse.success(scriptService.getChapters(id));
+    }
+
+    @PatchMapping("/chapters/{chapterId}")
+    public ApiResponse<?> updateChapter(@PathVariable Long chapterId, @RequestBody Map<String, Object> body) {
+        var chapter = scriptService.updateChapter(chapterId, body);
+        return chapter == null ? ApiResponse.error(47020, "章节不存在") : ApiResponse.success(chapter);
+    }
+
+    @GetMapping("/chapters/{chapterId}/versions")
+    public ApiResponse<?> getChapterVersions(@PathVariable Long chapterId) {
+        return ApiResponse.success(scriptService.getChapterVersions(chapterId));
+    }
+
+    @PostMapping("/chapters/{chapterId}/versions")
+    public ApiResponse<?> createChapterVersion(@PathVariable Long chapterId, @RequestBody Map<String, Object> body) {
+        return ApiResponse.success(scriptService.createChapterVersion(null, chapterId, body));
+    }
+
+    // ===== 改编脚本版本 =====
+    @GetMapping("/adaptations")
+    public ApiResponse<?> getAdaptations(@RequestParam(required = false) Long script_id,
+                                         @RequestParam(required = false) Long chapter_version_id,
+                                         @RequestParam(required = false) String target_type) {
+        return ApiResponse.success(scriptService.getAdaptations(script_id, chapter_version_id, target_type));
+    }
+
+    @PostMapping("/adaptations")
+    public ApiResponse<?> createAdaptation(@RequestBody Map<String, Object> body) {
+        return ApiResponse.success(scriptService.createAdaptation(body));
+    }
+
+    @GetMapping("/adaptations/{id}")
+    public ApiResponse<?> getAdaptation(@PathVariable Long id) {
+        var adaptation = scriptService.getAdaptation(id);
+        return adaptation == null ? ApiResponse.error(47030, "改编脚本不存在") : ApiResponse.success(adaptation);
+    }
+
+    @PatchMapping("/adaptations/{id}")
+    public ApiResponse<?> updateAdaptation(@PathVariable Long id, @RequestBody Map<String, Object> body) {
+        var adaptation = scriptService.updateAdaptation(id, body);
+        return adaptation == null ? ApiResponse.error(47030, "改编脚本不存在") : ApiResponse.success(adaptation);
+    }
+
+    @PostMapping("/adaptations/{id}/lock")
+    public ApiResponse<?> lockAdaptation(@PathVariable Long id) {
+        var adaptation = scriptService.lockAdaptation(id);
+        return adaptation == null ? ApiResponse.error(47030, "改编脚本不存在") : ApiResponse.success(adaptation);
+    }
+
     @GetMapping("/assets")
     public ApiResponse<?> getAssets(@RequestParam(required = false) String type,
                                     @RequestParam(required = false) String maturity) {

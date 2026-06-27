@@ -38,7 +38,11 @@ export const canvasApi = {
   createDirectorDesk: (id, data) => request.post(`/canvas/projects/${id}/director-desk`, data),
   getDirectorDesk: (id, deskId) => request.get(`/canvas/projects/${id}/director-desk/${deskId}`),
   updateDirectorDesk: (id, deskId, data) => request.put(`/canvas/projects/${id}/director-desk/${deskId}`, data),
-  captureDirectorDesk: (id, deskId) => request.post(`/canvas/projects/${id}/director-desk/${deskId}/capture`),
+  uploadDirectorModel: (id, deskId, data) => request.post(`/canvas/projects/${id}/director-desk/${deskId}/assets/model`, data),
+  captureDirectorDesk: (id, deskId, data = {}) => request.post(`/canvas/projects/${id}/director-desk/${deskId}/capture`, data),
+  sendDirectorScreenshotToCanvas: (id, deskId, screenshotId, data = {}) =>
+    request.post(`/canvas/projects/${id}/director-desk/${deskId}/screenshots/${screenshotId}/send-to-canvas`, data),
+  aiImportDirectorDesk: (id, deskId, data) => request.post(`/canvas/projects/${id}/director-desk/${deskId}/ai-import`, data),
   getFullTimeline: (id) => request.get(`/canvas/projects/${id}/timeline/full`),
   updateFullTimeline: (id, data) => request.put(`/canvas/projects/${id}/timeline/full`, data),
   clipTimeline: (id, data) => request.post(`/canvas/projects/${id}/timeline/clip`, data),

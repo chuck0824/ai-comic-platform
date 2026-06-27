@@ -11,7 +11,7 @@
 | 优先级 | P1，MVP 内核心链路按 P0 执行 |
 | 目标读者 | 产品、交互、前端、3D/WebGL、后端、算法、测试 |
 | 输入依据 | `提取自LibTV使用指南(1).pdf` 中 2.4 导演台操作说明；现有画布、节点、资产、API 文档 |
-| 文档状态 | 待评审 |
+| 文档状态 | MVP 已落地（前后端双向打通，mock 实现），待产品体验评审与真实渲染/资产服务联调 |
 
 ## 2. 产品定位
 
@@ -1115,15 +1115,17 @@ POST /api/v1/canvas/projects/:projectId/director-desk/:deskId/ai-import
 
 ## 13. 后端实现要求
 
-| 模块 | 要求 |
-| --- | --- |
-| 节点持久化 | 导演台本质为 `director_desk` 类型画布节点 |
-| 状态存储 | MVP 可存于 `canvas_nodes.data.director_desk` JSON 字段 |
-| 资源存储 | 截图、上传模型、全景图进入统一 assets/CDN |
-| 权限 | 校验项目访问权限、节点归属、团队权限 |
-| 审计 | 记录创建、保存、截图、发送画布、删除等操作 |
-| 大字段 | 对 JSON 大小设置限制，超过提示拆分或清理 |
-| 任务体系 | 全景图生成和服务端截图进入 `generation_tasks` |
+| 模块 | 要求 | MVP 状态 |
+| --- | --- | --- |
+| 节点持久化 | 导演台本质为 `director_desk` 类型画布节点 | ✅ 已落地 |
+| 状态存储 | MVP 可存于 `canvas_nodes.data` JSON 字段（`director` key） | ✅ 已落地 |
+| 资源存储 | 截图、上传模型、全景图进入统一 assets/CDN | 🔶 mock（返回 /mock/... URL，待接入 MinIO） |
+| 权限 | 校验项目访问权限、节点归属、团队权限 | ⬜ 待实现 |
+| 审计 | 记录创建、保存、截图、发送画布、删除等操作 | ⬜ 待实现 |
+| 大字段 | 对 JSON 大小设置限制，超过提示拆分或清理 | ⬜ 待实现 |
+| 任务体系 | 全景图生成和服务端截图进入 `generation_tasks` | 🔶 mock（AI 导入直接返回 succeeded，待接入异步任务） |
+
+> **架构说明**：当前前后端采用双向协同模式 —— 前端本地生成 SVG 截图预览并立即渲染 UI，同时异步调用后端 API 同步服务端状态。后端端点已全部实现并挂载，但截图 URL、模型存储、AI 识别结果当前为 mock 占位，待基础设施就绪后替换为真实实现。前端 `canvasApi.xxx()` 调用均以 `.catch(() => {})` 静默降级，确保后端未就绪时不影响前端功能。
 
 ## 14. 算法与生成链路
 
@@ -1356,3 +1358,111 @@ POST /api/v1/canvas/projects/:projectId/director-desk/:deskId/ai-import
 4. 群众阵列是否需要在 MVP 中支持单个群众独立编辑？
 5. 截图发送到画布后，是否默认自动接入当前选中的图片/视频生成器？
 6. 全景图是否作为导演台 P1，还是需要跟随 MVP 一起上线？
+
+## 23. 当前落地实施记录（2026-06-24）
+
+本节记录当前已开发到代码中的导演台 MVP 功能，用于和 PRD 目标范围、接口文档、测试验收保持一致。
+
+### 23.1 落地入口与部署方式
+
+| 项 | 当前实现 |
+| --- | --- |
+| 生产访问入口 | `http://localhost:8080/canvas` |
+| 开发调试入口 | `http://127.0.0.1:5173/`，仅用于 Vite 本地开发，不作为最终验收入口 |
+| 前端源码 | `aicp-frontend/src/views/Canvas.vue`、`aicp-frontend/src/api/canvas.js` |
+| 后端源码 | `aicp-backend/src/main/java/com/aicp/module/canvas/controller/CanvasController.java` |
+| 静态资源落地 | `npm run build` 输出到 `aicp-backend/src/main/resources/static`，后端 8080 直接托管页面 |
+| 当前验证 | `mvn -q -DskipTests package` 通过；`GET /canvas` 返回 200 |
+
+### 23.2 已落地前端能力
+
+| 模块 | 已实现内容 | 状态 |
+| --- | --- | --- |
+| 导演台编辑器 | 顶部栏、导演视角/机位视角分段切换、帮助、关闭 | 已完成 |
+| 左侧场景树 | 3D 场景、摄像机、角色/几何体/群众元素列表；选中后联动右侧属性面板 | 已完成 |
+| 中央视口 | CSS/DOM 轻量 3D 占位视口、地面网格、取景框、方向辅助、对象拖拽 | 已完成 |
+| 右侧属性 | 摄像机属性、3D 场景属性、角色/元素属性按选择对象切换 | 已完成 |
+| 底部工具栏 | 移动/旋转/缩放、添加模型、720、机位、比例、截图、AI 识图导入、全屏 | 已完成 |
+| 添加模型 | 男性/女性/宽厚/健壮/纤细/少年/儿童/二头身素体；几何体；群众阵列 | 已完成 |
+| 群众阵列 | 行数、列数、间距配置，自动生成多人阵列 | 已完成 |
+| 机位预设 | 当前视角、正面中景、正面特写、正面全景、侧面跟拍、侧面近景 | 已完成 |
+| 截图比例 | Auto、21:9、16:9、4:3、1:1、3:4、9:16 | 已完成 |
+| 截图列表 | 创建截图记录，右侧摄像机面板展示，支持发送画布和删除 | 已完成 |
+| AI 识图导入 | 弹窗、上传区、历史记录 Tab、插入/覆盖模式、导入状态 | 已完成 mock |
+| 快捷键 | Esc、V、R、S、X、T、Y、Q、Command/Ctrl+G、Command/Ctrl+Shift+G、Delete | 已完成 |
+| 状态保存 | 导演台对象、场景、摄像机、截图、比例、全景状态写回节点数据 | 已完成 |
+
+当前前端采用 CSS/DOM 方式实现轻量 3D 占位，不依赖 Three.js。Three.js、OrbitControls、TransformControls、GLTFLoader、真实 WebGL 截图和模型渲染仍属于后续增强项。
+
+### 23.3 已落地后端接口
+
+| 能力 | 方法与路径 | 当前行为 | 状态 |
+| --- | --- | --- | --- |
+| 创建导演台 | `POST /api/v1/canvas/projects/{projectId}/director-desk` | 创建画布节点并返回节点对象 | ✅ 完整 |
+| 获取导演台 | `GET /api/v1/canvas/projects/{projectId}/director-desk/{deskId}` | 返回 mock 机位截图列表 | 🔶 mock |
+| 更新导演台 | `PUT /api/v1/canvas/projects/{projectId}/director-desk/{deskId}` | 将导演台状态写回节点数据 | ✅ 完整 |
+| 上传模型 | `POST /api/v1/canvas/projects/{projectId}/director-desk/{deskId}/assets/model` | 返回 mock 模型资产 URL，文件未实际存储 | 🔶 mock |
+| 创建截图 | `POST /api/v1/canvas/projects/{projectId}/director-desk/{deskId}/capture` | 在导演台状态中追加截图记录，返回 mock 图片 URL | 🔶 mock |
+| 发送截图到画布 | `POST /api/v1/canvas/projects/{projectId}/director-desk/{deskId}/screenshots/{screenshotId}/send-to-canvas` | 创建图片节点 + 连线，标记截图已发送 | ✅ 完整 |
+| AI 识图导入 | `POST /api/v1/canvas/projects/{projectId}/director-desk/{deskId}/ai-import` | 写入 mock 识别结果和全景背景候选，直接返回 succeeded | 🔶 mock |
+
+### 23.4 当前数据结构补充
+
+当前代码中导演台状态统一写入节点数据的 `director` 字段，核心结构如下：
+
+```json
+{
+  "director": {
+    "scene": {
+      "zoom": 300,
+      "pan": { "x": 0, "y": 0, "z": 0 },
+      "rotation": { "x": 0, "y": 0, "z": 0 },
+      "skyColor": "#060608",
+      "panoramaStatus": "未连接全景图",
+      "panoramaAssetId": null,
+      "panoramaRotation": 0,
+      "panoramaRadius": 60,
+      "characterLabelVisible": true,
+      "groundVisible": true,
+      "groundOpacity": 0.4,
+      "groundHeight": 0
+    },
+    "camera": {
+      "id": "camera_1",
+      "name": "机位1",
+      "x": 0,
+      "y": 2.2,
+      "z": 10,
+      "lookAtX": 0,
+      "lookAtY": 1.2,
+      "lookAtZ": 0,
+      "fov": 50,
+      "focus": ""
+    },
+    "objects": [],
+    "shots": [],
+    "ai_imports": []
+  }
+}
+```
+
+### 23.5 当前边界与后续补齐
+
+| 边界 | 当前处理 | 后续建议 |
+| --- | --- | --- |
+| 真实 3D 渲染 | CSS/DOM 占位，满足产品交互验证 | 接入 Three.js 和真实模型加载 |
+| 本地模型上传 | 后端返回 mock URL，文件未实际存储（WARN 日志记录） | 接入 MinIO/CDN，增加格式和大小校验 |
+| 截图生成 | 前端生成 SVG data URI 预览 + 异步调用后端 capture API（后端当前 mock） | WebGL canvas toBlob 上传，服务端批量截图后置 |
+| AI 识图导入 | 前端优先调用后端 ai-import API + 后端 fallback 本地 700ms 模拟 | 接入真实图片识别、全景生成和异步任务通知 |
+| 前后端同步 | 前端主导 UI 渲染，后端 API 异步同步（`.catch()` 静默降级） | 后端 mock→真实实现时无需改动前端调用代码 |
+| 姿势控制 | 当前为素体类型和站位控制 | P1 接入姿势预设或简易骨骼控制 |
+| 性能指标 | 未做 WebGL 帧率压测 | Three.js 化后补齐对象上限和内存测试 |
+
+### 23.6 已验证项
+
+| 验证项 | 结果 |
+| --- | --- |
+| 前端构建 | `npm run build` 通过 |
+| 后端构建 | `mvn -q -DskipTests package` 通过 |
+| 8080 页面入口 | `curl -sI http://localhost:8080/canvas` 返回 `HTTP/1.1 200` |
+| 静态资源 | 后端返回最新 `index` 与 `Canvas` 构建产物 |

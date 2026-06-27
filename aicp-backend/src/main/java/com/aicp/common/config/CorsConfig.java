@@ -14,7 +14,7 @@ import java.util.List;
 public class CorsConfig {
 
     /** 允许的前端域名列表，逗号分隔。生产环境通过环境变量 CORS_ORIGINS 覆盖。 */
-    @Value("${app.cors.allowed-origins:http://localhost:8080,http://localhost:3001}")
+    @Value("${app.cors.allowed-origins:http://localhost:8080,http://localhost:5173}")
     private String allowedOrigins;
 
     @Bean
