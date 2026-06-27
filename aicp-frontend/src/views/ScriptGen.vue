@@ -431,7 +431,7 @@
 </template>
 
 <script setup>
-import { ref, reactive } from 'vue'
+import { ref, reactive, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Loading, UploadFilled, Cpu, Upload, Lightning, Aim, FolderAdd, FolderOpened, Document, Brush, Refresh, MagicStick, CircleCheck, MapLocation, Reading, TrendCharts, Warning, Star, VideoCamera, Link, DataAnalysis, List, Picture, Scissor } from '@element-plus/icons-vue'
@@ -447,6 +447,8 @@ const genMode = ref('fine')
 
 // ===== 通用 =====
 const loading = ref(false); const progress = ref(0)
+const activeTimers = [] // track setInterval IDs for cleanup
+onUnmounted(() => activeTimers.forEach(clearInterval))
 const saving = ref(false)
 const savedScriptId = ref(null)  // 跟踪已保存的剧本 ID，避免重复创建
 
@@ -464,6 +466,7 @@ async function doQuickGen() {
   if (!quickIdea.value.trim()) { ElMessage.warning('请输入创意描述'); return }
   loading.value = true; progress.value = 0; genResult.value = null
   const t = setInterval(() => { if (progress.value < 90) progress.value += Math.random() * 10 }, 500)
+  activeTimers.push(t)
   try {
     const res = await scriptApi.genQuick({
       idea: quickIdea.value,
@@ -558,6 +561,7 @@ function selectTopic(i) { selectedTopic.value = i }
 async function runStep(apiFn, params, onDone) {
   stepLoading.value = true; stepProgress.value = 0
   const t = setInterval(() => { if (stepProgress.value < 90) stepProgress.value += Math.random() * 10 }, 500)
+  activeTimers.push(t)
   try {
     const res = await apiFn(params); const taskId = res.data?.task_id
     if (taskId) {

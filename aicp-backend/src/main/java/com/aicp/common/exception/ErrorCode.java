@@ -50,6 +50,8 @@ public enum ErrorCode {
 
     // 画布服务 46xxx
     CANVAS_NOT_FOUND(46001, "画布项目不存在"),
+    CANVAS_NODE_NOT_FOUND(46011, "画布节点不存在"),
+    CANVAS_EDGE_NOT_FOUND(46012, "连线节点不存在"),
     SHOTS_INCOMPLETE(46002, "分镜未完成，无法合成"),
     RENDER_FAILED(46003, "渲染失败"),
     EXPORT_QUEUE_FULL(46004, "导出队列已满"),

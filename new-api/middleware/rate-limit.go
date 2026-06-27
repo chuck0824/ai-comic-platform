@@ -24,29 +24,37 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 	key := "rateLimit:" + mark + c.ClientIP()
 	listLength, err := rdb.LLen(ctx, key).Result()
 	if err != nil {
-		fmt.Println(err.Error())
-		c.Status(http.StatusInternalServerError)
-		c.Abort()
+		// Redis error — fail open to avoid breaking legitimate traffic.
+		// Rate limiting is a protection mechanism, not a critical feature.
+		common.SysLog(fmt.Sprintf("redisRateLimiter LLEN error (key=%s): %v", key, err))
+		c.Next()
 		return
 	}
 	if listLength < int64(maxRequestNum) {
-		rdb.LPush(ctx, key, time.Now().Format(timeFormat))
+		if err := rdb.LPush(ctx, key, time.Now().Format(timeFormat)).Err(); err != nil {
+			common.SysLog(fmt.Sprintf("redisRateLimiter LPUSH error (key=%s): %v", key, err))
+			c.Next()
+			return
+		}
 		rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
 	} else {
-		oldTimeStr, _ := rdb.LIndex(ctx, key, -1).Result()
+		oldTimeStr, err := rdb.LIndex(ctx, key, -1).Result()
+		if err != nil {
+			common.SysLog(fmt.Sprintf("redisRateLimiter LINDEX error (key=%s): %v", key, err))
+			c.Next()
+			return
+		}
 		oldTime, err := time.Parse(timeFormat, oldTimeStr)
 		if err != nil {
-			fmt.Println(err)
-			c.Status(http.StatusInternalServerError)
-			c.Abort()
+			common.SysLog(fmt.Sprintf("redisRateLimiter Parse oldTime error (key=%s): %v", key, err))
+			c.Next()
 			return
 		}
 		nowTimeStr := time.Now().Format(timeFormat)
 		nowTime, err := time.Parse(timeFormat, nowTimeStr)
 		if err != nil {
-			fmt.Println(err)
-			c.Status(http.StatusInternalServerError)
-			c.Abort()
+			common.SysLog(fmt.Sprintf("redisRateLimiter Parse nowTime error (key=%s): %v", key, err))
+			c.Next()
 			return
 		}
 		// time.Since will return negative number!
@@ -57,7 +65,11 @@ func redisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, mark st
 			c.Abort()
 			return
 		} else {
-			rdb.LPush(ctx, key, time.Now().Format(timeFormat))
+			if err := rdb.LPush(ctx, key, time.Now().Format(timeFormat)).Err(); err != nil {
+				common.SysLog(fmt.Sprintf("redisRateLimiter LPUSH error (key=%s): %v", key, err))
+				c.Next()
+				return
+			}
 			rdb.LTrim(ctx, key, 0, int64(maxRequestNum-1))
 			rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
 		}
@@ -157,29 +169,35 @@ func userRedisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, key
 	rdb := common.RDB
 	listLength, err := rdb.LLen(ctx, key).Result()
 	if err != nil {
-		fmt.Println(err.Error())
-		c.Status(http.StatusInternalServerError)
-		c.Abort()
+		common.SysLog(fmt.Sprintf("userRedisRateLimiter LLEN error (key=%s): %v", key, err))
+		c.Next()
 		return
 	}
 	if listLength < int64(maxRequestNum) {
-		rdb.LPush(ctx, key, time.Now().Format(timeFormat))
+		if err := rdb.LPush(ctx, key, time.Now().Format(timeFormat)).Err(); err != nil {
+			common.SysLog(fmt.Sprintf("userRedisRateLimiter LPUSH error (key=%s): %v", key, err))
+			c.Next()
+			return
+		}
 		rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
 	} else {
-		oldTimeStr, _ := rdb.LIndex(ctx, key, -1).Result()
+		oldTimeStr, err := rdb.LIndex(ctx, key, -1).Result()
+		if err != nil {
+			common.SysLog(fmt.Sprintf("userRedisRateLimiter LINDEX error (key=%s): %v", key, err))
+			c.Next()
+			return
+		}
 		oldTime, err := time.Parse(timeFormat, oldTimeStr)
 		if err != nil {
-			fmt.Println(err)
-			c.Status(http.StatusInternalServerError)
-			c.Abort()
+			common.SysLog(fmt.Sprintf("userRedisRateLimiter Parse oldTime error (key=%s): %v", key, err))
+			c.Next()
 			return
 		}
 		nowTimeStr := time.Now().Format(timeFormat)
 		nowTime, err := time.Parse(timeFormat, nowTimeStr)
 		if err != nil {
-			fmt.Println(err)
-			c.Status(http.StatusInternalServerError)
-			c.Abort()
+			common.SysLog(fmt.Sprintf("userRedisRateLimiter Parse nowTime error (key=%s): %v", key, err))
+			c.Next()
 			return
 		}
 		if int64(nowTime.Sub(oldTime).Seconds()) < duration {
@@ -188,7 +206,11 @@ func userRedisRateLimiter(c *gin.Context, maxRequestNum int, duration int64, key
 			c.Abort()
 			return
 		} else {
-			rdb.LPush(ctx, key, time.Now().Format(timeFormat))
+			if err := rdb.LPush(ctx, key, time.Now().Format(timeFormat)).Err(); err != nil {
+				common.SysLog(fmt.Sprintf("userRedisRateLimiter LPUSH error (key=%s): %v", key, err))
+				c.Next()
+				return
+			}
 			rdb.LTrim(ctx, key, 0, int64(maxRequestNum-1))
 			rdb.Expire(ctx, key, common.RateLimitKeyExpirationDuration)
 		}

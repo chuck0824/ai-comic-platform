@@ -53,6 +53,10 @@ public class GlobalExceptionHandler {
     }
 
     private HttpStatus mapHttpStatus(int code) {
+        // 5xxxx → server error (500), not client error (400)
+        if (code >= 50000) {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        }
         return switch (code) {
             case 40003 -> HttpStatus.UNAUTHORIZED;
             case 40004 -> HttpStatus.FORBIDDEN;

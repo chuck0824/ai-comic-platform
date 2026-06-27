@@ -12,7 +12,7 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.aicp.module.auth.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,7 +29,8 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
     private final RedisUtil redisUtil;
-    private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder();
+    private final Environment environment;
+    private final PasswordEncoder passwordEncoder;
 
     // ===== 验证码 =====
     public void sendCode(String target, String type, String scene) {
@@ -42,7 +43,8 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
             throw new BizException(ErrorCode.RATE_LIMIT, "验证码发送过于频繁，请60秒后重试");
         }
         redisUtil.set(retryKey, "1", 60, TimeUnit.SECONDS);
-        log.info("验证码发送: target={}, type={}, scene={}, code={}", target, type, scene, code);
+        // 不记录验证码明文，防止日志泄漏导致账户接管
+        log.info("验证码发送: target={}, type={}, scene={}", target, type, scene);
     }
 
     // ===== 注册 =====
@@ -227,6 +229,10 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
     // ===== [DEV] 初始化测试账号 =====
     @Transactional
     public Map<String, Object> devInit(String account, String password) {
+        // 防御纵深：非 dev 环境直接拒绝
+        if (!Arrays.asList(environment.getActiveProfiles()).contains("dev")) {
+            throw new BizException(ErrorCode.FORBIDDEN);
+        }
         // 先检查账号是否已存在
         User existing = userMapper.selectOne(
                 new LambdaQueryWrapper<User>().eq(User::getPhone, account));

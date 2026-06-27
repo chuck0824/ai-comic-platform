@@ -82,6 +82,7 @@ public class UploadService {
      * 异步解析文件：检测集数边界 → 创建 Script + ScriptEpisode
      */
     @Async("genTaskExecutor")
+    @Transactional
     public void parseFile(Long uploadId, String title) {
         ScriptUploadFile upload = uploadFileMapper.selectById(uploadId);
         if (upload == null) return;

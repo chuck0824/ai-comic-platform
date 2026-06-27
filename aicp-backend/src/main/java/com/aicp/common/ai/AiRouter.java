@@ -4,6 +4,7 @@ import com.aicp.common.ai.client.NewApiClient;
 import com.aicp.module.generation.entity.GenerationTask;
 import com.aicp.module.generation.mapper.GenerationTaskMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -14,6 +15,7 @@ import java.util.*;
  * 职责：画布任务 → 模型选择 → Adapter 翻译 → new-api 调用 → 结果回写
  * 所有 AI 调用必须经过 AiRouter，不允许微服务直连 new-api
  */
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class AiRouter {
@@ -41,6 +43,7 @@ public class AiRouter {
             task.setProgress(100);
             task.setOutputAssets(toJson(result));
         } catch (Exception e) {
+            log.error("AI task failed: taskId={}, type={}", task.getId(), task.getType(), e);
             task.setStatus("failed");
             task.setErrorCode("AI_ERROR");
             task.setErrorMessage(e.getMessage());

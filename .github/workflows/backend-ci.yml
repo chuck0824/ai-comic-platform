@@ -1,0 +1,69 @@
+name: Backend CI (Java)
+
+on:
+  push:
+    paths:
+      - 'aicp-backend/**'
+  pull_request:
+    paths:
+      - 'aicp-backend/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root123
+          MYSQL_DATABASE: aicp
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build with Maven
+        run: |
+          cd aicp-backend
+          mvn -B compile --file pom.xml
+
+      - name: Run Tests
+        run: |
+          cd aicp-backend
+          mvn -B test --file pom.xml
+        env:
+          SPRING_PROFILES_ACTIVE: mysql
+          DB_USERNAME: root
+          DB_PASSWORD: root123
+          REDIS_HOST: localhost
+          REDIS_PORT: 6380
+          JWT_SECRET: ci-test-jwt-secret-key-2026
+
+      - name: Package
+        run: |
+          cd aicp-backend
+          mvn -B package -DskipTests --file pom.xml

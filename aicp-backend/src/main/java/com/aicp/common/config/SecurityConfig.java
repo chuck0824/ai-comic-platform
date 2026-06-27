@@ -13,6 +13,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.http.HttpHeaders;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -46,6 +48,11 @@ public class SecurityConfig {
     /** 生产环境 CORS 允许的前端域名（可通过环境变量覆盖） */
     @Value("${app.cors.allowed-origins:http://localhost:8080,http://localhost:5173}")
     private String allowedOrigins;
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -102,6 +109,7 @@ public class SecurityConfig {
                 auth.requestMatchers(
                     "/api/v1/auth/**",          // 登录/注册/刷新Token/短信
                     "/api/v1/callback/**",       // 第三方回调（微信/SSO）
+                    "/api/health/**",            // 健康检查（K8s probes）
                     "/error"                      // 错误页面
                 ).permitAll();
 

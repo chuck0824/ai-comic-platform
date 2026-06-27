@@ -188,6 +188,7 @@ public class CanvasService {
     }
 
     // ===== Groups =====
+    @Transactional
     public CanvasGroup groupNodes(String projectId, Map<String, Object> body) {
         CanvasProject project = getProject(projectId);
         if (project == null) return null;

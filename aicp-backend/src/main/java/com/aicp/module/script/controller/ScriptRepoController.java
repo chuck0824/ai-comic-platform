@@ -9,6 +9,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
+
 import java.util.*;
 
 @RestController
@@ -172,9 +174,10 @@ public class ScriptRepoController {
             return ApiResponse.success(result);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(40001, e.getMessage());
-        } catch (Exception e) {
+        } catch (IOException e) {
             return ApiResponse.error(50001, "文件上传失败: " + e.getMessage());
         }
+        // BizException and other RuntimeExceptions propagate to GlobalExceptionHandler
     }
 
     @GetMapping("/upload/{uploadId}/status")

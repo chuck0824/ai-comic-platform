@@ -26,9 +26,8 @@ mybatis-plus:
       logic-delete-value: 1
       logic-not-delete-value: 0
 
-# JWT (dev 默认值，prod/mysql 通过环境变量覆盖)
+# JWT 密钥由各 profile 独立配置，不设全局默认值以防止生产误用
 jwt:
-  secret: ${JWT_SECRET:aicp-jwt-secret-key-2026-very-long-secret-key-for-hs256}
   access-token-expire: 7200
   refresh-token-expire: 2592000
 
@@ -65,6 +64,8 @@ mybatis-plus:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 # dev 环境不连外部 AI/存储，全部走 mock
+jwt:
+  secret: aicp-jwt-secret-key-2026-very-long-secret-key-for-hs256
 new-api:
   base-url: http://localhost:3001
   api-key: dev-mock-key
@@ -85,6 +86,7 @@ logging:
 # MYSQL Profile：MySQL 持久化，需要 docker-compose 启动数据库
 # 启动方式：--spring.profiles.active=mysql
 # 先启动 docker compose：cd aicp-backend && docker compose up -d
+# 注意：生产环境请用 prod profile，不要用 mysql profile 部署
 # ================================================================
 spring:
   config:
@@ -98,6 +100,10 @@ spring:
     hikari:
       maximum-pool-size: 10
       minimum-idle: 3
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 10000
   sql:
     init:
       mode: always
@@ -107,6 +113,9 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6380}
       timeout: 3000ms
+
+jwt:
+  secret: ${JWT_SECRET:aicp-jwt-mysql-dev-key-change-in-production}
 
 mybatis-plus:
   configuration:
@@ -144,6 +153,10 @@ spring:
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 10000
   data:
     redis:
       host: ${REDIS_HOST}

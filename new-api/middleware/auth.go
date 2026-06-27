@@ -120,7 +120,13 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if status.(int) == common.UserStatusDisabled {
+	userStatus, ok := status.(int)
+		if !ok {
+			common.ApiErrorI18n(c, i18n.MsgAuthUserInfoInvalid)
+			c.Abort()
+			return
+		}
+		if userStatus == common.UserStatusDisabled {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserBanned),
@@ -128,7 +134,13 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if role.(int) < minRole {
+	userRole, ok := role.(int)
+		if !ok {
+			common.ApiErrorI18n(c, i18n.MsgAuthInsufficientPrivilege)
+			c.Abort()
+			return
+		}
+		if userRole < minRole {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthInsufficientPrivilege),
@@ -136,7 +148,13 @@ func authHelper(c *gin.Context, minRole int) {
 		c.Abort()
 		return
 	}
-	if !validUserInfo(username.(string), role.(int)) {
+	userName, ok := username.(string)
+		if !ok {
+			common.ApiErrorI18n(c, i18n.MsgAuthUserInfoInvalid)
+			c.Abort()
+			return
+		}
+		if !validUserInfo(userName, userRole) {
 		c.JSON(http.StatusOK, gin.H{
 			"success": false,
 			"message": common.TranslateMessage(c, i18n.MsgAuthUserInfoInvalid),

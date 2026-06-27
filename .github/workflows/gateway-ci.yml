@@ -1,0 +1,42 @@
+name: Gateway CI (Go)
+
+on:
+  push:
+    paths:
+      - 'new-api/**'
+  pull_request:
+    paths:
+      - 'new-api/**'
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+          cache: true
+          cache-dependency-path: new-api/go.sum
+
+      - name: Vet
+        run: |
+          cd new-api
+          go vet ./...
+
+      - name: Build
+        run: |
+          cd new-api
+          go build -v ./...
+
+      - name: Test
+        run: |
+          cd new-api
+          go test -v -race -count=1 ./...
+        env:
+          SESSION_SECRET: ci-test-session-secret
+          CRYPTO_SECRET: ci-test-crypto-secret
+          SQL_DSN: local

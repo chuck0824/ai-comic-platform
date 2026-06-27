@@ -1,6 +1,7 @@
 package com.aicp.module.canvas.controller;
 
 import com.aicp.common.dto.ApiResponse;
+import com.aicp.common.exception.ErrorCode;
 import com.aicp.module.canvas.entity.*;
 import com.aicp.module.canvas.service.CanvasService;
 import com.aicp.module.generation.entity.GenerationTask;
@@ -31,26 +32,26 @@ public class CanvasController {
     @GetMapping("/projects/{id}")
     public ApiResponse<?> getProject(@PathVariable String id) {
         CanvasProject p = canvasService.getProject(id);
-        return p == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(p);
+        return p == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(p);
     }
 
     @PutMapping("/projects/{id}")
     public ApiResponse<?> updateProject(@PathVariable String id, @RequestBody Map<String, Object> body) {
         CanvasProject p = canvasService.updateProject(id, body);
-        return p == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(p);
+        return p == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(p);
     }
 
     @PostMapping("/projects/{id}/import-script")
     public ApiResponse<?> importScript(@PathVariable String id, @RequestBody Map<String, Object> body) {
         Map<String, Object> result = canvasService.importScript(id, body);
-        return result == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(result);
+        return result == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(result);
     }
 
     // ===== Nodes =====
     @GetMapping("/projects/{id}/nodes")
     public ApiResponse<Map<String, Object>> getNodes(@PathVariable String id) {
         CanvasProject p = canvasService.getProject(id);
-        if (p == null) return ApiResponse.error(46001, "画布项目不存在");
+        if (p == null) return ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND);
         return ApiResponse.success(Map.of(
                 "nodes", canvasService.getProjectNodes(id),
                 "connections", canvasService.getProjectConnections(id)));
@@ -59,14 +60,14 @@ public class CanvasController {
     @PostMapping("/projects/{id}/nodes")
     public ApiResponse<?> createNode(@PathVariable String id, @RequestBody Map<String, Object> body) {
         CanvasNode node = canvasService.createNode(id, body);
-        return node == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(node);
+        return node == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(node);
     }
 
     @PutMapping("/projects/{id}/nodes/{nodeId}")
     public ApiResponse<?> updateNode(@PathVariable String id, @PathVariable String nodeId,
                                      @RequestBody Map<String, Object> body) {
         CanvasNode node = canvasService.updateNode(id, nodeId, body);
-        return node == null ? ApiResponse.error(46011, "画布节点不存在") : ApiResponse.success(node);
+        return node == null ? ApiResponse.error(ErrorCode.CANVAS_NODE_NOT_FOUND) : ApiResponse.success(node);
     }
 
     @DeleteMapping("/projects/{id}/nodes/{nodeId}")
@@ -78,7 +79,7 @@ public class CanvasController {
     @PostMapping("/projects/{id}/nodes/{nodeId}/duplicate")
     public ApiResponse<?> duplicateNode(@PathVariable String id, @PathVariable String nodeId) {
         CanvasNode node = canvasService.duplicateNode(id, nodeId);
-        return node == null ? ApiResponse.error(46011, "画布节点不存在") : ApiResponse.success(node);
+        return node == null ? ApiResponse.error(ErrorCode.CANVAS_NODE_NOT_FOUND) : ApiResponse.success(node);
     }
 
     @PatchMapping("/projects/{id}/nodes/positions")
@@ -100,7 +101,7 @@ public class CanvasController {
     @PostMapping("/projects/{id}/nodes/connect")
     public ApiResponse<?> connectNodes(@PathVariable String id, @RequestBody Map<String, Object> body) {
         CanvasEdge edge = canvasService.connectNodes(id, body);
-        return edge == null ? ApiResponse.error(46012, "连线节点不存在") : ApiResponse.success(edge);
+        return edge == null ? ApiResponse.error(ErrorCode.CANVAS_EDGE_NOT_FOUND) : ApiResponse.success(edge);
     }
 
     @DeleteMapping("/projects/{id}/connections/{connId}")
@@ -113,20 +114,20 @@ public class CanvasController {
     @PostMapping("/projects/{id}/groups")
     public ApiResponse<?> groupNodes(@PathVariable String id, @RequestBody Map<String, Object> body) {
         CanvasGroup group = canvasService.groupNodes(id, body);
-        return group == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(group);
+        return group == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(group);
     }
 
     // ===== Shots =====
     @GetMapping("/projects/{id}/shots")
     public ApiResponse<?> getShots(@PathVariable String id) {
-        if (canvasService.getProject(id) == null) return ApiResponse.error(46001, "画布项目不存在");
+        if (canvasService.getProject(id) == null) return ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND);
         return ApiResponse.success(canvasService.getProjectShots(id));
     }
 
     @PostMapping("/projects/{id}/shots")
     public ApiResponse<?> createShot(@PathVariable String id, @RequestBody Map<String, Object> body) {
         StoryboardShot shot = canvasService.createShot(id, body);
-        return shot == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(shot);
+        return shot == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(shot);
     }
 
     @PutMapping("/projects/{id}/shots/{shotId}")
@@ -163,13 +164,13 @@ public class CanvasController {
                                        @RequestBody(required = false) Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "shot_generate",
                 Map.of("shot_id", shotId, "params", body == null ? Map.of() : body));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/shots/batch-generate")
     public ApiResponse<?> batchGenerateShots(@PathVariable String id, @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "batch_generate", body);
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/shots/{shotId}/inpaint")
@@ -177,7 +178,7 @@ public class CanvasController {
                                   @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "inpaint",
                 Map.of("shot_id", shotId, "params", body));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/shots/{shotId}/outpaint")
@@ -185,7 +186,7 @@ public class CanvasController {
                                    @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "outpaint",
                 Map.of("shot_id", shotId, "params", body));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/shots/{shotId}/generate-multimodal")
@@ -193,7 +194,7 @@ public class CanvasController {
                                                   @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "multimodal_video",
                 Map.of("shot_id", shotId, "params", body));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     // ===== Script Node Operations =====
@@ -202,7 +203,7 @@ public class CanvasController {
                                              @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "storyboard_generate",
                 Map.of("node_id", nodeId, "params", body));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/nodes/{nodeId}/script/batch-image")
@@ -210,7 +211,7 @@ public class CanvasController {
                                      @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "script_batch_image",
                 Map.of("node_id", nodeId, "params", body));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/nodes/{nodeId}/script/batch-video")
@@ -218,20 +219,20 @@ public class CanvasController {
                                      @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "script_batch_video",
                 Map.of("node_id", nodeId, "params", body));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PutMapping("/projects/{id}/nodes/{nodeId}/script/cell")
     public ApiResponse<?> updateScriptCell(@PathVariable String id, @PathVariable String nodeId,
                                            @RequestBody Map<String, Object> body) {
         CanvasNode node = canvasService.updateNode(id, nodeId, Map.of("data", body));
-        return node == null ? ApiResponse.error(46011, "画布节点不存在") : ApiResponse.success(node);
+        return node == null ? ApiResponse.error(ErrorCode.CANVAS_NODE_NOT_FOUND) : ApiResponse.success(node);
     }
 
     // ===== Timeline =====
     @GetMapping("/projects/{id}/timeline/full")
     public ApiResponse<?> getFullTimeline(@PathVariable String id) {
-        if (canvasService.getProject(id) == null) return ApiResponse.error(46001, "画布项目不存在");
+        if (canvasService.getProject(id) == null) return ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND);
         return ApiResponse.success(canvasService.getFullTimeline(id));
     }
 
@@ -244,32 +245,32 @@ public class CanvasController {
     @PostMapping("/projects/{id}/timeline/dub")
     public ApiResponse<?> generateDub(@PathVariable String id, @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "dub", body);
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/timeline/subtitle")
     public ApiResponse<?> generateSubtitle(@PathVariable String id, @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "subtitle", body);
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/timeline/clip")
     public ApiResponse<?> clipTimeline(@PathVariable String id, @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "timeline_clip", body);
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/timeline/splice")
     public ApiResponse<?> spliceTimeline(@PathVariable String id, @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "timeline_splice", body);
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     // ===== Compose & Export =====
     @PostMapping("/projects/{id}/compose")
     public ApiResponse<?> compose(@PathVariable String id) {
         GenerationTask task = canvasService.enqueueTask(id, "compose", Map.of("mode", "preview"));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @GetMapping("/projects/{id}/compose/{taskId}")
@@ -281,7 +282,7 @@ public class CanvasController {
     @PostMapping("/projects/{id}/export")
     public ApiResponse<?> exportVideo(@PathVariable String id, @RequestBody Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "export", body);
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @GetMapping("/export/{taskId}")
@@ -300,12 +301,12 @@ public class CanvasController {
     @PostMapping("/projects/{id}/workflows")
     public ApiResponse<?> createWorkflow(@PathVariable String id, @RequestBody Map<String, Object> body) {
         CanvasWorkflow wf = canvasService.createWorkflow(id, body);
-        return wf == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(wf);
+        return wf == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(wf);
     }
 
     @GetMapping("/projects/{id}/workflows")
     public ApiResponse<?> getWorkflows(@PathVariable String id) {
-        if (canvasService.getProject(id) == null) return ApiResponse.error(46001, "画布项目不存在");
+        if (canvasService.getProject(id) == null) return ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND);
         return ApiResponse.success(canvasService.getWorkflows(id));
     }
 
@@ -313,14 +314,14 @@ public class CanvasController {
     public ApiResponse<?> applyWorkflow(@PathVariable String id, @PathVariable String wfId) {
         GenerationTask task = canvasService.enqueueTask(id, "workflow_apply",
                 Map.of("workflow_id", wfId));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     @PostMapping("/projects/{id}/workflows/{wfId}/execute-all")
     public ApiResponse<?> executeWorkflow(@PathVariable String id, @PathVariable String wfId) {
         GenerationTask task = canvasService.enqueueTask(id, "workflow_execute",
                 Map.of("workflow_id", wfId));
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     // ===== Slash Commands =====
@@ -329,7 +330,7 @@ public class CanvasController {
                                 @RequestBody(required = false) Map<String, Object> body) {
         GenerationTask task = canvasService.enqueueTask(id, "slash_" + command,
                 body == null ? Map.of() : body);
-        return task == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(task);
+        return task == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(task);
     }
 
     // ===== Director Desk =====
@@ -341,7 +342,7 @@ public class CanvasController {
         data.put("scene", body == null ? Map.of() : body);
         data.put("captures", List.of());
         CanvasNode node = canvasService.createNode(id, Map.of("type", "reference", "x", 240, "y", 180, "data", data));
-        return node == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(node);
+        return node == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(node);
     }
 
     @GetMapping("/projects/{id}/director-desk/{deskId}")
@@ -446,7 +447,7 @@ public class CanvasController {
         imageData.put("aspect_ratio", shot.getOrDefault("aspect_ratio", shot.get("aspect")));
         imageData.put("preview_url", shot.getOrDefault("preview_url", shot.get("image_url")));
         CanvasNode imageNode = canvasService.createNode(id, Map.of("type", "image", "x", x, "y", y, "data", imageData));
-        if (imageNode == null) return ApiResponse.error(46001, "画布项目不存在");
+        if (imageNode == null) return ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND);
         CanvasEdge edge = canvasService.connectNodes(id, Map.of(
                 "source_node_id", source.getUuid(),
                 "target_node_id", imageNode.getUuid(),
@@ -504,7 +505,7 @@ public class CanvasController {
         CanvasNode node = canvasService.createNode(id, Map.of(
                 "type", type, "x", body.getOrDefault("x", 200),
                 "y", body.getOrDefault("y", 200), "data", data));
-        return node == null ? ApiResponse.error(46001, "画布项目不存在") : ApiResponse.success(node);
+        return node == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(node);
     }
 
     private CanvasNode findProjectNode(String projectId, String nodeId) {

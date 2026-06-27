@@ -36,7 +36,7 @@ type User struct {
 	WeChatId         string         `json:"wechat_id" gorm:"column:wechat_id;index"`
 	TelegramId       string         `json:"telegram_id" gorm:"column:telegram_id;index"`
 	VerificationCode string         `json:"verification_code" gorm:"-:all"`                         // this field is only for Email verification, don't save it to database!
-	AccessToken      *string        `json:"-" gorm:"type:char(32);column:access_token;uniqueIndex"` // this token is for system management
+	AccessToken      *string        `json:"-" gorm:"type:varchar(64);column:access_token;uniqueIndex"` // HMAC hash of access token (plaintext shown once at creation)
 	Quota            int            `json:"quota" gorm:"type:int;default:0"`
 	UsedQuota        int            `json:"used_quota" gorm:"type:int;default:0;column:used_quota"` // used quota
 	RequestCount     int            `json:"request_count" gorm:"type:int;default:0;"`               // request number
@@ -51,6 +51,7 @@ type User struct {
 	Setting          string         `json:"setting" gorm:"type:text;column:setting"`
 	Remark           string         `json:"remark,omitempty" gorm:"type:varchar(255)" validate:"max=255"`
 	StripeCustomer   string         `json:"stripe_customer" gorm:"type:varchar(64);column:stripe_customer;index"`
+	AicpUserId       *int64         `json:"aicp_user_id" gorm:"column:aicp_user_id;index"`
 	CreatedAt        int64          `json:"created_at" gorm:"autoCreateTime;column:created_at"`
 	LastLoginAt      int64          `json:"last_login_at" gorm:"default:0;column:last_login_at"`
 }
@@ -68,6 +69,8 @@ func (user *User) ToBaseUser() *UserBase {
 	return cache
 }
 
+// GetAccessToken returns the stored token hash (not the original plaintext token).
+// The plaintext token is only available at creation time via GenerateAccessToken.
 func (user *User) GetAccessToken() string {
 	if user.AccessToken == nil {
 		return ""
@@ -75,8 +78,11 @@ func (user *User) GetAccessToken() string {
 	return *user.AccessToken
 }
 
+// SetAccessToken hashes the plaintext token with HMAC-SHA256 and stores the
+// hex-encoded hash. The plaintext is never persisted.
 func (user *User) SetAccessToken(token string) {
-	user.AccessToken = &token
+	hashed := common.GenerateHMAC(token)
+	user.AccessToken = &hashed
 }
 
 func (user *User) GetSetting() dto.UserSetting {
@@ -305,6 +311,54 @@ func GetUserById(id int, selectAll bool) (*User, error) {
 		err = DB.Omit("password").First(&user, "id = ?", id).Error
 	}
 	return &user, err
+}
+
+// GetOrCreateShadowUser looks up an existing new-api user linked to the given
+// AICP user ID, or creates one so that AICP JWT holders can use new-api without
+// a separate registration step.
+func GetOrCreateShadowUser(aicpUserId int64, userUUID string, claims map[string]interface{}) (*User, error) {
+	// 1. Look up existing shadow user by AICP user ID
+	var user User
+	result := DB.Where("aicp_user_id = ?", aicpUserId).First(&user)
+	if result.Error == nil {
+		return &user, nil
+	}
+	if !errors.Is(result.Error, gorm.ErrRecordNotFound) {
+		return nil, result.Error
+	}
+
+	// 2. Derive a username from AICP claims, falling back to aicp_{id}
+	username := fmt.Sprintf("aicp_%d", aicpUserId)
+	if name, ok := claims["username"].(string); ok && strings.TrimSpace(name) != "" {
+		username = strings.TrimSpace(name)
+	}
+
+	// 3. Ensure username uniqueness — if the derived name is taken, append the AICP id
+	var existing User
+	if DB.Where("username = ?", username).First(&existing).Error == nil {
+		username = fmt.Sprintf("%s_%d", username, aicpUserId)
+	}
+
+	// 4. Create the shadow user (password is random — login happens via AICP JWT)
+	cleanUser := User{
+		Username:    username,
+		DisplayName: username,
+		Password:    common.GetRandomString(16),
+		Role:        common.RoleCommonUser,
+		Status:      common.UserStatusEnabled,
+		Group:       "default",
+		AicpUserId:  &aicpUserId,
+	}
+	if err := cleanUser.Insert(0); err != nil {
+		return nil, fmt.Errorf("failed to create shadow user: %w", err)
+	}
+
+	// 5. Re-fetch to get the assigned ID
+	if err := DB.Where("aicp_user_id = ?", aicpUserId).First(&user).Error; err != nil {
+		return nil, err
+	}
+	common.SysLog(fmt.Sprintf("created shadow user id=%d username=%s for AICP user %d", user.Id, user.Username, aicpUserId))
+	return &user, nil
 }
 
 func GetUserIdByAffCode(affCode string) (int, error) {
@@ -777,8 +831,10 @@ func ValidateAccessToken(token string) (*User, error) {
 		return nil, nil
 	}
 	token = strings.Replace(token, "Bearer ", "", 1)
+	// Hash the provided token — the database stores the HMAC hash, never the plaintext token.
+	tokenHash := common.GenerateHMAC(token)
 	user := &User{}
-	err := DB.Where("access_token = ?", token).First(user).Error
+	err := DB.Where("access_token = ?", tokenHash).First(user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil

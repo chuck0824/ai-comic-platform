@@ -2020,6 +2020,8 @@ async function deleteSelectedConnection() {
 function onCanvasKeydown(e) {
   const tag = document.activeElement?.tagName?.toLowerCase()
   if (['input', 'textarea', 'select'].includes(tag)) return
+  // 弹窗/对话框打开时不处理画布快捷键
+  if (document.querySelector('.el-overlay.is-message-box, .el-dialog:not([style*="display: none"])')) return
   if (directorDeskVisible.value) {
     const key = e.key.toLowerCase()
     if (key === 'escape') {

@@ -172,7 +172,10 @@ export function SignUpForm({
         toast.error(res?.message || t('Failed to create account'))
       }
     } catch (_error) {
-      // Errors are handled by global interceptor
+      // Log the error for debugging — the global interceptor shows a toast
+      // but we need the console trace to diagnose error boundary triggers.
+      // eslint-disable-next-line no-console
+      console.error('[SignUpForm] Registration failed:', _error)
     } finally {
       setIsLoading(false)
     }

@@ -1,5 +1,6 @@
 package com.aicp.common.dto;
 
+import com.aicp.common.exception.ErrorCode;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 import java.util.UUID;
@@ -35,6 +36,10 @@ public class ApiResponse<T> {
         r.code = code;
         r.message = message;
         return r;
+    }
+
+    public static <T> ApiResponse<T> error(ErrorCode errorCode) {
+        return error(errorCode.getCode(), errorCode.getMessage());
     }
 
     public static <T> ApiResponse<T> error(int code, String message, T data) {

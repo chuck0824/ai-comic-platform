@@ -98,6 +98,10 @@ CREATE TABLE IF NOT EXISTS scripts (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='剧本表';
 
+-- 高频查询索引
+CREATE INDEX IF NOT EXISTS idx_scripts_owner ON scripts(owner_user_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_scripts_market ON scripts(status, genre_tag, updated_at);
+
 CREATE TABLE IF NOT EXISTS script_episodes (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     script_id BIGINT NOT NULL, episode_number INT NOT NULL,
@@ -342,6 +346,10 @@ CREATE TABLE IF NOT EXISTS generation_tasks (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='生成任务表';
 
+-- 高频查询索引
+CREATE INDEX IF NOT EXISTS idx_gen_task_project ON generation_tasks(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_gen_task_status ON generation_tasks(status, created_at);
+
 CREATE TABLE IF NOT EXISTS generation_variants (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     parent_task_id BIGINT NOT NULL, variant_index INT NOT NULL,
@@ -539,6 +547,8 @@ CREATE TABLE IF NOT EXISTS sop_audits (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='SOP审计表';
 
+CREATE INDEX IF NOT EXISTS idx_sop_audit_project ON sop_audits(project_id);
+
 CREATE TABLE IF NOT EXISTS sop_versions (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     project_id VARCHAR(50) NOT NULL,
@@ -557,5 +567,7 @@ CREATE TABLE IF NOT EXISTS notifications (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (user_id) REFERENCES users(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='通知表';
+
+CREATE INDEX IF NOT EXISTS idx_notif_user_read ON notifications(user_id, is_read, created_at);
 
 SET FOREIGN_KEY_CHECKS = 1;

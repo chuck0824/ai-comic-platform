@@ -55,6 +55,9 @@ func InitEnv() {
 		} else {
 			SessionSecret = ss
 		}
+	} else {
+		log.Println("WARNING: SESSION_SECRET is not set — using auto-generated value. Sessions will be invalidated on restart and across instances.")
+		log.Println("警告：未设置 SESSION_SECRET 环境变量，每次重启将导致所有用户会话失效。多实例部署时必须保持一致。")
 	}
 	if os.Getenv("CRYPTO_SECRET") != "" {
 		CryptoSecret = os.Getenv("CRYPTO_SECRET")
@@ -85,6 +88,8 @@ func InitEnv() {
 	initNodeNameIdentity()
 	TLSInsecureSkipVerify = GetEnvOrDefaultBool("TLS_INSECURE_SKIP_VERIFY", false)
 	if TLSInsecureSkipVerify {
+		log.Println("WARNING: TLS_INSECURE_SKIP_VERIFY is enabled — all outbound HTTPS connections are vulnerable to MITM attacks. Use only in development.")
+		log.Println("警告：已启用 TLS_INSECURE_SKIP_VERIFY，所有出站 HTTPS 连接均易受中间人攻击。仅限开发环境使用。")
 		if tr, ok := http.DefaultTransport.(*http.Transport); ok && tr != nil {
 			if tr.TLSClientConfig != nil {
 				tr.TLSClientConfig.InsecureSkipVerify = true

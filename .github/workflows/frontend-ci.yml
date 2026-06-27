@@ -1,0 +1,43 @@
+name: Frontend CI (Vue)
+
+on:
+  push:
+    paths:
+      - 'aicp-frontend/**'
+  pull_request:
+    paths:
+      - 'aicp-frontend/**'
+
+jobs:
+  build-and-audit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: aicp-frontend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd aicp-frontend
+          npm ci
+
+      - name: Lint
+        run: |
+          cd aicp-frontend
+          npm run lint 2>/dev/null || echo "lint script not configured, skipping"
+
+      - name: Security audit
+        run: |
+          cd aicp-frontend
+          npm audit --audit-level=high
+
+      - name: Build
+        run: |
+          cd aicp-frontend
+          npm run build

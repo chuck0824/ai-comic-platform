@@ -5,16 +5,21 @@ import com.aicp.module.auth.dto.*;
 import com.aicp.module.auth.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.env.Environment;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
+    private final Environment environment;
 
     @PostMapping("/send-code")
     public ApiResponse<Map<String, Object>> sendCode(@RequestBody Map<String, String> body) {
@@ -74,9 +79,17 @@ public class AuthController {
         return ApiResponse.success();
     }
 
-    /** [DEV] 初始化测试账号（仅 dev 环境使用） */
+    /**
+     * [DEV] 初始化测试账号 — 仅 dev 环境可访问。
+     * 非 dev 环境返回 404，不暴露端点存在性。
+     */
     @PostMapping("/dev/init")
     public ApiResponse<Map<String, Object>> devInit(@RequestBody Map<String, String> body) {
+        if (!Arrays.asList(environment.getActiveProfiles()).contains("dev")) {
+            log.warn("dev/init 在非 dev 环境被调用（profiles={}），已拒绝",
+                    Arrays.toString(environment.getActiveProfiles()));
+            return ApiResponse.error(404, "Not Found");
+        }
         return ApiResponse.success(authService.devInit(
                 body.getOrDefault("account", "admin"),
                 body.getOrDefault("password", "admin123")));

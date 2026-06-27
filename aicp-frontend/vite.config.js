@@ -32,6 +32,15 @@ export default defineConfig({
   },
   build: {
     outDir: '../aicp-backend/src/main/resources/static',
-    emptyOutDir: true
+    emptyOutDir: true,
+    chunkSizeWarningLimit: 800,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'element-plus': ['element-plus'],
+          'echarts': ['echarts', 'vue-echarts']
+        }
+      }
+    }
   }
 })

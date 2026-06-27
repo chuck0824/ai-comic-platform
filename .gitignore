@@ -9,6 +9,7 @@ aicp-backend/target/
 
 # IDE
 .idea/
+.vscode/
 *.iml
 
 # OS
@@ -19,10 +20,13 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.env.development
+.env.production
 
 # Logs
 *.log
 logs/
+new-api/logs/
 
 # Temp
 tmp/
@@ -34,3 +38,10 @@ aicp-frontend/.vite/
 # Java
 aicp-backend/*.jar
 aicp-backend/*.war
+**/*.jar
+
+# new-api data (SQLite)
+new-api/data/*.db
+
+# Generated outputs
+outputs/

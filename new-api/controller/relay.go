@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -251,7 +252,21 @@ func Relay(c *gin.Context, relayFormat types.RelayFormat) {
 var upgrader = websocket.Upgrader{
 	Subprotocols: []string{"realtime"}, // WS 握手支持的协议，如果有使用 Sec-WebSocket-Protocol，则必须在此声明对应的 Protocol TODO add other protocol
 	CheckOrigin: func(r *http.Request) bool {
-		return true // 允许跨域
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // same-origin requests have no Origin header
+		}
+		// Allow localhost origins (dev) and configured origins
+		allowed := os.Getenv("CORS_ALLOWED_ORIGINS")
+		if allowed == "" {
+			return strings.HasPrefix(origin, "http://localhost:")
+		}
+		for _, o := range strings.Split(allowed, ",") {
+			if strings.TrimSpace(o) == origin {
+				return true
+			}
+		}
+		return false
 	},
 }
 

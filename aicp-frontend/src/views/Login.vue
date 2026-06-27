@@ -74,7 +74,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { authApi } from '@/api/auth'
@@ -91,6 +91,8 @@ const loading = ref(false)
 const phone = ref('13800000001')
 const smsCode = ref('123456')
 const countdown = ref(0)
+const activeTimers = []
+onUnmounted(() => activeTimers.forEach(clearInterval))
 
 // 密码登录
 const account = ref('13800000001')
@@ -108,7 +110,8 @@ async function sendSms() {
     return
   }
   countdown.value = 60
-  const timer = setInterval(() => { countdown.value--; if (countdown.value <= 0) clearInterval(timer) }, 1000)
+  const timer = setInterval(() => { countdown.value--; if (countdown.value <= 0) { clearInterval(timer); activeTimers.splice(activeTimers.indexOf(timer), 1) } }, 1000)
+  activeTimers.push(timer)
   try {
     await authApi.sendCode(phone.value, 'sms', 'login')
     ElMessage.success('验证码已发送')
@@ -123,7 +126,8 @@ async function sendRegCode() {
     return
   }
   regCountdown.value = 60
-  const timer = setInterval(() => { regCountdown.value--; if (regCountdown.value <= 0) clearInterval(timer) }, 1000)
+  const timer = setInterval(() => { regCountdown.value--; if (regCountdown.value <= 0) { clearInterval(timer); activeTimers.splice(activeTimers.indexOf(timer), 1) } }, 1000)
+  activeTimers.push(timer)
   try {
     await authApi.sendCode(registerForm.value.phone, 'sms', 'register')
     ElMessage.success('验证码已发送')

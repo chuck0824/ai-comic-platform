@@ -145,8 +145,8 @@ async function loadProjects() {
     // 统计：从后端总数字段或前端聚合
     stats.warehouseCount = total
     stats.scriptsGenerated = total // 近似值（含 ai_generated + uploaded）
-    stats.exports = Math.floor(total * 0.3) // 后端暂不返回导出数
-    stats.revenue = Math.floor(total * 5) // 后端暂不返回收入
+    stats.exports = data.exports_count ?? data.exportCount ?? '--' // 后端暂不返回则显示 --
+    stats.revenue = data.revenue ?? '--'
   } catch (e) {
     // 后端不可用时显示零值（非 mock 数字）
     stats.scriptsGenerated = 0

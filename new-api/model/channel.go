@@ -59,6 +59,39 @@ type Channel struct {
 	Keys []string `json:"-" gorm:"-"`
 }
 
+// BeforeSave encrypts the Key field if it is not already encrypted.
+func (c *Channel) BeforeSave(_ *gorm.DB) error {
+	if c.Key == "" {
+		return nil
+	}
+	// Skip if already encrypted (safety: double-encrypt prevention)
+	if len(c.Key) > 7 && c.Key[:7] == "AES256:" {
+		return nil
+	}
+	encrypted, err := common.EncryptByAES(c.Key)
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to encrypt channel key id=%d: %v", c.Id, err))
+		return err
+	}
+	c.Key = encrypted
+	return nil
+}
+
+// AfterFind decrypts the Key field if it is encrypted.
+func (c *Channel) AfterFind(_ *gorm.DB) error {
+	if c.Key == "" {
+		return nil
+	}
+	decrypted, err := common.DecryptByAES(c.Key)
+	if err != nil {
+		common.SysError(fmt.Sprintf("failed to decrypt channel key id=%d: %v", c.Id, err))
+		// Don't fail reads — return the stored value on decrypt failure
+		return nil
+	}
+	c.Key = decrypted
+	return nil
+}
+
 type ChannelInfo struct {
 	IsMultiKey             bool                  `json:"is_multi_key"`                        // 是否多Key模式
 	MultiKeySize           int                   `json:"multi_key_size"`                      // 多Key模式下的Key数量
