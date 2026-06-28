@@ -86,14 +86,7 @@ public class CanvasController {
     public ApiResponse<Void> updateNodePositions(@PathVariable String id, @RequestBody Map<String, Object> body) {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> positions = (List<Map<String, Object>>) body.get("positions");
-        if (positions != null) {
-            for (Map<String, Object> pos : positions) {
-                Map<String, Object> update = new LinkedHashMap<>();
-                if (pos.containsKey("x")) update.put("x", pos.get("x"));
-                if (pos.containsKey("y")) update.put("y", pos.get("y"));
-                canvasService.updateNode(id, (String) pos.get("node_id"), update);
-            }
-        }
+        canvasService.batchUpdateNodePositions(id, positions);
         return ApiResponse.success();
     }
 

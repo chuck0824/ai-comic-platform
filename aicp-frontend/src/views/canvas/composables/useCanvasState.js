@@ -58,6 +58,12 @@ export function useCanvasState() {
   }
 
   function selectNode(nodeId) {
+    // 点击已选中的节点：取消选中
+    if (selectedNodeId.value === nodeId) {
+      selectedNodeId.value = null
+      selectedNodes.value = selectedNodes.value.filter(id => id !== nodeId)
+      return
+    }
     selectedNodeId.value = nodeId
     if (nodeId && !selectedNodes.value.includes(nodeId)) {
       selectedNodes.value.push(nodeId)

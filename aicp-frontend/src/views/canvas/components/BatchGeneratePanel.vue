@@ -45,7 +45,7 @@
       <div class="cost-estimate">
         <el-icon><Coin /></el-icon> 预估消耗：
         <strong>{{ estimateCredits }} 积分</strong>
-        ({{ shotCount }} × {{ config.variants }} 副本 × {{ mode === 'image' ? '10' : '50' }})
+        <span class="text-xs text-muted">({{ shotCount }}镜头 × {{ config.variants }}副本，实际扣费以服务端返回为准)</span>
       </div>
 
       <div class="flex gap-sm mt-md">

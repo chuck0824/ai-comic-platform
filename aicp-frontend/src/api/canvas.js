@@ -10,7 +10,7 @@ export const canvasApi = {
   reorderShots: (id, data) => request.put(`/canvas/projects/${id}/shots/reorder`, data),
   updateKeyframe: (id, shotId, data) => request.put(`/canvas/projects/${id}/shots/${shotId}/keyframe`, data),
   inpaint: (id, shotId, data) => request.post(`/canvas/projects/${id}/shots/${shotId}/inpaint`, data),
-  updateTimeline: (id, data) => request.put(`/canvas/projects/${id}/timeline`, data),
+  updateTimeline: (id, data) => request.put(`/canvas/projects/${id}/timeline/full`, data),
   generateDub: (id, data) => request.post(`/canvas/projects/${id}/timeline/dub`, data),
   compose: (id) => request.post(`/canvas/projects/${id}/compose`),
   getComposeStatus: (id, taskId) => request.get(`/canvas/projects/${id}/compose/${taskId}`),
@@ -52,8 +52,7 @@ export const canvasApi = {
   // === V1.5 新增 ===
   updateNodePositions: (id, data) => request.patch(`/canvas/projects/${id}/nodes/positions`, data),
   dropMaterial: (id, data) => request.post(`/canvas/projects/${id}/assets/drop`, data),
-  createGroup: (id, data) => request.post(`/canvas/projects/${id}/groups`, data),
-  getGroups: (id) => request.get(`/canvas/projects/${id}/groups`)
+  createGroup: (id, data) => request.post(`/canvas/projects/${id}/groups`, data)
 }
 
 export const canvasAgentApi = {

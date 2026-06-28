@@ -8,6 +8,7 @@ import com.aicp.module.generation.mapper.GenerationTaskMapper;
 import com.aicp.module.generation.service.GenerationExecutor;
 import com.aicp.module.generation.service.GenerationService;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +29,7 @@ public class CanvasService {
     private final GenerationTaskMapper generationTaskMapper;
     private final GenerationService generationService;
     private final GenerationExecutor generationExecutor;
+    private final ObjectMapper objectMapper;
 
     // ===== Project CRUD =====
     public CanvasProject createProject(Map<String, Object> body) {
@@ -45,14 +47,23 @@ public class CanvasService {
     }
 
     public CanvasProject getProject(String id) {
-        CanvasProject project = findByUuidOrId(projectMapper, id);
-        if (project == null) return null;
-        // 数据隔离：验证项目归属当前用户
         Long currentUserId = SecurityUtil.getCurrentUserId();
-        if (currentUserId != null && !currentUserId.equals(project.getUserId())) {
-            return null; // 不返回其他用户的项目
+        // 数据隔离：在 SQL 层面过滤，避免通过响应时间差异推断项目存在性
+        CanvasProject byUuid = projectMapper.selectOne(
+                new LambdaQueryWrapper<CanvasProject>()
+                        .eq(CanvasProject::getUuid, id)
+                        .eq(currentUserId != null, CanvasProject::getUserId, currentUserId));
+        if (byUuid != null) return byUuid;
+        // 回退：尝试按自增 ID + 用户过滤查询
+        try {
+            long numericId = Long.parseLong(id);
+            return projectMapper.selectOne(
+                    new LambdaQueryWrapper<CanvasProject>()
+                            .eq(CanvasProject::getId, numericId)
+                            .eq(currentUserId != null, CanvasProject::getUserId, currentUserId));
+        } catch (NumberFormatException e) {
+            return null;
         }
-        return project;
     }
 
     /** 获取当前用户的所有项目 */
@@ -89,7 +100,7 @@ public class CanvasService {
         node.setX(toInt(body.get("x"), 80));
         node.setY(toInt(body.get("y"), 80));
         node.setWidth(toInt(body.get("width"), nodeWidth(type)));
-        node.setHeight(toInt(body.get("height"), "script".equals(type) ? 280 : 180));
+        node.setHeight(toInt(body.get("height"), nodeHeight(type)));
         node.setInputData(toJson(body.get("data")));
         node.setStatus("ready");
         nodeMapper.insert(node);
@@ -115,6 +126,19 @@ public class CanvasService {
         if (body.containsKey("status")) node.setStatus((String) body.get("status"));
         nodeMapper.updateById(node);
         return node;
+    }
+
+    @Transactional
+    public void batchUpdateNodePositions(String projectId, List<Map<String, Object>> positions) {
+        CanvasProject project = getProject(projectId);
+        if (project == null || positions == null || positions.isEmpty()) return;
+        for (Map<String, Object> pos : positions) {
+            CanvasNode node = findNodeByUuid(projectId, String.valueOf(pos.get("node_id")));
+            if (node == null) continue;
+            if (pos.containsKey("x")) node.setX(toInt(pos.get("x"), node.getX()));
+            if (pos.containsKey("y")) node.setY(toInt(pos.get("y"), node.getY()));
+            nodeMapper.updateById(node);
+        }
     }
 
     @Transactional
@@ -480,23 +504,13 @@ public class CanvasService {
 
     private String normalizeTaskType(String type) {
         if (type == null) return "text";
+        // compose/export 直接透传，不做归类
         if ("compose".equals(type) || "export".equals(type)) return type;
         if (type.contains("image") || type.contains("inpaint") || type.contains("outpaint")) return "image";
-        if (type.contains("video") || type.contains("compose") || type.contains("export") || type.contains("clip") || type.contains("splice")) return "video";
+        if (type.contains("video") || type.contains("clip") || type.contains("splice")) return "video";
         if (type.contains("audio") || type.contains("dub") || type.contains("subtitle")) return "audio";
         if (type.contains("workflow")) return "agent";
         return "text";
-    }
-
-    private CanvasProject findByUuidOrId(com.baomidou.mybatisplus.core.mapper.BaseMapper<CanvasProject> mapper, String id) {
-        CanvasProject byUuid = mapper.selectOne(
-                new LambdaQueryWrapper<CanvasProject>().eq(CanvasProject::getUuid, id));
-        if (byUuid != null) return byUuid;
-        try {
-            return mapper.selectById(Long.parseLong(id));
-        } catch (NumberFormatException e) {
-            return null;
-        }
     }
 
     // ===== Utility =====
@@ -548,17 +562,18 @@ public class CanvasService {
     private String toJson(Object value) {
         if (value == null) return null;
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value);
+            return objectMapper.writeValueAsString(value);
         } catch (Exception e) {
             return String.valueOf(value);
         }
     }
 
-    @SuppressWarnings("unchecked")
     private Map<String, Object> parseJson(String json) {
         if (json == null) return new LinkedHashMap<>();
         try {
-            return new com.fasterxml.jackson.databind.ObjectMapper().readValue(json, Map.class);
+            @SuppressWarnings("unchecked")
+            Map<String, Object> result = objectMapper.readValue(json, Map.class);
+            return result;
         } catch (Exception e) {
             return new LinkedHashMap<>();
         }
@@ -575,10 +590,27 @@ public class CanvasService {
         };
     }
 
+    /** 节点默认宽度，与前端 useCanvasNodes 的 addLocalNode 保持一致 */
     private int nodeWidth(String type) {
         return switch (type) {
-            case "script" -> 340; case "text" -> 240; case "video" -> 220;
+            case "script" -> 340;
+            case "director" -> 280;
+            case "text" -> 560;
+            case "image", "video" -> 520;
+            case "audio" -> 300;
             default -> 200;
+        };
+    }
+
+    /** 节点默认高度，与前端 useCanvasNodes 的 addLocalNode 保持一致 */
+    private int nodeHeight(String type) {
+        return switch (type) {
+            case "script" -> 280;
+            case "director" -> 220;
+            case "text" -> 520;
+            case "image", "video" -> 360;
+            case "audio" -> 300;
+            default -> 180;
         };
     }
 

@@ -30,7 +30,7 @@ export const scriptApi = {
   getChapters: (scriptId) => request.get(`/script/repo/scripts/${scriptId}/chapters`),
   updateChapter: (chapterId, data) => request.patch(`/script/repo/chapters/${chapterId}`, data),
   getChapterVersions: (chapterId) => request.get(`/script/repo/chapters/${chapterId}/versions`),
-  createChapterVersion: (chapterId, data) => request.post(`/script/repo/chapters/${chapterId}/versions`, data),
+  createChapterVersion: (chapterId, data) => request.post(`/script/repo/chapters/${chapterId || 0}/versions`, data),
 
   // 源头文本改编脚本
   getAdaptations: (params) => request.get('/script/repo/adaptations', { params }),

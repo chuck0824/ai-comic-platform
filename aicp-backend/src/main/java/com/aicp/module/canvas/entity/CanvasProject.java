@@ -1,6 +1,8 @@
 package com.aicp.module.canvas.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 import java.time.LocalDateTime;
 
@@ -9,17 +11,27 @@ import java.time.LocalDateTime;
 public class CanvasProject {
     @TableId(type = IdType.AUTO)
     private Long id;
+
+    @NotBlank
     private String uuid;
+
+    @NotNull
     private Long userId;
+
     private Long enterpriseId;
+
+    @NotBlank
     private String name;
+
     private Long scriptId;
     private Integer episodeIndex;
     private String styleConfig;
     private String status;
     private Integer canvasVersion;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
+
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 }

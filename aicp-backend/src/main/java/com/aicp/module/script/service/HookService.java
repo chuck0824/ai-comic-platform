@@ -1,5 +1,6 @@
 package com.aicp.module.script.service;
 
+import com.aicp.common.ai.AiRouter;
 import com.aicp.module.script.entity.*;
 import com.aicp.module.script.mapper.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,6 +20,7 @@ public class HookService {
     private final EpisodeHookMapper hookMapper;
     private final ScriptEpisodeMapper episodeMapper;
     private final ScriptMapper scriptMapper;
+    private final AiRouter aiRouter;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** 钩子生成 System Prompt */
@@ -189,19 +191,66 @@ public class HookService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> callAiForHooks(String userPrompt) {
-        // TODO: 接入 AiRouter 的 LLM 调用（待 AiRouter 支持通用 chat 方法）
-        log.debug("钩子系统暂使用 mock 数据。Prompt: {}", userPrompt.substring(0, Math.min(200, userPrompt.length())));
+        try {
+            Map<String, Object> aiResult = aiRouter.chatCompletion(Map.of(
+                    "system_prompt", HOOK_SYSTEM_PROMPT,
+                    "prompt", userPrompt,
+                    "temperature", 0.7,
+                    "max_tokens", 2048));
+
+            String content = extractContent(aiResult);
+            String jsonBlock = extractJson(content);
+            Map<String, Object> parsed = parseJson(jsonBlock);
+
+            if (!parsed.isEmpty() && parsed.containsKey("hooks")) {
+                log.info("AI 钩子生成成功: hooks={}", ((List<?>) parsed.getOrDefault("hooks", List.of())).size());
+                return parsed;
+            }
+        } catch (Exception e) {
+            log.warn("AI 钩子生成失败，回退到 mock: {}", e.getMessage());
+        }
+        log.debug("钩子系统回退到 mock 数据");
         return mockAiResponse();
     }
 
-    /** 从 AI 响应中提取 JSON */
-    private String extractJson(String response) {
-        int start = response.indexOf('{');
-        int end = response.lastIndexOf('}');
-        if (start >= 0 && end > start) {
-            return response.substring(start, end + 1);
+    /** 从 AI 响应中提取文本内容 */
+    @SuppressWarnings("unchecked")
+    private String extractContent(Map<String, Object> aiResult) {
+        Object choices = aiResult.get("choices");
+        if (choices instanceof List<?> list && !list.isEmpty()) {
+            Object first = list.get(0);
+            if (first instanceof Map<?, ?> choice) {
+                Object message = choice.get("message");
+                if (message instanceof Map<?, ?> msg) {
+                    Object content = msg.get("content");
+                    if (content != null) return String.valueOf(content);
+                }
+            }
         }
-        return response;
+        Object content = aiResult.get("content");
+        if (content != null) return String.valueOf(content);
+        return aiResult.toString();
+    }
+
+    /** 从文本中提取首个 JSON 块 */
+    private String extractJson(String text) {
+        int start = text.indexOf('{');
+        int end = text.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return text.substring(start, end + 1);
+        }
+        return text;
+    }
+
+    /** 安全解析 JSON */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJson(String json) {
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            log.debug("JSON 解析失败: {}", e.getMessage());
+            return Map.of();
+        }
     }
 
     /** 模拟 AI 钩子生成（dev fallback） */

@@ -44,7 +44,7 @@ public class ScriptGenService {
                 "estimated_seconds", genType.equals("quick") ? 120 : 30);
     }
 
-    @Async
+    @Async("genTaskExecutor")
     public void simulateGeneration(Long taskId, String genType, Map<String, Object> params, String tier) {
         try {
             GenTask task = genTaskMapper.selectById(taskId);
@@ -387,11 +387,16 @@ public class ScriptGenService {
         try {
             task = genTaskMapper.selectById(Long.parseLong(taskId));
         } catch (NumberFormatException e) {
-            task = genTaskMapper.selectOne(
-                    new LambdaQueryWrapper<GenTask>().eq(GenTask::getGenType, taskId));
+            // 不合法的 taskId 格式，直接返回错误，不再回退到按 genType 查询
+            return Map.of("error", "无效的任务ID: " + taskId);
         }
         if (task == null) {
             return Map.of("error", "任务不存在: " + taskId);
+        }
+        // 校验任务归属
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        if (currentUserId != null && task.getUserId() != null && !currentUserId.equals(task.getUserId())) {
+            return Map.of("error", "无权访问该任务");
         }
         return toMap(task);
     }
@@ -416,7 +421,11 @@ public class ScriptGenService {
         map.put("status", task.getStatus());
         map.put("progress", task.getProgress() != null ? task.getProgress() : 0);
         map.put("input_params", parseJson(task.getInputParams()));
-        map.put("result", parseJson(task.getOutputData()));
+        Map<String, Object> resultData = parseJson(task.getOutputData());
+        // 标记 AI 来源：前端据此展示 mock 提示
+        if (resultData == null) resultData = new LinkedHashMap<>();
+        resultData.put("_model_used", task.getModelUsed());
+        map.put("result", resultData);
         map.put("tokens_used", task.getTokensUsed());
         map.put("duration_ms", task.getDurationMs());
         map.put("error_msg", task.getErrorMsg());

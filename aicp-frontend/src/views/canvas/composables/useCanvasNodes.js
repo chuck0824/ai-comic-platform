@@ -116,8 +116,7 @@ export function useCanvasNodes(projectId) {
     if (localMode.value) return duplicateLocalNode(nodeId)
     const res = await canvasApi.duplicateNode(projectId.value, nodeId)
     if (res.data) {
-      nodes.value.push(res.data)
-      await loadNodes()
+      await loadNodes() // 全量刷新以获取服务端生成的 ID/timestamp 等字段
     }
     return res.data
   }
@@ -265,10 +264,30 @@ export function useCanvasNodes(projectId) {
   }
 
   function saveLocalCanvas() {
-    localStorage.setItem(localKey(), JSON.stringify({
-      nodes: nodes.value,
-      connections: connections.value
-    }))
+    try {
+      const data = JSON.stringify({
+        nodes: nodes.value,
+        connections: connections.value
+      })
+      localStorage.setItem(localKey(), data)
+    } catch (e) {
+      if (e.name === 'QuotaExceededError' || e.toString().includes('quota')) {
+        console.error('localStorage 容量不足，画布数据保存失败。请清理浏览器存储或减少节点数量。', e)
+        // 尝试清理旧数据后重试一次
+        try {
+          // 移除最旧的 canvas 备份
+          const keys = Object.keys(localStorage).filter(k => k.startsWith('aicp:canvas:'))
+          if (keys.length > 1) {
+            localStorage.removeItem(keys.sort()[0])
+            localStorage.setItem(localKey(), JSON.stringify({ nodes: nodes.value, connections: connections.value }))
+          }
+        } catch (retryErr) {
+          console.error('重试保存失败', retryErr)
+        }
+      } else {
+        console.error('画布本地保存失败', e)
+      }
+    }
   }
 
   function loadLocalCanvas() {

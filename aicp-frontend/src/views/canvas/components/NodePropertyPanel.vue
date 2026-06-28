@@ -109,6 +109,13 @@ const localAspectRatio = ref('9:16')
 const localVariants = ref(1)
 const localDuration = ref(5)
 
+// 简易 debounce，避免快速连续 blur-change 导致重复 API 调用
+let _debounceTimers = {}
+function debounce(key, fn, delay = 300) {
+  if (_debounceTimers[key]) clearTimeout(_debounceTimers[key])
+  _debounceTimers[key] = setTimeout(fn, delay)
+}
+
 const nodeIcon = computed(() => {
   const icons = { script:'Document', image:'Picture', video:'VideoCamera', audio:'Headset', text:'EditPen',
     character:'User', scene:'PictureFilled', prompt:'ChatLineRound', reference:'Camera', workflow:'SetUp', storyboard:'Film' }
@@ -138,15 +145,19 @@ watch(() => props.node, (n) => {
   }
 }, { immediate: true })
 
-function save(field, value) { emit('update', { [field]: value }) }
+function save(field, value) {
+  debounce('save_' + field, () => emit('update', { [field]: value }), field === 'name' ? 400 : 150)
+}
 function saveData(field, value) {
-  try {
-    const data = typeof props.node.input_data === 'string'
-      ? JSON.parse(props.node.input_data)
-      : (props.node.input_data || props.node.data || {})
-    data[field] = value
-    emit('update', { data })
-  } catch { emit('update', { data: { [field]: value } }) }
+  debounce('saveData_' + field, () => {
+    try {
+      const data = typeof props.node.input_data === 'string'
+        ? JSON.parse(props.node.input_data)
+        : (props.node.input_data || props.node.data || {})
+      data[field] = value
+      emit('update', { data })
+    } catch { emit('update', { data: { [field]: value } }) }
+  }, 300)
 }
 
 function defaultModelId(type) {

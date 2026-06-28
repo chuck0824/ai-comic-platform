@@ -1,5 +1,5 @@
 <template>
-  <div class="node-agent-box" @mousedown.stop>
+  <div :class="['node-agent-box', { embedded }]" @mousedown.stop>
     <textarea
       v-model="instruction"
       class="agent-input"
@@ -82,7 +82,8 @@ import { canvasAgentApi } from '@/api/canvas'
 const props = defineProps({
   projectId: { type: String, required: true },
   node: { type: Object, required: true },
-  localMode: { type: Boolean, default: false }
+  localMode: { type: Boolean, default: false },
+  embedded: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['applied', 'close'])
@@ -262,6 +263,34 @@ function estimateLocalUsage(command, content) {
   color: #e5e7eb;
   padding: 22px;
 }
+.node-agent-box.embedded {
+  position: static;
+  z-index: auto;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+.embedded .agent-input {
+  min-height: 104px;
+  padding: 12px;
+  border: 1px solid #3f4658;
+  border-radius: 10px;
+  background: #111827;
+  font-size: 14px;
+}
+.embedded .agent-controls { margin-top: 10px; flex-wrap: wrap; }
+.embedded .model-picker { min-width: 156px; padding: 7px 10px; }
+.embedded .model-menu { top: 46px; bottom: auto; width: min(420px, 100%); }
+.embedded .model-menu button { padding: 10px; gap: 10px; }
+.embedded .model-menu button > span { width: 34px; height: 34px; font-size: 16px; }
+.embedded .model-menu strong { font-size: 14px; }
+.embedded .model-menu small { font-size: 12px; }
+.embedded .agent-tool-icons { display: none; }
+.embedded .result-grid { grid-template-columns: 1fr; }
 .agent-input {
   width:100%;
   min-height:118px;

@@ -1,5 +1,6 @@
 package com.aicp.module.script.service;
 
+import com.aicp.common.ai.AiRouter;
 import com.aicp.module.script.entity.EpisodeReviewReport;
 import com.aicp.module.script.entity.Script;
 import com.aicp.module.script.entity.ScriptEpisode;
@@ -9,11 +10,13 @@ import com.aicp.module.script.mapper.ScriptMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class EpisodeReviewService {
@@ -21,6 +24,7 @@ public class EpisodeReviewService {
     private final EpisodeReviewReportMapper reportMapper;
     private final ScriptEpisodeMapper episodeMapper;
     private final ScriptMapper scriptMapper;
+    private final AiRouter aiRouter;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     public Map<String, Object> reviewPreview(Map<String, Object> body) {
@@ -78,9 +82,28 @@ public class EpisodeReviewService {
     }
 
     private Map<String, Object> buildReviewReport(ReviewContext ctx, boolean persistable) {
-        Map<String, Object> hookReview = reviewHook(ctx);
-        Map<String, Object> showrunnerReview = reviewShowrunner(ctx);
-        Map<String, Object> directorReview = reviewDirector(ctx);
+        // 尝试 AI 审核，失败时回退到规则引擎
+        Map<String, Object> aiReviewResult = null;
+        try {
+            aiReviewResult = callAiForReview(ctx);
+        } catch (Exception e) {
+            log.warn("AI 审核调用失败，回退到规则引擎: episodeId={}, error={}",
+                    ctx.episodeId, e.getMessage());
+        }
+
+        Map<String, Object> hookReview;
+        Map<String, Object> showrunnerReview;
+        Map<String, Object> directorReview;
+
+        if (aiReviewResult != null && !aiReviewResult.isEmpty()) {
+            hookReview = buildAgentFromAi(aiReviewResult, "hook", "钩子 Agent");
+            showrunnerReview = buildAgentFromAi(aiReviewResult, "showrunner", "编导 Agent");
+            directorReview = buildAgentFromAi(aiReviewResult, "director", "导演 Agent");
+        } else {
+            hookReview = reviewHook(ctx);
+            showrunnerReview = reviewShowrunner(ctx);
+            directorReview = reviewDirector(ctx);
+        }
 
         double hookScore = asDouble(hookReview.get("score"));
         double showrunnerScore = asDouble(showrunnerReview.get("score"));
@@ -111,6 +134,159 @@ public class EpisodeReviewService {
         result.put("created_at", LocalDateTime.now().toString());
         return result;
     }
+
+    // ===== AI 审核调用 =====
+
+    /**
+     * 调用 AI 路由进行三 Agent 联合审核，返回结构化评审结果。
+     */
+    private Map<String, Object> callAiForReview(ReviewContext ctx) {
+        String systemPrompt = """
+                你是一个专业的短剧质量审核系统，包含三位评审 Agent：
+
+                ## 钩子 Agent（权重 40%）
+                评审开场钩子（前3-5秒抓人能力）、结尾悬念（下一集点击理由）、
+                信息差/秘密/危机密度、下一集承诺强度。评分 0.0-1.0。
+
+                ## 编导 Agent（权重 35%）
+                评审核心事件清晰度、对白质量与人物关系、人物行动动机、
+                中段冲突升级、情绪转折与关系变化。评分 0.0-1.0。
+
+                ## 导演 Agent（权重 25%）
+                评审场景数量与生产成本、画面描述充分度、可视化钩子物件、
+                高成本/高难度画面风险、结尾停顿画面。评分 0.0-1.0。
+
+                ## 输出格式
+                只输出 JSON，不要其他文字：
+                {
+                  "hook": {"score": 0.85, "summary": "...", "issues": [{"severity":"high","message":"..."}], "suggestions": ["..."]},
+                  "showrunner": {"score": 0.72, "summary": "...", "issues": [], "suggestions": ["..."]},
+                  "director": {"score": 0.80, "summary": "...", "issues": [], "suggestions": ["..."]}
+                }""";
+
+        String userPrompt = String.format("""
+                剧本信息：
+                - 题材：%s
+                - 受众：%s
+                - 平台：%s
+
+                第%d集：%s
+
+                核心事件：%s
+                开场钩子：%s
+                结尾悬念：%s
+                下一集承诺：%s
+
+                正文内容：
+                %s""",
+                ctx.genreTag != null ? ctx.genreTag : "未知",
+                ctx.audienceMode != null ? ctx.audienceMode : "全部",
+                "",
+                ctx.episodeNumber,
+                ctx.title != null ? ctx.title : "未命名",
+                ctx.coreEvent != null ? ctx.coreEvent : "未设定",
+                ctx.openingHook != null ? ctx.openingHook : "未设定",
+                ctx.closingHook != null ? ctx.closingHook : "未设定",
+                ctx.nextEpisodePromise != null ? ctx.nextEpisodePromise : "未设定",
+                ctx.content != null ? ctx.content.substring(0, Math.min(3000, ctx.content.length())) : "");
+
+        Map<String, Object> aiResult = aiRouter.chatCompletion(Map.of(
+                "system_prompt", systemPrompt,
+                "prompt", userPrompt,
+                "temperature", 0.5,
+                "max_tokens", 2048));
+
+        String content = extractContent(aiResult);
+        Map<String, Object> parsed = parseJsonSafely(extractJsonBlock(content));
+        if (parsed.isEmpty()) {
+            log.debug("AI 审核返回无法解析，内容预览: {}", content.substring(0, Math.min(200, content.length())));
+            return null;
+        }
+        log.info("AI 审核完成: episodeId={}, hook={}, showrunner={}, director={}",
+                ctx.episodeId,
+                ((Map<?, ?>) parsed.getOrDefault("hook", Map.of())).get("score"),
+                ((Map<?, ?>) parsed.getOrDefault("showrunner", Map.of())).get("score"),
+                ((Map<?, ?>) parsed.getOrDefault("director", Map.of())).get("score"));
+        return parsed;
+    }
+
+    /** 从 AI 审核结果构建单个 Agent 的评审记录 */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> buildAgentFromAi(Map<String, Object> aiResult, String type, String name) {
+        Map<String, Object> agentData = (Map<String, Object>) aiResult.getOrDefault(type, Map.of());
+        double score = clamp(asDouble(agentData.get("score")));
+        String summary = String.valueOf(agentData.getOrDefault("summary",
+                score >= 0.78 ? "AI 审核通过" : "AI 审核建议优化"));
+
+        List<Map<String, Object>> issues = new ArrayList<>();
+        Object issuesObj = agentData.get("issues");
+        if (issuesObj instanceof List<?> list) {
+            for (Object item : list) {
+                if (item instanceof Map<?, ?> m) {
+                    Map<String, Object> issue = new LinkedHashMap<>();
+                    Object sev = m.get("severity");
+                    Object msg = m.get("message");
+                    issue.put("severity", sev != null ? sev.toString() : "medium");
+                    issue.put("message", msg != null ? msg.toString() : "");
+                    issues.add(issue);
+                }
+            }
+        }
+
+        List<String> suggestions = new ArrayList<>();
+        Object sugObj = agentData.get("suggestions");
+        if (sugObj instanceof List<?> list) {
+            for (Object item : list) {
+                suggestions.add(String.valueOf(item));
+            }
+        }
+
+        return agentReview(type, name, score, summary, issues, suggestions);
+    }
+
+    /** 从 AI 响应中提取文本内容 */
+    @SuppressWarnings("unchecked")
+    private String extractContent(Map<String, Object> aiResult) {
+        Object choices = aiResult.get("choices");
+        if (choices instanceof List<?> list && !list.isEmpty()) {
+            Object first = list.get(0);
+            if (first instanceof Map<?, ?> choice) {
+                Object message = choice.get("message");
+                if (message instanceof Map<?, ?> msg) {
+                    Object content = msg.get("content");
+                    if (content != null) return String.valueOf(content);
+                }
+            }
+        }
+        Object content = aiResult.get("content");
+        if (content != null) return String.valueOf(content);
+        Object text = aiResult.get("text");
+        if (text != null) return String.valueOf(text);
+        return aiResult.toString();
+    }
+
+    /** 从文本中提取首个 JSON 块 */
+    private String extractJsonBlock(String text) {
+        int start = text.indexOf('{');
+        int end = text.lastIndexOf('}');
+        if (start >= 0 && end > start) {
+            return text.substring(start, end + 1);
+        }
+        return text;
+    }
+
+    /** 安全解析 JSON，失败返回空 Map */
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonSafely(String json) {
+        try {
+            return objectMapper.readValue(json, Map.class);
+        } catch (Exception e) {
+            log.debug("JSON 解析失败: {}", e.getMessage());
+            return Map.of();
+        }
+    }
+
+    // ===== 规则引擎回退（AI 不可用时） =====
 
     private Map<String, Object> reviewHook(ReviewContext ctx) {
         List<Map<String, Object>> issues = new ArrayList<>();

@@ -67,6 +67,12 @@ public class TextNodeAgentController {
         return node == null ? ApiResponse.error(46011, "画布节点不存在") : ApiResponse.success(node);
     }
 
+    /**
+     * 文本内容修订。
+     * TODO: 当前为规则引擎 mock 实现，尚未接入 AI 模型。
+     * 在接入 LLM API 后，应替换为实际的模型调用。
+     * 参见: docs/02-derived/漫剧自由画布二期增强_PRD.md
+     */
     private String reviseContent(String instruction, String currentContent) {
         String base = currentContent == null ? "" : currentContent.trim();
         String command = instruction == null ? "" : instruction.trim();

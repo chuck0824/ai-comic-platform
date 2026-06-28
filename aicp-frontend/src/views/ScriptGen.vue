@@ -80,6 +80,7 @@
         <el-progress v-if="loading" :percentage="progress" :stroke-width="6" class="mt-md" />
 
         <div v-if="genResult" class="gen-result mt-lg">
+          <el-alert v-if="usingMockData" type="warning" title="AI 服务暂时不可用，当前为示例内容，与你的输入可能无关" :closable="false" show-icon class="mb-md" />
           <el-alert type="success" title="生成完成！" :closable="false" show-icon />
           <div class="mt-md text-sm"><strong>剧本标题：</strong>{{ genResult.title || '未命名' }}</div>
           <div class="mt-sm text-sm text-muted">{{ genResult.synopsis || '' }}</div>
@@ -96,6 +97,7 @@
 
       <!-- ===== 精细模式 ===== -->
       <div v-else>
+        <el-alert v-if="usingMockData && currentStep >= 1" type="warning" title="AI 服务暂时不可用，当前展示为示例内容" :closable="false" show-icon class="mb-md" />
         <!-- 步骤指示器 -->
         <div class="step-indicator mb-lg">
           <div v-for="(s, i) in fineSteps" :key="i"
@@ -119,7 +121,7 @@
             </el-select>
             <el-select v-model="finePlatform" size="small"><el-option label="抖音" value="douyin" /><el-option label="快手" value="kuaishou" /><el-option label="视频号" value="wechat" /></el-select>
             <el-select v-model="fineAudience" size="small"><el-option label="女频" value="female" /><el-option label="男频" value="male" /><el-option label="全年龄" value="all" /></el-select>
-            <el-select v-model="fineEpisodes" size="small"><el-option label="20集" :value="20" /><el-option label="40集" :value="40" /><el-option label="80集" :value="80" /></el-select>
+            <el-select v-model="fineEpisodes" size="small"><el-option label="20集" :value="20" /><el-option label="40集" :value="40" /><el-option label="60集" :value="60" /><el-option label="80集" :value="80" /></el-select>
           </div>
           <div class="hook-strategy-card mt-md">
             <strong>钩子策略前置</strong>
@@ -183,7 +185,7 @@
         <div v-show="currentStep === 3" class="card">
           <div class="flex items-center justify-between mb-md">
             <h3 class="font-bold">Step 4: 分集大纲</h3>
-            <el-select v-model="fineEpisodes" size="small" style="width:100px"><el-option label="20集" :value="20" /><el-option label="40集" :value="40" /><el-option label="80集" :value="80" /></el-select>
+            <el-select v-model="fineEpisodes" size="small" style="width:100px"><el-option label="20集" :value="20" /><el-option label="40集" :value="40" /><el-option label="60集" :value="60" /><el-option label="80集" :value="80" /></el-select>
           </div>
           <div v-if="stepLoading" class="text-center py-xl"><el-icon :size="40"><Loading /></el-icon><p class="mt-md">AI正在生成大纲...</p></div>
           <div v-else-if="outlineEpisodes.length" class="ep-list">
@@ -461,6 +463,7 @@ const quickWithStoryboard = ref(false)
 const quickPlatform = ref('douyin'); const quickAudience = ref('female'); const quickEpisodes = ref(40)
 const quickTags = reactive({ genre: '言情', plots: ['重生', '先婚后爱'], tones: ['甜宠', '打脸'], setting: '现代' })
 const genResult = ref(null)
+const usingMockData = ref(false)  // 标记当前结果是否来自 mock 回退
 
 async function doQuickGen() {
   if (!quickIdea.value.trim()) { ElMessage.warning('请输入创意描述'); return }
@@ -489,6 +492,7 @@ async function doQuickGen() {
         const tr = await scriptApi.getTaskStatus(taskId)
         if (tr.data?.status === 'completed') {
           genResult.value = tr.data.result || tr.data.output_data || tr.data
+          usingMockData.value = genResult.value?._model_used === 'mock-fallback'
           break
         }
         if (tr.data?.status === 'failed') throw new Error(tr.data.error_msg || '任务执行失败')
@@ -567,7 +571,11 @@ async function runStep(apiFn, params, onDone) {
     if (taskId) {
       for (let i = 0; i < 25; i++) {
         await sleep(2000); const tr = await scriptApi.getTaskStatus(taskId)
-        if (tr.data?.status === 'completed') { onDone(tr.data.result || tr.data.output_data || tr.data); return }
+        if (tr.data?.status === 'completed') {
+          const result = tr.data.result || tr.data.output_data || tr.data
+          usingMockData.value = result?._model_used === 'mock-fallback'
+          onDone(result); return
+        }
         if (tr.data?.status === 'failed') throw new Error(tr.data.error_msg || '任务执行失败')
       }
       // 轮询超时：尝试用已有数据回调，并提示用户
@@ -636,7 +644,7 @@ async function saveChapterDraft() {
   try {
     if (!savedScriptId.value) await saveToWarehouse(false)
     const ep = outlineEpisodes.value[scriptEpIdx.value] || {}
-    await scriptApi.createChapterVersion(0, {
+    await scriptApi.createChapterVersion(null, {
       script_id: savedScriptId.value,
       chapter_number: ep.number || scriptEpIdx.value + 1,
       title: ep.title || '第' + (scriptEpIdx.value + 1) + '章',

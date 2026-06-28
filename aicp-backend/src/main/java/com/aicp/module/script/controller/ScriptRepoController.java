@@ -81,6 +81,7 @@ public class ScriptRepoController {
 
     @PostMapping("/scripts/{id}/versions/{vid}/restore")
     public ApiResponse<Void> restoreVersion(@PathVariable Long id, @PathVariable Long vid) {
+        scriptService.restoreVersion(id, vid);
         return ApiResponse.success();
     }
 
@@ -156,11 +157,13 @@ public class ScriptRepoController {
     @PutMapping("/assets/{type}/{id}/maturity")
     public ApiResponse<Void> updateMaturity(@PathVariable String type, @PathVariable String id,
                                              @RequestBody Map<String, String> body) {
+        scriptService.updateMaturity(type, id, body.get("maturity_level"));
         return ApiResponse.success();
     }
 
     @PutMapping("/assets/{type}/{id}/lock")
     public ApiResponse<Void> lockAsset(@PathVariable String type, @PathVariable String id) {
+        scriptService.lockAsset(type, id);
         return ApiResponse.success();
     }
 

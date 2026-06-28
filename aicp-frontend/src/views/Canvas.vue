@@ -33,7 +33,7 @@
 
     <div class="canvas-body">
       <!-- LEFT Panel -->
-      <div class="canvas-left-panel">
+      <div v-show="!leftPanelCollapsed" class="canvas-left-panel">
         <div class="canvas-tabs">
           <div v-for="tab in leftTabs" :key="tab.key"
                :class="['canvas-tab', { active: state.activeLeftTab.value === tab.key }]"
@@ -122,6 +122,12 @@
            @mouseup="onCanvasMouseUp"
            @mouseleave="onCanvasMouseLeave"
            @click.self="deselectCanvas()">
+        <button
+          class="left-panel-toggle"
+          :title="leftPanelCollapsed ? '展开节点工具栏' : '收起节点工具栏'"
+          @mousedown.stop
+          @click.stop="leftPanelCollapsed = !leftPanelCollapsed"
+        >{{ leftPanelCollapsed ? '›' : '‹' }}</button>
         <!-- Minimap -->
         <div class="minimap">
           <strong>{{ canvas.nodes.value.length }}</strong>
@@ -207,20 +213,8 @@
                 </div>
               </div>
               <div v-else-if="node.type === 'text'" class="text-node-body">
-                <div v-if="getTextNodeMode(node) === 'manual'" class="text-manual-editor">
-                  <div class="text-editor-toolbar">
-                    <button title="清除格式">⊘</button>
-                    <span></span>
-                    <button>H1</button><button>H2</button><button>H3</button>
-                    <button>¶</button><button>B</button><button><i>I</i></button>
-                    <button>☷</button><button>↕</button><button>—</button>
-                    <span></span>
-                    <button></button><button></button>
-                  </div>
-                  <textarea :value="getNodePrompt(node)"
-                            placeholder="输入内容..."
-                            @input="setTextNodeDraft(node, $event.target.value)"
-                            @change="persistTextNodeDraft(node, $event.target.value)"></textarea>
+                <div v-if="getTextNodeMode(node) === 'manual'" class="text-content-preview">
+                  {{ getNodePrompt(node) || '点击节点，在浮动编辑器中输入内容…' }}
                 </div>
                 <div v-else-if="getTextNodeMode(node) === 'prompt'" class="text-prompt-card">
                   {{ getNodePrompt(node) || '输入文本提示词...' }}
@@ -245,23 +239,12 @@
                 {{ getNodePrompt(node) || node.type + ' 节点' }}
               </div>
             </div>
-            <!-- Node Actions -->
-            <div class="node-actions compact" v-if="!['script', 'director', 'text'].includes(node.type)">
-              <el-button v-for="act in nodeActions(node.type)" :key="act.label"
-                         size="small" @click.stop="handleNodeAction(node, act)">
-                {{ act.label }}
-              </el-button>
-            </div>
+            <!-- Complex workspaces keep one clear entry; ordinary node actions live in the floating editor. -->
             <div v-if="node.type === 'script'" class="node-actions">
-              <el-button size="small" @click="synthesizeScriptPrompts(node)">合成提示词</el-button>
-              <el-button type="primary" size="small" @click="handleBatchGenerate(node, 'image')"><el-icon><Picture /></el-icon> 批量生图</el-button>
-              <el-button size="small" @click="handleBatchGenerate(node, 'video')"><el-icon><VideoCamera /></el-icon> 批量视频</el-button>
-              <el-button size="small" @click="openShotEditor(node)"><el-icon><List /></el-icon> 分镜表</el-button>
+              <el-button type="primary" size="small" @click.stop="openShotEditor(node)">打开专业编辑器 ↗</el-button>
             </div>
             <div v-if="node.type === 'director'" class="node-actions">
-              <el-button type="primary" size="small" @click.stop="openDirectorDesk(node)">打开导演台</el-button>
-              <el-button size="small" @click.stop="captureDirectorShot(node)">机位截图</el-button>
-              <el-button size="small" @click.stop="sendDirectorShotToCanvas(node)">发送到画布</el-button>
+              <el-button type="primary" size="small" @click.stop="openDirectorDesk(node)">打开专业编辑器 ↗</el-button>
             </div>
             <div class="node-out-port" title="拖出连线" @mousedown.stop="startConnectionDrag(node)"></div>
             <div :class="['node-in-port', { connectable: isConnectableTarget(node) }]"
@@ -269,15 +252,27 @@
                  @mouseup.stop="completeConnectionDrag(node)"></div>
           </div>
 
-          <CanvasNodeAgentBox
-            v-if="selectedNodeForPanel?.type === 'text'"
-            :style="textNodeAgentStyle"
-            :project-id="state.projectId.value"
-            :node="selectedNodeForPanel"
-            :local-mode="canvas.localMode.value"
-            @applied="handleTextAgentApplied"
-            @close="selectedNodeForPanel = null" />
         </div>
+
+        <NodeFloatingEditor
+          v-if="selectedNodeForPanel"
+          :node="selectedNodeForPanel"
+          :style="floatingEditorStyle"
+          :placement="floatingPlacement"
+          :shots="getNodeShots(selectedNodeForPanel)"
+          :project-id="state.projectId.value"
+          :local-mode="canvas.localMode.value"
+          @close="deselectCanvas"
+          @update="handleFloatingUpdate"
+          @generate="handleFloatingGenerate"
+          @tool="handleFloatingTool"
+          @open-shot-editor="openShotEditor"
+          @open-director="openDirectorDesk"
+          @duplicate="handleDuplicateNode"
+          @reuse="handleReuseNode"
+          @save-asset="saveNodeAsAsset"
+          @delete="handleDeleteNode"
+          @agent-applied="handleTextAgentApplied" />
 
         <!-- Node Create Menu (on double click) -->
         <NodeCreateMenu :visible="createMenuVisible" :x="createMenuPos.x" :y="createMenuPos.y"
@@ -301,64 +296,6 @@
         </div>
       </div>
 
-      <!-- RIGHT Panel: Node Properties -->
-      <NodePropertyPanel v-if="selectedNodeForPanel"
-                         :node="selectedNodeForPanel"
-                         :shots="getNodeShots(selectedNodeForPanel)"
-                         @close="selectedNodeForPanel = null"
-                         @update="(u) => handleNodeUpdate(selectedNodeForPanel, u)"
-                         @openShotEditor="openShotEditor(selectedNodeForPanel)"
-                         @generate="(n) => handleBatchGenerate(n, n.type === 'image' ? 'image' : 'video')"
-                         @duplicate="handleDuplicateNode"
-                         @delete="(n) => handleDeleteNode(n)" />
-    </div>
-
-    <!-- BOTTOM: Timeline -->
-    <div class="canvas-bottom">
-      <div v-if="selectedNodeForPanel" class="generator-panel">
-          <div class="generator-head">
-            <div>
-              <strong><el-icon :size="14"><component :is="nodeIcon(selectedNodeForPanel.type)" /></el-icon> {{ selectedNodeForPanel.name || nodeLabel(selectedNodeForPanel.type) }}</strong>
-            <span class="text-xs text-muted">{{ generatorDescription(selectedNodeForPanel.type) }}</span>
-            </div>
-          <div class="flex gap-sm">
-            <el-button size="small" @click="createDownstreamNode(selectedNodeForPanel, recommendedNextNode(selectedNodeForPanel.type))">
-              添加下游节点
-            </el-button>
-            <el-button type="primary" size="small" @click="runGeneratorForSelected">执行生成</el-button>
-          </div>
-        </div>
-        <div class="generator-grid">
-          <el-input v-model="generatorPrompt" type="textarea" :rows="3"
-                    placeholder="输入剧情、分镜描述、角色设定、参考要求或生成提示词" />
-          <div class="generator-controls">
-            <label>模式</label>
-            <el-select v-model="generatorConfig.mode" size="small">
-              <el-option v-for="mode in generatorModes(selectedNodeForPanel.type)"
-                         :key="mode.value"
-                         :label="mode.label"
-                         :value="mode.value" />
-            </el-select>
-            <label>模型</label>
-            <el-select v-model="generatorConfig.modelId" size="small">
-              <el-option label="DeepSeek V3" value="deepseek-v3" />
-              <el-option label="Seedream 5.0" value="seedream-5.0" />
-              <el-option label="Seedance 2.0" value="seedance-2.0" />
-              <el-option label="Volcano TTS" value="volcano-tts" />
-            </el-select>
-            <label>比例</label>
-            <el-select v-model="generatorConfig.aspectRatio" size="small">
-              <el-option label="9:16" value="9:16" />
-              <el-option label="16:9" value="16:9" />
-              <el-option label="1:1" value="1:1" />
-            </el-select>
-            <label>时长</label>
-            <el-input-number v-model="generatorConfig.duration" :min="1" :max="30" size="small" />
-            <label>副本</label>
-            <el-input-number v-model="generatorConfig.variants" :min="1" :max="8" size="small" />
-          </div>
-        </div>
-      </div>
     </div>
 
     <!-- Full-screen Shot Editor -->
@@ -667,10 +604,11 @@ import { generationApi } from '@/api/generation'
 import { useCanvasState } from './canvas/composables/useCanvasState'
 import { useCanvasNodes } from './canvas/composables/useCanvasNodes'
 import NodeCreateMenu from './canvas/components/NodeCreateMenu.vue'
-import NodePropertyPanel from './canvas/components/NodePropertyPanel.vue'
+import NodeFloatingEditor from './canvas/components/NodeFloatingEditor.vue'
 import ShotTableEditor from './canvas/components/ShotTableEditor.vue'
 import VideoComposeTimeline from './canvas/components/VideoComposeTimeline.vue'
-import CanvasNodeAgentBox from './canvas/components/CanvasNodeAgentBox.vue'
+import { computeFloatingEditorPosition } from './canvas/utils/floatingEditorPosition'
+import { shouldSelectNode } from './canvas/utils/nodeEditorData'
 
 const route = useRoute()
 const router = useRouter()
@@ -680,6 +618,7 @@ const canvas = useCanvasNodes(state.projectId)
 const canvasAreaRef = ref(null)
 const directorStageRef = ref(null)
 const selectedNodeForPanel = ref(null)
+const leftPanelCollapsed = ref(false)
 const shotEditorVisible = ref(false)
 const shotEditorNode = ref(null)
 const timelineVisible = ref(false)
@@ -784,14 +723,8 @@ const groupDrag = ref({ active: false, groupId: null, startX: 0, startY: 0, node
 const connectionDrag = ref({ active: false, sourceNode: null, mouseX: 0, mouseY: 0 })
 const selectedConnectionId = ref(null)
 const pendingConnectionSource = ref(null)
-const generatorPrompt = ref('')
-const generatorConfig = reactive({
-  mode: 'image',
-  modelId: 'seedream-5.0',
-  aspectRatio: '9:16',
-  duration: 5,
-  variants: 1
-})
+const canvasViewport = ref({ width: 1280, height: 720 })
+let canvasResizeObserver = null
 
 // Canvas pan state
 const panDrag = ref({ active: false, startX: 0, startY: 0, originX: 0, originY: 0 })
@@ -835,33 +768,51 @@ const stageStyle = computed(() => ({
   transform: state.canvasTransform.value
 }))
 
-const textNodeAgentStyle = computed(() => {
+const floatingEditorPosition = computed(() => {
   const node = selectedNodeForPanel.value
-  if (!node || node.type !== 'text') return {}
-  const width = 940
-  const left = Math.max(24, Math.round((node.x || 0) + nodeW(node) / 2 - width / 2))
-  const top = Math.max(24, Math.round((node.y || 0) + nodeH(node) + 28))
-  return {
-    left: left + 'px',
-    top: top + 'px',
-    width: width + 'px'
-  }
+  if (!node) return { placement: 'right', x: 16, y: 16 }
+  const scale = state.zoomLevel.value / 100
+  return computeFloatingEditorPosition({
+    nodeRect: {
+      left: (node.x || 0) * scale + state.panOffset.value.x,
+      top: (node.y || 0) * scale + state.panOffset.value.y,
+      width: nodeW(node) * scale,
+      height: nodeH(node) * scale
+    },
+    viewport: canvasViewport.value,
+    panel: { width: floatingEditorWidth.value, height: Math.min(560, Math.max(360, canvasViewport.value.height - 32)) }
+  })
 })
+
+const floatingEditorWidth = computed(() => {
+  const node = selectedNodeForPanel.value
+  if (!node) return 440
+  const scale = state.zoomLevel.value / 100
+  const nodeLeft = (node.x || 0) * scale + state.panOffset.value.x
+  const nodeRight = nodeLeft + nodeW(node) * scale
+  const rightSpace = canvasViewport.value.width - nodeRight - 34
+  const leftSpace = nodeLeft - 34
+  const available = Math.max(rightSpace, leftSpace)
+  return Math.max(360, Math.min(440, available))
+})
+
+const floatingEditorStyle = computed(() => ({
+  left: `${floatingEditorPosition.value.x}px`,
+  top: `${floatingEditorPosition.value.y}px`,
+  width: `${floatingEditorWidth.value}px`
+}))
+
+const floatingPlacement = computed(() => floatingEditorPosition.value.placement)
 
 // Selected node for property panel
 watch(() => state.selectedNodeId.value, (id) => {
   if (id) {
     selectedNodeForPanel.value = findNodeByRef(id)
+    if (canvasViewport.value.width < 980) leftPanelCollapsed.value = true
   } else {
     selectedNodeForPanel.value = null
+    leftPanelCollapsed.value = false
   }
-}, { immediate: true })
-
-watch(selectedNodeForPanel, (node) => {
-  if (!node) return
-  generatorPrompt.value = getNodePrompt(node)
-  generatorConfig.mode = taskTypeForNode(node.type)
-  generatorConfig.modelId = defaultModelForTask(generatorConfig.mode)
 }, { immediate: true })
 
 // Connection paths for SVG
@@ -963,6 +914,15 @@ const tempConnectionLine = computed(() => {
 // ===== Lifecycle =====
 onMounted(async () => {
   window.addEventListener('keydown', onCanvasKeydown)
+  if (canvasAreaRef.value) {
+    const updateViewport = () => {
+      const rect = canvasAreaRef.value?.getBoundingClientRect()
+      if (rect) canvasViewport.value = { width: rect.width, height: rect.height }
+    }
+    updateViewport()
+    canvasResizeObserver = new ResizeObserver(updateViewport)
+    canvasResizeObserver.observe(canvasAreaRef.value)
+  }
   try {
     await ensureProject()
     await canvas.loadNodes()
@@ -975,6 +935,7 @@ onMounted(async () => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onCanvasKeydown)
+  canvasResizeObserver?.disconnect()
   cleanupDirectorTransformListeners()
   cleanupDocumentListeners()
 })
@@ -1055,6 +1016,31 @@ async function handleNodeUpdate(node, updates) {
   } catch (e) { ElMessage.error('更新节点失败') }
 }
 
+async function handleFloatingUpdate({ node, updates }) {
+  await handleNodeUpdate(node, updates)
+}
+
+async function handleFloatingGenerate({ node, data, action }) {
+  try {
+    const id = nodeKey(node)
+    await canvas.updateNode(id, { data, status: 'ready' })
+    const current = findNodeByRef(id) || node
+    await runNodeTask(current, action)
+    state.markSaved()
+  } catch (e) {
+    ElMessage.error('生成任务提交失败')
+  }
+}
+
+async function handleFloatingTool({ node, action }) {
+  if (action.creates) {
+    const created = await createDownstreamNode(node, action.creates)
+    if (created) ElMessage.success(`${action.label}节点已创建`)
+    return
+  }
+  await runNodeTask(node, action)
+}
+
 async function handleTextAgentApplied(updatedNode) {
   const id = nodeKey(updatedNode)
   const local = findNodeByRef(id)
@@ -1073,7 +1059,6 @@ async function handleTextAgentApplied(updatedNode) {
     }
   }
   selectedNodeForPanel.value = local
-  generatorPrompt.value = getNodePrompt(local)
   state.markSaved()
 }
 
@@ -1107,11 +1092,37 @@ function contextNode() {
 async function saveSelectedAsAsset() {
   const node = contextNode() || selectedNodeForPanel.value
   if (!node) return
+  await saveNodeAsAsset(node)
+  state.closeContextMenu()
+}
+
+async function saveNodeAsAsset(node) {
   await canvas.updateNode(nodeKey(node), {
     data: { ...readNodeData(node), saved_as_asset: true, asset_name: node.name || nodeLabel(node.type) }
   }).catch(() => {})
-  state.closeContextMenu()
   ElMessage.success('已保存为资产')
+}
+
+async function handleReuseNode(node) {
+  const copy = await canvas.duplicateNode(nodeKey(node))
+  if (!copy) return
+  const related = canvas.connections.value.filter((conn) => {
+    const source = conn.source_node_id || conn.sourceNodeId || conn.source
+    const target = conn.target_node_id || conn.targetNodeId || conn.target
+    return findNodeByRef(source) === node || findNodeByRef(target) === node
+  })
+  for (const conn of related) {
+    const sourceRef = conn.source_node_id || conn.sourceNodeId || conn.source
+    const targetRef = conn.target_node_id || conn.targetNodeId || conn.target
+    const source = findNodeByRef(sourceRef) === node ? copy : findNodeByRef(sourceRef)
+    const target = findNodeByRef(targetRef) === node ? copy : findNodeByRef(targetRef)
+    if (source && target && nodeKey(source) !== nodeKey(target)) {
+      await canvas.connectNodes(nodeKey(source), nodeKey(target)).catch(() => {})
+    }
+  }
+  state.selectNode(nodeKey(copy))
+  state.markSaved()
+  ElMessage.success('已复用节点并保留连线')
 }
 
 async function copySelectedNode(keepConnections) {
@@ -1144,16 +1155,6 @@ async function deleteContextNode() {
   if (!node) return
   await handleDeleteNode(node)
   state.closeContextMenu()
-}
-
-// ===== Node Actions =====
-async function handleNodeAction(node, action) {
-  if (action.creates) {
-    const created = await createDownstreamNode(node, action.creates)
-    if (created) ElMessage.success(`${action.label}节点已创建`)
-    return
-  }
-  await runNodeTask(node, action)
 }
 
 async function handleBatchGenerate(node, mode) {
@@ -1935,25 +1936,6 @@ function getTextNodeMode(node) {
   return readNodeData(node).text_mode || 'choice'
 }
 
-function setTextNodeDraft(node, value) {
-  const data = readNodeData(node)
-  data.prompt = value
-  data.content = value
-  node.input_data = JSON.stringify(data)
-  node.inputData = JSON.stringify(data)
-  node.data = data
-}
-
-async function persistTextNodeDraft(node, value) {
-  const data = readNodeData(node)
-  data.prompt = value
-  data.content = value
-  await canvas.updateNode(nodeKey(node), { data, status: 'ready' }).catch(() => {
-    ElMessage.error('文本内容保存失败')
-  })
-  state.markSaved()
-}
-
 function getNodePreviewUrl(node) {
   const data = readNodeData(node)
   return data.preview_url || data.image_url || data.url || ''
@@ -1991,7 +1973,8 @@ function onCanvasDoubleClick(e) {
 
 function selectNode(node) {
   selectedConnectionId.value = null
-  state.selectNode(nodeKey(node))
+  const id = nodeKey(node)
+  if (shouldSelectNode(state.selectedNodeId.value, id)) state.selectNode(id)
 }
 
 function selectConnection(connId) {
@@ -2126,7 +2109,7 @@ function onNodeMouseDown(e, node) {
   if (groupNodes.length > 1 && !e.altKey) {
     startGroupDrag(groupId, point)
     selectedConnectionId.value = null
-    state.selectNode(nodeId)
+    if (shouldSelectNode(state.selectedNodeId.value, nodeId)) state.selectNode(nodeId)
     document.addEventListener('mousemove', onDocumentMouseMove)
     document.addEventListener('mouseup', onDocumentMouseUp)
     e.preventDefault()
@@ -2143,7 +2126,7 @@ function onNodeMouseDown(e, node) {
   }
   // Also select the node
   selectedConnectionId.value = null
-  state.selectNode(nodeId)
+  if (shouldSelectNode(state.selectedNodeId.value, nodeId)) state.selectNode(nodeId)
   // Bind document-level listeners so drag continues outside canvas
   document.addEventListener('mousemove', onDocumentMouseMove)
   document.addEventListener('mouseup', onDocumentMouseUp)
@@ -2625,100 +2608,6 @@ async function createImageReversePromptGroup(node) {
   ElMessage.success(`已创建${title}`)
 }
 
-function recommendedNextNode(type) {
-  return {
-    text: 'script',
-    director: 'image',
-    script: 'image',
-    image: 'video',
-    video: 'audio',
-    audio: 'video'
-  }[type] || 'image'
-}
-
-async function runGeneratorForSelected() {
-  const node = selectedNodeForPanel.value
-  if (!node) return
-  const data = {
-    ...readNodeData(node),
-    prompt: generatorPrompt.value,
-    model_id: generatorConfig.modelId,
-    aspect_ratio: generatorConfig.aspectRatio,
-    duration: generatorConfig.duration,
-    variants: generatorConfig.variants,
-    mode: generatorConfig.mode
-  }
-  await canvas.updateNode(nodeKey(node), { data, status: 'ready' }).catch(() => {})
-  await runNodeTask(node, {
-    label: generatorActionLabel(generatorConfig.mode),
-    taskType: generatorConfig.mode,
-    modelId: generatorConfig.modelId,
-    command: generatorActionLabel(generatorConfig.mode)
-  })
-}
-
-function generatorActionLabel(mode) {
-  return { text: '生成文本', image: '生成图片', video: '生成视频', audio: '生成音频', agent: '执行工作流', director_open: '打开导演台', director_capture: '导演台截图', director_send_canvas: '发送到画布', director_panorama: '全景设置' }[mode] || '执行生成'
-}
-
-function generatorDescription(type) {
-  return {
-    text: '文本节点 · 自己编写内容、文生视频、图片反推提示词、文字生音乐',
-    director: '导演台 · 轻量3D构图、角色/元素/机位管理、截图发送到画布作为参考图',
-    image: '图片生成器 · 上传图片、文生图、图生图、多图参考融合、图像编辑',
-    video: '视频生成器 · 上传视频、文生视频、图生视频、首尾帧、多模态参考、视频编辑/延展',
-    audio: '音频生成器 · 上传音频、生成音乐、音效、文字转语音',
-    script: '脚本节点 · 确认镜头信息、整理资产、合成最终提示词、批量生成'
-  }[type] || '节点生成器'
-}
-
-function generatorModes(type) {
-  const modes = {
-    text: [
-      { label: '自己编写内容', value: 'manual_text' },
-      { label: '文生视频', value: 'text_to_video' },
-      { label: '图片反推提示词', value: 'image_to_prompt' },
-      { label: '文字生音乐', value: 'text_to_music' }
-    ],
-    director: [
-      { label: '打开导演台', value: 'director_open' },
-      { label: '机位截图', value: 'director_capture' },
-      { label: '截图发送到画布', value: 'director_send_canvas' },
-      { label: '全景模式设置', value: 'director_panorama' }
-    ],
-    image: [
-      { label: '文生图', value: 'image' },
-      { label: '图生图', value: 'image_to_image' },
-      { label: '多图参考融合', value: 'multi_ref_image' },
-      { label: '图像编辑', value: 'image_edit' },
-      { label: '全景模式', value: 'panorama' },
-      { label: '智能打光', value: 'lighting' }
-    ],
-    video: [
-      { label: '文生视频', value: 'video' },
-      { label: '图生视频', value: 'image_to_video' },
-      { label: '首尾帧视频', value: 'first_last_frame' },
-      { label: '多模态参考视频', value: 'multi_ref_video' },
-      { label: '视频编辑', value: 'video_edit' },
-      { label: '视频延展', value: 'video_extend' }
-    ],
-    audio: [
-      { label: '生成音乐', value: 'music' },
-      { label: '生成音效', value: 'sfx' },
-      { label: '文字转语音', value: 'tts' },
-      { label: '音频截取', value: 'audio_trim' },
-      { label: '音频变速', value: 'audio_speed' }
-    ],
-    script: [
-      { label: '拆解剧本为分镜', value: 'script_breakdown' },
-      { label: '合成最终提示词', value: 'script_prompt' },
-      { label: '批量生分镜图', value: 'script_batch_image' },
-      { label: '批量生视频', value: 'script_batch_video' }
-    ]
-  }
-  return modes[type] || [{ label: '执行生成', value: taskTypeForNode(type) }]
-}
-
 // ===== Slash Commands =====
 async function handleSlash(cmd) {
   const selectedNode = findNodeByRef(state.selectedNodeId.value)
@@ -2790,10 +2679,11 @@ async function runNodeTask(node, action) {
     return
   }
   const params = {
+    ...(action.parameters || {}),
     node_id: nodeKey(node),
-    prompt: getNodePrompt(node),
+    prompt: action.parameters?.prompt ?? getNodePrompt(node),
     action: action.label,
-    model_id: action.modelId || defaultModelForTask(taskType)
+    model_id: action.modelId || action.parameters?.model_id || defaultModelForTask(taskType)
   }
   const confirmed = await confirmTaskCost(taskType, params, action.label)
   if (!confirmed) return
@@ -3007,17 +2897,6 @@ function estimatedCostForNode(type) {
   return { text: 10, script: 10, director: 0, image: 10, video: 50, audio: 5, workflow: 25 }[type] || 10
 }
 
-function nodeActions(type) {
-  const actions = {
-    text: [],
-    director: [{ label:'打开导演台', taskType:'director_open' }, { label:'机位截图', taskType:'director_capture' }, { label:'发送到画布', taskType:'director_send_canvas' }],
-    image: [{ label:'发送到视频', creates:'video' }, { label:'Inpaint', taskType:'image' }, { label:'高清放大', taskType:'image' }],
-    video: [{ label:'配音', creates:'audio' }, { label:'字幕', taskType:'audio' }, { label:'剪辑', taskType:'video' }],
-    audio: [{ label:'转字幕', taskType:'audio' }, { label:'进时间轴' }],
-    script: [{ label:'合成提示词', taskType:'text' }, { label:'批量生图', creates:'image' }, { label:'批量视频', creates:'video' }]
-  }
-  return actions[type] || [{ label:'执行' }]
-}
 </script>
 
 <style scoped>
@@ -3054,6 +2933,14 @@ function nodeActions(type) {
   background-image:radial-gradient(#1e293b 1px, transparent 1px); background-size:24px 24px;
   position:relative; overflow:hidden; cursor:grab; color:#e0e0e0; }
 .canvas-area:active { cursor:grabbing; }
+.left-panel-toggle {
+  position:absolute; left:12px; top:12px; z-index:82;
+  width:30px; height:30px; display:grid; place-items:center;
+  border:1px solid #3b465c; border-radius:9px;
+  color:#c7d2fe; background:rgba(18,24,38,.94);
+  box-shadow:0 8px 22px rgba(0,0,0,.28); cursor:pointer;
+}
+.left-panel-toggle:hover { border-color:#818cf8; background:#252d48; }
 .canvas-stage { position:absolute; left:0; top:0; transform-origin:0 0; z-index:1; }
 .preset-group-frame { position:absolute; z-index:4; pointer-events:auto; cursor:grab; border:1px solid #3f3f46; border-radius:18px;
   background:rgba(63,63,70,.5); box-shadow:inset 0 0 0 1px rgba(255,255,255,.03); }
@@ -3126,12 +3013,7 @@ function nodeActions(type) {
 .text-choice-panel button { border:0; background:transparent; color:#f5f5f5; display:flex; align-items:center; gap:16px; padding:13px 18px; font-size:22px; cursor:pointer; border-radius:8px; text-align:left; }
 .text-choice-panel button:hover { background:#333; }
 .text-choice-panel button span { width:28px; color:#f5f5f5; font-weight:800; text-align:center; }
-.text-manual-editor { position:relative; padding:0 10px 10px; }
-.text-editor-toolbar { position:absolute; left:50%; bottom:calc(100% + 54px); transform:translateX(-50%); height:64px; min-width:760px; display:flex; align-items:center; justify-content:center; gap:20px; padding:0 24px; background:#262626; border:1px solid #333; border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.32); }
-.text-editor-toolbar button { border:0; background:transparent; color:#d4d4d8; font-size:20px; min-width:32px; height:34px; border-radius:6px; cursor:pointer; }
-.text-editor-toolbar button:hover { background:#3f3f46; color:#fff; }
-.text-editor-toolbar span { width:1px; height:30px; background:#3f3f46; }
-.text-manual-editor textarea { width:100%; height:240px; resize:both; min-height:190px; color:#e5e7eb; background:#111; border:2px solid #8a8a8a; border-radius:10px; padding:16px; outline:none; font-size:16px; line-height:1.7; }
+.text-content-preview { min-height:210px; margin:10px; padding:18px 22px; border-radius:10px; background:#111827; color:#e5e7eb; font-size:16px; line-height:1.75; white-space:pre-wrap; overflow:auto; }
 .text-prompt-card { min-height:240px; margin:10px; padding:18px 22px; border-radius:10px; background:#111; color:#f5f5f5; font-size:18px; line-height:1.7; white-space:pre-wrap; overflow:auto; }
 .director-node-preview { padding:10px; }
 .director-mini-stage { position:relative; height:92px; border:1px solid #334155; border-radius:8px;
@@ -3155,13 +3037,6 @@ function nodeActions(type) {
 .node-in-port { left:-6px; background:#10b981; box-shadow:0 0 0 2px rgba(16,185,129,0.5); }
 .node-in-port.connectable { transform:scale(1.25); box-shadow:0 0 0 4px rgba(16,185,129,0.28), 0 0 16px rgba(16,185,129,.75); }
 .floating-add { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:10; }
-.canvas-bottom { background:#1a1a2e; border-top:1px solid #2a2a3e; flex-shrink:0; }
-.generator-panel { border-bottom:1px solid #222; padding:10px 12px; background:#151526; }
-.generator-head { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:8px; }
-.generator-head strong { display:block; font-size:13px; color:#e0e7ff; line-height:1.2; }
-.generator-grid { display:grid; grid-template-columns:minmax(280px, 1fr) 520px; gap:12px; align-items:start; }
-.generator-controls { display:grid; grid-template-columns:36px minmax(92px,1fr) 36px minmax(110px,1fr) 36px minmax(76px,1fr); gap:6px; align-items:center; }
-.generator-controls label { color:#94a3b8; font-size:11px; font-weight:700; }
 .node-context-menu { position:fixed; z-index:1000; display:grid; min-width:160px; background:#111827; border:1px solid #374151; border-radius:8px; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,.45); }
 .node-context-menu button { border:0; background:transparent; color:#e5e7eb; text-align:left; padding:9px 12px; cursor:pointer; font-size:12px; }
 .node-context-menu button:hover { background:#1f2937; }

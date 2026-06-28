@@ -5,13 +5,16 @@ import com.aicp.module.script.entity.*;
 import com.aicp.module.script.mapper.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.*;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ScriptService {
@@ -22,13 +25,14 @@ public class ScriptService {
     private final RepoAssetMapper repoAssetMapper;
     private final ChapterVersionMapper chapterVersionMapper;
     private final AdaptationVersionMapper adaptationVersionMapper;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     // ===== Script CRUD =====
     @Transactional
     public Script createScript(Map<String, Object> body) {
         Long userId = SecurityUtil.requireCurrentUserId();
         Script script = new Script();
-        script.setUuid("scr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
+        script.setUuid("scr_" + UUID.randomUUID().toString().replace("-", ""));
         script.setTitle((String) body.getOrDefault("title", "未命名剧本"));
         script.setAuthorUserId(userId);
         script.setOwnerUserId(userId);
@@ -68,7 +72,11 @@ public class ScriptService {
     }
 
     public Script getScript(Long id) {
-        return scriptMapper.selectById(id);
+        Script script = scriptMapper.selectById(id);
+        if (script != null) {
+            verifyAccess(script);
+        }
+        return script;
     }
 
     public Script updateScript(Long id, Map<String, Object> body) {
@@ -118,6 +126,21 @@ public class ScriptService {
                         .orderByDesc(ScriptVersion::getCreatedAt));
     }
 
+    @Transactional
+    public void restoreVersion(Long scriptId, Long versionId) {
+        ScriptVersion version = versionMapper.selectById(versionId);
+        if (version == null || !version.getScriptId().equals(scriptId)) {
+            throw new RuntimeException("版本不存在或不属于该剧本");
+        }
+        // 更新剧本的 current_version 字段
+        Script script = scriptMapper.selectById(scriptId);
+        if (script != null) {
+            script.setCurrentVersion(version.getVersion());
+            scriptMapper.updateById(script);
+        }
+        log.info("剧本版本已恢复: scriptId={}, versionId={}, version={}", scriptId, versionId, version.getVersion());
+    }
+
     public void createVersion(Long scriptId, Map<String, Object> body) {
         ScriptVersion version = new ScriptVersion();
         version.setScriptId(scriptId);
@@ -163,11 +186,24 @@ public class ScriptService {
     }
 
     public ChapterVersion createChapterVersion(Long scriptId, Long chapterId, Map<String, Object> body) {
-        ScriptEpisode episode = chapterId == null ? null : episodeMapper.selectById(chapterId);
-        ChapterVersion version = new ChapterVersion();
+        // 处理无效 chapterId（0 或 null）：通过 script_id + chapter_number 查找实际 episode
+        ScriptEpisode episode = (chapterId != null && chapterId > 0) ? episodeMapper.selectById(chapterId) : null;
         Long bodyScriptId = toLong(body.get("script_id"));
-        version.setScriptId(scriptId != null ? scriptId : (bodyScriptId != null ? bodyScriptId : (episode == null ? null : episode.getScriptId())));
-        version.setEpisodeId(chapterId);
+        Long resolvedScriptId = scriptId != null ? scriptId : bodyScriptId;
+
+        // 如果通过 ID 找不到 episode，尝试通过 script_id + chapter_number 定位
+        if (episode == null && resolvedScriptId != null && body.containsKey("chapter_number")) {
+            int chapterNum = toInt(body.get("chapter_number"), 0);
+            if (chapterNum > 0) {
+                episode = episodeMapper.selectOne(new LambdaQueryWrapper<ScriptEpisode>()
+                        .eq(ScriptEpisode::getScriptId, resolvedScriptId)
+                        .eq(ScriptEpisode::getEpisodeNumber, chapterNum));
+            }
+        }
+
+        ChapterVersion version = new ChapterVersion();
+        version.setScriptId(resolvedScriptId != null ? resolvedScriptId : (episode != null ? episode.getScriptId() : null));
+        version.setEpisodeId(episode != null ? episode.getId() : (chapterId != null && chapterId > 0 ? chapterId : null));
         version.setChapterNumber(toInt(body.get("chapter_number"), episode == null ? 1 : episode.getEpisodeNumber()));
         version.setTitle(String.valueOf(body.getOrDefault("title", episode == null ? "未命名章节" : episode.getTitle())));
         version.setContent(String.valueOf(body.getOrDefault("content", episode == null ? "" : episode.getContent())));
@@ -191,7 +227,14 @@ public class ScriptService {
     }
 
     public AdaptationVersion getAdaptation(Long id) {
-        return adaptationVersionMapper.selectById(id);
+        AdaptationVersion adaptation = adaptationVersionMapper.selectById(id);
+        if (adaptation != null && adaptation.getScriptId() != null) {
+            Script script = scriptMapper.selectById(adaptation.getScriptId());
+            if (script != null) {
+                verifyAccess(script);
+            }
+        }
+        return adaptation;
     }
 
     public AdaptationVersion createAdaptation(Map<String, Object> body) {
@@ -267,10 +310,31 @@ public class ScriptService {
         return asset;
     }
 
+    // ===== Asset maturity & lock =====
+    public void updateMaturity(String type, String assetId, String maturityLevel) {
+        RepoAsset asset = repoAssetMapper.selectOne(new LambdaQueryWrapper<RepoAsset>()
+                .eq(RepoAsset::getAssetType, type)
+                .eq(RepoAsset::getAssetId, assetId));
+        if (asset != null) {
+            asset.setMaturityLevel(maturityLevel);
+            repoAssetMapper.updateById(asset);
+        }
+    }
+
+    public void lockAsset(String type, String assetId) {
+        RepoAsset asset = repoAssetMapper.selectOne(new LambdaQueryWrapper<RepoAsset>()
+                .eq(RepoAsset::getAssetType, type)
+                .eq(RepoAsset::getAssetId, assetId));
+        if (asset != null) {
+            asset.setMaturityLevel("locked");
+            repoAssetMapper.updateById(asset);
+        }
+    }
+
     // ===== Utility =====
     private String toJson(Object value) {
         if (value == null) return null;
-        try { return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value); }
+        try { return objectMapper.writeValueAsString(value); }
         catch (Exception e) { return String.valueOf(value); }
     }
 
@@ -371,5 +435,21 @@ public class ScriptService {
                 - 主体推进：按目标媒介拆成场次、对白、动作和转场。
                 - 结尾留白：保留下一集/下一镜头/转化动作。
                 """.formatted(label, source.isBlank() ? "待补充源头文本。" : source);
+    }
+
+    /**
+     * 校验当前用户是否有权访问该剧本（作者或拥有者均可访问）。
+     * 管理员权限由上层 SecurityUtil / 拦截器统一处理。
+     */
+    private void verifyAccess(Script script) {
+        Long currentUserId = SecurityUtil.getCurrentUserId();
+        if (currentUserId == null) {
+            throw new RuntimeException("未登录");
+        }
+        boolean isAuthor = currentUserId.equals(script.getAuthorUserId());
+        boolean isOwner = currentUserId.equals(script.getOwnerUserId());
+        if (!isAuthor && !isOwner) {
+            throw new RuntimeException("无权访问该剧本");
+        }
     }
 }
