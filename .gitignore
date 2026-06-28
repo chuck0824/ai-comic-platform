@@ -31,6 +31,7 @@ new-api/logs/
 # Temp
 tmp/
 *.tmp
+.worktrees/
 
 # Vite
 aicp-frontend/.vite/
