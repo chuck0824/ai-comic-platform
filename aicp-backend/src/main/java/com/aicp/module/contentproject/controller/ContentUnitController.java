@@ -4,11 +4,13 @@ import com.aicp.common.dto.ApiResponse;
 import com.aicp.common.util.SecurityUtil;
 import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
+import com.aicp.module.contentproject.service.ContentReviewService;
 import com.aicp.module.contentproject.service.ContentUnitService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/content-units")
@@ -16,6 +18,7 @@ import java.util.List;
 public class ContentUnitController {
 
     private final ContentUnitService unitService;
+    private final ContentReviewService reviewService;
 
     @GetMapping("/{id}/draft")
     public ApiResponse<DraftView> getDraft(@PathVariable Long id) {
@@ -43,5 +46,12 @@ public class ContentUnitController {
     public ApiResponse<DraftView> restoreVersion(@PathVariable Long id, @PathVariable Long versionId) {
         return ApiResponse.success(unitService.restoreVersion(
                 SecurityUtil.requireCurrentUserId(), id, versionId));
+    }
+
+    // ===== M1: Three-Agent Review =====
+
+    @PostMapping("/{id}/review")
+    public ApiResponse<Map<String, Object>> reviewUnit(@PathVariable Long id) {
+        return ApiResponse.success(reviewService.reviewUnit(id));
     }
 }

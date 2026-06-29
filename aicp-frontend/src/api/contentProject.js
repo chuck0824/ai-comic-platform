@@ -26,6 +26,8 @@ export const contentProjectApi = {
   listVersions: (unitId) => request.get(`/content-units/${unitId}/versions`),
   createVersion: (unitId, data) => request.post(`/content-units/${unitId}/versions`, data),
   restoreVersion: (unitId, versionId) => request.post(`/content-units/${unitId}/versions/${versionId}/restore`),
+  // M1: Three-Agent Review
+  reviewUnit: (unitId) => request.post(`/content-units/${unitId}/review`),
   // Legacy
   backfillLegacy: () => request.post('/content-projects/backfill-legacy')
 }
