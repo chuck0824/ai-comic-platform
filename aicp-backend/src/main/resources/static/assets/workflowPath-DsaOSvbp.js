@@ -1,0 +1,1 @@
+function n(t=[]){return t.find(e=>e.status==="current")||t.find(e=>!["completed","skipped","optional"].includes(e.status))||null}function s(t){return{story_seed:"故事种子",import_review:"导入审核",characters:"角色设定",synopsis:"梗概",outline:"大纲",content:"正文",review:"审核",destination:"内容去向",storyboard:"分镜"}[t]||t}export{n as c,s};
