@@ -25,10 +25,10 @@
           <div class="font-semibold">AI 手动创作</div>
           <div class="text-xs text-muted">输入故事种子，AI引导创作</div>
         </div>
-        <div :class="['card flex-1 text-center p-md', { 'disabled': true }]"
-             style="opacity:0.5;cursor:not-allowed">
+        <div :class="['card card-hover flex-1 text-center p-md', { 'selected': form.sourceMode === 'uploaded' }]"
+             @click="form.sourceMode = 'uploaded'">
           <div class="font-semibold">上传剧本</div>
-          <div class="text-xs text-muted">上传已有剧本（M2上线）</div>
+          <div class="text-xs text-muted">上传TXT/DOCX，AI自动解析</div>
         </div>
       </div>
     </div>

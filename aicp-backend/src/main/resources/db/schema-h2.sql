@@ -543,3 +543,18 @@ CREATE TABLE IF NOT EXISTS cp_storyboard_shots (
 CREATE INDEX IF NOT EXISTS idx_cp_sbm_project ON cp_storyboard_masters(project_id, tier);
 CREATE INDEX IF NOT EXISTS idx_cp_sbs_master ON cp_storyboard_scenes(master_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_cp_sbsh_master ON cp_storyboard_shots(master_id, sort_order);
+
+-- M1: Upload files
+CREATE TABLE IF NOT EXISTS content_upload_files (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL,
+    original_name VARCHAR(500) NOT NULL,
+    file_type VARCHAR(20) NOT NULL,
+    file_size BIGINT NOT NULL,
+    parsed_text TEXT,
+    parse_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    error_message VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

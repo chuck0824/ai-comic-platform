@@ -36,6 +36,11 @@ export const contentProjectApi = {
   listStoryboardScenes: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboard/${masterId}/scenes`),
   listStoryboardShots: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboard/${masterId}/shots`),
   lockStoryboardMaster: (projectId, masterId) => request.post(`/content-projects/${projectId}/storyboard/${masterId}/lock`),
+  // M1: Upload
+  uploadFile: (formData) => request.post('/content-projects/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  getUpload: (uploadId) => request.get(`/content-projects/upload/${uploadId}`),
+  aiExtractUpload: (uploadId) => request.post(`/content-projects/upload/${uploadId}/ai-extract`),
+  confirmImport: (uploadId, projectId, chapters) => request.post(`/content-projects/upload/${uploadId}/confirm-import`, { project_id: projectId, chapters }),
   // Legacy
   backfillLegacy: () => request.post('/content-projects/backfill-legacy')
 }

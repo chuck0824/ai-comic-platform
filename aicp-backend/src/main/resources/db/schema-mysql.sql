@@ -770,4 +770,20 @@ CREATE TABLE IF NOT EXISTS cp_storyboard_shots (
     INDEX idx_cp_sbsh_master (master_id, sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜镜头表(V7)';
 
+
+-- M1: Upload files
+CREATE TABLE IF NOT EXISTS content_upload_files (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    user_id BIGINT NOT NULL,
+    original_name VARCHAR(500) NOT NULL,
+    file_type VARCHAR(20) NOT NULL,
+    file_size BIGINT NOT NULL,
+    parsed_text LONGTEXT,
+    parse_status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    error_message VARCHAR(500),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='上传文件表';
+
 SET FOREIGN_KEY_CHECKS = 1;
