@@ -1,7 +1,7 @@
-# 剧本与 TVC 创作模块 PRD V7
+# 剧本与 TVC 创作模块 PRD V7.1
 
 > 文档状态：待产品评审
-> 版本：V7.0
+> 版本：V7.1
 > 日期：2026-06-29
 > 适用范围：用户端剧本创作、长篇创作、TVC 创作、用户文稿导入、改编、分镜、画布生产关联
 > 主要读者：产品、交互、前端、后端、AI/Agent、测试、运维、内容审核
@@ -17,18 +17,26 @@
 
 冲突时以本 V7 为准。历史文档保留作为设计溯源，不再作为开发验收依据。
 
-### 0.1 已确定的产品决策
+### 0.1 变更记录
+
+| 版本 | 日期 | 变更 |
+|---|---|---|
+| V7.0 | 2026-06-29 | 形成内容项目、三模式、版本、Agent、分镜与画布开发基线 |
+| V7.1 | 2026-06-29 | 确认自适应引导流程；分镜改为用户可选；补充最短路径和易用性规则 |
+
+### 0.2 已确定的产品决策
 
 1. 产品根对象统一命名为“内容项目”。过渡期物理表可继续使用 `scripts`，但新 API、页面和埋点使用 `content_project`。
 2. 创建时由用户明确选择“短剧快速创作”、“长篇世界观创作”或“TVC 创作”。
 3. 人物设定与剧情桥段至少提供一项；AI 可补全另一项，用户确认后才成为项目事实。
 4. 世界地图不作为长篇创作的起始门槛。地点按 L0 地点提取、L1 区域关系、L2 可视化地图渐进构建。
 5. TVC 是独立创作模式，同时允许从已有内容版本改编。两条路径统一产出 `tvc_script_version`。
-6. 用户界面使用流程化创作台，不将复杂多 Tab 工作台作为主交互。
+6. 用户界面使用自适应引导流程：保留阶段轨道，但根据来源、目标和已有资产自动完成或收起无关阶段，不要求所有用户走同一条固定向导。
 7. 每一阶段的 AI 生成必须使用用户已修订版本，不得继续只使用初始 idea。
 8. 钩子 Agent、编导 Agent、导演 Agent 保留为 ScriptAgent 内部三个专业审校角色。
 9. 源正文、改编脚本、分镜 Master、画布快照和生成资产各自独立版本化，不自动覆盖上下游。
 10. 默认画布耦合模式为半耦合：分镜锁定后创建画布快照，后续差异需用户确认。
+11. 分镜不是内容创作完成条件。用户可选择“暂不制作”或“现在制作”；只有进入画布概念验证或生产时，才要求生成并确认对应档位的分镜。
 
 ## 1. 背景、问题与产品判断
 
@@ -152,7 +160,9 @@ flowchart TD
     I --> I1["继续修订/入库/上架"]
     I --> I2["改编脚本"]
     I --> I3["TVC 脚本"]
-    I --> I4["分镜 Master A/B/C"]
+    I --> Q{"是否制作分镜"}
+    Q -->|暂不制作| I5["完成内容流程<br/>可稍后进入分镜"]
+    Q -->|现在制作| I4["分镜 Master A/B/C"]
     I4 --> J["生产准入"]
     J --> K["画布快照"]
     K --> L["ProductionAgent 节点生产"]
@@ -168,6 +178,7 @@ flowchart LR
     A["首页/内容项目列表"] --> B["新建/上传"]
     B --> C["模式与参数"]
     C --> D["流程化创作台"]
+    D --> J["项目完成页/内容资产页"]
     D --> E["改编/TVC 编辑器"]
     D --> F["分镜专业编辑器"]
     E --> F
@@ -190,7 +201,8 @@ journey
       AI 生成草稿: 4: 系统
       用户修订并建立版本: 5: 用户
       三智能体审核: 4: 系统,用户
-    section 生产
+    section 可选生产
+      选择是否制作分镜: 5: 用户
       分镜升档与资产准备: 4: 用户,系统
       画布生成与质检: 4: 系统
       采用版本与导出: 5: 用户
@@ -199,6 +211,8 @@ journey
 ## 6. 项目入口、参数与上传
 
 ### 6.1 新建项目 `F-02-00`
+
+首屏只要求 `creation_mode`、`source_mode`、起始内容和内容目标。下表“必填”表示进入相关生成阶段前必须确认，不要求用户在创建项目时一次填完；题材、受众、平台和长度可由模板或 AI 推荐，用户确认后写入参数版本。
 
 | 字段 | 短剧 | 长篇 | TVC | 校验 |
 |---|---|---|---|---|
@@ -242,7 +256,7 @@ journey
 上传 → 安全扫描 → 异步解析 → 原文预览
 → 用户拆分/合并/重排章节或集数
 → AI 提取人物/关系/地点/任务/时间线/伏笔候选
-→ 用户确认 → 创建初始内容版本 → 进入对应创作流程
+→ 用户确认 → 创建初始内容版本 → 系统计算已满足阶段 → 进入第一个未完成的必需任务
 ```
 
 上传与解析是任务，前端必须查询真实状态，不得用假进度直接标记完成。
@@ -251,20 +265,21 @@ journey
 
 ### 7.0 内容项目列表 `F-02-09`
 
-- 项目卡片显示名称、模式、来源、内容状态、生产状态、当前阶段、整体进度、最近编辑时间、当前主版本及画布状态。
+- 项目卡片显示名称、模式、来源、内容状态、生产状态、分镜意向、当前阶段、整体进度、最近编辑时间、当前主版本及画布状态。
 - 支持按模式、来源、成员、状态、平台、更新时间筛选，并支持名称搜索和最近访问排序。
 - 点击“继续创作”恢复最后阶段、任务和内容单元；点击版本号进入只读版本历史；无权限项目不展示编辑入口。
 - 删除进入 30 天回收站；复制项目创建新项目并保留 `copied_from_project_id`，不得共用可变资产。
 - 列表进度由阶段完成状态计算，不得由前端模拟；后台任务仍在运行时显示真实任务状态。
+- 整体进度只计算推荐路径中的必需阶段；可选任务和已选择“暂不制作”的分镜不得降低完成度。
 
 ### 7.1 统一页面布局 `F-02-10`
 
 - 顶部：项目名、模式、参数摘要、自动保存状态、当前版本。
-- 顶部阶段轨道：已完成、当前、待完成、未解锁、有风险。
+- 顶部阶段轨道：已完成、当前、待完成、可选、已跳过、未解锁、有风险。
 - 左侧：当前阶段任务、必填与可选标识。
 - 中间：当前唯一主编辑区。
 - 右侧：本步 AI 使用的上下文、所选版本、被锁定事实和风险。
-- 底部：上一项、保存草稿、AI 重新生成、确认并继续。
+- 底部：上一项、稍后处理（可选任务）、保存草稿、AI 重新生成、确认并继续。每屏只能有一个视觉主按钮。
 
 ### 7.2 阶段合同
 
@@ -297,6 +312,30 @@ journey
 - 冲突时保留“服务端版本”和“本地草稿”，提供对比后手动选择或合并。
 - M0–M2 不支持同一内容单元多人实时合并。
 
+### 7.4 自适应引导与易用性 `F-02-11`
+
+系统根据 `creation_mode`、`source_mode`、创作目标和已确认资产计算推荐路径。完整阶段始终可查看，但页面只突出当前必须完成的一项任务；已满足阶段自动标记完成，可选任务默认收起并可随时展开。
+
+| 规则 | 产品要求 |
+|---|---|
+| 最短可行路径 | 手动创作、上传文稿、TVC 简报和已有版本派生分别定义最少必需步骤，不共用一条固定路径 |
+| 渐进展示 | 专业参数、世界设定、Agent 明细、版本依赖和生产配置默认收起 |
+| 单屏单目标 | 一个页面只突出一个主要任务和一个主按钮 |
+| 智能默认值 | 平台、画幅、时长和 Agent 权重使用模板推荐值，并说明来源、允许修改 |
+| 非阻塞任务 | 长时间生成进入后台；离开页面不取消，完成后通知并提供结果差异 |
+| 草稿与版本分离 | 自动保存只增加草稿 revision；提交审核、批准、锁定或用户手动命名时才创建用户可见版本 |
+| 建议分级 | Agent 结果先汇总为阻塞项、建议项和可忽略项，再允许展开各 Agent 报告 |
+| 结果可解释 | AI 操作前后显示使用了什么、保持了什么、会影响什么 |
+| 错误可恢复 | 错误提示必须回答发生什么、保留了什么、下一步做什么和是否产生费用 |
+| 去向聚焦 | 锁稿后根据项目目标推荐后续动作；其他能力收进“更多去向” |
+
+推荐路径示例：
+
+- 人物/桥段启动：确认输入 → AI 补全候选 → 梗概 → 大纲 → 目标内容单元。
+- 上传文稿：解析确认 → 人物/结构校对 → 直接进入分章、改编或分镜；已满足阶段自动完成。
+- TVC 简报：事实与 claims → 创意方向 → 概念脚本 → 分秒脚本。
+- 已有版本派生：选择源版本和目标 → 预览复制/不兼容范围 → 创建派生项目。
+
 ## 8. 三种创作流程
 
 ### 8.1 短剧快速创作 `F-02-20`
@@ -306,10 +345,10 @@ journey
 | 故事种子 | 确认创意、模式、参数和源头钩子策略 | 参考作品风格描述 | 故事种子版本已保存 |
 | 人物设定 | 至少确认 1 个主要人物的身份、动机、目标 | 关系、成长弧、台词风格 | 主要人物不存在未解决冲突 |
 | 梗概与任务 | 故事梗概、核心冲突、主线任务 | 支线任务、地点候选 | 梗概版本已保存 |
-| 分集大纲 | 按项目集数生成分集，确认每集核心事件与钩子 | 拖拽排序、插入/删除集 | 所有目标集存在大纲且必填钩子已确认 |
+| 分集大纲 | 选择全季或滚动规划范围，确认当前范围内每集核心事件与钩子 | 未来集占位、拖拽排序、插入/删除集 | 当前规划范围存在大纲且必填钩子已确认；不要求先完成全项目大纲 |
 | 逐集正文 | 每次生成/编辑一集，保存内容版本 | 批量生成（M2） | 至少一集存在 approved 版本 |
 | 审核锁稿 | 钩子/编导/导演报告，用户批准或风险放行 | 局部采纳建议 | 选中内容版本已 locked |
-| 去向 | 选择继续修订、入库、改编、TVC、分镜或投流 | 上架交易 | 不阻塞，去向为显式用户决策 |
+| 去向 | 选择完成内容流程、继续修订、入库、改编、TVC 或投流 | 分镜、上架交易 | 分镜可跳过；选择结果已保存 |
 
 ### 8.2 长篇世界观创作 `F-02-30`
 
@@ -322,6 +361,7 @@ journey
 | 分卷 | 每卷目标、转折、卷末钩子和主要人物变化 | 地点 L0/L1、时间线 | 目标卷存在大纲版本 |
 | 逐章正文 | 章大纲、章正文、章末留白、连续性快照 | AI 润色/扩写/压缩/对白优化 | 单章版本已保存 |
 | 阶段审核 | 钩子、编导/编辑、连续性报告 | 导演可视化建议 | 选中范围已 approved/locked |
+| 去向 | 选择继续写作、入库、改编或完成本次流程 | 分镜、TVC、上架交易 | 分镜可跳过；选择结果已保存 |
 
 #### 8.2.1 地点与地图
 
@@ -341,7 +381,7 @@ TVC 的 `source_type` 可为 `brief` 或 `content_version`，两者共用后续�
 | 概念脚本 | 问题/情境、产品介入、利益证明、CTA | 角色、情绪和故事化表达 | 概念脚本已 approved |
 | 分秒脚本 | 时码、画面、动作、旁白/台词、字幕、音乐/音效、产品/品牌露出、CTA | 多时长改版 | 分秒脚本版本已保存 |
 | 审核锁稿 | TVC 钩子、创意/转化编导、导演/生产报告，合规规则 | 风险放行 | 选定 TVC 版本 locked |
-| 去向 | 分镜、多时长/多平台改版、投放素材、画布 | 入库/上架 | 用户明确选择 |
+| 去向 | 选择完成脚本、多时长/多平台改版或投放素材 | 分镜、入库、上架 | 分镜可跳过；选择结果已保存 |
 
 ## 9. 专业编辑、钩子与连续性
 
@@ -425,6 +465,17 @@ Agent 先输出报告，不直接覆盖内容。用户可对建议执行“采�
 
 ## 12. 分镜 Master 与项目插件包
 
+### 12.0 分镜选择 `F-02-79`
+
+内容版本锁定后，页面向有编辑权限的用户提供两个并列选项：
+
+- `暂不制作分镜`：将 `storyboard_intent_status` 记为 `skipped`，内容流程正常完成；项目概览保留“制作分镜”入口，用户以后可重新选择。
+- `现在制作分镜`：将状态记为 `requested`，用户选择源版本和范围后进入 A 档分镜；生成前展示预计镜头数、耗时和费用。
+
+初始状态为 `not_decided`，产生首个分镜版本后为 `in_progress`，选定分镜版本锁定后为 `completed`。选择“暂不制作”不得创建空分镜、不得影响内容状态、入库、投流或普通文本导出。
+
+进入画布概念验证时至少需要一个已确认的 A/B 档分镜；进入批量生产时需要 locked C 档。如果用户从内容完成页直接选择画布，系统先解释原因并提供“一键生成 A 档分镜”，不得静默替用户创建或计费。
+
 ### 12.1 A/B/C 分镜 `F-02-80`
 
 | 档位 | 输出 | 用途 | 画布准入 |
@@ -439,9 +490,10 @@ Agent 先输出报告，不直接覆盖内容。用户可对建议执行“采�
 
 ```text
 Project_ID: PROJ_{short}
-ContentUnit_ID: EP{n} | VOL{n}_CH{n} | TVC{n}
-Scene_ID: {ContentUnit_ID}_SC{n}
-Shot_ID: {Scene_ID}_SH{n}
+ContentUnit_ID: CU_{short}
+ContentUnit_Display_Code: EP{display_no} | VOL{display_no}_CH{display_no} | TVC{display_no}
+Scene_ID: SC_{short}
+Shot_ID: SH_{short}
 Character_ID: CH_{short}
 Face_ID: FACE_{short}_V{n}
 Costume_ID: CST_{short}_{state}_V{n}
@@ -482,6 +534,8 @@ L4 降级只有 Owner/Producer 可执行，必须填写原因并触发连续性�
 → 采用版本
 → 导出 Manifest
 ```
+
+该链路只在用户选择制作分镜或进入画布时启动；内容创作、审核、入库、投流和文本导出不依赖分镜存在。
 
 ### 13.2 生产准入 `F-02-90`
 
@@ -574,6 +628,27 @@ stateDiagram-v2
 
 ### 14.2 依赖和过期
 
+分镜意向不是第四条业务状态轴，仅用于控制可选路径：
+
+```text
+not_decided → skipped
+not_decided → requested → in_progress → completed
+skipped → requested
+requested/in_progress → skipped（已生成分镜保留，不删除）
+```
+
+从 `in_progress` 改为 `skipped` 时只退出当前推荐路径，已有分镜版本仍可从项目资产中访问。
+
+项目卡片的 `content_status` 按当前交付范围中的必需内容单元派生，不由前端写入：
+
+1. 任一必需单元为 `needs_revision`，项目为 `needs_revision`。
+2. 否则任一必需单元为 `reviewing`，项目为 `reviewing`。
+3. 否则任一必需单元尚无 approved/locked 版本，项目为 `draft`。
+4. 否则全部必需单元为 locked，项目为 `locked`。
+5. 其余全部已 approved/locked 的组合，项目为 `approved`。
+
+可选任务、已跳过的分镜和交付范围之外的草稿不参与项目内容状态聚合。状态由内容版本事件触发重算，定时校验任务负责修复事件遗漏。
+
 `artifact_dependency` 记录 `source_version_id`、`target_version_id`、`dependency_type`、`source_hash`、`created_at`。上游创建新版本时，相关下游标记 `needs_sync`，但不改变旧版本内容。
 
 ### 14.3 核心事件
@@ -584,11 +659,14 @@ stateDiagram-v2
 | `generation_job.completed/failed` | 生成服务 | 创作台、任务中心、通知 |
 | `artifact_version.created` | 版本服务 | 依赖计算、审核 |
 | `artifact.locked/unlocked` | 审核服务 | 分镜、生产准入、审计 |
+| `storyboard.intent_updated` | 内容项目服务 | 创作台、项目概览、分镜服务 |
 | `dependency.stale` | 依赖服务 | 页面提示、同步中心 |
 | `canvas_snapshot.created` | 画布服务 | 生产服务、项目概览 |
 | `generation_asset.created` | 生产服务 | QualityAgent、画布 |
 | `generation_asset.adopted` | 画布服务 | 导出、资产历史 |
 | `export_manifest.created` | 导出服务 | 项目概览、通知 |
+
+业务事件与源数据在同一事务写入 Outbox，采用 at-least-once 投递。事件以 `project_id` 作为顺序键，包含 `event_id`、`aggregate_revision` 和 `occurred_at`；消费者必须按 `event_id` 幂等，失败进入有限重试和死信队列，不允许以“可能重复”为理由重复创建版本、任务或资产。
 
 ## 15. 数据模型
 
@@ -625,7 +703,7 @@ content_projects
 - 所有资产版本必须包含 `id`、`project_id`、`version_no`、`status`、`content_hash`、`created_by`、`created_at`、`source`。
 - 任何更新必须携带 `revision` 或 `If-Match`。
 - 所有 AI 结果保存 `generation_job_id`、`model`、`prompt_version`、`skill_versions`、`input_snapshot_hash`。
-- `content_projects` 保存 `creation_mode`、`source_mode`、`converted_from_project_id`、`copied_from_project_id`；两个来源字段只读且可空。
+- `content_projects` 保存 `creation_mode`、`source_mode`、`storyboard_intent_status`、`converted_from_project_id`、`copied_from_project_id`；两个来源字段只读且可空。
 - 参数、平台规则、Prompt、Skill 和模型配置均使用不可变版本引用，不保存无法追溯的“当前值”。
 - 物理删除由数据保留任务执行，业务 API 使用软删除。
 - 跨租户关联和空 `project_id` 不允许。
@@ -634,7 +712,7 @@ content_projects
 
 | 实体 | 必需字段 | 约束/索引 |
 |---|---|---|
-| `content_projects` | `id, tenant_id, owner_id, name, creation_mode, source_mode, content_status, production_status, market_status, last_stage_key, last_task_key, last_content_unit_id, revision, created_at, updated_at, deleted_at` | `tenant_id+updated_at`、`owner_id+updated_at`；三条状态轴分列 |
+| `content_projects` | `id, tenant_id, owner_id, name, creation_mode, source_mode, storyboard_intent_status, content_status, production_status, market_status, last_stage_key, last_task_key, last_content_unit_id, revision, created_at, updated_at, deleted_at` | `tenant_id+updated_at`、`owner_id+updated_at`；三条状态轴分列 |
 | `project_parameter_versions` | `id, project_id, version_no, payload_json, platform_rule_version_ids, content_hash, created_by, created_at` | `project_id+version_no` 唯一；不可原地更新 |
 | `content_units` | `id, project_id, unit_type, stable_key, display_no, title, status, current_version_id, revision` | `project_id+stable_key` 唯一；排序只修改 `display_no` |
 | `content_versions` | `id, project_id, content_unit_id, version_no, status, content_json, plain_text, source, generation_job_id, content_hash, created_by, created_at` | `content_unit_id+version_no` 唯一；locked 版本不可更新 |
@@ -674,7 +752,7 @@ content_projects
 | 生成 | `POST /generation-jobs` / `GET /generation-jobs/{id}` / `POST /retry` / `POST /cancel` |
 | 审核 | `POST /reviews` / `GET /reviews/{artifactType}/{versionId}` / `POST /approve|reject|override` |
 | 改编/TVC | `/adaptations` / `/tvc-briefs` / `/tvc-scripts` |
-| 分镜 | `/storyboards` / `/storyboard-versions` / `/shots` / `/upgrade-tier` / `/lock` |
+| 分镜 | `PUT /content-projects/{id}/storyboard-intent` / `/storyboards` / `/storyboard-versions` / `/shots` / `/upgrade-tier` / `/lock` |
 | 插件包 | `/plugin-packs` / `/plugin-pack-versions` / `/asset-bindings` |
 | 画布 | `POST /canvas/projects/{id}/imports` / `GET /canvas-snapshots/{id}` / `GET|POST /sync-diffs` |
 | 导出 | `POST /exports` / `GET /exports/{id}` / `GET /export-manifests/{id}` |
@@ -696,6 +774,20 @@ content_projects
 | `IDEMPOTENCY_CONFLICT` | 409 | 同幂等键参数不同 | 禁止重复创建 |
 
 ### 16.3 核心请求示例
+
+更新分镜意向：
+
+```json
+PUT /api/v1/content-projects/123/storyboard-intent
+If-Match: 18
+
+{
+  "intent": "skipped",
+  "source_version_id": 9003
+}
+```
+
+`intent` 只接受 `skipped` 或 `requested`。选择 `requested` 只更新意向并返回下一步路由，不自动创建分镜生成任务；创建任务仍需用户确认范围、费用和幂等键。
 
 创建生成任务：
 
@@ -840,14 +932,16 @@ If-Match: 17
 
 - 使用功能开关按内部账号→试点用户→全量分阶段开启。
 - 每阶段先运行数据校验：项目数、内容单元数、版本数、孤儿外键、hash 一致性。
-- 回滚时关闭新功能开关，旧 API 继续读旧表；新写入数据保留，不反向覆盖旧表。
+- 兼容期旧 API 通过适配层读取：历史项目优先读旧表，新建 V7 项目从新模型投影为旧界面可展示的只读结构；旧 API 不直接维护第二份可变数据。
+- 回滚只关闭新界面和新写入口，不关闭兼容读取适配层。回滚后 V7 新项目仍可在旧项目列表查看和导出；旧界面不支持的分镜/画布能力显示只读提示。
+- 恢复新版本后继续使用新模型原数据，不从只读投影反向覆盖。兼容适配层至少保留至旧 API 下线后的一个稳定发布周期。
 
 ## 22. 里程碑与交付顺序
 
 | 里程碑 | 范围 | 出口标准 |
 |---|---|---|
 | M0 底座 | 内容项目、成员权限、参数/版本/依赖、生成任务、Context Assembler、结构化输出、迁移 | 旧数据可读；新项目可创建、保存和恢复；无越权 |
-| M1 短剧纵向切片 | 故事种子→人物→梗概→分集→第 1 集→三 Agent→A 档→概念画布 | 一条 E2E 通过；刷新不丢稿；画布映射完整 |
+| M1 短剧纵向切片 | 自适应路径：故事种子→人物→梗概→分集→第 1 集→三 Agent；另实现可选 A 档→概念画布 | “跳过分镜完成内容”和“选择分镜进入画布”两条 E2E 通过；刷新不丢稿 |
 | M2 短剧完整 | 多集、钩子、批量、连续性、上传、投流、项目列表恢复 | 20/40/60/80 集关键用例通过；批量任务可恢复 |
 | M3 长篇 | 人物关系、任务、总纲/分卷/章节、地点 L0/L1、时间线、伏笔、长上下文 | 100 章项目可分页恢复；连续性检查可定位冲突 |
 | M4 TVC | 简报、品牌/产品、创意、分秒脚本、claims、多时长/多平台 | 简报和内容改编两入口均产出统一 TVC 版本 |
@@ -873,10 +967,16 @@ If-Match: 17
 | AC-012 | 删除项目后 30 天内恢复 | 项目、版本和关联恢复 |
 | AC-013 | 将短剧项目转换为 TVC | 创建派生项目并记录来源；原项目和原版本不变 |
 | AC-014 | 平台规则升级后打开历史任务 | 仍显示并引用任务运行时的平台规则版本 |
+| AC-015 | 锁稿后选择“暂不制作分镜” | 内容流程完成，不创建空分镜；仍可入库、投流和文本导出 |
+| AC-016 | 已跳过分镜的项目再次选择“制作分镜” | 从选定源版本进入 A 档，原内容状态和版本不变 |
+| AC-017 | 无分镜时直接选择进入画布 | 解释画布依赖并要求确认生成 A 档；未确认不创建任务或扣费 |
+| AC-018 | 上传文稿已包含明确人物和章节结构 | 自动完成已满足阶段，进入第一个未完成的必需任务 |
+| AC-019 | 长生成任务运行中切换内容单元或离开页面 | 任务后台继续，完成后通知；当前草稿不丢失 |
+| AC-020 | 三 Agent 同时返回大量建议 | 首屏按阻塞/建议/可忽略汇总，不要求逐份报告才能继续 |
 
 ### 23.2 模式必测
 
-- 短剧：20/40/60/80 集参数、单集钩子、三 Agent、A 档分镜。
+- 短剧：20/40/60/80 集参数、单集钩子、三 Agent；分别验证跳过分镜与选择 A 档分镜。
 - 长篇：无可视化地图时仍能完成人物→任务→总纲→分卷→章节；地点 L0/L1 可作为空间约束。
 - TVC：简报直达和内容版本改编均产生统一分秒脚本；无证据 claims 无法锁稿。
 - 上传：用户可拆分/合并/重排，解析失败显示具体段落并可重试。
@@ -886,7 +986,7 @@ If-Match: 17
 
 ### 24.1 开工前必需附件
 
-1. V7 PRD（本文档）。
+1. V7.1 PRD（本文档）。
 2. ERD 与数据字典。
 3. OpenAPI 与 JSON Schema 文件。
 4. 事件目录和任务状态机。
