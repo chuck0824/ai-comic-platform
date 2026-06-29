@@ -53,41 +53,44 @@ class AuthServiceTest {
     @Test
     @DisplayName("短信验证码过期 → 抛出 BizException(VERIFY_CODE_ERROR)")
     void registerWithExpiredCode() {
-        when(redisUtil.get("code:register:13800000001")).thenReturn(null);
+        when(redisUtil.get("code:register:13800000001", String.class)).thenReturn(null);
 
         assertThatThrownBy(() -> authService.register(validRequest))
                 .isInstanceOf(BizException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.VERIFY_CODE_ERROR);
+                .extracting("code")
+                .isEqualTo(ErrorCode.VERIFY_CODE_ERROR.getCode());
     }
 
     @Test
     @DisplayName("账号已存在 → 抛出 BizException(ACCOUNT_EXISTS)")
     void registerWithExistingAccount() {
-        when(redisUtil.get("code:register:13800000001")).thenReturn("123456");
-        when(userMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(new User());
+        when(redisUtil.get("code:register:13800000001", String.class)).thenReturn("123456");
+        when(userMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(1L);
 
         assertThatThrownBy(() -> authService.register(validRequest))
                 .isInstanceOf(BizException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.ACCOUNT_EXISTS);
+                .extracting("code")
+                .isEqualTo(ErrorCode.ACCOUNT_EXISTS.getCode());
     }
 
     @Test
     @DisplayName("验证码正确且账号不存在 → 注册成功，返回 token")
     void registerSuccess() {
-        when(redisUtil.get("code:register:13800000001")).thenReturn("123456");
-        when(userMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(null);
+        when(redisUtil.get("code:register:13800000001", String.class)).thenReturn("123456");
+        when(userMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(0L);
         when(passwordEncoder.encode("Abc12345")).thenReturn("$2a$10$hashedPassword");
         when(userMapper.insert(any(User.class))).thenReturn(1);
-        // JWT claims mock
-        when(jwtUtil.generateAccessToken(anyLong(), anyString(), anyString(), anyString(), any())).thenReturn("fake-jwt-token");
-        when(jwtUtil.generateRefreshToken(anyLong())).thenReturn("fake-refresh-token");
+        // JWT claims mock — use lenient matchers since userId is set by MyBatis-Plus after insert
+        when(jwtUtil.generateAccessToken(any(), anyString(), anyString(), any(), any())).thenReturn("fake-jwt-token");
+        when(jwtUtil.generateRefreshToken(any())).thenReturn("fake-refresh-token");
 
         Map<String, Object> result = authService.register(validRequest);
 
-        assertThat(result).containsKeys("access_token", "refresh_token", "user");
-        assertThat(result.get("access_token")).isEqualTo("fake-jwt-token");
+        assertThat(result).containsKeys("user", "token");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> token = (Map<String, Object>) result.get("token");
+        assertThat(token).containsKeys("access_token", "refresh_token");
+        assertThat(token.get("access_token")).isEqualTo("fake-jwt-token");
         verify(userMapper).insert(any(User.class));
         verify(redisUtil).delete("code:register:13800000001");
     }
@@ -99,7 +102,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.devInit("admin", "admin123"))
                 .isInstanceOf(BizException.class)
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.FORBIDDEN);
+                .extracting("code")
+                .isEqualTo(ErrorCode.FORBIDDEN.getCode());
     }
 }
