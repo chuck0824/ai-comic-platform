@@ -7,6 +7,7 @@ import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
 import com.aicp.module.contentproject.service.ContentProjectService;
 import com.aicp.module.contentproject.service.ContentUnitService;
+import com.aicp.module.contentproject.service.LegacyProjectProjectionService;
 import com.aicp.module.contentproject.service.ProjectWorkflowService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class ContentProjectController {
     private final ContentProjectService projects;
     private final ProjectWorkflowService workflow;
     private final ContentUnitService unitService;
+    private final LegacyProjectProjectionService legacy;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectDetail>> create(@Valid @RequestBody CreateProjectRequest request) {
@@ -119,5 +121,17 @@ public class ContentProjectController {
         return ResponseEntity.status(HttpStatus.CREATED)
                 .body(ApiResponse.success(unitService.createUnit(
                         SecurityUtil.requireCurrentUserId(), projectId, unitType, displayNo, title)));
+    }
+
+    // ===== Legacy Backfill =====
+
+    @PostMapping("/backfill-legacy")
+    public ApiResponse<Map<String, Object>> backfillLegacy() {
+        var result = legacy.backfill(SecurityUtil.requireCurrentUserId());
+        return ApiResponse.success(Map.of(
+                "projects", result.projects(),
+                "units", result.units(),
+                "versions", result.versions(),
+                "skipped", result.skipped()));
     }
 }
