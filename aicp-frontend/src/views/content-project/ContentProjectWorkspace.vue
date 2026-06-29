@@ -130,6 +130,18 @@
           </div>
         </div>
 
+        <!-- Stage: storyboard (M1 A-tier) -->
+        <div v-else-if="currentStageInfo.key === 'storyboard'">
+          <StoryboardPanel
+            :master="storyboardMaster"
+            :scenes="storyboardScenes"
+            :shots="storyboardShots"
+            :generating="storyboardGenerating"
+            @generate="handleGenerateStoryboard"
+            @lock="handleLockStoryboard"
+          />
+        </div>
+
         <!-- Fallback for other stages -->
         <div v-else>
           <p class="text-sm text-muted">此阶段的创作工具将在后续版本上线。</p>
@@ -180,6 +192,7 @@ import { currentStage, stageLabel, primaryAction } from './utils/workflowPath'
 import { useGeneration } from './composables/useGeneration'
 import WorkflowRail from './components/WorkflowRail.vue'
 import ContextPanel from './components/ContextPanel.vue'
+import StoryboardPanel from './components/StoryboardPanel.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -201,6 +214,12 @@ const impactSummary = ref('')
 
 let currentUnitId = null
 let autosaveTimer = null
+
+// Storyboard state
+const storyboardMaster = ref(null)
+const storyboardScenes = ref([])
+const storyboardShots = ref([])
+const storyboardGenerating = ref(false)
 
 const { generating, genError, currentJob, triggerGeneration, cancelGeneration } = useGeneration(projectId)
 
@@ -241,6 +260,8 @@ async function loadProject() {
       await loadDraftForUnit(currentUnitId)
       await loadVersionsForUnit(currentUnitId)
     }
+    // load storyboard if available
+    await loadStoryboard()
   } catch (e) {
     error.value = e.response?.data?.message || '加载项目失败'
   } finally {
@@ -406,6 +427,53 @@ async function requestStoryboard() {
     await loadProject()
   } catch (e) {
     error.value = '操作失败: ' + (e.response?.data?.message || e.message)
+  }
+}
+
+// ===== Storyboard handlers =====
+
+async function loadStoryboard() {
+  try {
+    const res = await contentProjectApi.listStoryboardMasters(projectId.value)
+    const masters = res.data || []
+    if (masters.length > 0) {
+      storyboardMaster.value = masters[0]
+      const [scenesRes, shotsRes] = await Promise.all([
+        contentProjectApi.listStoryboardScenes(projectId.value, storyboardMaster.value.id),
+        contentProjectApi.listStoryboardShots(projectId.value, storyboardMaster.value.id)
+      ])
+      storyboardScenes.value = scenesRes.data || []
+      storyboardShots.value = shotsRes.data || []
+    }
+  } catch (e) { /* no storyboard yet */ }
+}
+
+async function handleGenerateStoryboard() {
+  storyboardGenerating.value = true
+  try {
+    const contentUnitId = currentUnitId || units.value.find(u => u.unit_type === 'content')?.id
+    if (!contentUnitId) {
+      ElMessage.warning('请先生成正文内容')
+      storyboardGenerating.value = false
+      return
+    }
+    await contentProjectApi.generateStoryboard(projectId.value, contentUnitId)
+    ElMessage.success('分镜生成成功')
+    await loadStoryboard()
+  } catch (e) {
+    ElMessage.error('分镜生成失败: ' + (e.response?.data?.message || e.message))
+  } finally {
+    storyboardGenerating.value = false
+  }
+}
+
+async function handleLockStoryboard(masterId) {
+  try {
+    await contentProjectApi.lockStoryboardMaster(projectId.value, masterId)
+    ElMessage.success('分镜已锁定')
+    await loadStoryboard()
+  } catch (e) {
+    ElMessage.error('锁定失败: ' + (e.response?.data?.message || e.message))
   }
 }
 

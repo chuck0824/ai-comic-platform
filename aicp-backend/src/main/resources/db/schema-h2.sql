@@ -484,3 +484,62 @@ CREATE INDEX IF NOT EXISTS idx_cu_project_display ON content_units(project_id, d
 CREATE INDEX IF NOT EXISTS idx_cv_project_created ON content_versions(project_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_cgj_project_status ON content_generation_jobs(project_id, status, created_at);
 CREATE INDEX IF NOT EXISTS idx_oe_status_next ON outbox_events(status, next_attempt_at);
+
+-- ============================================================
+-- V7.1 M1: A-tier 分镜 (content-project storyboard)
+-- 使用 cp_ 前缀避免与 canvas storyboard_shots 冲突
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS cp_storyboard_masters (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    content_unit_id BIGINT NOT NULL,
+    tier VARCHAR(10) NOT NULL DEFAULT 'A',
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    total_shots INT DEFAULT 0,
+    estimated_duration_sec INT DEFAULT 0,
+    source_version_id BIGINT NOT NULL,
+    locked_by BIGINT,
+    locked_at TIMESTAMP,
+    revision INT NOT NULL DEFAULT 0,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS cp_storyboard_scenes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    master_id BIGINT NOT NULL,
+    scene_no INT NOT NULL,
+    dramatic_goal TEXT,
+    beat_description TEXT,
+    location_id BIGINT,
+    character_ids TEXT,
+    duration_sec INT DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_cp_sb_scene UNIQUE (master_id, scene_no)
+);
+
+CREATE TABLE IF NOT EXISTS cp_storyboard_shots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    scene_id BIGINT NOT NULL,
+    master_id BIGINT NOT NULL,
+    shot_no INT NOT NULL,
+    shot_type VARCHAR(30),
+    duration_sec INT DEFAULT 0,
+    description TEXT,
+    camera_action TEXT,
+    dialogue_ref TEXT,
+    visual_ref_url VARCHAR(500),
+    status VARCHAR(20) DEFAULT 'draft',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_cp_sb_shot UNIQUE (master_id, shot_no)
+);
+
+CREATE INDEX IF NOT EXISTS idx_cp_sbm_project ON cp_storyboard_masters(project_id, tier);
+CREATE INDEX IF NOT EXISTS idx_cp_sbs_master ON cp_storyboard_scenes(master_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_cp_sbsh_master ON cp_storyboard_shots(master_id, sort_order);

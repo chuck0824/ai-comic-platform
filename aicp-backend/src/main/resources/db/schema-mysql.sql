@@ -713,4 +713,61 @@ CREATE TABLE IF NOT EXISTS outbox_events (
     INDEX idx_oe_status_next (status, next_attempt_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='发件箱事件表';
 
+-- ============================================================
+-- V7.1 M1: cp_storyboard_* (content-project storyboard, 避免与canvas冲突)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS cp_storyboard_masters (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    content_unit_id BIGINT NOT NULL,
+    tier VARCHAR(10) NOT NULL DEFAULT 'A',
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    total_shots INT DEFAULT 0,
+    estimated_duration_sec INT DEFAULT 0,
+    source_version_id BIGINT NOT NULL,
+    locked_by BIGINT,
+    locked_at DATETIME,
+    revision INT NOT NULL DEFAULT 0,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_cp_sbm_project (project_id, tier)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜Master表(V7)';
+
+CREATE TABLE IF NOT EXISTS cp_storyboard_scenes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    master_id BIGINT NOT NULL,
+    scene_no INT NOT NULL,
+    dramatic_goal TEXT,
+    beat_description TEXT,
+    location_id BIGINT,
+    character_ids TEXT,
+    duration_sec INT DEFAULT 0,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_cp_sb_scene UNIQUE (master_id, scene_no),
+    INDEX idx_cp_sbs_master (master_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜场景表(V7)';
+
+CREATE TABLE IF NOT EXISTS cp_storyboard_shots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    scene_id BIGINT NOT NULL,
+    master_id BIGINT NOT NULL,
+    shot_no INT NOT NULL,
+    shot_type VARCHAR(30),
+    duration_sec INT DEFAULT 0,
+    description TEXT,
+    camera_action TEXT,
+    dialogue_ref TEXT,
+    visual_ref_url VARCHAR(500),
+    status VARCHAR(20) DEFAULT 'draft',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_cp_sb_shot UNIQUE (master_id, shot_no),
+    INDEX idx_cp_sbsh_master (master_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜镜头表(V7)';
+
 SET FOREIGN_KEY_CHECKS = 1;

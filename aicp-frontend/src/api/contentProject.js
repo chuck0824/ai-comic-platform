@@ -28,6 +28,14 @@ export const contentProjectApi = {
   restoreVersion: (unitId, versionId) => request.post(`/content-units/${unitId}/versions/${versionId}/restore`),
   // M1: Three-Agent Review
   reviewUnit: (unitId) => request.post(`/content-units/${unitId}/review`),
+  // M1: Storyboard
+  generateStoryboard: (projectId, contentUnitId) =>
+    request.post(`/content-projects/${projectId}/storyboard/generate`, { content_unit_id: contentUnitId }),
+  listStoryboardMasters: (projectId) => request.get(`/content-projects/${projectId}/storyboard`),
+  getStoryboardMaster: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboard/${masterId}`),
+  listStoryboardScenes: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboard/${masterId}/scenes`),
+  listStoryboardShots: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboard/${masterId}/shots`),
+  lockStoryboardMaster: (projectId, masterId) => request.post(`/content-projects/${projectId}/storyboard/${masterId}/lock`),
   // Legacy
   backfillLegacy: () => request.post('/content-projects/backfill-legacy')
 }
