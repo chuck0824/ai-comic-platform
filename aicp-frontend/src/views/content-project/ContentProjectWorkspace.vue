@@ -19,7 +19,7 @@
           </div>
         </div>
         <div class="flex gap-sm">
-          <el-button size="small" @click="$router.push('/content-projects')">返回列表</el-button>
+          <el-button size="small" @click="$router.push('/script-gen')">返回列表</el-button>
         </div>
       </div>
 

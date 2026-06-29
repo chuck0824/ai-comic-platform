@@ -2,7 +2,7 @@
   <div class="content-project-list">
     <div class="flex items-center justify-between mb-lg">
       <h2 class="text-xl font-bold">内容项目</h2>
-      <el-button type="primary" @click="$router.push('/content-projects/new')">
+      <el-button type="primary" @click="$router.push('/script-gen/new')">
         <el-icon><Plus /></el-icon> 新建项目
       </el-button>
     </div>
@@ -21,7 +21,7 @@
     <!-- Empty -->
     <div v-else-if="projects.length === 0" class="text-center py-xl">
       <p class="text-muted mb-md">暂无内容项目，立即创建一个开始创作</p>
-      <el-button type="primary" @click="$router.push('/content-projects/new')">新建项目</el-button>
+      <el-button type="primary" @click="$router.push('/script-gen/new')">新建项目</el-button>
     </div>
 
     <!-- Project Cards -->
@@ -104,7 +104,7 @@ async function loadMore() {
 }
 
 function openProject(p) {
-  router.push(`/content-projects/${p.id}/workspace`)
+  router.push(`/script-gen/${p.id}/workspace`)
 }
 
 function formatTime(t) {

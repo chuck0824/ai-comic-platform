@@ -52,7 +52,7 @@
       <el-button type="primary" :loading="submitting" @click="handleCreate" :disabled="!canSubmit">
         创建项目
       </el-button>
-      <el-button @click="$router.push('/content-projects')">取消</el-button>
+      <el-button @click="$router.push('/script-gen')">取消</el-button>
     </div>
 
     <p v-if="error" class="text-danger text-sm mt-sm">{{ error }}</p>
@@ -96,7 +96,7 @@ async function handleCreate() {
       tenant_type: 'personal'
     })
     const project = res.data
-    router.push(`/content-projects/${project.id}/workspace`)
+    router.push(`/script-gen/${project.id}/workspace`)
   } catch (e) {
     error.value = e.response?.data?.message || '创建失败，请重试'
   } finally {

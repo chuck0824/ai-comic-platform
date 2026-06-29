@@ -19,35 +19,22 @@ const routes = [
         component: () => import('@/views/Dashboard.vue'),
         meta: { title: '工作台' }
       },
-      // === V7 剧本创作（主入口） ===
+      // === V7 剧本创作（主入口，直接加载V7组件） ===
       {
         path: 'script-gen',
-        redirect: '/content-projects'
+        name: 'ScriptGen',
+        component: () => import('@/views/content-project/ContentProjectList.vue'),
+        meta: { title: '剧本创作' }
       },
       {
         path: 'script-gen/new',
-        redirect: '/content-projects/new'
+        name: 'ScriptGenCreate',
+        component: () => import('@/views/content-project/ContentProjectCreate.vue'),
+        meta: { title: '新建项目' }
       },
       {
         path: 'script-gen/:projectId/workspace',
-        redirect: to => `/content-projects/${to.params.projectId}/workspace`
-      },
-      // === V7 Content Project Routes ===
-      {
-        path: 'content-projects',
-        name: 'ContentProjects',
-        component: () => import('@/views/content-project/ContentProjectList.vue'),
-        meta: { title: '内容项目' }
-      },
-      {
-        path: 'content-projects/new',
-        name: 'ContentProjectCreate',
-        component: () => import('@/views/content-project/ContentProjectCreate.vue'),
-        meta: { title: '新建内容项目' }
-      },
-      {
-        path: 'content-projects/:projectId/workspace',
-        name: 'ContentProjectWorkspace',
+        name: 'ScriptGenWorkspace',
         component: () => import('@/views/content-project/ContentProjectWorkspace.vue'),
         meta: { title: '流程化创作台' }
       },
