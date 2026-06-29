@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Review Generate Output",
+  "type": "object",
+  "required": ["verdict"],
+  "properties": {
+    "verdict": { "type": "string", "enum": ["approved", "needs_revision"] },
+    "weighted_score": { "type": "number", "minimum": 0, "maximum": 100 },
+    "hook": { "type": "object" },
+    "director": { "type": "object" },
+    "production": { "type": "object" }
+  }
+}

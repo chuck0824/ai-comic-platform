@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Content Generate Output",
+  "type": "object",
+  "required": ["content"],
+  "properties": {
+    "content": { "type": "string", "minLength": 100 },
+    "word_count": { "type": "integer" },
+    "dialogue_ratio": { "type": "number" },
+    "scenes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "scene_no": { "type": "integer" },
+          "location": { "type": "string" },
+          "characters": { "type": "array", "items": { "type": "string" } },
+          "summary": { "type": "string" }
+        }
+      }
+    }
+  }
+}

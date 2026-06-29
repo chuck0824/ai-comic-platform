@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Synopsis Generate Output",
+  "type": "object",
+  "required": ["synopsis"],
+  "properties": {
+    "synopsis": { "type": "string", "minLength": 50 },
+    "title_suggestions": { "type": "array", "items": { "type": "string" } },
+    "core_conflict": { "type": "string" },
+    "target_audience": { "type": "string" }
+  }
+}

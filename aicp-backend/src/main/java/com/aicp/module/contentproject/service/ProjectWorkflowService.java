@@ -53,7 +53,7 @@ public class ProjectWorkflowService {
         return calculate(project, Map.of());
     }
 
-    WorkflowView calculate(ContentProject project, Map<String, Boolean> facts) {
+    public WorkflowView calculate(ContentProject project, Map<String, Boolean> facts) {
         String sourceMode = project.getSourceMode();
         String storyboardIntent = project.getStoryboardIntentStatus();
         String lastStage = project.getLastStageKey();

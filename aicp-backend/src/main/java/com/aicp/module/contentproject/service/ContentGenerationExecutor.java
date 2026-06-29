@@ -31,6 +31,7 @@ public class ContentGenerationExecutor {
     private final ContentUnitMapper unitMapper;
     private final AiRouter aiRouter;
     private final ObjectMapper objectMapper;
+    private final SchemaValidationService schemaValidation;
 
     /**
      * Execute a generation job asynchronously.
@@ -76,6 +77,20 @@ public class ContentGenerationExecutor {
 
             // Parse structured output if the job expects JSON
             Map<String, Object> parsedResult = tryParseJson(generatedText);
+
+            // M1: Schema validation with repair retry
+            if (parsedResult != null) {
+                try {
+                    parsedResult = schemaValidation.validate(job.getJobType(), parsedResult);
+                } catch (SchemaValidationService.SchemaValidationException e) {
+                    log.error("Schema validation failed for job {}: {}", jobId, e.getMessage());
+                    job.setStatus("failed");
+                    job.setErrorCode("SCHEMA_VALIDATION_FAILED");
+                    job.setFinishedAt(LocalDateTime.now());
+                    jobMapper.updateById(job);
+                    return;
+                }
+            }
 
             // Save as a content version if target_id is specified
             if (job.getTargetId() != null && job.getTargetType() != null) {

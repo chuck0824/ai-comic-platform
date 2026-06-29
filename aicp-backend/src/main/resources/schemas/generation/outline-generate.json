@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Outline Generate Output",
+  "type": "object",
+  "required": ["episodes"],
+  "properties": {
+    "episodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["episode_no", "title", "summary"],
+        "properties": {
+          "episode_no": { "type": "integer", "minimum": 1 },
+          "title": { "type": "string" },
+          "summary": { "type": "string" },
+          "core_conflict": { "type": "string" },
+          "cliffhanger": { "type": "string" }
+        }
+      }
+    }
+  }
+}
