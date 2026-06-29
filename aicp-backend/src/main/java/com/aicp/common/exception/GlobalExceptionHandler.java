@@ -57,6 +57,14 @@ public class GlobalExceptionHandler {
         if (code >= 50000) {
             return HttpStatus.INTERNAL_SERVER_ERROR;
         }
+        // 43xxx → content project errors
+        if (code >= 43000 && code < 44000) {
+            return switch (code) {
+                case 43001 -> HttpStatus.NOT_FOUND;
+                case 43002 -> HttpStatus.FORBIDDEN;
+                default -> HttpStatus.CONFLICT; // 43003–43007 → 409
+            };
+        }
         return switch (code) {
             case 40003 -> HttpStatus.UNAUTHORIZED;
             case 40004 -> HttpStatus.FORBIDDEN;

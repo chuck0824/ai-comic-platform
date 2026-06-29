@@ -48,6 +48,15 @@ public enum ErrorCode {
     BALANCE_INSUFFICIENT(44005, "余额不足"),
     WITHDRAW_BELOW_MINIMUM(44006, "提现金额低于最低限额"),
 
+    // 内容项目 43xxx
+    PROJECT_NOT_FOUND(43001, "项目不存在"),
+    PROJECT_ACCESS_DENIED(43002, "无项目访问权限"),
+    EDIT_CONFLICT(43003, "编辑冲突，数据已被他人修改"),
+    WORKFLOW_STAGE_LOCKED(43004, "工作流阶段已锁定"),
+    ARTIFACT_LOCKED(43005, "产物已锁定"),
+    DEPENDENCY_STALE(43006, "依赖已过期"),
+    IDEMPOTENCY_CONFLICT(43007, "幂等键冲突"),
+
     // 画布服务 46xxx
     CANVAS_NOT_FOUND(46001, "画布项目不存在"),
     CANVAS_NODE_NOT_FOUND(46011, "画布节点不存在"),
