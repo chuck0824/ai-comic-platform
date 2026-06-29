@@ -4,23 +4,23 @@
       <h2>AI漫剧生产工作台</h2>
       <span>V1.5 工业化</span>
     </div>
-    <div class="sidebar-section">创作</div>
-    <router-link to="/dashboard" class="sidebar-item" :class="{ active: isActive('/dashboard') }">
-      <el-icon><HomeFilled /></el-icon> 工作台
-    </router-link>
-    <router-link to="/script-gen" class="sidebar-item" :class="{ active: isActive('/script-gen') }">
-      <el-icon><EditPen /></el-icon> 剧本创作
-    </router-link>
-    <router-link to="/storyboard/1" class="sidebar-item" :class="{ active: isActive('/storyboard') }">
-      <el-icon><Film /></el-icon> 分镜编辑
+    <div class="sidebar-section">V7 创作</div>
+    <router-link to="/content-projects" class="sidebar-item" :class="{ active: isActive('/content-projects') }">
+      <el-icon><FolderAdd /></el-icon> 内容项目
     </router-link>
     <router-link to="/canvas" class="sidebar-item" :class="{ active: isActive('/canvas') }">
       <el-icon><Brush /></el-icon> 画布工作台
     </router-link>
 
-    <div class="sidebar-section">管理</div>
+    <div class="sidebar-section">旧版（兼容模式）</div>
+    <router-link to="/script-gen" class="sidebar-item" :class="{ active: isActive('/script-gen') }">
+      <el-icon><EditPen /></el-icon> 剧本创作（旧）
+    </router-link>
     <router-link to="/warehouse" class="sidebar-item" :class="{ active: isActive('/warehouse') }">
-      <el-icon><Collection /></el-icon> 剧本仓库
+      <el-icon><Collection /></el-icon> 剧本仓库（旧）
+    </router-link>
+    <router-link to="/storyboard/1" class="sidebar-item" :class="{ active: isActive('/storyboard') }">
+      <el-icon><Film /></el-icon> 分镜编辑（旧）
     </router-link>
     <router-link to="/tag-editor/1" class="sidebar-item" :class="{ active: isActive('/tag-editor') }">
       <el-icon><PriceTag /></el-icon> 标签编辑

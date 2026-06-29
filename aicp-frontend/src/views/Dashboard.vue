@@ -25,17 +25,17 @@
       <div class="card">
         <h3 class="font-bold mb-md" style="font-size:15px">快捷入口</h3>
         <div class="grid2 gap-sm">
-          <el-button type="primary" size="large" @click="$router.push('/script-gen')">
-            <el-icon><EditPen /></el-icon> 开始创作
+          <el-button type="primary" size="large" @click="$router.push('/content-projects/new')">
+            <el-icon><EditPen /></el-icon> 开始创作 (V7)
+          </el-button>
+          <el-button size="large" @click="$router.push('/content-projects')">
+            <el-icon><FolderAdd /></el-icon> 我的项目
           </el-button>
           <el-button size="large" @click="$router.push('/canvas')">
             <el-icon><Brush /></el-icon> 画布工作台
           </el-button>
           <el-button size="large" @click="$router.push('/market')">
             <el-icon><ShoppingBag /></el-icon> 剧本市场
-          </el-button>
-          <el-button size="large" @click="$router.push('/warehouse')">
-            <el-icon><Collection /></el-icon> 我的仓库
           </el-button>
         </div>
       </div>
@@ -45,7 +45,7 @@
         </h3>
         <div class="flex gap-sm flex-wrap">
           <span class="tag selected" v-for="t in inspirations" :key="t" style="cursor:pointer"
-                @click="$router.push({ path: '/script-gen', query: { idea: t } })">
+                @click="$router.push({ path: '/content-projects/new', query: { idea: t } })">
             {{ t }}
           </span>
         </div>

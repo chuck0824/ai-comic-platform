@@ -1,15 +1,20 @@
 <template>
   <div>
     <!-- V7.1 compatibility notice -->
-    <el-alert type="info" :closable="false" class="mb-lg">
+    <el-alert type="warning" :closable="false" class="mb-lg" style="padding:16px">
       <template #title>
-        剧本创作已升级为
-        <el-button type="primary" link @click="$router.push('/content-projects/new')">内容项目管理</el-button>
-        ，体验全新流程化创作台。
+        <span style="font-size:15px">⚠️ 剧本创作已升级为 V7 内容项目管理</span>
       </template>
+      <div style="margin-top:8px">
+        <p class="mb-sm">旧版剧本创作已停止更新，新功能（AI 生成管线、三Agent 审校、A/B/C-tier 分镜、批量生成、钩子系统、连续性快照、长篇世界构建、TVC 商业脚本、Canvas 生产集成）仅在 V7 可用。</p>
+        <div class="flex gap-sm mt-sm">
+          <el-button type="primary" @click="$router.push('/content-projects/new')">🚀 创建 V7 项目</el-button>
+          <el-button @click="$router.push('/content-projects')">📂 查看我的项目</el-button>
+        </div>
+      </div>
     </el-alert>
 
-    <h2 class="text-xl font-bold mb-lg">剧本创作（旧版兼容模式）</h2>
+    <h2 class="text-xl font-bold mb-lg">剧本创作（旧版兼容模式 — 仅维护，不再新增功能）</h2>
 
     <!-- 创作路径选择 -->
     <div class="path-tabs mb-lg">
