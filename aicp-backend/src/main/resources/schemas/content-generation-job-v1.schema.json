@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aicp.example.com/schemas/content-generation-job-v1",
+  "title": "Content Generation Job Result Envelope",
+  "type": "object",
+  "required": ["schema_version", "job_id", "status"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Schema version identifier"
+    },
+    "job_id": {
+      "type": "string",
+      "description": "Unique job identifier"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending", "processing", "completed", "partial_completed", "failed", "cancelled"],
+      "description": "Current job status"
+    },
+    "result": {
+      "type": "object",
+      "description": "M0: free-form result object. M1+ adds task-specific schemas."
+    }
+  }
+}
