@@ -19,13 +19,20 @@ const routes = [
         component: () => import('@/views/Dashboard.vue'),
         meta: { title: '工作台' }
       },
+      // === V7 剧本创作（主入口） ===
       {
         path: 'script-gen',
-        name: 'ScriptGen',
-        component: () => import('@/views/ScriptGen.vue'),
-        meta: { title: '剧本创作' }
+        redirect: '/content-projects'
       },
-      // === V7.1 Content Project Routes ===
+      {
+        path: 'script-gen/new',
+        redirect: '/content-projects/new'
+      },
+      {
+        path: 'script-gen/:projectId/workspace',
+        redirect: to => `/content-projects/${to.params.projectId}/workspace`
+      },
+      // === V7 Content Project Routes ===
       {
         path: 'content-projects',
         name: 'ContentProjects',
@@ -43,6 +50,13 @@ const routes = [
         name: 'ContentProjectWorkspace',
         component: () => import('@/views/content-project/ContentProjectWorkspace.vue'),
         meta: { title: '流程化创作台' }
+      },
+      // === 旧版兼容（仅维护） ===
+      {
+        path: 'script-gen-legacy',
+        name: 'ScriptGenLegacy',
+        component: () => import('@/views/ScriptGen.vue'),
+        meta: { title: '剧本创作（旧版）' }
       },
       {
         path: 'storyboard/:scriptId',

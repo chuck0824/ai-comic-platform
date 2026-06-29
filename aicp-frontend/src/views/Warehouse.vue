@@ -3,11 +3,11 @@
     <div class="flex items-center justify-between mb-lg">
       <h2 class="text-xl font-bold">我的剧本仓库</h2>
       <div class="flex gap-sm">
-        <el-button size="small" type="primary" @click="$router.push('/content-projects')">
-          前往内容项目
+        <el-button size="small" type="primary" @click="$router.push('/script-gen')">
+          前往剧本创作 (V7)
         </el-button>
-        <el-button size="small" @click="$router.push('/script-gen')">
-          旧版剧本创作
+        <el-button size="small" @click="$router.push('/script-gen-legacy')">
+          旧版创作（兼容）
         </el-button>
       </div>
     </div>
