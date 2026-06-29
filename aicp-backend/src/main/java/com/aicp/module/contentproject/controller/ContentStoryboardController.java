@@ -55,4 +55,20 @@ public class ContentStoryboardController {
         storyboardService.lockMaster(masterId, SecurityUtil.requireCurrentUserId());
         return ApiResponse.success();
     }
+
+    // ===== M5: B/C-tier upgrade =====
+
+    @PostMapping("/{masterId}/upgrade-b")
+    public ApiResponse<Map<String, Object>> upgradeToB(@PathVariable Long projectId,
+                                                        @PathVariable Long masterId) {
+        return ApiResponse.success(storyboardService.upgradeToBTier(masterId,
+                SecurityUtil.requireCurrentUserId()));
+    }
+
+    @PostMapping("/{masterId}/upgrade-c")
+    public ApiResponse<Map<String, Object>> upgradeToC(@PathVariable Long projectId,
+                                                        @PathVariable Long masterId) {
+        return ApiResponse.success(storyboardService.upgradeToCTier(masterId,
+                SecurityUtil.requireCurrentUserId()));
+    }
 }

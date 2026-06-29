@@ -273,4 +273,94 @@ public class StoryboardService {
     private String ellipsis(String text, int max) {
         return text != null && text.length() > max ? text.substring(0, max) + "..." : text;
     }
+
+    // ===== M5: B/C-tier upgrade =====
+
+    @Transactional
+    public Map<String, Object> upgradeToBTier(Long masterId, Long userId) {
+        StoryboardMaster master = masterMapper.selectById(masterId);
+        if (master == null || !"A".equals(master.getTier())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅 A 档分镜可升为 B 档");
+        }
+
+        // Use AI to enrich with director-level detail
+        String systemPrompt = """
+            你是资深导演。请为每个镜头添加导演意图、动作动机、关系调度、信息差、声画关系和剪辑点。
+            输出JSON：{"shots":[{"shot_no":1,"director_intention":"","action_motivation":"",
+            "relationship_blocking":"","information_gap":"","audio_visual":"","edit_point":""}]}
+            """;
+
+        List<StoryboardShot> existingShots = shotMapper.selectList(
+                new LambdaQueryWrapper<StoryboardShot>().eq(StoryboardShot::getMasterId, masterId));
+        StringBuilder ctx = new StringBuilder("现有镜头：\n");
+        for (StoryboardShot s : existingShots) {
+            ctx.append("镜头").append(s.getShotNo()).append(": ").append(s.getDescription()).append("\n");
+        }
+
+        Map<String, Object> result = aiRouter.chatCompletion(Map.of(
+                "system_prompt", systemPrompt, "prompt", ctx.toString(),
+                "temperature", 0.6, "max_tokens", 4096));
+        Map<String, Object> parsed = parseJson(extractText(result));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> shots = (List<Map<String, Object>>) parsed.getOrDefault("shots", List.of());
+        for (Map<String, Object> s : shots) {
+            int shotNo = toInt(s.get("shot_no"), 0);
+            if (shotNo > 0 && shotNo <= existingShots.size()) {
+                StoryboardShot shot = existingShots.get(shotNo - 1);
+                shot.setDescription(shot.getDescription() + "\n[导演意图] " + str(s.get("director_intention")));
+                shot.setCameraAction(str(s.get("audio_visual")));
+                shotMapper.updateById(shot);
+            }
+        }
+
+        master.setTier("B");
+        masterMapper.updateById(master);
+        return Map.of("master_id", masterId, "upgraded_to", "B", "shots_enriched", shots.size());
+    }
+
+    @Transactional
+    public Map<String, Object> upgradeToCTier(Long masterId, Long userId) {
+        StoryboardMaster master = masterMapper.selectById(masterId);
+        if (master == null || !"B".equals(master.getTier())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "仅 B 档分镜可升为 C 档");
+        }
+
+        String systemPrompt = """
+            你是资深制片。请为批量生产准备：AI抽卡表、AI视频表、配音字幕表、失败策略。
+            输出JSON：{"shots":[{"shot_no":1,"image_prompt":"","video_prompt":"",
+            "dub_text":"","subtitle":"","failure_strategy":""}]}
+            """;
+
+        List<StoryboardShot> existingShots = shotMapper.selectList(
+                new LambdaQueryWrapper<StoryboardShot>().eq(StoryboardShot::getMasterId, masterId));
+        StringBuilder ctx = new StringBuilder();
+        for (StoryboardShot s : existingShots) {
+            ctx.append("镜头").append(s.getShotNo()).append(": ").append(s.getDescription()).append("\n");
+        }
+
+        Map<String, Object> result = aiRouter.chatCompletion(Map.of(
+                "system_prompt", systemPrompt, "prompt", ctx.toString(),
+                "temperature", 0.6, "max_tokens", 4096));
+        Map<String, Object> parsed = parseJson(extractText(result));
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> shots = (List<Map<String, Object>>) parsed.getOrDefault("shots", List.of());
+        for (Map<String, Object> s : shots) {
+            int shotNo = toInt(s.get("shot_no"), 0);
+            if (shotNo > 0 && shotNo <= existingShots.size()) {
+                StoryboardShot shot = existingShots.get(shotNo - 1);
+                shot.setVisualRefUrl(str(s.get("image_prompt")));
+                shot.setDialogueRef(str(s.get("dub_text")));
+                shotMapper.updateById(shot);
+            }
+        }
+
+        master.setTier("C");
+        master.setStatus("locked");
+        master.setLockedBy(userId);
+        master.setLockedAt(LocalDateTime.now());
+        masterMapper.updateById(master);
+        return Map.of("master_id", masterId, "upgraded_to", "C", "locked", true, "shots_processed", shots.size());
+    }
 }
