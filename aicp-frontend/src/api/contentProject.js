@@ -49,6 +49,11 @@ export const contentProjectApi = {
   getUnitHooks: (projectId, unitId) => request.get(`/content-projects/${projectId}/units/${unitId}/hooks`),
   captureSnapshots: (projectId) => request.post(`/content-projects/${projectId}/capture-snapshots`),
   continuityConflicts: (projectId) => request.get(`/content-projects/${projectId}/continuity-conflicts`),
+  // M2: Adaptation + Promotion
+  createAdaptation: (projectId, sourceUnitId, format = 'short_drama', multiEpisode = false) =>
+    request.post(`/content-projects/${projectId}/adapt`, { source_unit_id: sourceUnitId, format, multi_episode: multiEpisode }),
+  generatePromotion: (projectId, sourceUnitId) =>
+    request.post(`/content-projects/${projectId}/promote`, { source_unit_id: sourceUnitId }),
   // Legacy
   backfillLegacy: () => request.post('/content-projects/backfill-legacy')
 }

@@ -4,6 +4,7 @@ import com.aicp.common.dto.ApiResponse;
 import com.aicp.common.util.SecurityUtil;
 import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
+import com.aicp.module.contentproject.entity.ContentUnit;
 import com.aicp.module.contentproject.service.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,8 @@ public class ContentBatchController {
     private final ContentGenerationJobService jobService;
     private final ContentHookService hookService;
     private final ContinuityService continuityService;
+    private final AdaptationService adaptationService;
+    private final PromotionService promotionService;
 
     /** Generate content for multiple episodes at once */
     @PostMapping("/batch-generate")
@@ -76,5 +79,34 @@ public class ContentBatchController {
     @GetMapping("/continuity-conflicts")
     public ApiResponse<List<Map<String, Object>>> checkConflicts(@PathVariable Long projectId) {
         return ApiResponse.success(continuityService.checkConflicts(projectId));
+    }
+
+    // ===== M2: Adaptation + Promotion =====
+
+    /** Create adaptation from source content */
+    @PostMapping("/adapt")
+    public ApiResponse<ContentUnit> createAdaptation(@PathVariable Long projectId,
+                                                      @RequestBody Map<String, Object> body) {
+        Long sourceUnitId = ((Number) body.get("source_unit_id")).longValue();
+        String format = (String) body.getOrDefault("format", "short_drama");
+        boolean multiEpisode = Boolean.TRUE.equals(body.get("multi_episode"));
+
+        ContentUnit result;
+        if (multiEpisode) {
+            result = adaptationService.createAdaptationMultiEpisode(
+                    SecurityUtil.requireCurrentUserId(), projectId, sourceUnitId, format);
+        } else {
+            result = adaptationService.createAdaptation(
+                    SecurityUtil.requireCurrentUserId(), projectId, sourceUnitId, format);
+        }
+        return ApiResponse.success(result);
+    }
+
+    /** Generate promotional materials */
+    @PostMapping("/promote")
+    public ApiResponse<Map<String, Object>> generatePromotion(@PathVariable Long projectId,
+                                                               @RequestBody Map<String, Object> body) {
+        Long sourceUnitId = ((Number) body.get("source_unit_id")).longValue();
+        return ApiResponse.success(promotionService.generatePromotion(projectId, sourceUnitId));
     }
 }
