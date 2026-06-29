@@ -41,6 +41,14 @@ export const contentProjectApi = {
   getUpload: (uploadId) => request.get(`/content-projects/upload/${uploadId}`),
   aiExtractUpload: (uploadId) => request.post(`/content-projects/upload/${uploadId}/ai-extract`),
   confirmImport: (uploadId, projectId, chapters) => request.post(`/content-projects/upload/${uploadId}/confirm-import`, { project_id: projectId, chapters }),
+  // M2: Batch, Hooks, Continuity
+  batchGenerate: (projectId, unitIds, jobType = 'content_generate') =>
+    request.post(`/content-projects/${projectId}/batch-generate`, { unit_ids: unitIds, job_type: jobType }),
+  generateHooks: (projectId) => request.post(`/content-projects/${projectId}/generate-hooks`),
+  hookSummary: (projectId) => request.get(`/content-projects/${projectId}/hook-summary`),
+  getUnitHooks: (projectId, unitId) => request.get(`/content-projects/${projectId}/units/${unitId}/hooks`),
+  captureSnapshots: (projectId) => request.post(`/content-projects/${projectId}/capture-snapshots`),
+  continuityConflicts: (projectId) => request.get(`/content-projects/${projectId}/continuity-conflicts`),
   // Legacy
   backfillLegacy: () => request.post('/content-projects/backfill-legacy')
 }

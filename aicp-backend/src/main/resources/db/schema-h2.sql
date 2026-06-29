@@ -544,6 +544,36 @@ CREATE INDEX IF NOT EXISTS idx_cp_sbm_project ON cp_storyboard_masters(project_i
 CREATE INDEX IF NOT EXISTS idx_cp_sbs_master ON cp_storyboard_scenes(master_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_cp_sbsh_master ON cp_storyboard_shots(master_id, sort_order);
 
+-- M2: Content unit hooks (per-unit hook analysis)
+CREATE TABLE IF NOT EXISTS content_unit_hooks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    content_unit_id BIGINT NOT NULL,
+    content_version_id BIGINT,
+    previous_promise TEXT,
+    promise_payoff TEXT,
+    opening_hook TEXT,
+    mid_escalation TEXT,
+    payoff_or_reversal TEXT,
+    closing_hook TEXT,
+    next_promise TEXT,
+    hook_score DECIMAL(4,2),
+    locked_fields TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_unit_hook UNIQUE (content_unit_id)
+);
+
+-- M2: Continuity snapshots
+CREATE TABLE IF NOT EXISTS continuity_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    content_unit_id BIGINT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    content_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_unit_snapshot UNIQUE (content_unit_id)
+);
+
 -- M1: Upload files
 CREATE TABLE IF NOT EXISTS content_upload_files (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,

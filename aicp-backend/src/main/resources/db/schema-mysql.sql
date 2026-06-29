@@ -786,4 +786,34 @@ CREATE TABLE IF NOT EXISTS content_upload_files (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='上传文件表';
 
+-- M2: Content unit hooks
+CREATE TABLE IF NOT EXISTS content_unit_hooks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    content_unit_id BIGINT NOT NULL,
+    content_version_id BIGINT,
+    previous_promise TEXT,
+    promise_payoff TEXT,
+    opening_hook TEXT,
+    mid_escalation TEXT,
+    payoff_or_reversal TEXT,
+    closing_hook TEXT,
+    next_promise TEXT,
+    hook_score DECIMAL(4,2),
+    locked_fields TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_unit_hook UNIQUE (content_unit_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='单元钩子表';
+
+-- M2: Continuity snapshots
+CREATE TABLE IF NOT EXISTS continuity_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    content_unit_id BIGINT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    content_hash VARCHAR(64) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_unit_snapshot UNIQUE (content_unit_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='连续性快照表';
+
 SET FOREIGN_KEY_CHECKS = 1;
