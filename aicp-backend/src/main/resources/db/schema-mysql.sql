@@ -816,4 +816,62 @@ CREATE TABLE IF NOT EXISTS continuity_snapshots (
     CONSTRAINT uk_unit_snapshot UNIQUE (content_unit_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='连续性快照表';
 
+
+-- M3: Long-form worldbuilding
+CREATE TABLE IF NOT EXISTS character_profiles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY, project_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL, role VARCHAR(50), archetype VARCHAR(100),
+    appearance TEXT, personality TEXT, motivation TEXT, long_term_goal TEXT,
+    knowledge_boundary TEXT, dialogue_style TEXT, backstory TEXT,
+    relationships_json TEXT, status VARCHAR(20) DEFAULT 'draft',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色档案表';
+
+CREATE TABLE IF NOT EXISTS plot_tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY, project_id BIGINT NOT NULL,
+    task_type VARCHAR(30) NOT NULL, title VARCHAR(200) NOT NULL,
+    description TEXT, stage_goals TEXT, obstacles TEXT, cost TEXT,
+    character_ids TEXT, parent_task_id BIGINT,
+    status VARCHAR(20) DEFAULT 'planned', sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='情节任务表';
+
+CREATE TABLE IF NOT EXISTS volume_outlines (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY, project_id BIGINT NOT NULL,
+    volume_no INT NOT NULL, title VARCHAR(200), goal TEXT, turns TEXT,
+    volume_end_hook TEXT, character_changes TEXT, chapter_count INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'draft', sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_project_volume UNIQUE (project_id, volume_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='卷大纲表';
+
+CREATE TABLE IF NOT EXISTS world_locations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY, project_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL, tier VARCHAR(5) NOT NULL DEFAULT 'L0',
+    description TEXT, parent_location_id BIGINT, area_type VARCHAR(30),
+    distance_from_origin VARCHAR(50), transportation TEXT,
+    faction_territory VARCHAR(100), visual_reference TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='世界地点表';
+
+CREATE TABLE IF NOT EXISTS story_timeline (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY, project_id BIGINT NOT NULL,
+    event_name VARCHAR(200) NOT NULL, description TEXT,
+    relative_time VARCHAR(100), involved_characters TEXT,
+    location_id BIGINT, foreshadowing_ids TEXT, sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='故事时间线表';
+
+CREATE TABLE IF NOT EXISTS foreshadowing_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY, project_id BIGINT NOT NULL,
+    description TEXT NOT NULL, planted_in_unit_id BIGINT, payoff_in_unit_id BIGINT,
+    status VARCHAR(20) DEFAULT 'planted', category VARCHAR(30),
+    character_ids TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='伏笔项表';
 SET FOREIGN_KEY_CHECKS = 1;

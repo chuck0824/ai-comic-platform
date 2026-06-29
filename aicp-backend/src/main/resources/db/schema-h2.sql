@@ -588,3 +588,102 @@ CREATE TABLE IF NOT EXISTS content_upload_files (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ============================================================
+-- M3: Long-form worldbuilding
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS character_profiles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    role VARCHAR(50),
+    archetype VARCHAR(100),
+    appearance TEXT,
+    personality TEXT,
+    motivation TEXT,
+    long_term_goal TEXT,
+    knowledge_boundary TEXT,
+    dialogue_style TEXT,
+    backstory TEXT,
+    relationships_json TEXT,
+    status VARCHAR(20) DEFAULT 'draft',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS plot_tasks (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    task_type VARCHAR(30) NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    description TEXT,
+    stage_goals TEXT,
+    obstacles TEXT,
+    cost TEXT,
+    character_ids TEXT,
+    parent_task_id BIGINT,
+    status VARCHAR(20) DEFAULT 'planned',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS volume_outlines (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    volume_no INT NOT NULL,
+    title VARCHAR(200),
+    goal TEXT,
+    turns TEXT,
+    volume_end_hook TEXT,
+    character_changes TEXT,
+    chapter_count INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'draft',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_project_volume UNIQUE (project_id, volume_no)
+);
+
+CREATE TABLE IF NOT EXISTS world_locations (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    tier VARCHAR(5) NOT NULL DEFAULT 'L0',
+    description TEXT,
+    parent_location_id BIGINT,
+    area_type VARCHAR(30),
+    distance_from_origin VARCHAR(50),
+    transportation TEXT,
+    faction_territory VARCHAR(100),
+    visual_reference TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS story_timeline (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    event_name VARCHAR(200) NOT NULL,
+    description TEXT,
+    relative_time VARCHAR(100),
+    involved_characters TEXT,
+    location_id BIGINT,
+    foreshadowing_ids TEXT,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS foreshadowing_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    description TEXT NOT NULL,
+    planted_in_unit_id BIGINT,
+    payoff_in_unit_id BIGINT,
+    status VARCHAR(20) DEFAULT 'planted',
+    category VARCHAR(30),
+    character_ids TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
