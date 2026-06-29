@@ -22,6 +22,7 @@ public class ContentGenerationJobService {
 
     private final ContentGenerationJobMapper jobMapper;
     private final ContextAssembler contextAssembler;
+    private final ContentGenerationExecutor executor;
 
     @Transactional
     public GenerationJobView createJob(Long userId, Long projectId, GenerationJobRequest request,
@@ -56,6 +57,9 @@ public class ContentGenerationJobService {
         job.setIdempotencyKey(idempotencyKey);
         job.setCreatedBy(userId);
         jobMapper.insert(job);
+
+        // M1: trigger async AI execution
+        executor.execute(job.getId());
 
         return toView(job);
     }
