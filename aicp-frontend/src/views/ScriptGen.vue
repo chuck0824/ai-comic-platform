@@ -1,6 +1,15 @@
 <template>
   <div>
-    <h2 class="text-xl font-bold mb-lg">剧本创作</h2>
+    <!-- V7.1 compatibility notice -->
+    <el-alert type="info" :closable="false" class="mb-lg">
+      <template #title>
+        剧本创作已升级为
+        <el-button type="primary" link @click="$router.push('/content-projects/new')">内容项目管理</el-button>
+        ，体验全新流程化创作台。
+      </template>
+    </el-alert>
+
+    <h2 class="text-xl font-bold mb-lg">剧本创作（旧版兼容模式）</h2>
 
     <!-- 创作路径选择 -->
     <div class="path-tabs mb-lg">
