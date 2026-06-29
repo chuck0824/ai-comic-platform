@@ -8,15 +8,12 @@ import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.aicp.module.contentproject.mapper.ContentVersionMapper;
 import com.aicp.module.contentproject.mapper.ContinuitySnapshotMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.*;
 
 /**
@@ -33,6 +30,7 @@ public class ContinuityService {
     private final ContentVersionMapper versionMapper;
     private final AiRouter aiRouter;
     private final ObjectMapper objectMapper;
+    private final AiResponseParser parser;
 
     static final String SNAPSHOT_PROMPT = """
         你是一位剧本连续性分析师。请从以下剧本内容提取连续性信息，输出JSON：
@@ -70,18 +68,18 @@ public class ContinuityService {
         // AI extract
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("system_prompt", SNAPSHOT_PROMPT);
-        params.put("prompt", "请分析以下剧本的连续性：\n\n" + ellipsis(content, 4000));
+        params.put("prompt", "请分析以下剧本的连续性：\n\n" + parser.ellipsis(content, 4000));
         params.put("temperature", 0.2);
         params.put("max_tokens", 2048);
 
         Map<String, Object> result = aiRouter.chatCompletion(params);
-        String text = extractText(result);
-        Map<String, Object> parsed = parseJson(text);
+        String text = parser.extractText(result);
+        Map<String, Object> parsed = parser.parseJson(text);
 
         String snapshotJson;
         try { snapshotJson = objectMapper.writeValueAsString(parsed); }
         catch (Exception e) { snapshotJson = "{}"; }
-        String hash = sha256(snapshotJson);
+        String hash = parser.sha256(snapshotJson);
 
         ContinuitySnapshot snap = new ContinuitySnapshot();
         snap.setProjectId(unit.getProjectId());
@@ -121,24 +119,26 @@ public class ContinuityService {
                         .orderByAsc(ContentUnit::getDisplayNo));
 
         List<Map<String, Object>> conflicts = new ArrayList<>();
-        ContinuitySnapshot prev = null;
+        ContinuitySnapshot prevSnapshot = null;
+        ContentUnit prevUnit = null;
 
         for (ContentUnit u : units) {
             ContinuitySnapshot curr = snapshotMapper.selectOne(
                     new LambdaQueryWrapper<ContinuitySnapshot>()
                             .eq(ContinuitySnapshot::getContentUnitId, u.getId()));
-            if (prev != null && curr != null) {
-                Map<String, Object> diff = compareSnapshots(prev, curr);
+            if (prevSnapshot != null && curr != null) {
+                Map<String, Object> diff = compareSnapshots(prevSnapshot, curr);
                 if (!diff.isEmpty()) {
                     conflicts.add(Map.of(
-                            "from_unit", prev.getContentUnitId(),
+                            "from_unit", prevSnapshot.getContentUnitId(),
                             "to_unit", curr.getContentUnitId(),
-                            "from_display", units.indexOf(u) > 0 ? units.get(units.indexOf(u)-1).getDisplayNo() : 0,
+                            "from_display", prevUnit != null ? prevUnit.getDisplayNo() : 0,
                             "to_display", u.getDisplayNo(),
                             "conflicts", diff));
                 }
             }
-            prev = curr;
+            prevSnapshot = curr;
+            prevUnit = u;
         }
         return conflicts;
     }
@@ -165,48 +165,58 @@ public class ContinuityService {
                     }
                 }
             }
-        } catch (Exception e) { /* ignore parse errors */ }
-        return diffs;
-    }
 
-    @SuppressWarnings("unchecked")
-    private String extractText(Map<String, Object> result) {
-        Object choices = result.get("choices");
-        if (choices instanceof List<?> list && !list.isEmpty()) {
-            Object first = list.get(0);
-            if (first instanceof Map) {
-                Object message = ((Map<String, Object>) first).get("message");
-                if (message instanceof Map) {
-                    Object c = ((Map<String, Object>) message).get("content");
-                    if (c != null) return String.valueOf(c);
+            // Compare relationship changes
+            List<Map<String, Object>> relsA = (List<Map<String, Object>>) sa.getOrDefault("relationships", List.of());
+            List<Map<String, Object>> relsB = (List<Map<String, Object>>) sb.getOrDefault("relationships", List.of());
+            for (Map<String, Object> ra : relsA) {
+                String pair = (String) ra.get("pair");
+                String stateA = (String) ra.get("state");
+                for (Map<String, Object> rb : relsB) {
+                    if (pair != null && pair.equals(rb.get("pair"))) {
+                        String stateB = (String) rb.get("state");
+                        if (stateA != null && stateB != null && !stateA.equals(stateB)) {
+                            diffs.put("relationship_" + pair, Map.of("from", stateA, "to", stateB));
+                        }
+                    }
                 }
             }
-        }
-        return result.toString();
-    }
 
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseJson(String text) {
-        try {
-            String json = text;
-            if (text.contains("```json")) {
-                int s = text.indexOf("```json") + 7;
-                int e = text.indexOf("```", s);
-                if (e > s) json = text.substring(s, e).trim();
+            // Compare props
+            List<Map<String, Object>> propsA = (List<Map<String, Object>>) sa.getOrDefault("props", List.of());
+            List<Map<String, Object>> propsB = (List<Map<String, Object>>) sb.getOrDefault("props", List.of());
+            for (Map<String, Object> pa : propsA) {
+                String pName = (String) pa.get("name");
+                String statusA = (String) pa.get("status");
+                for (Map<String, Object> pb : propsB) {
+                    if (pName != null && pName.equals(pb.get("name"))) {
+                        String statusB = (String) pb.get("status");
+                        if (statusA != null && statusB != null && !statusA.equals(statusB)) {
+                            diffs.put("prop_" + pName, Map.of("from", statusA, "to", statusB));
+                        }
+                    }
+                }
             }
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) { return Map.of(); }
-    }
 
-    private String ellipsis(String s, int max) { return s != null && s.length() > max ? s.substring(0, max) + "..." : s; }
-
-    private String sha256(String input) {
-        try {
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder();
-            for (byte b : hash) hex.append(String.format("%02x", b));
-            return hex.toString();
-        } catch (Exception e) { return "" + input.hashCode(); }
+            // Compare foreshadowing state transitions
+            List<Map<String, Object>> foresA = (List<Map<String, Object>>) sa.getOrDefault("foreshadowing", List.of());
+            List<Map<String, Object>> foresB = (List<Map<String, Object>>) sb.getOrDefault("foreshadowing", List.of());
+            for (Map<String, Object> fa : foresA) {
+                String desc = (String) fa.get("description");
+                String stateA = (String) fa.get("state");
+                for (Map<String, Object> fb : foresB) {
+                    if (desc != null && desc.equals(fb.get("description"))) {
+                        String stateB = (String) fb.get("state");
+                        if (stateA != null && stateB != null && !stateA.equals(stateB)) {
+                            diffs.put("foreshadowing_" + desc.substring(0, Math.min(desc.length(), 30)),
+                                    Map.of("from", stateA, "to", stateB));
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Failed to compare continuity snapshots", e);
+        }
+        return diffs;
     }
 }

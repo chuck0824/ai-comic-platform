@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("LTvc_LScripts")
+@TableName("tvc_scripts")
 public class TvcScript {
     @TableId(type = IdType.AUTO)
     private Long id;

@@ -29,7 +29,7 @@ public class TvcService {
     private final CreativeStrategyMapper strategyMapper;
     private final TvcScriptMapper scriptMapper;
     private final AiRouter aiRouter;
-    private final ObjectMapper objectMapper;
+    private final AiResponseParser parser;
 
     // ===== Brief =====
 
@@ -37,13 +37,13 @@ public class TvcService {
     public TvcBrief createBrief(Long projectId, Map<String, Object> input) {
         TvcBrief b = new TvcBrief();
         b.setProjectId(projectId);
-        b.setBrandName(str(input.get("brand_name")));
-        b.setProductName(str(input.get("product_name")));
-        b.setTargetAudience(str(input.get("target_audience")));
-        b.setBudget(str(input.get("budget")));
-        b.setPlatforms(str(input.get("platforms")));
-        b.setDuration(str(input.get("duration")));
-        b.setAdditionalNotes(str(input.get("additional_notes")));
+        b.setBrandName(parser.str(input.get("brand_name")));
+        b.setProductName(parser.str(input.get("product_name")));
+        b.setTargetAudience(parser.str(input.get("target_audience")));
+        b.setBudget(parser.str(input.get("budget")));
+        b.setPlatforms(parser.str(input.get("platforms")));
+        b.setDuration(parser.str(input.get("duration")));
+        b.setAdditionalNotes(parser.str(input.get("additional_notes")));
         b.setStatus("draft");
         briefMapper.insert(b);
         return b;
@@ -64,7 +64,7 @@ public class TvcService {
         Map<String, Object> r = aiRouter.chatCompletion(Map.of(
                 "system_prompt", prompt, "prompt", "品牌：" + brief.getBrandName() + "\n产品：" + brief.getProductName() + "\n受众：" + brief.getTargetAudience(),
                 "temperature", 0.3, "max_tokens", 2048));
-        Map<String, Object> parsed = parseJson(extractText(r));
+        Map<String, Object> parsed = parser.parseJson(parser.extractText(r));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> facts = (List<Map<String, Object>>) parsed.getOrDefault("facts", List.of());
@@ -72,9 +72,9 @@ public class TvcService {
         for (Map<String, Object> f : facts) {
             BrandFact bf = new BrandFact();
             bf.setProjectId(projectId);
-            bf.setFactType(str(f.get("type")));
-            bf.setContent(str(f.get("content")));
-            bf.setEvidenceStatus(str(f.get("evidence_status")));
+            bf.setFactType(parser.str(f.get("type")));
+            bf.setContent(parser.str(f.get("content")));
+            bf.setEvidenceStatus(parser.str(f.get("evidence_status")));
             bf.setIsMustExpress(Boolean.TRUE.equals(f.get("must_express")) ? "yes" : "no");
             bf.setIsMustNotExpress(Boolean.TRUE.equals(f.get("must_not_express")) ? "yes" : "no");
             factMapper.insert(bf);
@@ -96,7 +96,7 @@ public class TvcService {
         Map<String, Object> r = aiRouter.chatCompletion(Map.of(
                 "system_prompt", "你是资深广告创意总监。", "prompt", prompt + "\n品牌：" + brief.getBrandName() + "\n产品：" + brief.getProductName(),
                 "temperature", 0.8, "max_tokens", 3000));
-        Map<String, Object> parsed = parseJson(extractText(r));
+        Map<String, Object> parsed = parser.parseJson(parser.extractText(r));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> strategies = (List<Map<String, Object>>) parsed.getOrDefault("strategies", List.of());
@@ -105,11 +105,11 @@ public class TvcService {
             CreativeStrategy cs = new CreativeStrategy();
             cs.setProjectId(projectId);
             cs.setAngleNo(created + 1);
-            cs.setAngleName(str(s.get("angle_name")));
-            cs.setOpeningHook(str(s.get("opening_hook")));
-            cs.setValueProposition(str(s.get("value_proposition")));
-            cs.setBrandMemoryPoint(str(s.get("brand_memory_point")));
-            cs.setPlatform(str(s.get("platform")));
+            cs.setAngleName(parser.str(s.get("angle_name")));
+            cs.setOpeningHook(parser.str(s.get("opening_hook")));
+            cs.setValueProposition(parser.str(s.get("value_proposition")));
+            cs.setBrandMemoryPoint(parser.str(s.get("brand_memory_point")));
+            cs.setPlatform(parser.str(s.get("platform")));
             cs.setStatus("draft");
             strategyMapper.insert(cs);
             created++;
@@ -132,25 +132,25 @@ public class TvcService {
         String mustFacts = facts.stream().filter(f -> "yes".equals(f.getIsMustExpress())).map(BrandFact::getContent).reduce((a,b)->a+"; "+b).orElse("");
         String forbiddenFacts = facts.stream().filter(f -> "yes".equals(f.getIsMustNotExpress())).map(BrandFact::getContent).reduce((a,b)->a+"; "+b).orElse("");
 
-        String prompt = """
-            你是一位资深TVC编剧。请根据以下信息生成时间码脚本。输出JSON：
-            {"version_name":"","script":{"timecode":"00:00","visual":"","action":"","narration":"","subtitle":"","music_sfx":"","product_exposure":"","cta":""},"duration_sec":%d}
-            品牌：%s 产品：%s 必须表达：%s 禁止表达：%s 创意：%s
-            """.formatted(durationSec, brief.getBrandName(), brief.getProductName(), mustFacts, forbiddenFacts, strategy.getAngleName());
+        String prompt = String.format(
+            "你是一位资深TVC编剧。请根据以下信息生成时间码脚本。输出JSON：\n"
+            + "{\"version_name\":\"\",\"script\":{\"timecode\":\"00:00\",\"visual\":\"\",\"action\":\"\",\"narration\":\"\",\"subtitle\":\"\",\"music_sfx\":\"\",\"product_exposure\":\"\",\"cta\":\"\"},\"duration_sec\":%d}\n"
+            + "品牌：%s 产品：%s 必须表达：%s 禁止表达：%s 创意：%s",
+            durationSec, brief.getBrandName(), brief.getProductName(), mustFacts, forbiddenFacts, strategy.getAngleName());
 
         Map<String, Object> r = aiRouter.chatCompletion(Map.of(
                 "system_prompt", "你是资深TVC编剧，输出精确时间码脚本。", "prompt", prompt, "temperature", 0.7, "max_tokens", 4096));
-        Map<String, Object> parsed = parseJson(extractText(r));
+        Map<String, Object> parsed = parser.parseJson(parser.extractText(r));
 
         TvcScript ts = new TvcScript();
         ts.setProjectId(projectId);
-        ts.setVersionName(str(parsed.get("version_name")));
-        ts.setContentJson(toJson(parsed.get("script")));
-        ts.setPlainText(toJson(parsed));
+        ts.setVersionName(parser.str(parsed.get("version_name")));
+        ts.setContentJson(parser.toJson(parsed.get("script")));
+        ts.setPlainText(parser.toJson(parsed));
         ts.setDurationSec(durationSec);
         ts.setPlatforms(brief.getPlatforms());
         ts.setStatus("draft");
-        ts.setContentHash(sha256(toJson(parsed)));
+        ts.setContentHash(parser.sha256(parser.toJson(parsed)));
         scriptMapper.insert(ts);
         return ts;
     }
@@ -169,28 +169,5 @@ public class TvcService {
 
     public List<TvcScript> listScripts(Long projectId) {
         return scriptMapper.selectList(new LambdaQueryWrapper<TvcScript>().eq(TvcScript::getProjectId, projectId));
-    }
-
-    // ===== Helpers =====
-    @SuppressWarnings("unchecked")
-    private String extractText(Map<String, Object> r) {
-        Object choices = r.get("choices");
-        if (choices instanceof List<?> l && !l.isEmpty() && l.get(0) instanceof Map m) {
-            Object msg = m.get("message");
-            if (msg instanceof Map mm) { Object c = mm.get("content"); if (c != null) return String.valueOf(c); }
-        }
-        return r.toString();
-    }
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseJson(String text) {
-        try { String j = text; if (text.contains("```json")) { int s=text.indexOf("```json")+7,e=text.indexOf("```",s); if(e>s)j=text.substring(s,e).trim(); }
-            return objectMapper.readValue(j, new TypeReference<Map<String,Object>>() {}); } catch(Exception e) { return Map.of(); }
-    }
-    private String str(Object v) { return v!=null?String.valueOf(v):""; }
-    private String toJson(Object v) { try{return objectMapper.writeValueAsString(v);}catch(Exception e){return"{}";} }
-    private String sha256(String input) {
-        try { MessageDigest md = MessageDigest.getInstance("SHA-256"); byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(); for(byte b:hash) hex.append(String.format("%02x",b)); return hex.toString(); }
-        catch(Exception e) { return ""+input.hashCode(); }
     }
 }

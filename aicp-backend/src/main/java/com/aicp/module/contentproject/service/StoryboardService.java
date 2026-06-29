@@ -31,7 +31,7 @@ public class StoryboardService {
     private final ContentUnitMapper unitMapper;
     private final ContentVersionMapper versionMapper;
     private final AiRouter aiRouter;
-    private final ObjectMapper objectMapper;
+    private final AiResponseParser parser;
 
     static final String STORYBOARD_A_SYSTEM_PROMPT = """
         你是一位资深导演，擅长将剧本转化为分镜脚本（A-tier）。
@@ -90,7 +90,7 @@ public class StoryboardService {
             content = version.getContentJson();
         }
 
-        // Check for existing master
+        // Check for existing master — reuse to avoid race condition
         StoryboardMaster existing = masterMapper.selectOne(
                 new LambdaQueryWrapper<StoryboardMaster>()
                         .eq(StoryboardMaster::getProjectId, projectId)
@@ -98,37 +98,46 @@ public class StoryboardService {
                         .eq(StoryboardMaster::getTier, "A")
                         .eq(StoryboardMaster::getIsDeleted, 0));
         if (existing != null) {
-            // delete old scenes/shots for regeneration
+            // Clear old scenes/shots for regeneration (keep master row to avoid race)
             sceneMapper.delete(new LambdaQueryWrapper<StoryboardScene>()
                     .eq(StoryboardScene::getMasterId, existing.getId()));
             shotMapper.delete(new LambdaQueryWrapper<StoryboardShot>()
                     .eq(StoryboardShot::getMasterId, existing.getId()));
-            masterMapper.deleteById(existing.getId());
+            // Reset lock since regeneration invalidates previous lock
+            existing.setLockedBy(null);
+            existing.setLockedAt(null);
         }
 
         // Call AI
         Map<String, Object> aiParams = new LinkedHashMap<>();
         aiParams.put("system_prompt", STORYBOARD_A_SYSTEM_PROMPT);
-        aiParams.put("prompt", "请为以下剧本生成A-tier分镜：\n\n" + ellipsis(content, 4000));
+        aiParams.put("prompt", "请为以下剧本生成A-tier分镜：\n\n" + parser.ellipsis(content, 4000));
         aiParams.put("temperature", 0.7);
         aiParams.put("max_tokens", 4096);
 
         log.info("Generating A-tier storyboard for unit {}", contentUnitId);
         Map<String, Object> aiResult = aiRouter.chatCompletion(aiParams);
-        String resultText = extractText(aiResult);
-        Map<String, Object> parsed = parseJson(resultText);
+        String resultText = parser.extractText(aiResult);
+        Map<String, Object> parsed = parser.parseJson(resultText);
 
-        // Create master
-        StoryboardMaster master = new StoryboardMaster();
-        master.setUuid(UUID.randomUUID().toString());
-        master.setProjectId(projectId);
-        master.setContentUnitId(contentUnitId);
-        master.setTier("A");
-        master.setStatus("draft");
-        master.setSourceVersionId(version.getId());
-        master.setRevision(0);
-        master.setIsDeleted(0);
-        masterMapper.insert(master);
+        // Reuse existing master or create new one
+        StoryboardMaster master;
+        if (existing != null) {
+            master = existing;
+            master.setSourceVersionId(version.getId());
+            master.setRevision(existing.getRevision() + 1);
+        } else {
+            master = new StoryboardMaster();
+            master.setUuid(UUID.randomUUID().toString());
+            master.setProjectId(projectId);
+            master.setContentUnitId(contentUnitId);
+            master.setTier("A");
+            master.setStatus("draft");
+            master.setSourceVersionId(version.getId());
+            master.setRevision(0);
+            master.setIsDeleted(0);
+            masterMapper.insert(master);
+        }
 
         // Parse scenes and shots
         int totalShots = 0;
@@ -141,11 +150,11 @@ public class StoryboardService {
             sceneOrder++;
             StoryboardScene scene = new StoryboardScene();
             scene.setMasterId(master.getId());
-            scene.setSceneNo(toInt(sceneData.get("scene_no"), sceneOrder));
-            scene.setDramaticGoal(str(sceneData.get("dramatic_goal")));
-            scene.setBeatDescription(str(sceneData.get("beat_description")));
-            scene.setCharacterIds(toJson(sceneData.get("characters")));
-            scene.setDurationSec(toInt(sceneData.get("estimated_duration_sec"), 30));
+            scene.setSceneNo(parser.toInt(sceneData.get("scene_no"), sceneOrder));
+            scene.setDramaticGoal(parser.str(sceneData.get("dramatic_goal")));
+            scene.setBeatDescription(parser.str(sceneData.get("beat_description")));
+            scene.setCharacterIds(parser.toJson(sceneData.get("characters")));
+            scene.setDurationSec(parser.toInt(sceneData.get("estimated_duration_sec"), 30));
             scene.setSortOrder(sceneOrder);
             sceneMapper.insert(scene);
 
@@ -158,12 +167,12 @@ public class StoryboardService {
                 shot.setUuid(UUID.randomUUID().toString());
                 shot.setSceneId(scene.getId());
                 shot.setMasterId(master.getId());
-                shot.setShotNo(toInt(shotData.get("shot_no"), shotOrder));
-                shot.setShotType(str(shotData.get("shot_type")));
-                shot.setDurationSec(toInt(shotData.get("duration_sec"), 5));
-                shot.setDescription(str(shotData.get("description")));
-                shot.setCameraAction(str(shotData.get("camera_action")));
-                shot.setDialogueRef(str(shotData.get("dialogue_ref")));
+                shot.setShotNo(parser.toInt(shotData.get("shot_no"), shotOrder));
+                shot.setShotType(parser.str(shotData.get("shot_type")));
+                shot.setDurationSec(parser.toInt(shotData.get("duration_sec"), 5));
+                shot.setDescription(parser.str(shotData.get("description")));
+                shot.setCameraAction(parser.str(shotData.get("camera_action")));
+                shot.setDialogueRef(parser.str(shotData.get("dialogue_ref")));
                 shot.setStatus("draft");
                 shot.setSortOrder(shotOrder);
                 shotMapper.insert(shot);
@@ -175,7 +184,7 @@ public class StoryboardService {
         // Update master totals
         master.setTotalShots(totalShots);
         master.setEstimatedDurationSec(totalDuration > 0 ? totalDuration
-                : toInt(parsed.get("estimated_duration_sec"), 120));
+                : parser.toInt(parsed.get("estimated_duration_sec"), 120));
         masterMapper.updateById(master);
 
         log.info("Generated A-tier storyboard: master={}, scenes={}, shots={}",
@@ -223,57 +232,6 @@ public class StoryboardService {
         masterMapper.updateById(master);
     }
 
-    // ===== helpers =====
-
-    @SuppressWarnings("unchecked")
-    private String extractText(Map<String, Object> result) {
-        Object choices = result.get("choices");
-        if (choices instanceof List<?> list && !list.isEmpty()) {
-            Object first = list.get(0);
-            if (first instanceof Map) {
-                Object message = ((Map<String, Object>) first).get("message");
-                if (message instanceof Map) {
-                    Object content = ((Map<String, Object>) message).get("content");
-                    if (content != null) return String.valueOf(content);
-                }
-            }
-        }
-        return result.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseJson(String text) {
-        try {
-            String json = text;
-            if (text.contains("```json")) {
-                int s = text.indexOf("```json") + 7;
-                int e = text.indexOf("```", s);
-                if (e > s) json = text.substring(s, e).trim();
-            } else if (text.contains("```")) {
-                int s = text.indexOf("```") + 3;
-                int e = text.indexOf("```", s);
-                if (e > s) json = text.substring(s, e).trim();
-            }
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) {
-            log.warn("Failed to parse storyboard JSON, using empty", e);
-            return Map.of("scenes", List.of(), "total_shots", 0);
-        }
-    }
-
-    private String str(Object v) { return v != null ? String.valueOf(v) : ""; }
-    private int toInt(Object v, int def) {
-        if (v instanceof Number n) return n.intValue();
-        if (v != null) try { return Integer.parseInt(v.toString()); } catch (Exception ignored) {}
-        return def;
-    }
-    private String toJson(Object v) {
-        try { return objectMapper.writeValueAsString(v); } catch (Exception e) { return "[]"; }
-    }
-    private String ellipsis(String text, int max) {
-        return text != null && text.length() > max ? text.substring(0, max) + "..." : text;
-    }
-
     // ===== M5: B/C-tier upgrade =====
 
     @Transactional
@@ -300,16 +258,16 @@ public class StoryboardService {
         Map<String, Object> result = aiRouter.chatCompletion(Map.of(
                 "system_prompt", systemPrompt, "prompt", ctx.toString(),
                 "temperature", 0.6, "max_tokens", 4096));
-        Map<String, Object> parsed = parseJson(extractText(result));
+        Map<String, Object> parsed = parser.parseJson(parser.extractText(result));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> shots = (List<Map<String, Object>>) parsed.getOrDefault("shots", List.of());
         for (Map<String, Object> s : shots) {
-            int shotNo = toInt(s.get("shot_no"), 0);
+            int shotNo = parser.toInt(s.get("shot_no"), 0);
             if (shotNo > 0 && shotNo <= existingShots.size()) {
                 StoryboardShot shot = existingShots.get(shotNo - 1);
-                shot.setDescription(shot.getDescription() + "\n[导演意图] " + str(s.get("director_intention")));
-                shot.setCameraAction(str(s.get("audio_visual")));
+                shot.setDescription(shot.getDescription() + "\n[导演意图] " + parser.str(s.get("director_intention")));
+                shot.setCameraAction(parser.str(s.get("audio_visual")));
                 shotMapper.updateById(shot);
             }
         }
@@ -342,16 +300,16 @@ public class StoryboardService {
         Map<String, Object> result = aiRouter.chatCompletion(Map.of(
                 "system_prompt", systemPrompt, "prompt", ctx.toString(),
                 "temperature", 0.6, "max_tokens", 4096));
-        Map<String, Object> parsed = parseJson(extractText(result));
+        Map<String, Object> parsed = parser.parseJson(parser.extractText(result));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> shots = (List<Map<String, Object>>) parsed.getOrDefault("shots", List.of());
         for (Map<String, Object> s : shots) {
-            int shotNo = toInt(s.get("shot_no"), 0);
+            int shotNo = parser.toInt(s.get("shot_no"), 0);
             if (shotNo > 0 && shotNo <= existingShots.size()) {
                 StoryboardShot shot = existingShots.get(shotNo - 1);
-                shot.setVisualRefUrl(str(s.get("image_prompt")));
-                shot.setDialogueRef(str(s.get("dub_text")));
+                shot.setVisualRefUrl(parser.str(s.get("image_prompt")));
+                shot.setDialogueRef(parser.str(s.get("dub_text")));
                 shotMapper.updateById(shot);
             }
         }

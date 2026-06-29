@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("LStory_LTimelines")
+@TableName("story_timeline")
 public class StoryTimeline {
     @TableId(type = IdType.AUTO)
     private Long id;

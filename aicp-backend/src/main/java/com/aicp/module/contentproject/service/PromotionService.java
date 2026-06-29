@@ -29,7 +29,7 @@ public class PromotionService {
     private final ContentUnitMapper unitMapper;
     private final ContentVersionMapper versionMapper;
     private final AiRouter aiRouter;
-    private final ObjectMapper objectMapper;
+    private final AiResponseParser parser;
 
     static final String PROMO_PROMPT = """
         你是一位资深的短剧营销专家。请根据剧本内容生成宣传物料。输出JSON：
@@ -63,13 +63,13 @@ public class PromotionService {
 
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("system_prompt", PROMO_PROMPT);
-        params.put("prompt", "请为以下剧本生成宣传物料：\n\n" + ellipsis(content, 4000));
+        params.put("prompt", "请为以下剧本生成宣传物料：\n\n" + parser.ellipsis(content, 4000));
         params.put("temperature", 0.8);
         params.put("max_tokens", 2048);
 
         Map<String, Object> result = aiRouter.chatCompletion(params);
-        String text = extractText(result);
-        Map<String, Object> promo = parseJson(text);
+        String text = parser.extractText(result);
+        Map<String, Object> promo = parser.parseJson(text);
 
         // Create a promotion unit to store results
         ContentUnit promoUnit = new ContentUnit();
@@ -88,11 +88,12 @@ public class PromotionService {
         cv.setContentUnitId(promoUnit.getId());
         cv.setVersionNo(1);
         cv.setStatus("draft");
-        cv.setContentJson(toJson(promo));
-        cv.setPlainText(toJson(promo));
+        cv.setContentJson(parser.toJson(promo));
+        cv.setPlainText(parser.toJson(promo));
         cv.setSource("ai_generated");
-        cv.setContentHash(sha256(toJson(promo)));
-        cv.setCreatedBy(1L); // system-generated
+        cv.setContentHash(parser.sha256(parser.toJson(promo)));
+        Long userId = com.aicp.common.util.SecurityUtil.getCurrentUserId();
+        cv.setCreatedBy(userId != null ? userId : 0L);
         versionMapper.insert(cv);
 
         promoUnit.setCurrentVersionId(cv.getId());
@@ -106,38 +107,5 @@ public class PromotionService {
     public Map<String, Object> generateAdaptationAndPromotion(Long userId, Long projectId, Long sourceUnitId, String format) {
         // Already handled by AdaptationService, this is the promo-only entry
         return generatePromotion(projectId, sourceUnitId);
-    }
-
-    @SuppressWarnings("unchecked")
-    private String extractText(Map<String, Object> result) {
-        Object choices = result.get("choices");
-        if (choices instanceof List<?> list && !list.isEmpty()) {
-            Object first = list.get(0);
-            if (first instanceof Map) {
-                Object message = ((Map<String, Object>) first).get("message");
-                if (message instanceof Map) {
-                    Object c = ((Map<String, Object>) message).get("content");
-                    if (c != null) return String.valueOf(c);
-                }
-            }
-        }
-        return result.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseJson(String text) {
-        try {
-            String json = text;
-            if (text.contains("```json")) { int s = text.indexOf("```json") + 7; int e = text.indexOf("```", s); if (e > s) json = text.substring(s, e).trim(); }
-            return objectMapper.readValue(json, new TypeReference<Map<String, Object>>() {});
-        } catch (Exception e) { return Map.of("raw", text); }
-    }
-
-    private String toJson(Object obj) { try { return objectMapper.writeValueAsString(obj); } catch (Exception e) { return "{}"; } }
-    private String ellipsis(String s, int max) { return s != null && s.length() > max ? s.substring(0, max) + "..." : s; }
-    private String sha256(String input) {
-        try { java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256"); byte[] hash = md.digest(input.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(); for (byte b : hash) hex.append(String.format("%02x", b)); return hex.toString(); }
-        catch (Exception e) { return "" + input.hashCode(); }
     }
 }

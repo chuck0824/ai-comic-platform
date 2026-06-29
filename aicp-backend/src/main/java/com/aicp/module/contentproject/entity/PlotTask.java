@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("LPlot_LTasks")
+@TableName("plot_tasks")
 public class PlotTask {
     @TableId(type = IdType.AUTO)
     private Long id;

@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("LWorld_LLocations")
+@TableName("world_locations")
 public class WorldLocation {
     @TableId(type = IdType.AUTO)
     private Long id;

@@ -38,6 +38,7 @@ public class CanvasBridgeService {
     private final ContentStoryboardShotMapper sbShotMapper;
     private final CanvasService canvasService;
     private final com.aicp.module.canvas.mapper.StoryboardShotMapper canvasShotMapper;
+    private final AiResponseParser parser;
 
     /**
      * Import A-tier storyboard into canvas as concept verification project.
@@ -95,7 +96,7 @@ public class CanvasBridgeService {
             node.setY(80);
             node.setWidth(200);
             node.setHeight(180);
-            node.setInputData(toJson(nodeData));
+            node.setInputData(parser.toJson(nodeData));
             node.setStatus("ready");
             canvasNodeMapper.insert(node);
 
@@ -128,7 +129,7 @@ public class CanvasBridgeService {
             canvasShot.setProjectId(cp.getId());
             canvasShot.setShotNo(shot.getShotNo());
             canvasShot.setSceneNo(1);
-            canvasShot.setDuration(shorterDuration(shot.getDurationSec()));
+            canvasShot.setDuration(toMillis(shot.getDurationSec()));
             canvasShot.setShotSize(shot.getShotType());
             canvasShot.setVisualDescription(shot.getDescription());
             canvasShot.setImageStatus("pending");
@@ -146,12 +147,7 @@ public class CanvasBridgeService {
                 "edges_created", Math.max(0, shotToNode.size() - 1));
     }
 
-    private String toJson(Object obj) {
-        try { return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(obj); }
-        catch (Exception e) { return "{}"; }
-    }
-
-    private int shorterDuration(Integer sec) {
+    private int toMillis(Integer sec) {
         return sec != null ? sec * 1000 : 3000; // seconds → ms for canvas
     }
 }

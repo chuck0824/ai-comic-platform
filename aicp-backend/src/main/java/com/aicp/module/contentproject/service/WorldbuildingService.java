@@ -31,7 +31,7 @@ public class WorldbuildingService {
     private final StoryTimelineMapper timelineMapper;
     private final ForeshadowingItemMapper foreshadowMapper;
     private final AiRouter aiRouter;
-    private final ObjectMapper objectMapper;
+    private final AiResponseParser parser;
 
     // ===== Character Profiles =====
 
@@ -58,22 +58,22 @@ public class WorldbuildingService {
         Map<String, Object> params = Map.of("system_prompt", prompt,
                 "prompt", "角色：" + name + "\n上下文：" + context, "temperature", 0.7, "max_tokens", 2048);
         Map<String, Object> result = aiRouter.chatCompletion(params);
-        String text = extractText(result);
-        Map<String, Object> parsed = parseJson(text);
+        String text = parser.extractText(result);
+        Map<String, Object> parsed = parser.parseJson(text);
 
         CharacterProfile cp = new CharacterProfile();
         cp.setProjectId(projectId);
         cp.setName((String) parsed.getOrDefault("name", name));
-        cp.setRole(str(parsed.get("role")));
-        cp.setArchetype(str(parsed.get("archetype")));
-        cp.setAppearance(str(parsed.get("appearance")));
-        cp.setPersonality(str(parsed.get("personality")));
-        cp.setMotivation(str(parsed.get("motivation")));
-        cp.setLongTermGoal(str(parsed.get("long_term_goal")));
-        cp.setKnowledgeBoundary(str(parsed.get("knowledge_boundary")));
-        cp.setDialogueStyle(str(parsed.get("dialogue_style")));
-        cp.setBackstory(str(parsed.get("backstory")));
-        cp.setRelationshipsJson(toJson(parsed.get("relationships")));
+        cp.setRole(parser.str(parsed.get("role")));
+        cp.setArchetype(parser.str(parsed.get("archetype")));
+        cp.setAppearance(parser.str(parsed.get("appearance")));
+        cp.setPersonality(parser.str(parsed.get("personality")));
+        cp.setMotivation(parser.str(parsed.get("motivation")));
+        cp.setLongTermGoal(parser.str(parsed.get("long_term_goal")));
+        cp.setKnowledgeBoundary(parser.str(parsed.get("knowledge_boundary")));
+        cp.setDialogueStyle(parser.str(parsed.get("dialogue_style")));
+        cp.setBackstory(parser.str(parsed.get("backstory")));
+        cp.setRelationshipsJson(parser.toJson(parsed.get("relationships")));
         cp.setStatus("draft");
         charMapper.insert(cp);
         return parsed;
@@ -109,8 +109,8 @@ public class WorldbuildingService {
             """;
         Map<String, Object> result = aiRouter.chatCompletion(Map.of(
                 "system_prompt", prompt, "prompt", synopsisContext, "temperature", 0.7, "max_tokens", 4096));
-        String text = extractText(result);
-        Map<String, Object> parsed = parseJson(text);
+        String text = parser.extractText(result);
+        Map<String, Object> parsed = parser.parseJson(text);
 
         int count = 0;
         @SuppressWarnings("unchecked")
@@ -119,11 +119,11 @@ public class WorldbuildingService {
             PlotTask pt = new PlotTask();
             pt.setProjectId(projectId);
             pt.setTaskType("stage");
-            pt.setTitle(str(t.get("title")));
-            pt.setDescription(str(t.get("goal")));
-            pt.setStageGoals(toJson(t.get("goals")));
-            pt.setObstacles(str(t.get("obstacle")));
-            pt.setCharacterIds(str(t.get("character")));
+            pt.setTitle(parser.str(t.get("title")));
+            pt.setDescription(parser.str(t.get("goal")));
+            pt.setStageGoals(parser.toJson(t.get("goals")));
+            pt.setObstacles(parser.str(t.get("obstacle")));
+            pt.setCharacterIds(parser.str(t.get("character")));
             pt.setStatus("planned");
             pt.setSortOrder(count + 1);
             taskMapper.insert(pt);
@@ -156,7 +156,7 @@ public class WorldbuildingService {
         String prompt = "请为以下故事生成" + count + "卷大纲。每卷包含目标、转折、卷末钩子和角色变化。输出JSON：{\"volumes\":[...]}";
         Map<String, Object> result = aiRouter.chatCompletion(Map.of(
                 "system_prompt", "你是资深故事架构师。", "prompt", prompt + "\n" + context, "temperature", 0.7, "max_tokens", 4096));
-        Map<String, Object> parsed = parseJson(extractText(result));
+        Map<String, Object> parsed = parser.parseJson(parser.extractText(result));
 
         int created = 0;
         @SuppressWarnings("unchecked")
@@ -164,12 +164,12 @@ public class WorldbuildingService {
         for (Map<String, Object> v : vols) {
             VolumeOutline vo = new VolumeOutline();
             vo.setProjectId(projectId);
-            vo.setVolumeNo(toInt(v.get("volume_no"), created + 1));
-            vo.setTitle(str(v.get("title")));
-            vo.setGoal(str(v.get("goal")));
-            vo.setTurns(str(v.get("turns")));
-            vo.setVolumeEndHook(str(v.get("volume_end_hook")));
-            vo.setCharacterChanges(str(v.get("character_changes")));
+            vo.setVolumeNo(parser.toInt(v.get("volume_no"), created + 1));
+            vo.setTitle(parser.str(v.get("title")));
+            vo.setGoal(parser.str(v.get("goal")));
+            vo.setTurns(parser.str(v.get("turns")));
+            vo.setVolumeEndHook(parser.str(v.get("volume_end_hook")));
+            vo.setCharacterChanges(parser.str(v.get("character_changes")));
             vo.setStatus("draft");
             vo.setSortOrder(created + 1);
             volumeMapper.insert(vo);
@@ -202,8 +202,8 @@ public class WorldbuildingService {
             请从以下文本提取所有地点，输出JSON：{"locations":[{"name":"","type":"","description":"","parent":""}]}
             """;
         Map<String, Object> result = aiRouter.chatCompletion(Map.of(
-                "system_prompt", prompt, "prompt", ellipsis(content, 6000), "temperature", 0.3, "max_tokens", 2048));
-        Map<String, Object> parsed = parseJson(extractText(result));
+                "system_prompt", prompt, "prompt", parser.ellipsis(content, 6000), "temperature", 0.3, "max_tokens", 2048));
+        Map<String, Object> parsed = parser.parseJson(parser.extractText(result));
 
         int count = 0;
         @SuppressWarnings("unchecked")
@@ -211,10 +211,10 @@ public class WorldbuildingService {
         for (Map<String, Object> l : locs) {
             WorldLocation wl = new WorldLocation();
             wl.setProjectId(projectId);
-            wl.setName(str(l.get("name")));
+            wl.setName(parser.str(l.get("name")));
             wl.setTier("L0");
-            wl.setDescription(str(l.get("description")));
-            wl.setAreaType(str(l.get("type")));
+            wl.setDescription(parser.str(l.get("description")));
+            wl.setAreaType(parser.str(l.get("type")));
             locationMapper.insert(wl);
             count++;
         }
@@ -232,8 +232,8 @@ public class WorldbuildingService {
     public Map<String, Object> aiGenerateTimeline(Long projectId, String context) {
         String prompt = "请为以下故事建立时间线，输出JSON：{\"events\":[{\"name\":\"\",\"time\":\"\",\"description\":\"\",\"characters\":[]}],\"foreshadowing\":[{\"description\":\"\",\"category\":\"\",\"planted_in\":\"\"}]}";
         Map<String, Object> result = aiRouter.chatCompletion(Map.of(
-                "system_prompt", prompt, "prompt", ellipsis(context, 6000), "temperature", 0.5, "max_tokens", 4096));
-        Map<String, Object> parsed = parseJson(extractText(result));
+                "system_prompt", prompt, "prompt", parser.ellipsis(context, 6000), "temperature", 0.5, "max_tokens", 4096));
+        Map<String, Object> parsed = parser.parseJson(parser.extractText(result));
 
         int events = 0, foreshadows = 0;
         @SuppressWarnings("unchecked")
@@ -241,10 +241,10 @@ public class WorldbuildingService {
         for (Map<String, Object> e : evts) {
             StoryTimeline st = new StoryTimeline();
             st.setProjectId(projectId);
-            st.setEventName(str(e.get("name")));
-            st.setDescription(str(e.get("description")));
-            st.setRelativeTime(str(e.get("time")));
-            st.setInvolvedCharacters(toJson(e.get("characters")));
+            st.setEventName(parser.str(e.get("name")));
+            st.setDescription(parser.str(e.get("description")));
+            st.setRelativeTime(parser.str(e.get("time")));
+            st.setInvolvedCharacters(parser.toJson(e.get("characters")));
             st.setSortOrder(events + 1);
             timelineMapper.insert(st);
             events++;
@@ -255,8 +255,8 @@ public class WorldbuildingService {
         for (Map<String, Object> f : fs) {
             ForeshadowingItem fi = new ForeshadowingItem();
             fi.setProjectId(projectId);
-            fi.setDescription(str(f.get("description")));
-            fi.setCategory(str(f.get("category")));
+            fi.setDescription(parser.str(f.get("description")));
+            fi.setCategory(parser.str(f.get("category")));
             fi.setStatus("planted");
             foreshadowMapper.insert(fi);
             foreshadows++;
@@ -276,26 +276,22 @@ public class WorldbuildingService {
         );
     }
 
-    // ===== Helpers =====
-    @SuppressWarnings("unchecked")
-    private String extractText(Map<String, Object> r) {
-        Object choices = r.get("choices");
-        if (choices instanceof List<?> l && !l.isEmpty() && l.get(0) instanceof Map m) {
-            Object msg = m.get("message");
-            if (msg instanceof Map mm) { Object c = mm.get("content"); if (c != null) return String.valueOf(c); }
-        }
-        return r.toString();
-    }
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> parseJson(String text) {
-        try { String j = text; if (text.contains("```json")) { int s=text.indexOf("```json")+7,e=text.indexOf("```",s); if(e>s)j=text.substring(s,e).trim(); }
-            return objectMapper.readValue(j, new TypeReference<Map<String,Object>>() {}); } catch(Exception e) { return Map.of(); }
-    }
-    private String str(Object v) { return v!=null?String.valueOf(v):""; }
-    private int toInt(Object v, int d) { if(v instanceof Number n) return n.intValue(); return d; }
-    private String toJson(Object v) { try{return objectMapper.writeValueAsString(v);}catch(Exception e){return"[]";} }
-    private String ellipsis(String s, int m) { return s!=null&&s.length()>m?s.substring(0,m)+"...":s; }
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private int getNextSort(com.baomidou.mybatisplus.core.mapper.BaseMapper<?> mapper, Long projectId) {
-        return 0; // simplified
+        // Query max sort_order for this project to maintain ordering
+        try {
+            com.baomidou.mybatisplus.core.conditions.query.QueryWrapper qw =
+                new com.baomidou.mybatisplus.core.conditions.query.QueryWrapper();
+            qw.select("COALESCE(MAX(sort_order), -1) + 1 as next_sort");
+            qw.eq("project_id", projectId);
+            List<Map<String, Object>> result = mapper.selectMaps(qw);
+            if (result != null && !result.isEmpty()) {
+                Object next = result.get(0).get("next_sort");
+                if (next instanceof Number n) return n.intValue();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to get next sort order, returning 0", e);
+        }
+        return 0;
     }
 }

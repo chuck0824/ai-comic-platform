@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("LForeshadowing_LItems")
+@TableName("foreshadowing_items")
 public class ForeshadowingItem {
     @TableId(type = IdType.AUTO)
     private Long id;

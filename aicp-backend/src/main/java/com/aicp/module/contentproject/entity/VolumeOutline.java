@@ -5,7 +5,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("LVolume_LOutlines")
+@TableName("volume_outlines")
 public class VolumeOutline {
     @TableId(type = IdType.AUTO)
     private Long id;
