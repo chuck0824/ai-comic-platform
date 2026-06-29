@@ -564,3 +564,147 @@ VALUES
 -- 测试通知偏好
 INSERT INTO notification_preferences (user_id, preferences) VALUES
 (1, '{"script_generated":{"in_app":true,"email":false,"push":true},"order_paid":{"in_app":true,"email":true,"sms":true},"export_completed":{"in_app":true,"email":true,"push":true}}');
+
+-- ============================================================
+-- V7.1 Content Project Foundation (M0)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS content_projects (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    tenant_type VARCHAR(20) NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    owner_user_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    creation_mode VARCHAR(30) NOT NULL,
+    source_mode VARCHAR(30) NOT NULL,
+    storyboard_intent_status VARCHAR(20) NOT NULL DEFAULT 'not_decided',
+    content_status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    production_status VARCHAR(20) NOT NULL DEFAULT 'not_started',
+    market_status VARCHAR(20) NOT NULL DEFAULT 'private',
+    last_stage_key VARCHAR(50),
+    last_task_key VARCHAR(50),
+    last_content_unit_id BIGINT,
+    current_parameter_version_id BIGINT,
+    legacy_script_id BIGINT,
+    converted_from_project_id BIGINT,
+    copied_from_project_id BIGINT,
+    revision INT NOT NULL DEFAULT 0,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS project_members (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_project_member UNIQUE (project_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS project_parameter_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    payload_json TEXT NOT NULL,
+    content_hash VARCHAR(64) NOT NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_project_parameter_version UNIQUE (project_id, version_no)
+);
+
+CREATE TABLE IF NOT EXISTS content_units (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    stable_key VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    unit_type VARCHAR(20) NOT NULL,
+    display_no INT NOT NULL,
+    title VARCHAR(200),
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    current_version_id BIGINT,
+    revision INT NOT NULL DEFAULT 0,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_project_unit_display UNIQUE (project_id, unit_type, display_no)
+);
+
+CREATE TABLE IF NOT EXISTS content_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    content_unit_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    content_json TEXT NOT NULL,
+    plain_text TEXT,
+    source VARCHAR(30) NOT NULL,
+    generation_job_id BIGINT,
+    content_hash VARCHAR(64) NOT NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_content_unit_version UNIQUE (content_unit_id, version_no)
+);
+
+CREATE TABLE IF NOT EXISTS artifact_dependencies (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    source_type VARCHAR(30) NOT NULL,
+    source_version_id BIGINT NOT NULL,
+    target_type VARCHAR(30) NOT NULL,
+    target_version_id BIGINT NOT NULL,
+    dependency_type VARCHAR(30) NOT NULL,
+    source_hash VARCHAR(64) NOT NULL,
+    sync_status VARCHAR(20) NOT NULL DEFAULT 'current',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_artifact_dependency UNIQUE (source_version_id, target_version_id, dependency_type)
+);
+
+CREATE TABLE IF NOT EXISTS content_generation_jobs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    job_type VARCHAR(40) NOT NULL,
+    target_type VARCHAR(30) NOT NULL,
+    target_id BIGINT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    input_snapshot_json TEXT NOT NULL,
+    input_snapshot_hash VARCHAR(64) NOT NULL,
+    schema_version VARCHAR(30) NOT NULL,
+    model VARCHAR(100),
+    prompt_version VARCHAR(50),
+    estimated_credits INT NOT NULL DEFAULT 0,
+    actual_credits INT NOT NULL DEFAULT 0,
+    error_code VARCHAR(50),
+    retry_of_job_id BIGINT,
+    idempotency_key VARCHAR(120) NOT NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    finished_at TIMESTAMP,
+    CONSTRAINT uk_project_job_idempotency UNIQUE (project_id, idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS outbox_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(36) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(30) NOT NULL,
+    aggregate_id BIGINT NOT NULL,
+    aggregate_revision INT NOT NULL,
+    event_type VARCHAR(80) NOT NULL,
+    payload_json TEXT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending',
+    attempt_count INT NOT NULL DEFAULT 0,
+    next_attempt_at TIMESTAMP,
+    occurred_at TIMESTAMP NOT NULL,
+    published_at TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS idx_cp_tenant_updated ON content_projects(tenant_type, tenant_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_cp_owner_updated ON content_projects(owner_user_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_pm_user_project ON project_members(user_id, project_id);
+CREATE INDEX IF NOT EXISTS idx_cu_project_display ON content_units(project_id, display_no);
+CREATE INDEX IF NOT EXISTS idx_cv_project_created ON content_versions(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_cgj_project_status ON content_generation_jobs(project_id, status, created_at);
+CREATE INDEX IF NOT EXISTS idx_oe_status_next ON outbox_events(status, next_attempt_at);
