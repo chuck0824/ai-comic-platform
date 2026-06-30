@@ -59,8 +59,12 @@ public class TvcService {
 
     @Transactional
     public int aiExtractBrandFacts(Long projectId) {
+        // Clear old facts before regeneration to prevent duplicates
+        factMapper.delete(new LambdaQueryWrapper<BrandFact>()
+                .eq(BrandFact::getProjectId, projectId));
+
         TvcBrief brief = getBrief(projectId);
-        String prompt = "请为以下品牌/产品提取事实信息，输出JSON：{\"facts\":[{\"type\":\"\",\"content\":\"\",\"must_express\":true,\"must_not_express\":false,\"evidence_status\":\"verified|claimed|unverified\"}]}";
+        String prompt = "请为以下品牌/产品提取事实信息，输出JSON：{\"facts\":[{\"type\":\"\",\"content\":\"\",\"must_express\":true,\"must_not_express\":false,\"evidence_status\":\"verified|claimed|unverified\",\"evidence_url\":\"\"}]}";
         Map<String, Object> r = aiRouter.chatCompletion(Map.of(
                 "system_prompt", prompt, "prompt", "品牌：" + brief.getBrandName() + "\n产品：" + brief.getProductName() + "\n受众：" + brief.getTargetAudience(),
                 "temperature", 0.3, "max_tokens", 2048));
@@ -75,6 +79,7 @@ public class TvcService {
             bf.setFactType(parser.str(f.get("type")));
             bf.setContent(parser.str(f.get("content")));
             bf.setEvidenceStatus(parser.str(f.get("evidence_status")));
+            bf.setEvidenceUrl(parser.str(f.get("evidence_url")));
             bf.setIsMustExpress(Boolean.TRUE.equals(f.get("must_express")) ? "yes" : "no");
             bf.setIsMustNotExpress(Boolean.TRUE.equals(f.get("must_not_express")) ? "yes" : "no");
             factMapper.insert(bf);
@@ -125,6 +130,11 @@ public class TvcService {
 
     @Transactional
     public TvcScript generateScript(Long projectId, Long strategyId, int durationSec) {
+        return generateScript(projectId, strategyId, durationSec, null);
+    }
+
+    @Transactional
+    public TvcScript generateScript(Long projectId, Long strategyId, int durationSec, Long sourceUnitId) {
         TvcBrief brief = getBrief(projectId);
         List<BrandFact> facts = listFacts(projectId);
         CreativeStrategy strategy = strategyMapper.selectById(strategyId);
@@ -144,6 +154,7 @@ public class TvcService {
 
         TvcScript ts = new TvcScript();
         ts.setProjectId(projectId);
+        ts.setSourceUnitId(sourceUnitId);
         ts.setVersionName(parser.str(parsed.get("version_name")));
         ts.setContentJson(parser.toJson(parsed.get("script")));
         ts.setPlainText(parser.toJson(parsed));

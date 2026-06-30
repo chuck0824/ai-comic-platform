@@ -765,6 +765,16 @@ CREATE TABLE IF NOT EXISTS cp_storyboard_shots (
     visual_ref_url VARCHAR(500),
     status VARCHAR(20) DEFAULT 'draft',
     sort_order INT NOT NULL DEFAULT 0,
+    director_intention TEXT COMMENT 'B-tier: 导演意图',
+    action_motivation TEXT COMMENT 'B-tier: 动作动机',
+    relationship_blocking TEXT COMMENT 'B-tier: 关系调度',
+    information_gap TEXT COMMENT 'B-tier: 信息差设计',
+    edit_point TEXT COMMENT 'B-tier: 剪辑点',
+    image_prompt TEXT COMMENT 'C-tier: 图片生成提示词',
+    video_prompt TEXT COMMENT 'C-tier: 视频生成提示词',
+    dub_text TEXT COMMENT 'C-tier: 配音文本',
+    subtitle TEXT COMMENT 'C-tier: 字幕文本',
+    failure_strategy VARCHAR(50) COMMENT 'C-tier: 失败策略(skip|retry|fallback)',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_cp_sb_shot UNIQUE (master_id, shot_no),
     INDEX idx_cp_sbsh_master (master_id, sort_order)
@@ -881,3 +891,40 @@ CREATE TABLE IF NOT EXISTS brand_facts (id BIGINT AUTO_INCREMENT PRIMARY KEY,pro
 CREATE TABLE IF NOT EXISTS creative_strategies (id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT NOT NULL,angle_no INT NOT NULL,angle_name VARCHAR(200),opening_hook TEXT,value_proposition TEXT,brand_memory_point TEXT,platform VARCHAR(50),status VARCHAR(20) DEFAULT 'draft',created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='创意策略表';
 CREATE TABLE IF NOT EXISTS tvc_scripts (id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT NOT NULL,source_unit_id BIGINT,version_name VARCHAR(100),content_json TEXT,plain_text TEXT,duration_sec INT DEFAULT 0,platforms VARCHAR(200),status VARCHAR(20) DEFAULT 'draft',source_version_id BIGINT,content_hash VARCHAR(64),created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='TVC脚本表');
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- M5: Quality reports
+CREATE TABLE IF NOT EXISTS quality_reports (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    canvas_project_id VARCHAR(36),
+    node_uuid VARCHAR(36),
+    asset_version_id BIGINT,
+    correctness_score INT DEFAULT 0,
+    security_score INT DEFAULT 0,
+    performance_score INT DEFAULT 0,
+    cost_score INT DEFAULT 0,
+    consistency_score INT DEFAULT 0,
+    issues_json TEXT,
+    summary TEXT,
+    status VARCHAR(20) DEFAULT 'open',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='质量审核报告表';
+
+-- M5: Plugin packs
+CREATE TABLE IF NOT EXISTS plugin_packs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    storyboard_master_id BIGINT NOT NULL,
+    version_no INT NOT NULL DEFAULT 1,
+    name VARCHAR(200),
+    manifest_json TEXT,
+    asset_count INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'draft',
+    created_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_plugin_pack_version UNIQUE (storyboard_master_id, version_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='插件包表';

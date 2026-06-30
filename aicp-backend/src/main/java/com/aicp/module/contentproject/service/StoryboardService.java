@@ -266,8 +266,17 @@ public class StoryboardService {
             int shotNo = parser.toInt(s.get("shot_no"), 0);
             if (shotNo > 0 && shotNo <= existingShots.size()) {
                 StoryboardShot shot = existingShots.get(shotNo - 1);
-                shot.setDescription(shot.getDescription() + "\n[导演意图] " + parser.str(s.get("director_intention")));
-                shot.setCameraAction(parser.str(s.get("audio_visual")));
+                // Write B-tier data to dedicated columns (not overwriting existing fields)
+                shot.setDirectorIntention(parser.str(s.get("director_intention")));
+                shot.setActionMotivation(parser.str(s.get("action_motivation")));
+                shot.setRelationshipBlocking(parser.str(s.get("relationship_blocking")));
+                shot.setInformationGap(parser.str(s.get("information_gap")));
+                shot.setEditPoint(parser.str(s.get("edit_point")));
+                // audio_visual enriches description without overwriting cameraAction
+                String audioVisual = parser.str(s.get("audio_visual"));
+                if (!audioVisual.isEmpty()) {
+                    shot.setDescription(shot.getDescription() + "\n[声画关系] " + audioVisual);
+                }
                 shotMapper.updateById(shot);
             }
         }
@@ -308,8 +317,12 @@ public class StoryboardService {
             int shotNo = parser.toInt(s.get("shot_no"), 0);
             if (shotNo > 0 && shotNo <= existingShots.size()) {
                 StoryboardShot shot = existingShots.get(shotNo - 1);
-                shot.setVisualRefUrl(parser.str(s.get("image_prompt")));
-                shot.setDialogueRef(parser.str(s.get("dub_text")));
+                // Write C-tier data to dedicated columns (not overwriting visualRefUrl/dialogueRef)
+                shot.setImagePrompt(parser.str(s.get("image_prompt")));
+                shot.setVideoPrompt(parser.str(s.get("video_prompt")));
+                shot.setDubText(parser.str(s.get("dub_text")));
+                shot.setSubtitle(parser.str(s.get("subtitle")));
+                shot.setFailureStrategy(parser.str(s.get("failure_strategy")));
                 shotMapper.updateById(shot);
             }
         }

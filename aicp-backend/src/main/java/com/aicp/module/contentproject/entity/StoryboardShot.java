@@ -25,6 +25,20 @@ public class StoryboardShot {
     private String status;
     private Integer sortOrder;
 
+    // B-tier: director-level intent and blocking
+    private String directorIntention;
+    private String actionMotivation;
+    private String relationshipBlocking;
+    private String informationGap;
+    private String editPoint;
+
+    // C-tier: production card (抽卡表) — image/video/dub/subtitle generation prompts
+    private String imagePrompt;
+    private String videoPrompt;
+    private String dubText;
+    private String subtitle;
+    private String failureStrategy;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

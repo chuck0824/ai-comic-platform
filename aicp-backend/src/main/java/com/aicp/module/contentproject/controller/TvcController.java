@@ -58,7 +58,8 @@ public class TvcController {
         projectAccessService.require(projectId, SecurityUtil.requireCurrentUserId(), Action.EDIT_CONTENT);
         Long strategyId = ((Number) body.get("strategy_id")).longValue();
         int duration = ((Number) body.getOrDefault("duration_sec", 30)).intValue();
-        return ApiResponse.success(tvc.generateScript(projectId, strategyId, duration));
+        Long sourceUnitId = body.containsKey("source_unit_id") ? ((Number) body.get("source_unit_id")).longValue() : null;
+        return ApiResponse.success(tvc.generateScript(projectId, strategyId, duration, sourceUnitId));
     }
     @PostMapping("/scripts/multi-platform")
     public ApiResponse<List<TvcScript>> multiPlatform(@PathVariable Long projectId, @RequestBody Map<String,Object> body) {

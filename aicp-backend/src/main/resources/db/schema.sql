@@ -767,6 +767,18 @@ CREATE INDEX IF NOT EXISTS idx_cp_sbm_project ON cp_storyboard_masters(project_i
 CREATE INDEX IF NOT EXISTS idx_cp_sbs_master ON cp_storyboard_scenes(master_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_cp_sbsh_master ON cp_storyboard_shots(master_id, sort_order);
 
+-- M5: B/C-tier storyboard shot columns (additive, no data migration needed)
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS director_intention TEXT AFTER sort_order;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS action_motivation TEXT AFTER director_intention;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS relationship_blocking TEXT AFTER action_motivation;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS information_gap TEXT AFTER relationship_blocking;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS edit_point TEXT AFTER information_gap;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS image_prompt TEXT AFTER edit_point;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS video_prompt TEXT AFTER image_prompt;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS dub_text TEXT AFTER video_prompt;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS subtitle TEXT AFTER dub_text;
+ALTER TABLE cp_storyboard_shots ADD COLUMN IF NOT EXISTS failure_strategy VARCHAR(50) AFTER subtitle;
+
 -- M1: Upload files
 CREATE TABLE IF NOT EXISTS content_upload_files (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -869,3 +881,40 @@ CREATE TABLE IF NOT EXISTS tvc_briefs (id BIGINT AUTO_INCREMENT PRIMARY KEY,proj
 CREATE TABLE IF NOT EXISTS brand_facts (id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT NOT NULL,fact_type VARCHAR(30),content TEXT,evidence_status VARCHAR(20) DEFAULT 'unverified',evidence_url VARCHAR(500),is_must_express VARCHAR(10) DEFAULT 'yes',is_must_not_express VARCHAR(10) DEFAULT 'no',created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS creative_strategies (id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT NOT NULL,angle_no INT NOT NULL,angle_name VARCHAR(200),opening_hook TEXT,value_proposition TEXT,brand_memory_point TEXT,platform VARCHAR(50),status VARCHAR(20) DEFAULT 'draft',created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
 CREATE TABLE IF NOT EXISTS tvc_scripts (id BIGINT AUTO_INCREMENT PRIMARY KEY,project_id BIGINT NOT NULL,source_unit_id BIGINT,version_name VARCHAR(100),content_json TEXT,plain_text TEXT,duration_sec INT DEFAULT 0,platforms VARCHAR(200),status VARCHAR(20) DEFAULT 'draft',source_version_id BIGINT,content_hash VARCHAR(64),created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP);
+
+-- M5: Quality reports (QualityAgent output, persisted per-node review)
+CREATE TABLE IF NOT EXISTS quality_reports (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    canvas_project_id VARCHAR(36),
+    node_uuid VARCHAR(36),
+    asset_version_id BIGINT,
+    correctness_score INT DEFAULT 0,
+    security_score INT DEFAULT 0,
+    performance_score INT DEFAULT 0,
+    cost_score INT DEFAULT 0,
+    consistency_score INT DEFAULT 0,
+    issues_json TEXT,
+    summary TEXT,
+    status VARCHAR(20) DEFAULT 'open',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- M5: Plugin packs (exportable production bundles)
+CREATE TABLE IF NOT EXISTS plugin_packs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    storyboard_master_id BIGINT NOT NULL,
+    version_no INT NOT NULL DEFAULT 1,
+    name VARCHAR(200),
+    manifest_json TEXT,
+    asset_count INT DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'draft',
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_plugin_pack_version UNIQUE (storyboard_master_id, version_no)
+);
