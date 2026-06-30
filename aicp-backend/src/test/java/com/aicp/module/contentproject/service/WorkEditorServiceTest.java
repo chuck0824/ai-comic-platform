@@ -35,6 +35,7 @@ class WorkEditorServiceTest {
     @Mock ContentProjectProfileMapper profileMapper;
     @Mock ProjectParameterVersionMapper parameterVersionMapper;
     @Mock TagDictionaryMapper tagDictionaryMapper;
+    @Mock ProjectSettingEntityMapper settingEntityMapper;
     @Mock ProjectAccessService accessService;
 
     @InjectMocks

@@ -829,3 +829,41 @@ CREATE TABLE IF NOT EXISTS tag_dictionary (
     CONSTRAINT uk_tag_dict_axis_value UNIQUE (axis, tag_value)
 );
 CREATE INDEX IF NOT EXISTS idx_td_axis ON tag_dictionary(axis);
+
+CREATE TABLE IF NOT EXISTS project_setting_entities (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    setting_type VARCHAR(20) NOT NULL,
+    canonical_name VARCHAR(200) NOT NULL,
+    aliases_json JSON,
+    summary TEXT,
+    details_json JSON,
+    relationships_json JSON,
+    status VARCHAR(20) DEFAULT 'draft',
+    source_type VARCHAR(20) DEFAULT 'manual',
+    current_version_no INT DEFAULT 0,
+    revision INT DEFAULT 0,
+    created_by BIGINT,
+    updated_by BIGINT,
+    archived_at TIMESTAMP NULL,
+    archived_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_setting_entity UNIQUE (project_id, setting_type, canonical_name, status)
+);
+CREATE INDEX IF NOT EXISTS idx_pse_project_type ON project_setting_entities(project_id, setting_type);
+CREATE INDEX IF NOT EXISTS idx_pse_status ON project_setting_entities(status);
+
+CREATE TABLE IF NOT EXISTS project_setting_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    entity_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    snapshot_json JSON NOT NULL,
+    field_changes_json JSON,
+    source_type VARCHAR(20),
+    operated_by BIGINT,
+    evidence_json JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_setting_version UNIQUE (entity_id, version_no)
+);
+CREATE INDEX IF NOT EXISTS idx_psv_entity ON project_setting_versions(entity_id);

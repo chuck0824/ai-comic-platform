@@ -31,6 +31,7 @@ public class WorkEditorService {
     private final ContentProjectProfileMapper profileMapper;
     private final ProjectParameterVersionMapper parameterVersionMapper;
     private final TagDictionaryMapper tagDictionaryMapper;
+    private final ProjectSettingEntityMapper settingEntityMapper;
     private final ProjectAccessService accessService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -197,13 +198,16 @@ public class WorkEditorService {
                         .eq(ProjectMember::getProjectId, projectId)).stream().findFirst().orElse(null);
         String permissions = member != null ? member.getRole() : "viewer";
 
-        // 设定数量占位（Task 3 实现）
+        // 设定数量统计
         Map<String, Integer> settingCounts = new LinkedHashMap<>();
-        settingCounts.put("character", 0);
-        settingCounts.put("background", 0);
-        settingCounts.put("faction", 0);
-        settingCounts.put("location", 0);
-        settingCounts.put("item", 0);
+        for (String type : List.of("character", "background", "faction", "location", "item")) {
+            Long count = settingEntityMapper.selectCount(
+                    new LambdaQueryWrapper<ProjectSettingEntity>()
+                            .eq(ProjectSettingEntity::getProjectId, projectId)
+                            .eq(ProjectSettingEntity::getSettingType, type)
+                            .ne(ProjectSettingEntity::getStatus, "archived"));
+            settingCounts.put(type, count.intValue());
+        }
 
         ProfileView pv = profile != null ? toProfileView(profile) : null;
 
