@@ -1,0 +1,57 @@
+<h2>设计 4/4：接口、分期与验收</h2>
+<p class="subtitle">按纵向切片交付，每一期都是可上线闭环，不留下只有页面没有数据的“待接入”入口。</p>
+
+<div class="cards">
+  <div class="card" style="cursor:default">
+    <div class="card-body"><div class="letter">P0</div><h3>资料闭环</h3><p>标签、简介、总纲、新旧入口、仓库联动。</p><ul><li>拆分旧 TagEditor 单文件</li><li>新增项目资料与标签接口</li><li>补权限、404、1/3/3/1 校验</li><li>旧 /tag-editor/:scriptId 自动兼容</li><li>仓库恢复真实列表、标签筛选与编辑入口</li></ul></div>
+  </div>
+  <div class="card" style="cursor:default">
+    <div class="card-body"><div class="letter">P1</div><h3>设定管理</h3><p>角色、背景、势力、地点、物品完整 CRUD。</p><ul><li>统一设定实体 + 类型化字段</li><li>列表、搜索、详情、复制、归档</li><li>实体关系与引用保护</li><li>版本记录、审计和编辑冲突</li><li>导航数量与完善状态实时更新</li></ul></div>
+  </div>
+  <div class="card" style="cursor:default">
+    <div class="card-body"><div class="letter">P2</div><h3>AI 提取回写</h3><p>异步提取、证据、差异审核与上下文生效。</p><ul><li>按全文/章节/版本创建任务</li><li>候选匹配与逐字段三选一</li><li>幂等重试、批量确认、事务写入</li><li>生成参数快照与下游刷新事件</li><li>提取模型、Prompt、证据全链路审计</li></ul></div>
+  </div>
+</div>
+
+<div class="split" style="margin-top:24px">
+  <div class="mockup">
+    <div class="mockup-header">核心 API 边界</div>
+    <div class="mockup-body" style="font-size:13px;line-height:1.8">
+      <code>GET /content-projects/{id}/editor</code><br>
+      <code>PUT /content-projects/{id}/tags</code><br>
+      <code>PATCH /content-projects/{id}/profile</code><br>
+      <code>GET|POST /content-projects/{id}/settings</code><br>
+      <code>GET|PATCH|DELETE /content-projects/{id}/settings/{sid}</code><br>
+      <code>POST /content-projects/{id}/setting-extractions</code><br>
+      <code>GET /content-projects/{id}/setting-extractions/{bid}</code><br>
+      <code>POST /content-projects/{id}/setting-extractions/{bid}/apply</code>
+      <p style="margin-bottom:0;color:#64748b">旧 tags 接口保留并委托同一领域服务，避免两套业务规则。</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">建议数据表</div>
+    <div class="mockup-body" style="font-size:13px;line-height:1.8">
+      <code>content_project_profiles</code> — 标签/简介/总纲/版本<br>
+      <code>project_setting_entities</code> — 五类正式设定<br>
+      <code>project_setting_versions</code> — 字段级前后值<br>
+      <code>setting_extraction_batches</code> — 任务与来源版本<br>
+      <code>setting_extraction_candidates</code> — 候选、证据、决策
+      <p style="margin-bottom:0;color:#64748b">标签使用可索引列或规范化关联，不只塞进不可查询 JSON。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>验收测试矩阵</h3>
+  <div style="display:grid;grid-template-columns:150px 1fr 1fr;gap:1px;background:#e2e8f0;border:1px solid #e2e8f0">
+    <div style="padding:10px;background:#f8fafc;font-weight:700">层级</div><div style="padding:10px;background:#f8fafc;font-weight:700">关键场景</div><div style="padding:10px;background:#f8fafc;font-weight:700">通过标准</div>
+    <div style="padding:10px;background:white">前端单测</div><div style="padding:10px;background:white">标签上限、保存队列、离开保护、差异三选一</div><div style="padding:10px;background:white">竞态下最终服务端值等于最后一次用户选择</div>
+    <div style="padding:10px;background:white">后端单测</div><div style="padding:10px;background:white">权限、合法值、404、revision、幂等、事务回滚</div><div style="padding:10px;background:white">越权不可写；非法标签不落库；冲突明确返回 409</div>
+    <div style="padding:10px;background:white">集成测试</div><div style="padding:10px;background:white">旧 script 映射、仓库筛选、参数快照、事件刷新</div><div style="padding:10px;background:white">一次确认后所有读取面看到同一版本</div>
+    <div style="padding:10px;background:white">E2E</div><div style="padding:10px;background:white">编辑标签 → 筛选命中；AI 提取 → 审核 → 后续生成读取</div><div style="padding:10px;background:white">主路径可完成，刷新/返回后数据与状态不丢失</div>
+  </div>
+</div>
+
+<div style="margin-top:22px;padding:16px;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe">
+  <strong>需要确认：</strong>是否批准按 P0 → P1 → P2 实施，并以以上接口边界与测试矩阵作为方案基线？
+</div>

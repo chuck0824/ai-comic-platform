@@ -1,0 +1,61 @@
+<style>
+  .v6,.v6 *{color:#111827}.v6 p,.v6 li,.v6 td,.v6 .sub{color:#243247!important;line-height:1.6}.v6 h3.sec{padding:9px 12px;background:#111827;color:#fff!important;border-radius:9px;margin-top:28px}.hero{padding:17px;border:2px solid #4338ca;border-radius:14px;background:#eef2ff;line-height:1.7}.hero b{color:#312e81!important}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{padding:14px;border:1.5px solid #64748b;border-radius:11px;background:#fff}.card h4{margin:0 0 8px}.high{background:#fef2f2;border-color:#dc2626}.medium{background:#fff7d6;border-color:#b45309}.low{background:#f0f9ff;border-color:#0369a1}.good{background:#dcfce7;border-color:#15803d}.shared{background:#eef2ff;border-color:#4338ca}
+  table{width:100%;border-collapse:collapse;border:1px solid #475569;background:#fff;font-size:12px}th,td{padding:9px;border-bottom:1px solid #94a3b8;text-align:left;vertical-align:top}th{background:#1f2937;color:#fff!important}.p0{color:#991b1b!important;font-weight:800}.p1{color:#92400e!important;font-weight:800}.p2{color:#075985!important;font-weight:800}.yes{color:#166534!important;font-weight:800}.no{color:#991b1b!important;font-weight:800}
+  .score{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:12px 0}.score div{padding:12px;border:1.5px solid #475569;border-radius:9px;background:#fff;text-align:center}.score b{display:block;font-size:22px;color:#312e81!important}.flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.node{padding:8px 10px;border:1.5px solid #475569;border-radius:8px;background:#fff;font-size:12px;font-weight:650}.node.start{background:#eef2ff;border-color:#4338ca}.node.end{background:#dcfce7;border-color:#15803d}.node.warn{background:#fef3c7;border-color:#d97706}.arr{font-weight:900}.phase{display:grid;grid-template-columns:86px 1fr;gap:10px;padding:11px;border-bottom:1px solid #64748b}.phase b{color:#312e81!important}.note{padding:11px;border:1.5px solid #d97706;border-radius:9px;background:#fef3c7;font-weight:650;margin:12px 0}.checklist{columns:2;column-gap:24px}.checklist li{break-inside:avoid;margin-bottom:5px}.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{padding:5px 8px;border:1px solid #4338ca;border-radius:999px;background:#eef2ff;color:#312e81!important;font-size:11px;font-weight:650}
+  @media(max-width:900px){.grid2,.grid3,.score{grid-template-columns:1fr}.checklist{columns:1}}
+</style>
+
+<div class="v6">
+<h2>V6 PRD 就绪度详细审查</h2>
+<div class="hero"><b>总结论：</b>V4+V5 已把“创作、版本、分镜、画布”的主干想清楚，但当前仍是“产品架构方案”，不是“开发可直接执行的 PRD”。若直接交开发，大概率会出现范围失控、业务口径不一、后端表结构反复迁移、画布同步无法验收。建议先完成 9 个高优先级决策，再生成正式 PRD 和开发同步包。</div>
+
+<h3 class="sec">1. PRD 就绪度评分</h3>
+<div class="score"><div><b>85%</b>产品主流程</div><div><b>70%</b>功能覆盖</div><div><b>55%</b>交互可执行</div><div><b>45%</b>技术合同可执行</div><div><b>35%</b>上线与运营准备</div></div>
+<div class="grid2"><div class="card good"><h4>已经成立的部分</h4><ul><li>短剧/长篇/TVC 三模式与上传入口。</li><li>流程化创作台，而不是复杂 Tab 工作台。</li><li>人物/剧情先行，世界地图渐进构建。</li><li>参数、逐集钩子、三智能体、版本和过期检测。</li><li>A/B/C 分镜 Master、项目插件包和 L0–L4 成熟度。</li><li>Canvas Import Manifest、半耦合快照和 Agent 生产回路。</li></ul></div><div class="card high"><h4>仍然阻碍开发的部分</h4><ul><li>用户、角色、权限和协作边界未定义。</li><li>P0 范围过大，不具备单期交付可行性。</li><li>核心术语、模式切换和 TVC 双入口仍有口径风险。</li><li>交互页、异常页、空状态和恢复策略未穷举。</li><li>数据字典、API Schema、事件目录和迁移脚本未出。</li><li>合规、成本、SLA、数据埋点、灰度发布未定义。</li></ul></div></div>
+
+<h3 class="sec">2. 九项高优先级问题：未解决前不建议正式进开发</h3>
+<table><thead><tr><th>#</th><th>问题</th><th>风险</th><th>建议结论</th></tr></thead><tbody>
+<tr><td>H1</td><td><b>产品根对象不统一</b><br>“剧本、内容项目、源头文本、改编脚本”在不同文档中交叉使用。</td><td>表名、路由、权限、交易和画布关联会反复改。</td><td>产品统一叫“内容项目”；scripts 只作为过渡期物理表名。</td></tr>
+<tr><td>H2</td><td><b>TVC 两条路径未合并</b><br>它既是独立模式，又可从小说/品牌故事改编。</td><td>数据结构可能做成两套，无法统一版本和交易。</td><td>TVC 为独立模式，支持 source_type=brief 或 source_type=content_version，最终都产出 tvc_script_version。</td></tr>
+<tr><td>H3</td><td><b>角色与权限未定义</b><br>编剧、编导、导演、资产制作、审核、企业管理员的权限不清。</td><td>锁稿、解锁、审核、导入画布和市场上架可被错误执行。</td><td>定义 Owner/Editor/Reviewer/Producer/Viewer 项目角色和动作级权限矩阵。</td></tr>
+<tr><td>H4</td><td><b>P0 超载</b><br>三模式、上传、长篇、TVC、三 Agent、A/B/C、画布快照都放在第一期。</td><td>开发周期、测试面和迁移风险同时爆炸。</td><td>按“基础底座 → 短剧纵向切片 → 长篇 → TVC → 生产级画布”分里程碑。</td></tr>
+<tr><td>H5</td><td><b>流程门禁还是口号</b><br>“确认并继续”需要明确每阶段必填、可跳过、可风险放行和解锁规则。</td><td>前端、后端和测试会各自理解一套。</td><td>为每个 Stage 定义 entry_condition、required_tasks、exit_condition、override_permission、next_stage。</td></tr>
+<tr><td>H6</td><td><b>数据迁移与兼容缺失</b><br>现有 scripts/script_episodes/chapter_versions/adaptation_versions/canvas_projects 如何迁移未定义。</td><td>上线后历史用户数据丢失，新旧 API 并行失败。</td><td>提供 schema migration、backfill、双读兼容期、回滚方案和历史数据校验报告。</td></tr>
+<tr><td>H7</td><td><b>上传与 AI 合规未建立</b><br>版权声明、隐私、敏感内容、商业声称、TVC 禁限词未入流程。</td><td>用户上传他人作品、AI 输出违规广告、企业机密进入外部模型。</td><td>增加授权声明、数据分类、模型传输提示、内容审查、TVC claims 证据字段和审计日志。</td></tr>
+<tr><td>H8</td><td><b>AI 成本与资源控制未设计</b><br>批量生成、三 Agent 审核、A→B→C 升档都会大量消耗。</td><td>无法做费用预估、限额、二次确认和异常止损。</td><td>每任务生成前显示预估积分/时间/范围；支持上限、取消、重试成本和团队预算。</td></tr>
+<tr><td>H9</td><td><b>产品成功标准缺失</b><br>当前只有功能验收，没有用户价值和商业结果。</td><td>产品上线后无法判断流程变简单了还是更复杂了。</td><td>定义北极星指标与漏斗：项目启动→首个可用版本→锁稿→分镜→首个采用画布资产→导出。</td></tr>
+</tbody></table>
+
+<h3 class="sec">3. 十项中优先级问题：可进入 PRD，但不能遗留给开发自行决定</h3>
+<div class="grid2"><div class="card medium"><h4>M1–M5：用户与交互</h4><ol><li>用户画像/JTBD 未按独立创作者、内容团队、TVC 营销团队拆分。</li><li>三模式之间是否可切换，以及切换后哪些参数保留未定义。</li><li>空项目、解析失败、AI 超时、上下文冲突、无权限等异常页缺失。</li><li>自动保存、撤销、并发编辑、离线恢复的交互文案和冲突 UI 未定义。</li><li>新手引导、模板、示例项目和逐步跳过策略未设计。</li></ol></div>
+<div class="card medium"><h4>M6–M10：运行与运营</h4><ol start="6"><li>平台适配规则需要版本化，不能把抖音/快手/视频号规则写死在 Prompt。</li><li>长上下文的摘要、召回、必选事实和记忆过期策略未定义。</li><li>任务中心、通知、失败重试、部分成功和运维可观测指标缺失。</li><li>上传文件/生成资产的保留期、删除、导出和账号注销策略未定义。</li><li>市场授权包对编辑、改编、生产、导出和二次交易的限制未体现。</li></ol></div></div>
+
+<h3 class="sec">4. 五项低优先级，建议纳入设计系统和后续版本</h3>
+<div class="grid3"><div class="card low"><h4>无障碍与可读性</h4><p>对比度、键盘操作、焦点状态、色弱友好、大文本编辑器可读性。</p></div><div class="card low"><h4>国际化</h4><p>TikTok 项目的时区、语言、敏感词、字幕、字数和合规规则。</p></div><div class="card low"><h4>移动端</h4><p>移动端是只审核/查看，还是支持编辑，需明确响应式边界。</p></div><div class="card low"><h4>命名与文案</h4><p>“剧本、正文、脚本、分镜、锁稿、采用”需建立统一术语表。</p></div><div class="card low"><h4>用户帮助</h4><p>阶段解释、为什么需要这项、AI 使用了哪些上下文、修订影响什么。</p></div></div>
+
+<h3 class="sec">5. 建议的用户与权限模型</h3>
+<table><thead><tr><th>项目角色</th><th>主要权限</th><th>不允许</th></tr></thead><tbody><tr><td>Owner</td><td>管理成员、锁稿/解锁、画布同步、上架、删除项目</td><td>企业安全策略另有限制时不得绕过</td></tr><tr><td>Editor</td><td>编辑设定、大纲、正文、改编、分镜；提交审核</td><td>不能锁定核心资产、上架或删除项目</td></tr><tr><td>Reviewer</td><td>查看版本和 Agent 报告，批准、驳回、风险放行</td><td>不能静默修改正文</td></tr><tr><td>Producer</td><td>管理插件包、成熟度、画布导入、批量生成、采用和导出</td><td>不能修改已锁定源正文</td></tr><tr><td>Viewer</td><td>查看、评论、下载授权范围内产物</td><td>不能编辑、生成、审核、锁定</td></tr></tbody></table>
+
+<h3 class="sec">6. 建议重拆里程碑，不按原 P0–P3 直接开工</h3>
+<div class="phase"><b>M0 底座</b><p>内容项目、版本、依赖、生成任务、权限、参数快照、Context Assembler、新旧数据迁移。本阶段不扩大功能。</p></div>
+<div class="phase"><b>M1 纵向切片</b><p>只打通一条短剧闭环：故事种子→人物→梗概→分集→第 1 集正文→三 Agent→A 档分镜→半耦合导入画布做概念验证。</p></div>
+<div class="phase"><b>M2 短剧完整</b><p>多集、逐集钩子、批量生成、跨集连续性、投流、项目列表恢复、上传剧本直达。</p></div>
+<div class="phase"><b>M3 长篇</b><p>剧情任务、总纲/分卷/章节、世界事实、地点 L0/L1、时间线、伏笔、长上下文和连续性。</p></div>
+<div class="phase"><b>M4 TVC</b><p>简报、品牌/产品档案、创意策略、分秒脚本、TVC 钩子、合规 claims、多时长/多平台改版。</p></div>
+<div class="phase"><b>M5 生产</b><p>B/C 档、项目插件包、L0–L4、生产准入、ProductionAgent/QualityAgent、批量画布、diff 同步和导出 Manifest。</p></div>
+
+<h3 class="sec">7. 正式 PRD 必须的章节</h3>
+<ol class="checklist"><li>文档状态、负责人、变更记录</li><li>背景、问题、产品判断</li><li>目标、非目标、成功指标</li><li>用户画像、JTBD、项目角色</li><li>术语表与事实源规则</li><li>总体信息架构</li><li>三模式+上传详细流程</li><li>每阶段门禁和跳过/风险放行</li><li>完整功能要求与交互说明</li><li>三 Agent 与生产 Agent 编排</li><li>版本、状态、依赖和冲突策略</li><li>Storyboard Master→Canvas Snapshot 数据合同</li><li>数据字典与 ERD</li><li>API Schema、错误码、幂等和事务边界</li><li>事件目录与任务状态机</li><li>权限、合规、授权和审计</li><li>性能、可用性、容量、SLA</li><li>费用估算与限额</li><li>数据埋点与数据看板</li><li>新旧数据迁移与回滚</li><li>功能验收、E2E 用例和上线准入</li><li>分期、依赖、风险与灰度计划</li></ol>
+
+<h3 class="sec">8. 给开发人员的同步包，不能只发一份 PRD</h3>
+<div class="grid3"><div class="card shared"><h4>产品包</h4><div class="chips"><span class="chip">PRD</span><span class="chip">四张核心流程图</span><span class="chip">权限矩阵</span><span class="chip">术语表</span><span class="chip">功能清单</span><span class="chip">验收用例</span></div></div><div class="card shared"><h4>技术合同包</h4><div class="chips"><span class="chip">ERD</span><span class="chip">OpenAPI</span><span class="chip">JSON Schema</span><span class="chip">事件目录</span><span class="chip">状态机</span><span class="chip">Canvas Manifest</span><span class="chip">迁移方案</span></div></div><div class="card shared"><h4>交付管理包</h4><div class="chips"><span class="chip">里程碑</span><span class="chip">依赖图</span><span class="chip">风险清单</span><span class="chip">测试计划</span><span class="chip">埋点表</span><span class="chip">灰度方案</span><span class="chip">RACI</span></div></div></div>
+
+<h3 class="sec">9. 建议的开发同步顺序</h3>
+<div class="flow"><span class="node start">1. 产品决策评审</span><span class="arr">→</span><span class="node">2. 术语/模型/权限评审</span><span class="arr">→</span><span class="node">3. 纵向切片交互评审</span><span class="arr">→</span><span class="node warn">4. API/ERD/迁移评审</span><span class="arr">→</span><span class="node">5. 用例与测试评审</span><span class="arr">→</span><span class="node end">6. 排期和开工</span></div>
+<div class="note">不建议先让前端继续堆页面，再让后端猜数据结构。第一个开发会议必须先确认“内容项目、版本、依赖、角色权限、生成任务、Canvas Snapshot”六个基础模型。</div>
+
+<h3 class="sec">10. 最终判断</h3>
+<table><thead><tr><th>问题</th><th>结论</th></tr></thead><tbody><tr><td>能否形成正式 PRD？</td><td class="yes">可以。V4+V5 已具备主体，需按 V6 的 PRD 章节和高优先级决策补齐。</td></tr><tr><td>现在能否直接交开发？</td><td class="no">不建议。目前可用于方案评审，不足以支撑无歧义开发和验收。</td></tr><tr><td>开发同步需要什么？</td><td>一份主 PRD + 一份技术合同附录 + 一份迁移与测试计划，而不是把历史多份文档一起丢给开发。</td></tr></tbody></table>
+
+<div class="options"><div class="option" data-choice="v6-review-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可 V6 审查结论</h3><p>下一步将 V4+V5 合并为正式 PRD，并按 V6 补齐高优先级决策、开发合同和验收标准。</p></div></div></div>
+</div>

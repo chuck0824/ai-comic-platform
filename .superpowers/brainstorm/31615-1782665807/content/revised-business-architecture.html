@@ -1,0 +1,67 @@
+<style>
+  .seed { border:2px solid #6366f1; background:#eef2ff; border-radius:14px; padding:16px; text-align:center; margin:16px auto; max-width:720px; }
+  .seed strong { display:block; color:#3730a3; font-size:17px; }
+  .seed span { color:#52525b; font-size:13px; }
+  .branch { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px; }
+  .lane { border-radius:14px; padding:16px; border:1px solid #d4d4d8; }
+  .lane.fast { background:#fffbeb; border-color:#f59e0b; }
+  .lane.long { background:#f0f9ff; border-color:#0ea5e9; }
+  .steps { display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin-top:12px; }
+  .step { background:#fff; border:1px solid #d4d4d8; border-radius:8px; padding:7px 9px; font-size:12px; }
+  .arrow { color:#a1a1aa; }
+  .assets { margin-top:18px; border:1px solid #a5b4fc; border-radius:14px; padding:16px; background:#fafaff; }
+  .asset-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin-top:10px; }
+  .asset { background:white; border:1px solid #c7d2fe; border-radius:9px; padding:10px; font-size:12px; }
+  .levels { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
+  .level { border-radius:9px; padding:10px; background:#f4f4f5; font-size:12px; }
+  .out { display:flex; justify-content:center; gap:8px; flex-wrap:wrap; margin-top:18px; }
+  .out span { padding:9px 12px; border-radius:9px; background:#f0fdf4; border:1px solid #86efac; font-size:12px; }
+  @media(max-width:850px){.branch{grid-template-columns:1fr}.asset-grid{grid-template-columns:1fr 1fr}.levels{grid-template-columns:1fr}}
+</style>
+
+<h2>设计第 1 部分：总体业务架构</h2>
+<p class="subtitle">从“故事种子”开始，用共享资产支撑短剧快速创作和长篇渐进扩展。</p>
+
+<div class="seed">
+  <strong>创建内容项目 → 选择模式</strong>
+  <span>输入人物设定或剧情桥段（至少一项），AI 提取并补全人物、冲突、地点和剧情任务。</span>
+</div>
+
+<div class="branch">
+  <div class="lane fast">
+    <h3>短剧快速创作</h3>
+    <p>设定资产按需补充，优先追求快速形成可审核的单集正文。</p>
+    <div class="steps"><span class="step">故事种子</span><span class="arrow">→</span><span class="step">选题/梗概</span><span class="arrow">→</span><span class="step">分集大纲</span><span class="arrow">→</span><span class="step">单集正文</span><span class="arrow">→</span><span class="step">审核与锁稿</span></div>
+  </div>
+  <div class="lane long">
+    <h3>长篇世界观创作</h3>
+    <p>先以人物和桥段扩展剧情，世界、地点、任务和时间线在创作中渐进完善。</p>
+    <div class="steps"><span class="step">故事种子</span><span class="arrow">→</span><span class="step">人物/关系</span><span class="arrow">→</span><span class="step">剧情任务</span><span class="arrow">→</span><span class="step">总纲</span><span class="arrow">→</span><span class="step">分卷</span><span class="arrow">→</span><span class="step">章节</span></div>
+  </div>
+</div>
+
+<div class="assets">
+  <h3>共享设定资产（可随时编辑、版本化）</h3>
+  <div class="asset-grid">
+    <div class="asset"><b>人物库</b><br>档案、动机、关系、成长弧</div>
+    <div class="asset"><b>剧情任务</b><br>主线、支线、角色目标、阶段目标</div>
+    <div class="asset"><b>世界设定</b><br>时代、规则、势力、文化、禁忌</div>
+    <div class="asset"><b>时间线</b><br>历史事件、剧情时序、人物行程</div>
+  </div>
+  <h3 style="margin-top:14px">地图采用渐进层级</h3>
+  <div class="levels">
+    <div class="level"><b>L0 地点提取</b><br>AI 从人物和桥段中提取地点卡、区域和空间约束。</div>
+    <div class="level"><b>L1 区域关系</b><br>用户确认上下级、距离、交通、归属与势力范围。</div>
+    <div class="level"><b>L2 可视化地图</b><br>剧情需要时才生成世界地图或区域地图，不作为开始门槛。</div>
+  </div>
+</div>
+
+<div class="out">
+  <span>源头正文版本</span><span>改编脚本版本</span><span>分镜版本</span><span>投流素材</span><span>画布生产快照</span>
+</div>
+
+<div class="options" style="margin-top:22px">
+  <div class="option" data-choice="architecture-approved" onclick="toggleSelect(this)">
+    <div class="letter">✓</div><div class="content"><h3>这个总体架构正确</h3><p>确认后继续设计各类设定资产的字段、联动与修订规则。</p></div>
+  </div>
+</div>

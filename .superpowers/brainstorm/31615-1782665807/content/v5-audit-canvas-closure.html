@@ -1,0 +1,112 @@
+<style>
+  .v5,.v5 *{color:#111827}.v5 p,.v5 li,.v5 td,.v5 .sub{color:#243247!important;line-height:1.6}.v5 h3.sec{padding:9px 12px;border-radius:9px;background:#111827;color:#fff!important;margin-top:28px}.hero{padding:17px;border:2px solid #4338ca;border-radius:14px;background:#eef2ff;line-height:1.7}.hero b{color:#312e81!important}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.card{padding:14px;border:1.5px solid #64748b;border-radius:11px;background:#fff}.card h4{margin:0 0 8px}.card ul{padding-left:19px;margin:5px 0}.high{background:#fef2f2;border-color:#dc2626}.medium{background:#fff7d6;border-color:#b45309}.closed{background:#dcfce7;border-color:#15803d}.shared{background:#eef2ff;border-color:#4338ca}
+  table{width:100%;border-collapse:collapse;border:1px solid #475569;background:#fff;font-size:12px}th,td{padding:9px;border-bottom:1px solid #94a3b8;text-align:left;vertical-align:top}th{background:#1f2937;color:#fff!important}.p0{color:#991b1b!important;font-weight:800}.p1{color:#92400e!important;font-weight:800}
+  .flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:10px 0}.node{padding:8px 10px;border:1.5px solid #475569;border-radius:8px;background:#fff;font-size:12px;font-weight:650}.node.master{background:#eef2ff;border-color:#4338ca}.node.snap{background:#fef3c7;border-color:#d97706}.node.canvas{background:#e0f2fe;border-color:#0369a1}.node.prod{background:#dcfce7;border-color:#15803d}.node.risk{background:#fee2e2;border-color:#dc2626}.arr{font-weight:900;color:#111827!important}.down{text-align:center;font-size:20px;font-weight:900}.note{padding:11px;border:1.5px solid #d97706;border-radius:9px;background:#fef3c7;font-weight:650;margin:12px 0}
+  .contract{background:#111827;color:#fff!important;border-radius:10px;padding:14px;white-space:pre-wrap;font:12px/1.7 ui-monospace,SFMono-Regular,Menlo,monospace}.contract *{color:#fff!important}.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{padding:5px 8px;border:1px solid #475569;border-radius:999px;background:#fff;font-size:11px;font-weight:650}
+  .maturity{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}.level{padding:10px;border:1.5px solid #475569;border-radius:8px;background:#fff;font-size:11px}.level b{display:block;color:#312e81!important}.level.lock{background:#dcfce7;border-color:#15803d}
+  .state-lanes{display:grid;gap:9px}.state-lane{display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center}.state-label{font-weight:800;color:#312e81!important}.diagram{padding:15px;border:2px solid #475569;border-radius:12px;background:#f8fafc}.phase{display:grid;grid-template-columns:70px 1fr;gap:10px;padding:10px;border-bottom:1px solid #64748b}.phase b{color:#312e81!important}
+  @media(max-width:900px){.grid2,.grid3,.maturity{grid-template-columns:1fr}.state-lane{grid-template-columns:1fr}}
+</style>
+
+<div class="v5">
+<h2>V5 对照核查：《用户端产品功能设计》模块二 + 画布闭环</h2>
+<div class="hero"><b>核查结论：</b>V4 已覆盖三模式、上传、参数、钩子与三智能体，但对照原方案后仍缺少生产级闭环。主要断点是：<b>分镜 Master 的 A/B/C 结构、项目插件包、资产成熟度、统一 ID、跨章状态、画布快照协议、ProductionAgent/QualityAgent 回路、同步冲突策略</b>。V5 补齐后，链路才能从创作走到可编辑的画布生产结果。</div>
+
+<h3 class="sec">1. 核查问题清单</h3>
+<table><thead><tr><th>#</th><th>位置</th><th>缺失/冲突</th><th>严重度</th><th>V5 修正</th></tr></thead><tbody>
+<tr><td>1</td><td>分镜生产</td><td>V4 只提到 A/B/C，未保留场景目标卡、Beat、导演维度和 C 档生产三表。</td><td class="p0">高</td><td>定义 Storyboard Master 三层结构与升档规则。</td></tr>
+<tr><td>2</td><td>创作→分镜</td><td>未纳入项目插件包：人物、声音、场景、道具、风格、伏笔、禁止偏移。</td><td class="p0">高</td><td>插件包版本成为分镜和画布的必要输入。</td></tr>
+<tr><td>3</td><td>资产准入</td><td>未定义 L0–L4 成熟度和锁定、降级、连续性复核。</td><td class="p0">高</td><td>恢复成熟度模型，C 档与批量生产设准入门槛。</td></tr>
+<tr><td>4</td><td>剧集连续性</td><td>人物伤势、关系、道具位置、伏笔、Voice_ID、场景状态未形成跨章状态表。</td><td class="p0">高</td><td>新增 continuity_snapshot，作为下一集/章和分镜输入。</td></tr>
+<tr><td>5</td><td>画布导入</td><td>V4 没有定义导入快照的完整数据合同、映射表、幂等与事务回滚。</td><td class="p0">高</td><td>定义 Canvas Import Manifest 和 master→snapshot 映射。</td></tr>
+<tr><td>6</td><td>画布同步</td><td>“弱/半/强耦合”未落到差异检测、冲突处理和回写新版本。</td><td class="p0">高</td><td>明确半耦合默认，所有同步都需用户确认。</td></tr>
+<tr><td>7</td><td>Agent 闭环</td><td>V4 有创作三 Agent，但没有 ScriptAgent→ProductionAgent→QualityAgent→画布节点的闭环。</td><td class="p0">高</td><td>补全生产任务、结果落盘、质检标注和人工采用回路。</td></tr>
+<tr><td>8</td><td>事实源</td><td>源正文、改编、分镜 Master 和画布镜头谁能覆盖谁不够明确。</td><td class="p0">高</td><td>每层拥有独立 Master，下游只保存快照和依赖，不自动覆盖上游。</td></tr>
+<tr><td>9</td><td>编辑器</td><td>未明确拖拽排集、插入/删除集、批量生成、格式校验、情绪曲线、敏感词和台词统计。</td><td class="p1">中</td><td>并入流程阶段中的专业编辑器功能。</td></tr>
+<tr><td>10</td><td>风险放行</td><td>用户强行通过审核后，风险未带入分镜和画布。</td><td class="p1">中</td><td>review_risk_snapshot 随导入快照传递并在问题节点持续提示。</td></tr>
+<tr><td>11</td><td>项目记忆/Skill</td><td>项目记忆、禁止偏移、Prompt/Skill 版本未与生成快照绑定。</td><td class="p1">中</td><td>每次生成保存 memory_snapshot_id 和 skill_version_ids。</td></tr>
+<tr><td>12</td><td>交易/购买资产</td><td>已购剧本进入创作/分镜/画布的授权边界没有体现。</td><td class="p1">中</td><td>根据授权包决定可编辑、可改编、可生产和可导出范围。</td></tr>
+<tr><td>13</td><td>状态机</td><td>内容审核状态与交易上架状态被混在同一 status 概念中。</td><td class="p1">中</td><td>拆为 content_status、production_status、market_status 三条状态轴。</td></tr>
+<tr><td>14</td><td>导出闭环</td><td>画布生产结果和项目素材包 manifest 未回关联内容项目。</td><td class="p1">中</td><td>导出 manifest 记录源版本、分镜版本、采用资产与模型参数。</td></tr>
+</tbody></table>
+
+<h3 class="sec">2. 修正后的唯一事实源链</h3>
+<div class="diagram">
+<div class="flow"><span class="node master">源头正文 Master 版本</span><span class="arr">→</span><span class="node master">改编脚本 Master 版本（可选）</span><span class="arr">→</span><span class="node master">分镜 Master 版本 A/B/C</span><span class="arr">→</span><span class="node snap">画布导入快照</span><span class="arr">→</span><span class="node canvas">画布镜头/节点</span><span class="arr">→</span><span class="node prod">生成资产候选版本</span><span class="arr">→</span><span class="node prod">采用资产/导出 Manifest</span></div>
+<p><b>覆盖原则：</b>每一层只修改自己的 Master 或快照。画布修改不自动改分镜；分镜修改不自动改改编；改编修改不自动改源正文。需向上同步时，必须用户确认并生成新版本。</p></div>
+
+<h3 class="sec">3. 分镜 Master 必须保留的 A/B/C 结构</h3>
+<div class="grid3"><div class="card shared"><h4>A 档 · 快速创作</h4><ul><li>场景戏剧目标卡</li><li>Beat：进入、试探、升级、反转、钩子</li><li>轻量主分镜表</li><li>镜头数/时长预算</li><li>可进行创作确认，不直接批量生产</li></ul></div>
+<div class="card warn"><h4>B 档 · 导演确认</h4><ul><li>导演意图</li><li>人物行动动机/关系调度</li><li>信息差控制</li><li>声画关系和剪辑点</li><li>关键场景可局部从 A 升到 B</li></ul></div>
+<div class="card closed"><h4>C 档 · 生产交付</h4><ul><li>AI 抽卡表：角色/服装/场景/首帧/构图/光影/img_prompt</li><li>AI 视频表：首帧/尾帧/动作链/运镜/video_prompt/失败策略</li><li>配音字幕表：Voice_ID/情绪/语速/文件/口型</li><li>只有 C 档锁定版本可直接进入批量画布生产</li></ul></div></div>
+<div class="note">便捷例外：A 档可导入画布做概念验证，但画布状态必须标记“非生产快照”，禁止一键批量生产。</div>
+
+<h3 class="sec">4. 项目插件包、资产成熟度与统一 ID</h3>
+<div class="grid2"><div class="card shared"><h4>项目插件包</h4><div class="chips"><span class="chip">人物设定</span><span class="chip">Face/Costume</span><span class="chip">Voice</span><span class="chip">世界观</span><span class="chip">场景</span><span class="chip">道具</span><span class="chip">伏笔</span><span class="chip">视觉风格</span><span class="chip">禁止偏移</span><span class="chip">平台/画幅</span><span class="chip">Prompt/Skill 版本</span></div><p>分镜生成和画布导入都必须绑定一个插件包版本。项目设定变化后，不覆盖已有快照。</p></div><div class="card"><h4>统一 ID</h4><p>Project_ID → Episode/Chapter_ID → Scene_ID → Shot_ID；Character_ID → Face_ID / Costume_ID / Voice_ID；Location_ID / Prop_ID / Style_ID / Prompt_ID。稳定 ID 是分镜与画布差异同步的基础。</p></div></div>
+<div class="maturity" style="margin-top:12px"><div class="level"><b>L0 无资产</b>文字临时锚点</div><div class="level"><b>L1 文字设定</b>临时 Character/Location ID</div><div class="level"><b>L2 候选参考</b>图片/音频候选版本</div><div class="level"><b>L3 已审核</b>允许进入生产</div><div class="level lock"><b>L4 已锁定</b>批量生产不可随意修改</div></div>
+
+<h3 class="sec">5. 从分镜 Master 到画布的生产准入</h3>
+<table><thead><tr><th>准入检查</th><th>概念验证</th><th>批量生产</th><th>不满足时</th></tr></thead><tbody>
+<tr><td>源正文/改编版本</td><td>可为 approved 或风险放行</td><td>必须 locked</td><td>返回创作台审核/锁稿</td></tr>
+<tr><td>分镜档位</td><td>A/B 可用</td><td>C 档必须 locked</td><td>升档并完成生产三表</td></tr>
+<tr><td>项目插件包</td><td>可有临时锚点</td><td>必须绑定版本</td><td>生成待确认资产清单</td></tr>
+<tr><td>核心角色/场景/风格</td><td>L1/L2 可用</td><td>核心资产至少 L3；批量期锁到 L4</td><td>进入资产生成/审核流程</td></tr>
+<tr><td>画幅/平台/时长</td><td>允许默认</td><td>必须确认</td><td>显示参数确认弹窗</td></tr>
+<tr><td>三 Agent 审核</td><td>可带风险进入</td><td>高风险必须人工确认</td><td>带入 review_risk_snapshot</td></tr>
+<tr><td>费用/产能估算</td><td>单镜头试生成</td><td>生成全项目预估</td><td>用户缩小范围或调整质量档</td></tr>
+</tbody></table>
+
+<h3 class="sec">6. Canvas Import Manifest（画布导入数据合同）</h3>
+<div class="contract">{
+  "content_project_id": 123,
+  "source_artifact": { "type": "adaptation", "id": 88, "version_id": 901 },
+  "storyboard": { "id": 55, "version_id": 777, "tier": "C", "locked": true },
+  "plugin_pack": { "id": 9, "version_id": 31 },
+  "coupling_mode": "semi",
+  "import_mode": "create | update_diff",
+  "target": { "platform": "douyin", "aspect_ratio": "9:16", "duration_sec": 90 },
+  "asset_bindings": ["CH_LIN/FACE_LIN_V01", "LOC_OFFICE_V01", "STYLE_KMANGA_V01"],
+  "continuity_snapshot_id": 602,
+  "review_risk_snapshot_id": 710,
+  "shots": ["C档生产字段完整的 Shot Master 快照"],
+  "idempotency_key": "project-storyboardVersion-canvasProject"
+}</div>
+<p><b>导入结果必须返回：</b>canvas_project_id、canvas_snapshot_id、script_node_id、master_shot_id↔canvas_shot_id 映射、已创建节点数、缺失资产任务、风险提示。整个导入在一个事务中完成；任一必需映射失败则回滚。</p>
+
+<h3 class="sec">7. 画布节点生成与 Agent 生产闭环</h3>
+<div class="diagram"><div class="flow"><span class="node master">ScriptAgent<br>分镜与生产策略</span><span class="arr">→</span><span class="node snap">Canvas Snapshot<br>脚本节点+镜头映射</span><span class="arr">→</span><span class="node canvas">ProductionAgent<br>创建/连接/执行节点</span><span class="arr">→</span><span class="node prod">图片/视频/音频候选资产</span><span class="arr">→</span><span class="node risk">QualityAgent<br>质检标注</span><span class="arr">→</span><span class="node prod">用户采用/重生成</span></div>
+<ul><li>ScriptAgent 不直接写生成结果，只输出分镜与编排任务。</li><li>ProductionAgent 通过画布 API 创建脚本、角色参考、场景参考、图片、视频、音频节点与连线。</li><li>QualityAgent 把角色不一致、场景跳变、Prompt 超限、生成失败等标注绑定到节点。</li><li>用户选择采用版本后，更新画布快照的 adopted_asset_id，不回写分镜 Master。</li></ul></div>
+
+<h3 class="sec">8. 耦合模式和差异同步</h3>
+<table><thead><tr><th>模式</th><th>用法</th><th>源版本变更</th><th>画布改动</th></tr></thead><tbody>
+<tr><td>弱耦合</td><td>纯文本/交易资产，或一次性导出</td><td>不通知画布</td><td>永不回写</td></tr>
+<tr><td><b>半耦合（默认）</b></td><td>锁定分镜生成独立画布快照</td><td>标记“有新源版本”，用户手动查看 diff 并选择更新镜头</td><td>默认只留在画布</td></tr>
+<tr><td>强耦合</td><td>团队协作中需维持 Shot ID 映射</td><td>自动计算 diff，但应用仍需用户确认</td><td>可提议回写，确认后生成新分镜版本</td></tr>
+</tbody></table>
+<div class="note"><b>冲突规则：</b>同一 Shot 如果在源分镜和画布都被修改，不自动覆盖。差异弹窗展示“保留画布 / 使用新 Master / 复制为新镜头”。</div>
+
+<h3 class="sec">9. 修正后的页面跳转和回路</h3>
+<div class="diagram"><div class="flow"><span class="node">流程化创作台</span><span class="arr">→</span><span class="node master">正文/改编锁稿</span><span class="arr">→</span><span class="node master">分镜专业编辑器 A/B/C</span><span class="arr">→</span><span class="node snap">生产准入检查</span><span class="arr">→</span><span class="node canvas">创建/更新画布快照</span><span class="arr">→</span><span class="node prod">画布生产</span></div>
+<div class="down">↓</div><div class="flow"><span class="node prod">采用资产/导出素材包</span><span class="arr">→</span><span class="node">内容项目概览查看关联结果</span><span class="arr">→</span><span class="node snap">源版本变更时查看同步差异</span><span class="arr">→</span><span class="node master">确认后生成新分镜/画布快照版本</span></div></div>
+
+<h3 class="sec">10. 三条状态轴，避免概念混乱</h3>
+<div class="state-lanes"><div class="state-lane"><div class="state-label">内容状态</div><div class="flow"><span class="node">draft</span><span class="arr">→</span><span class="node">reviewing</span><span class="arr">→</span><span class="node risk">needs_revision</span><span class="arr">→</span><span class="node prod">approved</span><span class="arr">→</span><span class="node prod">locked</span></div></div>
+<div class="state-lane"><div class="state-label">生产状态</div><div class="flow"><span class="node">not_started</span><span class="arr">→</span><span class="node snap">preflight</span><span class="arr">→</span><span class="node canvas">canvas_ready</span><span class="arr">→</span><span class="node">generating</span><span class="arr">→</span><span class="node risk">quality_review</span><span class="arr">→</span><span class="node prod">deliverable</span></div></div>
+<div class="state-lane"><div class="state-label">交易状态</div><div class="flow"><span class="node">private</span><span class="arr">→</span><span class="node">pending_review</span><span class="arr">→</span><span class="node prod">listed</span><span class="arr">→</span><span class="node">sold</span><span class="arr">→</span><span class="node risk">delisted</span></div></div></div>
+
+<h3 class="sec">11. 与当前实现的明确差距</h3>
+<div class="grid2"><div class="card high"><h4>当前前端</h4><p><code>canvasApi.importScript(id, scriptId)</code> 只发送 <code>script_id</code>，没有传 source_version、coupling_mode、storyboard_version、plugin_pack_version、shots、asset_bindings 和 review risks。</p></div><div class="card high"><h4>当前后端</h4><p>导入服务虽预留 script_id/coupling_mode/source_version/shots，但会默认 source_version=v0.1，且 CanvasProject 只记 script_id，没有 canvas_snapshot_id、storyboard_version_id、plugin_pack_version_id 和镜头映射表。</p></div></div>
+<p>因此现有“进入画布”只能算创建了脚本节点和镜头记录，还不是可追溯、可同步、可回滚的生产快照。</p>
+
+<h3 class="sec">12. 分期落地调整</h3>
+<div class="phase"><b>P0</b><p>保留 V4 的三模式、上传、参数、钩子、三 Agent 和流程化创作台；新增 Storyboard Master 版本、稳定 ID、半耦合快照、Canvas Import Manifest、导入事务与镜头映射。</p></div>
+<div class="phase"><b>P1</b><p>实现 A/B/C 完整结构、项目插件包、L0–L4 成熟度、跨章连续性快照、生产准入、风险快照与产能/费用预估。</p></div>
+<div class="phase"><b>P2</b><p>实现 ScriptAgent→ProductionAgent→QualityAgent 画布闭环、节点标注、采用版本、Master↔Canvas diff、冲突处理和确认回写新版本。</p></div>
+<div class="phase"><b>P3</b><p>强耦合团队协作、项目记忆/Skill 版本快照、购买资产授权准入、导出 Manifest 完整追溯和世界地图生产关联。</p></div>
+
+<h3 class="sec">13. 新增验收标准</h3>
+<ul><li>同一分镜版本重复导入不会重复创建镜头或节点。</li><li>每个 Canvas Shot 能追溯到 Storyboard Master Shot 和源正文/改编版本。</li><li>导入任一必需映射失败时全部回滚，不留半套画布数据。</li><li>源分镜变更后可查看镜头级 diff，未修改镜头可批量更新，冲突镜头必须手工决策。</li><li>画布修改不自动覆盖分镜 Master；回写确认后生成新分镜版本。</li><li>C 档批量生产前校验核心资产成熟度、插件包版本、风险和平台/画幅参数。</li><li>QualityAgent 问题能准确定位节点、镜头和生成资产版本。</li><li>导出素材包 manifest 能回溯内容项目、源版本、分镜版本、画布快照和采用资产。</li></ul>
+
+<div class="options"><div class="option" data-choice="v5-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认 V5 画布闭环修订</h3><p>确认后，V4 的创作方案与 V5 的生产闭环将合并写入正式设计文档。</p></div></div></div>
+</div>

@@ -1,0 +1,56 @@
+<h2>作品编辑模块：三种迭代路径</h2>
+<p class="subtitle">目标相同：沿用旧版交互，接通新版主链路，并补齐 AI 提取与设定管理。差别在于改造深度和交付风险。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a-thin-extension" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;min-height:190px;background:#f8fafc">
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;height:150px">
+        <div style="padding:12px;border:1px solid #cbd5e1;border-radius:10px">旧编辑页</div>
+        <div>→</div>
+        <div style="padding:12px;border:1px solid #cbd5e1;border-radius:10px">补菜单与表单</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="letter">A</div>
+      <h3>薄层扩展</h3>
+      <p>直接在现有单文件页面中继续堆功能，复用旧 script 接口。</p>
+      <div class="pros-cons"><div class="pros"><h4>优点</h4><ul><li>首屏改动快</li><li>短期文件少</li></ul></div><div class="cons"><h4>代价</h4><ul><li>新旧项目仍割裂</li><li>AI 提取与冲突合并难维护</li></ul></div></div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b-incremental-slices" onclick="toggleSelect(this)" style="border:2px solid #2563eb">
+    <div class="card-image" style="padding:18px;min-height:190px;background:#eff6ff">
+      <div style="display:grid;grid-template-columns:1fr 36px 1fr;gap:8px;align-items:center;height:150px">
+        <div style="display:grid;gap:8px"><div style="padding:8px;border:1px solid #93c5fd;border-radius:8px">旧版 UI 骨架</div><div style="padding:8px;border:1px solid #93c5fd;border-radius:8px">旧剧本兼容</div></div>
+        <div style="text-align:center">＋</div>
+        <div style="display:grid;gap:8px"><div style="padding:8px;border:1px solid #60a5fa;border-radius:8px">统一作品接口</div><div style="padding:8px;border:1px solid #60a5fa;border-radius:8px">设定库 + AI 审核</div></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="letter">B</div>
+      <h3>纵向切片迭代（推荐）</h3>
+      <p>保留页面体验，拆成独立子模块；每一期都打通 UI、接口、权限、AI 上下文和测试。</p>
+      <div class="pros-cons"><div class="pros"><h4>优点</h4><ul><li>符合“在旧版上迭代”</li><li>每期可独立验收上线</li><li>技术债可控</li></ul></div><div class="cons"><h4>代价</h4><ul><li>需要兼容适配层</li><li>整体分 3 期交付</li></ul></div></div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c-full-rebuild" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;min-height:190px;background:#fff7ed">
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;height:150px">
+        <div style="padding:12px;border:1px solid #fdba74;border-radius:10px;text-decoration:line-through">旧编辑器</div>
+        <div>→</div>
+        <div style="padding:12px;border:1px solid #fb923c;border-radius:10px">全新作品域</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="letter">C</div>
+      <h3>整体重构</h3>
+      <p>新建统一作品域、编辑器和设定系统，完成后一次性替换旧模块。</p>
+      <div class="pros-cons"><div class="pros"><h4>优点</h4><ul><li>最终模型最统一</li><li>历史包袱少</li></ul></div><div class="cons"><h4>代价</h4><ul><li>不符合原地迭代诉求</li><li>周期与回归风险最高</li></ul></div></div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:24px;padding:16px;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe">
+  <strong>我的建议：B。</strong>阶段 1 完成标签/简介/总纲与入口闭环；阶段 2 完成五类设定 CRUD；阶段 3 完成 AI 提取、差异审核、上下文回写与下游联动。
+</div>

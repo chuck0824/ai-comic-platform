@@ -1,0 +1,49 @@
+<h2>标签编辑模块：当前断点地图</h2>
+<p class="subtitle">现有页面有交互外壳，但入口、主数据与下游消费尚未闭环。请先确认这是否符合你看到的“功能缺失”。</p>
+
+<div class="mockup">
+  <div class="mockup-header">现状数据流</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 56px 1fr 56px 1fr;gap:10px;align-items:center">
+      <div style="border:1px solid #fecaca;background:#fff7f7;border-radius:12px;padding:16px">
+        <div class="label">入口断点</div>
+        <h3 style="margin:6px 0">新版内容项目 / 仓库</h3>
+        <p>仓库已被简化成提示页，按钮还指向不存在的 <code>/content-projects</code>；项目卡片也没有“编辑标签”入口。</p>
+      </div>
+      <div style="font-size:28px;text-align:center;color:#ef4444">×</div>
+      <div style="border:1px solid #fde68a;background:#fffbeb;border-radius:12px;padding:16px">
+        <div class="label">旧版孤岛</div>
+        <h3 style="margin:6px 0">TagEditor.vue</h3>
+        <p>已有四轴选择、上限计数、清空和自动保存，但只接受旧版 <code>scriptId</code>，其余“总纲/角色/背景…”全部停用。</p>
+      </div>
+      <div style="font-size:28px;text-align:center;color:#ef4444">×</div>
+      <div style="border:1px solid #fecaca;background:#fff7f7;border-radius:12px;padding:16px">
+        <div class="label">消费断点</div>
+        <h3 style="margin:6px 0">筛选 / 市场 / AI 上下文</h3>
+        <p>仓库不展示真实列表，市场仍是静态假数据；标签修改没有可验证的同步链路，也没有标签字典服务。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>已定位的技术风险</h3>
+  <div class="options" data-multiselect>
+    <div class="option" data-choice="missing-validation" onclick="toggleSelect(this)">
+      <div class="letter">1</div><div class="content"><h3>后端无合法性校验</h3><p>接口未校验 1/3/3/1 数量、标签合法值，也没有明确的 404 返回。</p></div>
+    </div>
+    <div class="option" data-choice="permission-boundary" onclick="toggleSelect(this)">
+      <div class="letter">2</div><div class="content"><h3>写接口权限边界不完整</h3><p>旧版标签更新没有复用读取时的资源归属校验，存在越权修改风险。</p></div>
+    </div>
+    <div class="option" data-choice="dual-model" onclick="toggleSelect(this)">
+      <div class="letter">3</div><div class="content"><h3>新旧模型双轨</h3><p>标签在旧 scripts 表，新创作主链路却是 content_projects，主数据归属没有定论。</p></div>
+    </div>
+    <div class="option" data-choice="no-tests" onclick="toggleSelect(this)">
+      <div class="letter">4</div><div class="content"><h3>缺少专项验收</h3><p>没有标签接口、自动保存竞态、入口联动、仓库筛选与市场同步的测试。</p></div>
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:22px;padding:16px;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe">
+  <strong>请确认：</strong>你的目标是把它补成“新版内容项目的完整标签闭环”，还是只恢复旧版剧本页可用？请回到对话中回答。
+</div>

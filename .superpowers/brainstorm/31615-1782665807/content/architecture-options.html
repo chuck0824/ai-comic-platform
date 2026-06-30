@@ -1,0 +1,49 @@
+<style>
+  .arch { display:grid; gap:9px; margin:14px 0 8px; }
+  .lane { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .box { border:1px solid #d4d4d8; border-radius:8px; padding:8px 10px; background:#fafafa; font-size:13px; }
+  .core { border-color:#6366f1; background:#eef2ff; color:#3730a3; font-weight:650; }
+  .fast { border-color:#f59e0b; background:#fffbeb; }
+  .long { border-color:#0ea5e9; background:#f0f9ff; }
+  .prod { border-color:#22c55e; background:#f0fdf4; }
+  .arr { color:#a1a1aa; }
+  .note { margin-top:8px; color:#71717a; font-size:12px; line-height:1.5; }
+</style>
+
+<h2>剧本创作双模式：重新编排方案</h2>
+<p class="subtitle">请点击一个方案。重点看长短内容的切换、设定复用和后续改编。</p>
+
+<div class="cards">
+  <div class="card" data-choice="separate-wizards" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="arch">
+        <div class="lane"><span class="box fast">短剧向导</span><span class="arr">→</span><span class="box fast">梗概/分集/正文</span><span class="arr">→</span><span class="box prod">分镜</span></div>
+        <div class="lane"><span class="box long">长篇向导</span><span class="arr">→</span><span class="box long">世界/人物/分卷</span><span class="arr">→</span><span class="box prod">章节</span></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A. 两套独立向导</h3><p>开发直观，但人物、世界观和版本逻辑会重复，模式转换成本高。</p></div>
+  </div>
+
+  <div class="card" data-choice="universal-workflow" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="arch">
+        <div class="lane"><span class="box core">统一 14 步流程</span><span class="arr">→</span><span class="box">世界</span><span class="box">人物</span><span class="box">任务</span><span class="box">大纲</span></div>
+        <div class="lane"><span class="box">分卷</span><span class="box">章节</span><span class="box">改编</span><span class="box">分镜</span><span class="box">投流</span></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B. 一套超级流程</h3><p>数据口径统一，但短剧用户会被大量长篇设定阻塞，页面和状态机会迅速膨胀。</p></div>
+  </div>
+
+  <div class="card" data-choice="shared-core-dual-orchestration" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="arch">
+        <div class="lane"><span class="box core">共享内容项目</span><span class="box core">人物库</span><span class="box core">世界设定</span><span class="box core">剧情任务</span><span class="box core">版本库</span></div>
+        <div class="lane"><span class="box fast">短剧编排：选题 → 梗概 → 分集 → 正文</span><span class="arr">→</span><span class="box prod">改编 / 分镜</span></div>
+        <div class="lane"><span class="box long">长篇编排：世界 → 地图 → 人物 → 任务 → 总纲 → 分卷 → 章节</span></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>C. 共享资产底座 + 双编排（推荐）</h3><p>两种模式共用人物、世界、剧情任务和版本；只在“创作步骤和必填项”上分开。可支持短剧升级长篇及长篇改编短剧。</p></div>
+  </div>
+</div>
+
+<p class="note">颜色说明：紫色=共享项目资产，黄色=短剧快速编排，蓝色=长篇世界观编排，绿色=派生生产资产。</p>

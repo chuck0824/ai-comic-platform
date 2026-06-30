@@ -1,0 +1,112 @@
+<style>
+  .v4,.v4 *{color:#111827}.v4 p,.v4 li,.v4 td,.v4 .sub{color:#243247!important;line-height:1.6}.v4 h3.sec{background:#111827;color:#fff!important;padding:9px 12px;border-radius:9px;margin-top:28px}.hero{padding:17px;border:2px solid #4338ca;border-radius:14px;background:#eef2ff;line-height:1.7}.hero b{color:#312e81!important}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{padding:14px;border:1.5px solid #64748b;border-radius:11px;background:#fff}.card h4{margin:0 0 8px;color:#111827!important}.card ul{padding-left:19px;margin:5px 0}.short{background:#fff7d6;border-color:#b45309}.long{background:#e0f2fe;border-color:#0369a1}.tvc{background:#fce7f3;border-color:#be185d}.shared{background:#eef2ff;border-color:#4338ca}.green{background:#dcfce7;border-color:#15803d}.warn{background:#fef3c7;border-color:#d97706}
+  .flow{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin:9px 0}.box{padding:7px 9px;border:1.5px solid #475569;border-radius:8px;background:#fff;font-size:12px;font-weight:650}.arr{font-weight:900;color:#111827!important}.decision{padding:11px;border:1.5px solid #d97706;border-radius:9px;background:#fef3c7;font-weight:650;margin:12px 0}
+  table{width:100%;border-collapse:collapse;border:1px solid #475569;background:#fff;font-size:12px}th,td{padding:9px;border-bottom:1px solid #94a3b8;text-align:left;vertical-align:top}th{background:#1f2937;color:#fff!important}.chips{display:flex;gap:6px;flex-wrap:wrap}.chip{padding:5px 8px;border:1px solid #4338ca;border-radius:999px;background:#eef2ff;color:#312e81!important;font-size:11px;font-weight:650}
+  .diagram{padding:16px;border:2px solid #475569;border-radius:13px;background:#f8fafc;margin:12px 0}.diagram h4{margin:0 0 12px}.lane{display:flex;align-items:center;justify-content:center;gap:7px;flex-wrap:wrap;margin:9px 0}.node{padding:9px 11px;border:1.5px solid #334155;border-radius:8px;background:#fff;font-size:12px;font-weight:650}.node.start{background:#e0e7ff;border-color:#4338ca}.node.choice{background:#fef3c7;border-color:#b45309}.node.end{background:#dcfce7;border-color:#15803d}.node.tvcnode{background:#fce7f3;border-color:#be185d}.node.warnnode{background:#fee2e2;border-color:#dc2626}.branch-label{font-size:11px;font-weight:800;color:#312e81!important;min-width:58px}.down{text-align:center;font-size:20px;font-weight:900}
+  .journey{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}.jstep{padding:10px;border:1.5px solid #475569;border-radius:9px;background:#fff;font-size:11px;min-height:92px}.jstep b{display:block;margin-bottom:5px;color:#312e81!important}.jstep .who{display:inline-block;margin-top:7px;padding:3px 6px;border-radius:999px;background:#e0e7ff;font-size:10px}
+  .pages{display:grid;grid-template-columns:180px 1fr;gap:12px}.page-list{padding:12px;background:#111827;border-radius:10px}.page-list div{padding:7px;color:#fff!important;border-bottom:1px solid #475569;font-size:12px}.page-list div.active{background:#4338ca;border-radius:6px}.page-map{padding:12px;border:1.5px solid #475569;border-radius:10px;background:#fff}
+  .stateflow{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.state{padding:9px 11px;border:1.5px solid #475569;border-radius:8px;background:#fff;font-size:12px;font-weight:650}.state.review{background:#e0e7ff}.state.locked{background:#dcfce7;border-color:#15803d}.state.revise{background:#fef3c7;border-color:#d97706}.state.stale{background:#fee2e2;border-color:#dc2626}.small{font-size:11px;color:#334155!important}
+  .agent{padding:15px;border:2px solid #475569;border-radius:12px;background:#fff}.agent h4{margin:0 0 7px}.weight{display:inline-block;padding:3px 7px;border-radius:999px;background:#111827;color:#fff!important;font-size:10px}.hook{border-color:#dc2626;background:#fef2f2}.show{border-color:#4338ca;background:#eef2ff}.director{border-color:#15803d;background:#f0fdf4}
+  .phase{display:grid;grid-template-columns:70px 1fr;gap:10px;padding:10px;border-bottom:1px solid #64748b}.phase b{color:#312e81!important}.tree{background:#111827;color:#fff!important;padding:15px;border-radius:10px;white-space:pre-wrap;font:12px/1.8 ui-monospace,SFMono-Regular,Menlo,monospace}
+  @media(max-width:980px){.grid2,.grid3,.grid4,.journey{grid-template-columns:1fr}.pages{grid-template-columns:1fr}}
+</style>
+
+<div class="v4">
+<h2>剧本与 TVC 创作模块整体重编方案 V4</h2>
+<div class="hero"><b>V4 完整修正：</b>短剧、长篇、TVC 三种独立模式；AI/手动创建与用户上传两种内容来源；标签、受众/频向、平台、长度/集数、逐集钩子全部进入创作上下文；保留并重编“钩子 Agent + 编导 Agent + 导演 Agent”；新增统一的总流程图、用户旅程图、页面跳转图和状态流转图。</div>
+
+<h3 class="sec">1. 创建项目时必须完成的参数表</h3>
+<table><thead><tr><th>参数组</th><th>短剧快速创作</th><th>长篇世界观创作</th><th>TVC 创作</th></tr></thead><tbody>
+<tr><td><b>内容来源</b></td><td>AI/手动输入；上传小说/剧本</td><td>AI/手动输入；上传小说/文稿</td><td>AI/手动输入；上传品牌/产品简报或 TVC 草稿</td></tr>
+<tr><td><b>起始内容</b></td><td>人物设定或剧情桥段，至少一项</td><td>人物设定或剧情桥段，至少一项</td><td>产品/品牌信息、核心卖点或创意桥段，至少一项</td></tr>
+<tr><td><b>题材/品类</b></td><td>言情、悬疑、科幻、现实情感等</td><td>奇幻、仙侠、科幻、历史、悬疑等</td><td>美妆、食品、汽车、教育、SaaS、品牌形象等</td></tr>
+<tr><td><b>情节/创意角度</b></td><td>重生、复仇、身份反转、先婚后爱等，最多 3 个</td><td>争霸、冒险、权谋、系统、破案等，最多 3 个</td><td>痛点型、反差型、见证型、场景型、情绪型等</td></tr>
+<tr><td><b>情绪/基调</b></td><td>爽感、甜宠、虐恋、沙雕、热血等，最多 3 个</td><td>宏大、暗黑、治愈、热血、烧脑等，最多 3 个</td><td>高级、温暖、专业、科技、焦虑解决、爽感等</td></tr>
+<tr><td><b>时空/场景</b></td><td>古代、现代、未来、民国、职场、校园等</td><td>时代、世界层级、地域和核心场景</td><td>家庭、办公、户外、门店、直播间、发布会等</td></tr>
+<tr><td><b>受众/频向</b></td><td>男频、女频、双频/全年龄；年龄层和偏好可选</td><td>男频、女频、双频/全年龄；连载读者画像</td><td>年龄、性别、地域、职业、消费阶段、核心痛点</td></tr>
+<tr><td><b>平台适配</b></td><td>抖音、快手、视频号、TikTok；可多选主/次平台</td><td>阅读/漫剧载体、抖音、快手、视频号、TikTok</td><td>抖音、快手、视频号、TikTok、电商/信息流；平台规格独立保存</td></tr>
+<tr><td><b>长度选择</b></td><td>20/40/60/80 集或自定义；每集目标时长</td><td>预计总字数、卷数、章数、单章目标字数</td><td>5/15/30/60 秒或自定义；可一次建多个时长改版</td></tr>
+<tr><td><b>转化/内容目标</b></td><td>追更、完播、情绪、反转、人物成长</td><td>连载、世界扩展、长期人物成长、改编潜力</td><td>品牌认知、种草、转化、招商、形象；CTA 必填</td></tr>
+</tbody></table>
+<div class="decision">参数可编辑并版本化。生成任务必须记录使用的参数快照，防止用户改参数后无法追溯旧结果。</div>
+
+<h3 class="sec">2. 逐集钩子设定与长线钩子</h3>
+<div class="grid2"><div class="card short"><h4>单集钩子卡</h4><table><tbody><tr><td>上集承接</td><td>上集留下什么问题，本集如何兑现</td></tr><tr><td>开场钩子</td><td>前 3–5 秒的冲突、危机、信息差或视觉奇观</td></tr><tr><td>中段推进</td><td>冲突升级、爽点/反转、情绪变化</td></tr><tr><td>结尾留白</td><td>未解问题、危险逼近、证据出现或关系突变</td></tr><tr><td>下集承诺</td><td>用户为什么必须继续看</td></tr><tr><td>钩子强度</td><td>0–100 评分、原因、修订建议、用户手动确认</td></tr></tbody></table></div>
+<div class="card long"><h4>长线钩子层级</h4><ul><li>全书/全剧大钩子：核心谜题、终极目标、主角身份。</li><li>阶段/分卷钩子：每卷目标、阶段反转和阶段兑现。</li><li>章节/单集钩子：开场、中段、结尾和下一单元承诺。</li><li>伏笔关联：埋设时间、提醒节点、兑现节点、过期预警。</li><li>长度决定大钩子密度：20/40/60/80 集或分卷长度自动调整。</li></ul></div></div>
+<div class="decision">每集钩子不只是大纲里的两个文本框。它是可编辑、可评分、可审核、可与上下集和伏笔关联的独立资产。</div>
+
+<h3 class="sec">3. 三智能体编排方案</h3>
+<div class="grid3"><div class="agent hook"><h4>钩子 Agent <span class="weight">核心常驻</span></h4><ul><li>根据模式路由到短剧钩子或 TVC 钩子策略。</li><li>检查大钩子、单集钩子、承接钩子、伏笔兑现。</li><li>TVC 检查注意力、痛点/利益、品牌记忆和 CTA。</li><li>不直接覆盖用户内容，输出修订建议或新版本。</li></ul></div>
+<div class="agent show"><h4>编导 Agent <span class="weight">故事成立</span></h4><ul><li>检查核心事件、人物动机、冲突升级、关系变化、节奏。</li><li>长篇同时检查卷章目标、支线与主线、连续性。</li><li>改编阶段检查媒介适配和源作核心保留。</li><li>TVC 时切换为“创意/转化编导”角色。</li></ul></div>
+<div class="agent director"><h4>导演 Agent <span class="weight">可视化与生产</span></h4><ul><li>检查场景数、画面可视化、人物调度、结尾停顿画面。</li><li>评估 AI 漫剧生产成本、高难画面和连续性风险。</li><li>在分镜阶段负责镜头语言、信息差、声画设计。</li><li>TVC 检查产品露出、品牌记忆点和分秒节奏。</li></ul></div></div>
+<table style="margin-top:12px"><thead><tr><th>阶段</th><th>钩子 Agent</th><th>编导 Agent</th><th>导演 Agent</th><th>结果处理</th></tr></thead><tbody>
+<tr><td>选题/梗概</td><td>强</td><td>强</td><td>弱，只做视觉潜力</td><td>生成建议和候选方案</td></tr>
+<tr><td>分集/分卷大纲</td><td>强</td><td>强</td><td>中</td><td>标记问题节点，用户确认修订</td></tr>
+<tr><td>单集/单章正文</td><td>40%</td><td>35%</td><td>25%（短剧）；长篇可降权</td><td>pass / needs_revision，支持人工批准</td></tr>
+<tr><td>改编脚本</td><td>强</td><td>强</td><td>中强</td><td>继承源钩子并检查媒介适配</td></tr>
+<tr><td>分镜</td><td>中</td><td>强</td><td>强</td><td>分镜审核与生产可行性</td></tr>
+<tr><td>TVC</td><td>TVC 钩子路由</td><td>创意/转化编导</td><td>产品露出/生产</td><td>另加品牌合规规则，但不隐藏三智能体</td></tr>
+</tbody></table>
+
+<h3 class="sec">4. 总流程图</h3>
+<div class="diagram"><h4>从入口到生产的全链路</h4>
+<div class="lane"><span class="node start">创作入口</span><span class="arr">→</span><span class="node choice">AI/手动创建 或 上传文稿</span><span class="arr">→</span><span class="node choice">选择短剧 / 长篇 / TVC</span><span class="arr">→</span><span class="node">参数与标签确认</span></div><div class="down">↓</div>
+<div class="lane"><span class="branch-label">短剧</span><span class="node">故事种子</span><span class="arr">→</span><span class="node">人物</span><span class="arr">→</span><span class="node">梗概/任务</span><span class="arr">→</span><span class="node">分集+钩子</span><span class="arr">→</span><span class="node">逐集正文</span></div>
+<div class="lane"><span class="branch-label">长篇</span><span class="node">故事种子</span><span class="arr">→</span><span class="node">人物/关系</span><span class="arr">→</span><span class="node">剧情任务</span><span class="arr">→</span><span class="node">总纲/分卷</span><span class="arr">→</span><span class="node">逐章正文</span></div>
+<div class="lane"><span class="branch-label">TVC</span><span class="node tvcnode">需求简报</span><span class="arr">→</span><span class="node tvcnode">创意策略</span><span class="arr">→</span><span class="node tvcnode">概念脚本</span><span class="arr">→</span><span class="node tvcnode">分秒脚本</span></div><div class="down">↓</div>
+<div class="lane"><span class="node">三智能体审核</span><span class="arr">→</span><span class="node end">用户修订与锁稿</span><span class="arr">→</span><span class="node choice">去向选择</span><span class="arr">→</span><span class="node">改编 / 分镜 / 投流</span><span class="arr">→</span><span class="node end">画布生产快照</span></div>
+</div>
+
+<h3 class="sec">5. 用户旅程图</h3>
+<div class="diagram"><div class="journey"><div class="jstep"><b>1. 明确目标</b>选择短剧、长篇或 TVC，并决定新建还是上传。<span class="who">用户</span></div><div class="jstep"><b>2. 提供素材</b>输入人物/桥段/简报，或上传已有文稿。<span class="who">用户</span></div><div class="jstep"><b>3. 结构化</b>AI 提取设定、标签、任务、地点和钩子候选。<span class="who">系统</span></div><div class="jstep"><b>4. 流程创作</b>用户逐项确认、修订，系统使用修订稿继续生成。<span class="who">人机协作</span></div><div class="jstep"><b>5. 审核优化</b>三智能体按阶段评审，用户决定是否采纳。<span class="who">人机协作</span></div><div class="jstep"><b>6. 版本锁定</b>保存新版本、审核并锁定可用稿。<span class="who">用户</span></div><div class="jstep"><b>7. 派生生产</b>改编、分镜、投流、多平台改版或导入画布。<span class="who">用户+系统</span></div></div></div>
+
+<h3 class="sec">6. 页面跳转图</h3>
+<div class="diagram"><div class="pages"><div class="page-list"><div>工作台/首页</div><div class="active">创建内容项目</div><div>流程化创作台</div><div>项目列表（原剧本仓库）</div><div>改编脚本编辑器</div><div>分镜专业编辑器</div><div>画布工作台</div></div><div class="page-map">
+<div class="lane"><span class="node start">首页</span><span class="arr">→</span><span class="node choice">新建创作 / 上传文稿</span><span class="arr">→</span><span class="node">模式与参数页</span><span class="arr">→</span><span class="node end">流程化创作台</span></div>
+<div class="lane"><span class="node">项目列表</span><span class="arr">→</span><span class="node end">继续编辑：恢复原阶段</span></div>
+<div class="lane"><span class="node end">正文锁稿</span><span class="arr">→</span><span class="node choice">改编脚本编辑器</span><span class="arr">→</span><span class="node choice">分镜专业编辑器</span><span class="arr">→</span><span class="node end">画布工作台</span></div>
+<div class="lane"><span class="node tvcnode">TVC 锁稿</span><span class="arr">→</span><span class="node">多时长/多平台改版</span><span class="arr">→</span><span class="node choice">分镜或投放素材</span></div>
+</div></div></div>
+
+<h3 class="sec">7. 状态流转图</h3>
+<div class="diagram"><h4>内容资产的统一状态机</h4>
+<div class="stateflow"><span class="state">draft<br>草稿</span><span class="arr">→</span><span class="state review">reviewing<br>审核中</span><span class="arr">→</span><span class="state revise">needs_revision<br>待修订</span><span class="arr">→</span><span class="state">draft<br>新草稿版本</span></div>
+<div class="stateflow" style="margin-top:12px"><span class="state review">reviewing<br>审核中</span><span class="arr">→</span><span class="state locked">approved<br>已确认</span><span class="arr">→</span><span class="state locked">locked<br>已锁稿</span><span class="arr">→</span><span class="state">派生改编/分镜/投流</span></div>
+<div class="stateflow" style="margin-top:12px"><span class="state locked">源版本 locked</span><span class="arr">→ 源稿产生新版本 →</span><span class="state stale">needs_sync<br>下游待同步</span><span class="arr">→</span><span class="state choice">保留 / 局部同步 / 重新生成</span></div>
+<p class="small">修改已锁稿内容不覆盖原版本，而是从原版本分支新草稿。下游资产不自动覆盖，保留用户修订和生产侧改动。</p></div>
+
+<h3 class="sec">8. 流程化页面中的参数和智能体展示</h3>
+<div class="grid2"><div class="card shared"><h4>参数始终可见</h4><div class="chips"><span class="chip">女频</span><span class="chip">抖音</span><span class="chip">40 集</span><span class="chip">言情</span><span class="chip">身份反转</span><span class="chip">甜宠</span><span class="chip">现代</span></div><p>顶部显示关键参数；点击可修改。参数变更会提示哪些大纲、钩子和正文可能受影响。</p></div><div class="card green"><h4>每次审核都显示三智能体</h4><div class="chips"><span class="chip">钩子 Agent 82%</span><span class="chip">编导 Agent 76%</span><span class="chip">导演 Agent 71%</span></div><p>展示分数、问题、建议和受影响段落。用户可逐条采纳，不由 Agent 直接覆盖原稿。</p></div></div>
+
+<h3 class="sec">9. 数据模型补充</h3>
+<div class="tree">scripts（内容项目根）
+├─ creation_mode: short_drama | long_form | tvc
+├─ source_mode: ai_manual | uploaded
+├─ project_parameters / parameter_versions
+│  ├─ audience_direction / audience_profile
+│  ├─ primary_platform / target_platforms
+│  ├─ episode_count / episode_duration
+│  ├─ volume_count / chapter_count / target_words
+│  └─ tvc_duration / conversion_goal / cta
+├─ project_tags / tag_definitions
+├─ source_files / parse_jobs / import_units
+├─ characters / plot_tasks / world_facts / locations / timelines
+├─ outline_nodes / content_units / content_versions
+├─ hook_strategies / episode_hooks / foreshadowings
+├─ agent_review_reports / agent_review_items
+├─ tvc_briefs / tvc_concepts / tvc_script_versions
+├─ adaptation_versions / storyboard_versions / promotion_assets
+└─ artifact_dependencies</div>
+
+<h3 class="sec">10. 分期实施修正</h3>
+<div class="phase"><b>P0</b><p>三模式与上传入口、完整参数表、流程化创作台、逐集/逐章/TVC 独立草稿版本、逐集钩子卡、三智能体审核、Context Assembler、项目恢复编辑。</p></div>
+<div class="phase"><b>P1</b><p>长篇人物关系/剧情任务/总纲/分卷/地点 L0-L1/时间线；TVC 简报/创意策略/分秒脚本/专属审核；平台适配规则。</p></div>
+<div class="phase"><b>P2</b><p>改编/分镜/投流源版本绑定、过期检测、分镜版本化、TVC 多时长/多平台改版、锁定分镜导入画布。</p></div>
+<div class="phase"><b>P3</b><p>世界/区域可视化地图 L2、人物行程/势力范围、TVC 品牌产品知识库与合规规则库。</p></div>
+
+<h3 class="sec">11. 核心验收标准</h3>
+<ul><li>受众/频向、平台、集数/时长和标签必须进入每次生成的输入快照。</li><li>每集具有可编辑的开场、中段、结尾、上集兑现和下集承诺。</li><li>每次正文审核都能看到钩子 Agent、编导 Agent和导演 Agent 的独立意见。</li><li>上传文稿后可校正分章、提取设定、继续修订与改编。</li><li>TVC 能独立从简报启动，并使用 TVC 钩子与三智能体审核。</li><li>四张图与实际路由、页面和状态枚举保持一致，不再单独维护一份过期流程图。</li></ul>
+
+<div class="options"><div class="option" data-choice="v4-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认 V4 完整方案</h3><p>已补齐标签、受众/频向、平台、集数/时长、逐集钩子、三智能体以及四张核心流程图。</p></div></div></div>
+</div>

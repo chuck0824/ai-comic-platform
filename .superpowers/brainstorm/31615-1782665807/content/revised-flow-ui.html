@@ -1,0 +1,50 @@
+<style>
+  .app{border:1px solid #d4d4d8;border-radius:15px;overflow:hidden;background:#fafafa}
+  .top{padding:14px 16px;background:#18181b;color:#fafafa;display:flex;justify-content:space-between;align-items:center}
+  .meta{font-size:11px;color:#a1a1aa;margin-top:3px}
+  .rail{display:flex;gap:6px;padding:14px;overflow-x:auto;background:white;border-bottom:1px solid #e4e4e7}
+  .stage{min-width:104px;padding:9px;border-radius:9px;border:1px solid #d4d4d8;font-size:11px;color:#71717a;background:#fafafa}
+  .stage b{display:block;font-size:12px;color:#3f3f46;margin-bottom:3px}.stage.done{border-color:#86efac;background:#f0fdf4}.stage.active{border:2px solid #6366f1;background:#eef2ff}.stage.locked{opacity:.5}
+  .body{display:grid;grid-template-columns:210px 1fr 250px;min-height:430px}
+  .left,.right{padding:14px;background:white}.left{border-right:1px solid #e4e4e7}.right{border-left:1px solid #e4e4e7}.center{padding:18px}
+  .task{padding:10px;border-radius:9px;border:1px solid #e4e4e7;margin:7px 0;font-size:12px}.task.active{border-color:#818cf8;background:#eef2ff}.task.done{color:#15803d}
+  .editor{background:white;border:1px solid #d4d4d8;border-radius:12px;padding:16px;min-height:260px}.input{height:110px;background:#f4f4f5;border-radius:8px;margin:10px 0}.actions{display:flex;justify-content:space-between;gap:8px;margin-top:14px}.btn{padding:8px 12px;border-radius:7px;border:1px solid #d4d4d8;background:white;font-size:12px}.primary{background:#4f46e5;color:white;border-color:#4f46e5}
+  .context{padding:9px;border-radius:8px;background:#f4f4f5;font-size:11px;margin:7px 0}.alert{padding:9px;border-radius:8px;background:#fffbeb;border:1px solid #fcd34d;font-size:11px}
+  .rules{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:18px}.rule{padding:12px;border:1px solid #d4d4d8;border-radius:10px;font-size:12px;background:#fff}.rule b{display:block;color:#4338ca;margin-bottom:5px}
+  @media(max-width:900px){.body{grid-template-columns:1fr}.left,.right{border:0;border-bottom:1px solid #e4e4e7}.rules{grid-template-columns:1fr 1fr}}
+</style>
+
+<h2>修订后的第 2 部分：流程化创作台</h2>
+<p class="subtitle">项目和版本在底层持久化；用户看到的仍是清晰、连续、可回退的创作流程。</p>
+
+<div class="app">
+  <div class="top"><div><b>《无声城》创作流程</b><div class="meta">短剧模式 · 自动保存于 10:32 · 当前草稿 v0.8</div></div><span class="btn">退出并保存</span></div>
+  <div class="rail">
+    <div class="stage done"><b>✓ 1 故事种子</b>已确认</div>
+    <div class="stage done"><b>✓ 2 人物设定</b>4 人</div>
+    <div class="stage active"><b>3 梗概与任务</b>当前阶段</div>
+    <div class="stage"><b>4 分集大纲</b>待完成</div>
+    <div class="stage locked"><b>5 逐集正文</b>未解锁</div>
+    <div class="stage locked"><b>6 审核锁稿</b>未解锁</div>
+    <div class="stage locked"><b>7 下一步去向</b>未解锁</div>
+  </div>
+  <div class="body">
+    <div class="left"><b>本阶段任务</b><div class="task done">✓ 确认故事梗概</div><div class="task active">● 确认主线任务</div><div class="task">○ 补充支线任务</div><div class="task">○ 检查人物目标</div><div class="alert">完成必填任务后即可进入“分集大纲”。</div></div>
+    <div class="center"><div class="editor"><h3>确认主线剧情任务</h3><p class="subtitle">AI 已根据人物和剧情桥段生成草案，你可以直接修改。</p><div class="input"></div><div class="actions"><span class="btn">← 上一项</span><div><span class="btn">AI 重新生成</span> <span class="btn primary">确认并继续 →</span></div></div></div></div>
+    <div class="right"><b>本步使用的上下文</b><div class="context">主角：林默、苏小晚</div><div class="context">核心冲突：身份秘密</div><div class="context">已确认地点：旧城、林氏公司</div><div class="context">钩子策略：旧疤真相</div><span class="btn">查看并修改设定</span></div>
+  </div>
+</div>
+
+<div class="rules">
+  <div class="rule"><b>始终知道下一步</b>页面只突出一个主操作：“确认并继续”。</div>
+  <div class="rule"><b>可回退，不丢稿</b>已完成阶段可随时返回修订，下游只标记受影响。</div>
+  <div class="rule"><b>智能解锁</b>只限制必要前置条件；世界地图等非必须项不阻塞流程。</div>
+  <div class="rule"><b>就地修改上下文</b>右侧显示 AI 本步使用的人物、地点、任务和版本。</div>
+</div>
+
+<div class="grid2x" style="margin-top:18px">
+  <div class="panel"><h3>短剧流程</h3><p>故事种子 → 人物 → 梗概/任务 → 分集大纲 → 逐集正文 → 审核锁稿 → 去向</p></div>
+  <div class="panel"><h3>长篇流程</h3><p>故事种子 → 人物/关系 → 剧情任务 → 总纲 → 分卷 → 逐章正文 → 阶段审核 → 去向</p></div>
+</div>
+
+<div class="options" style="margin-top:22px"><div class="option" data-choice="flow-ui-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>采用流程化创作台</h3><p>用顶部阶段轨道 + 本阶段任务 + 当前编辑器 + 上下文面板取代复杂 Tab 导航。</p></div></div></div>

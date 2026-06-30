@@ -1,0 +1,183 @@
+<style>
+  .v7,.v7 *{box-sizing:border-box;color:#111827}
+  .v7{font-size:14px;line-height:1.62}
+  .v7 p,.v7 li,.v7 td,.v7 .sub{color:#1f2937!important}
+  .v7 h2{padding:14px 16px;margin:0 0 8px;border:2px solid #1d4ed8;border-radius:12px;background:#fff;color:#172554!important}
+  .v7>.subtitle{padding:8px 12px;margin:0 0 14px;border-radius:8px;background:#f8fafc;color:#111827!important;font-weight:650}
+  .v7 h3.sec{padding:10px 13px;margin-top:30px;border-radius:10px;background:#172554;color:#fff!important}
+  .v7 h4{margin:0 0 8px;color:#172554!important}
+  .hero{padding:18px;border:2px solid #1d4ed8;border-radius:14px;background:#eff6ff}
+  .hero strong{color:#1e3a8a!important}
+  .status-row,.grid2,.grid3,.grid4{display:grid;gap:12px;margin:14px 0}
+  .status-row{grid-template-columns:repeat(4,1fr)}
+  .grid2{grid-template-columns:repeat(2,1fr)}
+  .grid3{grid-template-columns:repeat(3,1fr)}
+  .grid4{grid-template-columns:repeat(4,1fr)}
+  .card{padding:14px;border:1.5px solid #64748b;border-radius:11px;background:#fff}
+  .card.good{border-color:#15803d;background:#f0fdf4}
+  .card.warn{border-color:#b45309;background:#fffbeb}
+  .card.risk{border-color:#b91c1c;background:#fef2f2}
+  .card.info{border-color:#1d4ed8;background:#eff6ff}
+  .metric{padding:13px;border:1.5px solid #475569;border-radius:10px;background:#fff;text-align:center;font-weight:700}
+  .metric b{display:block;font-size:24px;color:#1d4ed8!important}
+  .flow{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:13px 0}
+  .node{padding:8px 10px;border:1.5px solid #475569;border-radius:8px;background:#fff;font-weight:700;font-size:12px}
+  .node.blue{border-color:#1d4ed8;background:#eff6ff;color:#1e3a8a!important}
+  .node.green{border-color:#15803d;background:#f0fdf4;color:#14532d!important}
+  .node.orange{border-color:#b45309;background:#fffbeb;color:#78350f!important}
+  .arr{font-weight:900;color:#334155!important}
+  .lane{padding:12px;border:1.5px solid #64748b;border-radius:10px;background:#fff}
+  .lane-title{font-weight:800;color:#172554!important;margin-bottom:7px}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}
+  .chip{padding:5px 8px;border:1px solid #1d4ed8;border-radius:999px;background:#eff6ff;color:#1e3a8a!important;font-size:11px;font-weight:700}
+  .screen{display:grid;grid-template-columns:160px 1fr 220px;border:1.5px solid #475569;border-radius:12px;overflow:hidden;background:#fff;min-height:220px}
+  .screen .left,.screen .right{padding:13px;background:#f8fafc}
+  .screen .left{border-right:1px solid #94a3b8}.screen .right{border-left:1px solid #94a3b8}
+  .screen .main{padding:15px}
+  .stage{padding:7px 8px;margin-bottom:7px;border:1px solid #64748b;border-radius:7px;background:#fff;font-size:12px;font-weight:650}
+  .stage.current{border-color:#1d4ed8;background:#dbeafe;color:#1e3a8a!important}
+  .editor{height:108px;padding:10px;border:1.5px solid #64748b;border-radius:8px;background:#fff}
+  .context{padding:8px;margin-bottom:7px;border:1px solid #64748b;border-radius:7px;background:#fff;font-size:11px}
+  table{width:100%;border-collapse:collapse;border:1px solid #475569;background:#fff;font-size:12px}
+  th,td{padding:9px;border-bottom:1px solid #94a3b8;text-align:left;vertical-align:top}
+  th{background:#1f2937;color:#fff!important}
+  .done{color:#166534!important;font-weight:800}.todo{color:#92400e!important;font-weight:800}.block{color:#991b1b!important;font-weight:800}
+  .phase{display:grid;grid-template-columns:92px 1fr 130px;gap:10px;padding:11px;border-bottom:1px solid #94a3b8;background:#fff}
+  .phase b{color:#1e3a8a!important}.phase .exit{font-weight:750;color:#166534!important}
+  .note{padding:12px;border:1.5px solid #b45309;border-radius:10px;background:#fffbeb;font-weight:700}
+  .small{font-size:11px;color:#334155!important}
+  @media(max-width:950px){.status-row,.grid2,.grid3,.grid4{grid-template-columns:1fr}.screen{grid-template-columns:1fr}.screen .left,.screen .right{border:0;border-bottom:1px solid #94a3b8}.phase{grid-template-columns:1fr}}
+</style>
+
+<div class="v7">
+  <h2>剧本与 TVC 创作模块 V7｜开发基线与二次审查</h2>
+  <p class="subtitle">对应正式文档：<b>《剧本与 TVC 创作模块 PRD V7》</b>（2026-06-29）</p>
+
+  <div class="hero">
+    <strong>更新结论：</strong>V6 提出的 9 项高优先级产品问题已在 V7 中关闭，主业务已经形成“内容项目 → 流程化创作 → 可编辑版本 → 三 Agent 审核 → 分镜 Master → 画布快照 → 生成资产”的闭环。V7 可以作为产品与技术联合评审基线，但还不能仅凭一份 Markdown 直接全量开工；M0 前仍需冻结机器可执行技术合同和关键交互状态。
+  </div>
+
+  <div class="status-row">
+    <div class="metric"><b>3</b>创作模式</div>
+    <div class="metric"><b>5</b>项目角色</div>
+    <div class="metric"><b>6</b>交付里程碑</div>
+    <div class="metric"><b>14</b>核心验收用例</div>
+  </div>
+
+  <h3 class="sec">1. V6 高优先级问题关闭情况</h3>
+  <table>
+    <thead><tr><th>问题</th><th>V7 解决方式</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td>根对象不统一</td><td>产品统一为“内容项目”，旧 `scripts` 仅作迁移期物理表。</td><td class="done">已关闭</td></tr>
+      <tr><td>TVC 双入口割裂</td><td>`brief` 与 `content_version` 共用流程，统一产出 `tvc_script_version`。</td><td class="done">已关闭</td></tr>
+      <tr><td>角色权限缺失</td><td>定义 Owner / Editor / Reviewer / Producer / Viewer 动作级矩阵。</td><td class="done">已关闭</td></tr>
+      <tr><td>P0 超载</td><td>改为 M0 底座、M1 短剧纵切、M2 短剧完整、M3 长篇、M4 TVC、M5 生产。</td><td class="done">已关闭</td></tr>
+      <tr><td>阶段门禁模糊</td><td>Stage 合同定义进入条件、必选/可选任务、退出条件、放行权限和下一阶段。</td><td class="done">已关闭</td></tr>
+      <tr><td>迁移缺失</td><td>提供 Backfill、兼容、校验、灰度与回滚原则。</td><td class="done">产品口径关闭</td></tr>
+      <tr><td>合规缺失</td><td>补充上传授权、模型渠道限制、TVC claims 证据与审计。</td><td class="done">产品口径关闭</td></tr>
+      <tr><td>AI 成本失控</td><td>生成前估算，批量/升档/生产二次确认，项目与企业预算上限。</td><td class="done">已关闭</td></tr>
+      <tr><td>成功标准缺失</td><td>建立项目启动→批准版本→锁稿→画布采用→导出的指标漏斗。</td><td class="done">已关闭</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sec">2. V7 总业务闭环</h3>
+  <div class="flow">
+    <span class="node blue">内容项目列表</span><span class="arr">→</span>
+    <span class="node">新建 / 上传</span><span class="arr">→</span>
+    <span class="node">模式与参数</span><span class="arr">→</span>
+    <span class="node blue">流程化创作台</span><span class="arr">→</span>
+    <span class="node">修订与版本</span><span class="arr">→</span>
+    <span class="node orange">三 Agent 审核</span><span class="arr">→</span>
+    <span class="node green">锁稿</span><span class="arr">→</span>
+    <span class="node">改编 / TVC / 分镜</span><span class="arr">→</span>
+    <span class="node blue">画布快照</span><span class="arr">→</span>
+    <span class="node green">采用与导出</span>
+  </div>
+
+  <div class="grid3">
+    <div class="lane"><div class="lane-title">短剧快速创作</div><div class="chips"><span class="chip">人物</span><span class="chip">梗概</span><span class="chip">分集</span><span class="chip">逐集正文</span><span class="chip">逐集钩子</span></div><p>面向快速产出与短周期审核，支持 20/40/60/80 集关键验收。</p></div>
+    <div class="lane"><div class="lane-title">长篇世界观创作</div><div class="chips"><span class="chip">人物关系</span><span class="chip">剧情任务</span><span class="chip">总纲</span><span class="chip">分卷</span><span class="chip">逐章</span></div><p>人物与桥段先行；地点按 L0 提取、L1 关系、L2 可视化地图渐进建设。</p></div>
+    <div class="lane"><div class="lane-title">TVC 创作</div><div class="chips"><span class="chip">简报</span><span class="chip">内容改编</span><span class="chip">创意策略</span><span class="chip">分秒脚本</span><span class="chip">Claims</span></div><p>独立创作与内容派生共用资产模型，支持多时长和多平台改版。</p></div>
+  </div>
+
+  <div class="card info"><h4>统一上传入口</h4><p>上传 → 安全扫描 → 异步解析 → 原文预览 → 用户拆分/合并/重排 → 提取人物/地点/任务/伏笔候选 → 用户确认 → 初始内容版本。上传状态必须来自后台真实任务，禁止假进度。</p></div>
+
+  <h3 class="sec">3. 流程化创作台：用户真正工作的页面</h3>
+  <div class="screen">
+    <div class="left">
+      <b>阶段轨道</b>
+      <div class="stage">✓ 故事种子</div><div class="stage">✓ 人物设定</div><div class="stage current">● 分集大纲</div><div class="stage">○ 逐集正文</div><div class="stage">🔒 审核锁稿</div>
+    </div>
+    <div class="main">
+      <b>当前唯一主编辑区｜第 12 集大纲</b>
+      <p class="small">自动保存：已保存 · 当前草稿 revision 18 · 基于梗概 V3</p>
+      <div class="editor">核心事件、人物目标、冲突升级、兑现承诺、开场钩子、中段升级、结尾钩子均可直接修订。AI 重生成前展示影响范围，结果以差异预览方式进入草稿。</div>
+      <div class="flow"><span class="node">上一项</span><span class="node blue">保存草稿</span><span class="node orange">AI 重新生成</span><span class="node green">确认并继续</span></div>
+    </div>
+    <div class="right">
+      <b>本步上下文</b>
+      <div class="context">参数版本 V4<br>平台规则：抖音 V12</div>
+      <div class="context">人物：林夏 V3 🔒<br>任务：主线 V2</div>
+      <div class="context">梗概 V3（用户修订）<br>连续性快照 EP11</div>
+      <div class="context">受影响：EP12–EP15 大纲</div>
+    </div>
+  </div>
+
+  <h3 class="sec">4. 版本、Agent 与画布数据链</h3>
+  <div class="grid2">
+    <div class="card">
+      <h4>创作与审核链</h4>
+      <div class="flow"><span class="node">用户草稿</span><span class="arr">→</span><span class="node">内容版本</span><span class="arr">→</span><span class="node orange">三 Agent 报告</span><span class="arr">→</span><span class="node green">批准 / 锁定</span></div>
+      <ul><li>钩子 Agent：开场、承接、中段、结尾、下一集承诺。</li><li>编导 Agent：人物动机、冲突、关系、台词和节奏。</li><li>导演 Agent：画面可表达性、资产难度、成本和风险。</li></ul>
+    </div>
+    <div class="card">
+      <h4>生产事实源链</h4>
+      <div class="flow"><span class="node">源内容</span><span class="arr">→</span><span class="node">改编/TVC</span><span class="arr">→</span><span class="node">分镜 Master</span><span class="arr">→</span><span class="node blue">Canvas Snapshot</span></div>
+      <p>默认半耦合。Master 更新后只标记 `needs_sync`；Canvas 与 Master 同时修改时必须展示 Shot diff，不允许静默覆盖。</p>
+    </div>
+  </div>
+
+  <table>
+    <thead><tr><th>分镜档位</th><th>内容</th><th>画布权限</th></tr></thead>
+    <tbody><tr><td>A</td><td>场景目标、Beat、轻量镜头、时长预算</td><td>概念验证，不可批量</td></tr><tr><td>B</td><td>导演意图、调度、声画、剪辑点</td><td>单镜头验证</td></tr><tr><td>C</td><td>AI 抽卡、视频、配音字幕、失败策略</td><td>锁定并通过准入后批量生产</td></tr></tbody>
+  </table>
+
+  <h3 class="sec">5. 开发合同已经明确到什么程度</h3>
+  <div class="grid3">
+    <div class="card good"><h4>产品合同</h4><div class="chips"><span class="chip">术语</span><span class="chip">权限</span><span class="chip">阶段合同</span><span class="chip">三状态轴</span><span class="chip">异常恢复</span><span class="chip">验收用例</span></div></div>
+    <div class="card good"><h4>数据/API 口径</h4><div class="chips"><span class="chip">最小数据字典</span><span class="chip">V1 API</span><span class="chip">幂等</span><span class="chip">乐观锁</span><span class="chip">错误码</span><span class="chip">任务示例</span></div></div>
+    <div class="card warn"><h4>仍需机器文件</h4><div class="chips"><span class="chip">ERD</span><span class="chip">OpenAPI</span><span class="chip">JSON Schema</span><span class="chip">事件目录</span><span class="chip">迁移 SQL</span><span class="chip">交互原型</span></div></div>
+  </div>
+
+  <h3 class="sec">6. 实施顺序</h3>
+  <div class="phase"><b>M0 底座</b><span>内容项目、权限、版本、依赖、任务、Context、Schema、迁移</span><span class="exit">可创建/保存/恢复</span></div>
+  <div class="phase"><b>M1 纵向切片</b><span>短剧第 1 集 → 三 Agent → A 档 → 概念画布</span><span class="exit">一条 E2E</span></div>
+  <div class="phase"><b>M2 短剧完整</b><span>多集、钩子、批量、连续性、上传、投流、项目恢复</span><span class="exit">20/40/60/80</span></div>
+  <div class="phase"><b>M3 长篇</b><span>任务、总纲、分卷、章节、地点 L0/L1、伏笔、长上下文</span><span class="exit">100 章恢复</span></div>
+  <div class="phase"><b>M4 TVC</b><span>简报/改编双入口、Claims、多时长、多平台</span><span class="exit">统一 TVC 版本</span></div>
+  <div class="phase"><b>M5 生产</b><span>B/C、插件包、L0–L4、生产 Agent、质检、同步、导出</span><span class="exit">生产 E2E</span></div>
+
+  <h3 class="sec">7. 二次审查：V7 仍有 8 个需要关闭的问题</h3>
+  <table>
+    <thead><tr><th>级别</th><th>问题</th><th>为什么仍有风险</th><th>建议处理</th></tr></thead>
+    <tbody>
+      <tr><td class="block">阻塞 M0</td><td><b>技术附件尚未生成</b></td><td>PRD 有字段和示例，但没有可校验的 OpenAPI、JSON Schema、完整 ERD 和事件契约。</td><td>M0 计划第一批任务先冻结这四类文件，再写业务代码。</td></tr>
+      <tr><td class="block">阻塞 M0</td><td><b>迁移回滚存在读路径缺口</b></td><td>“新写只进新模型”与“回滚后旧 API 读旧表”同时成立时，新项目在回滚后不可见。</td><td>明确兼容投影/双写或回滚期旧 API 读取新模型适配层，并补迁移演练用例。</td></tr>
+      <tr><td class="block">阻塞 M0</td><td><b>项目状态聚合规则未定义</b></td><td>项目、内容单元、版本都有状态，但项目卡片的内容状态如何计算不明确。</td><td>定义项目状态为派生视图，列出单元状态→项目状态的优先级与刷新事件。</td></tr>
+      <tr><td class="todo">M0 补齐</td><td><b>事件投递语义缺失</b></td><td>已列事件名，但没有 at-least-once、Outbox、顺序键和消费幂等规则。</td><td>事件目录中补生产事务、去重键、重试和死信策略。</td></tr>
+      <tr><td class="todo">M0 补齐</td><td><b>稳定键命名可能误导</b></td><td>`EP{n}` 作为 stable_key 与“拖拽排序后 ID 不变”容易冲突。</td><td>稳定键使用 UUID/短 ID，`display_no` 单独表达第几集/章。</td></tr>
+      <tr><td class="todo">M1 补齐</td><td><b>异常与空状态仍缺页面级定义</b></td><td>PRD 定义了错误行为，但尚无解析失败、无权限、版本冲突、部分成功、离线恢复的完整交互稿。</td><td>为 M1 纵向切片输出正常/空/加载/失败/冲突/无权限六态原型。</td></tr>
+      <tr><td class="todo">M1 补齐</td><td><b>部分成功状态不够细</b></td><td>`partial_completed` 没定义成功子项、失败子项、取消后续和费用展示结构。</td><td>增加 batch_job_items 与按子项重试、取消、结算合同。</td></tr>
+      <tr><td class="todo">评审补齐</td><td><b>指标多数只有“持续提升”</b></td><td>无法作为灰度转全量的退出门槛。</td><td>试点两周建立基线后，在灰度方案中冻结目标值、护栏指标和回滚阈值。</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note"><b>最终判断：</b>V7 已经不是概念方案，而是可用于拆解 M0/M1 的开发基线。当前最合理的下一步不是继续增加功能，而是先关闭“技术附件、迁移读路径、项目状态聚合”三个阻塞项，再形成 M0/M1 实施计划。</div>
+
+  <div class="options">
+    <div class="option" data-choice="v7-baseline-reviewed" onclick="toggleSelect(this)">
+      <div class="letter">✓</div>
+      <div class="content"><h3>确认 V7 二次审查结果</h3><p>按三个阻塞项优先补齐技术合同，再进入 M0/M1 实施计划。</p></div>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,138 @@
+<style>
+  :root{--vio:#6366f1;--blue:#0284c7;--amber:#d97706;--green:#16a34a;--red:#dc2626}
+  .hero{padding:18px;border-radius:16px;background:linear-gradient(135deg,#eef2ff,#f0f9ff);border:1px solid #c7d2fe;margin:12px 0 22px}
+  .hero b{color:#3730a3}
+  .sectionx{margin:24px 0;padding-top:4px}
+  .sectionx>h3{border-left:4px solid var(--vio);padding-left:10px}
+  .grid2x{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3x{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  .panel{border:1px solid #d4d4d8;border-radius:12px;padding:14px;background:#fff}
+  .panel h4{margin:0 0 8px;color:#27272a}
+  .panel p,.panel li{font-size:13px;line-height:1.55;color:#52525b}
+  .panel ul{margin:6px 0;padding-left:18px}
+  .fast{border-color:#f59e0b;background:#fffbeb}.long{border-color:#38bdf8;background:#f0f9ff}.shared{border-color:#a5b4fc;background:#fafaff}.prod{border-color:#86efac;background:#f0fdf4}
+  .flow{display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin:8px 0}
+  .box{border:1px solid #d4d4d8;background:#fff;border-radius:8px;padding:7px 9px;font-size:12px}.arr{color:#a1a1aa}
+  .navmock{display:grid;grid-template-columns:190px 1fr;border:1px solid #d4d4d8;border-radius:14px;overflow:hidden;min-height:310px}
+  .side{background:#18181b;color:#e4e4e7;padding:14px}.side b{display:block;margin-bottom:12px}.side span{display:block;padding:7px 9px;border-radius:6px;font-size:12px;margin:3px 0}.side .active{background:#4f46e5;color:white}.main{padding:16px;background:#fafafa}
+  .chips{display:flex;gap:6px;flex-wrap:wrap}.chip{padding:5px 8px;border-radius:999px;background:#eef2ff;color:#4338ca;font-size:11px;border:1px solid #c7d2fe}
+  table.matrix{width:100%;border-collapse:collapse;font-size:12px}.matrix th,.matrix td{border-bottom:1px solid #e4e4e7;padding:8px;text-align:left;vertical-align:top}.matrix th{background:#f4f4f5;color:#52525b}.keep{color:#15803d}.move{color:#b45309}.replace{color:#b91c1c}.new{color:#4338ca}
+  .tree{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.8;background:#18181b;color:#e4e4e7;border-radius:12px;padding:14px;white-space:pre-wrap}
+  .state{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-items:center}.state div{padding:10px;border-radius:9px;border:1px solid #d4d4d8;text-align:center;font-size:12px;background:#fff}.state .stale{border-color:#fca5a5;background:#fef2f2;color:#991b1b}
+  .phase{display:grid;grid-template-columns:80px 1fr;gap:10px;border-bottom:1px solid #e4e4e7;padding:10px 0}.phase b{color:#4338ca}.phase p{margin:0;color:#52525b;font-size:13px;line-height:1.55}
+  @media(max-width:900px){.grid2x,.grid3x{grid-template-columns:1fr}.navmock{grid-template-columns:1fr}.state{grid-template-columns:1fr}}
+</style>
+
+<h2>剧本创作模块完整重编方案</h2>
+<div class="hero">
+  <b>设计结论：</b>保留现有“快速/精细生成、上传、标签、钩子、审核、改编、分镜、投流、仓库、画布”能力，但不再放在一条 10 步线性向导中。改为 <b>“共享内容项目 + 短剧/长篇双编排 + 派生生产资产”</b>。
+</div>
+
+<div class="sectionx">
+  <h3>1. 用户业务流</h3>
+  <div class="grid2x">
+    <div class="panel fast"><h4>短剧快速创作</h4><div class="flow"><span class="box">人物/桥段</span><span class="arr">→</span><span class="box">选题梗概</span><span class="arr">→</span><span class="box">分集大纲</span><span class="arr">→</span><span class="box">逐集正文</span><span class="arr">→</span><span class="box">审核锁稿</span></div><p>人物、地点、剧情任务由 AI 轻量提取，用户确认即可。世界地图不作为门槛。</p></div>
+    <div class="panel long"><h4>长篇世界观创作</h4><div class="flow"><span class="box">人物/桥段</span><span class="arr">→</span><span class="box">关系与任务</span><span class="arr">→</span><span class="box">总纲</span><span class="arr">→</span><span class="box">分卷</span><span class="arr">→</span><span class="box">逐章正文</span></div><p>世界观、地点、时间线随剧情扩展而渐进完善，不强制一开始建完。</p></div>
+  </div>
+  <div class="panel prod" style="margin-top:12px"><h4>锁稿后的可选去向</h4><div class="flow"><span class="box">继续修订</span><span class="box">保存/发布</span><span class="box">改编 AI 漫剧/短剧/网剧/TVC</span><span class="box">选范围生成分镜</span><span class="box">生成投流素材</span><span class="box">导入画布</span></div></div>
+</div>
+
+<div class="sectionx">
+  <h3>2. 新页面结构：把向导改成可恢复的项目工作台</h3>
+  <div class="navmock">
+    <div class="side"><b>内容项目</b><span>概览</span><span class="active">创作台</span><span>设定库</span><span>大纲与正文</span><span>审核中心</span><span>改编脚本</span><span>分镜脚本</span><span>投流素材</span><span>版本记录</span><span>画布关联</span></div>
+    <div class="main"><h4>创作台 · 当前任务</h4><div class="chips"><span class="chip">短剧模式</span><span class="chip">第 3 集</span><span class="chip">源头版本 v0.8</span><span class="chip">未锁稿</span></div><div class="grid2x" style="margin-top:12px"><div class="panel"><h4>左侧：结构导航</h4><p>短剧：选题、梗概、分集、单集<br>长篇：总纲、分卷、章节</p></div><div class="panel"><h4>右侧：当前内容编辑器</h4><p>自动保存草稿、手动建版本、AI 续写/润色/扩写/压缩、修订对比、上下文查看。</p></div></div></div>
+  </div>
+  <p class="subtitle">快速生成仍保留，但生成后直接创建内容项目并进入工作台，不再只展示一个无法恢复的结果卡片。</p>
+</div>
+
+<div class="sectionx">
+  <h3>3. 设定库：人物与剧情先行，世界与地图渐进生长</h3>
+  <div class="grid3x">
+    <div class="panel shared"><h4>人物设定</h4><ul><li>身份、外貌、性格、动机、秘密</li><li>短期/长期目标、成长弧</li><li>人物关系及关系变化</li><li>知识边界：每个人当前知道什么</li></ul></div>
+    <div class="panel shared"><h4>剧情任务</h4><ul><li>主线、支线、角色任务</li><li>起点、阶段节点、阻碍、代价</li><li>完成/失败条件</li><li>关联卷、章节、集数和伏笔回收</li></ul></div>
+    <div class="panel shared"><h4>世界设定</h4><ul><li>时代、规则、能力/科技体系</li><li>势力、文化、禁忌、资源</li><li>设定事实可标记“已确认/候选/冲突”</li><li>AI 生成前只读取已确认事实</li></ul></div>
+    <div class="panel shared"><h4>地点与地图</h4><ul><li>L0：从桥段自动提取地点卡</li><li>L1：区域层级、距离、交通、势力关系</li><li>L2：按需生成世界/区域可视化地图</li><li>地点可作为剧情的空间约束</li></ul></div>
+    <div class="panel shared"><h4>时间线与伏笔</h4><ul><li>世界历史事件</li><li>当前剧情时序与人物行程</li><li>伏笔的埋设、提醒、兑现和过期</li><li>自动检查时间/空间冲突</li></ul></div>
+    <div class="panel shared"><h4>标签与钩子策略</h4><ul><li>保留现有 4 轴标签</li><li>增加内容长度、受众、平台、节奏</li><li>长篇用阶段大钩子，短剧用单集钩子曲线</li><li>钩子与剧情任务、伏笔关联</li></ul></div>
+  </div>
+</div>
+
+<div class="sectionx">
+  <h3>4. 现有功能迁移矩阵</h3>
+  <table class="matrix"><thead><tr><th>现有功能</th><th>处理</th><th>新位置/新行为</th></tr></thead><tbody>
+    <tr><td>AI 写作 / 用户上传</td><td class="keep">保留</td><td>统一创建内容项目；上传后自动拆章并提取设定。</td></tr>
+    <tr><td>快速模式</td><td class="move">重排</td><td>变成“故事种子快速启动”，生成后仍可进入项目工作台修订。</td></tr>
+    <tr><td>精细 10 步向导</td><td class="replace">替换</td><td>拆为短剧/长篇双编排，改用工作台任务导航，允许回退与跳转。</td></tr>
+    <tr><td>4 轴标签</td><td class="keep">保留增强</td><td>作为项目级元数据，所有生成任务共用。</td></tr>
+    <tr><td>梗概/世界观/起承转合</td><td class="move">拆分</td><td>梗概归“大纲”；世界事实归“设定库”；不再混在一个 JSON 里。</td></tr>
+    <tr><td>角色自动提取</td><td class="move">前移</td><td>从剧本后处理改为故事种子后的核心步骤，可编辑、去重、版本化。</td></tr>
+    <tr><td>分集大纲/单集正文</td><td class="keep">保留重做</td><td>每集/章独立 ID、内容和版本，不再共用一个 scriptText。</td></tr>
+    <tr><td>联合审核</td><td class="move">分阶段</td><td>正文：钩子+编辑+连续性；改编：钩子+改编+编导；分镜：编导+导演+生产。</td></tr>
+    <tr><td>改编脚本</td><td class="keep">保留强化</td><td>必须绑定源正文版本和范围；源文修订后标记 needs_sync。</td></tr>
+    <tr><td>A/B/C 分镜</td><td class="move">独立资产</td><td>进入现有 Storyboard 专业编辑器；支持镜头增删改排、版本和锁定。</td></tr>
+    <tr><td>投流素材</td><td class="move">可选资产</td><td>从指定源正文/改编/分镜版本生成，每条可编辑与采用。</td></tr>
+    <tr><td>剧本仓库</td><td class="replace">升级</td><td>改为“内容项目库”，点击编辑必须恢复项目和当前位置。</td></tr>
+    <tr><td>Prompt 管理</td><td class="keep">保留重构</td><td>按任务类型+创作模式+内容类型组合，使用结构化输出协议。</td></tr>
+    <tr><td>画布导入</td><td class="keep">保留收紧</td><td>只从锁定分镜版本生成快照；画布修改默认不回写 Master。</td></tr>
+  </tbody></table>
+</div>
+
+<div class="sectionx">
+  <h3>5. 数据与版本模型</h3>
+  <div class="tree">scripts（暂保留为项目根，产品名改为“内容项目”）
+├─ creation_mode: short_drama | long_form
+├─ story_seeds / story_seed_versions
+├─ characters / character_versions / character_relations
+├─ plot_tasks / plot_task_links
+├─ world_facts / factions
+├─ locations / location_relations / map_versions
+├─ timelines / foreshadowings
+├─ outline_nodes（overall | arc | volume | episode | chapter）
+├─ content_units（episode | chapter）
+│  └─ content_versions
+├─ adaptation_versions（强制 source_version_id + source_range）
+├─ storyboard_versions / storyboard_shots
+├─ promotion_assets
+├─ review_reports（artifact_type + artifact_version_id）
+└─ artifact_dependencies（源版本→派生版本，用于过期检测）</div>
+  <p class="subtitle">为降低迁移风险，第一期不强制把 scripts 表重命名。先把它当项目根使用，保留现有 ID、交易、标签、画布关联。</p>
+</div>
+
+<div class="sectionx">
+  <h3>6. 生成上下文：确保“用户修订稿”真正进入下一步</h3>
+  <div class="grid2x"><div class="panel"><h4>Context Assembler</h4><p>前端只提交任务类型、范围和所选版本 ID。后端统一组装已确认人物、剧情任务、世界事实、地点、前文摘要、本单元大纲和用户修订稿。</p></div><div class="panel"><h4>Structured Output Contract</h4><p>topic、synopsis、outline、episode、adaptation、storyboard、promotion 每类任务都有 JSON Schema。解析失败时自动修复一次；仍失败则显式报错，不再用固定示例假装真实结果。</p></div></div>
+  <div class="flow" style="justify-content:center;margin-top:14px"><span class="box">选定源版本</span><span class="arr">→</span><span class="box">组装上下文快照</span><span class="arr">→</span><span class="box">AI 生成</span><span class="arr">→</span><span class="box">Schema 校验</span><span class="arr">→</span><span class="box">生成新草稿</span><span class="arr">→</span><span class="box">用户修订/建版本</span></div>
+</div>
+
+<div class="sectionx">
+  <h3>7. 状态、修订和过期检测</h3>
+  <div class="state"><div>draft<br>草稿</div><div>reviewing<br>审核中</div><div>needs_revision<br>待修订</div><div>approved / locked<br>已确认/锁稿</div><div class="stale">needs_sync<br>源版本已变更</div></div>
+  <ul><li>修改锁稿内容不直接覆盖，而是从锁稿版本分支新草稿。</li><li>源正文新建版本后，已有改编/分镜只标记 needs_sync，由用户选择保留、局部同步或重新生成。</li><li>地点、人物、任务设定变更时，系统先计算受影响章节，不全局重生成。</li></ul>
+</div>
+
+<div class="sectionx">
+  <h3>8. API 和任务编排</h3>
+  <div class="grid2x"><div class="panel"><h4>资产 API</h4><p><code>/content-projects/{id}</code><br><code>/characters</code> <code>/plot-tasks</code> <code>/world-facts</code><br><code>/locations</code> <code>/outlines</code> <code>/content-units</code><br><code>/versions</code> <code>/dependencies</code></p></div><div class="panel"><h4>生成 API</h4><p><code>POST /generation-jobs</code> 创建任务<br><code>GET /generation-jobs/{id}</code> 查询<br><code>POST /generation-jobs/{id}/retry</code> 重试<br><code>POST /generation-jobs/{id}/cancel</code> 取消</p></div></div>
+  <ul><li>异步执行从 <code>ScriptGenService</code> 的自调用拆到独立 Executor，避免 <code>@Async</code> 因自调用失效。</li><li>任务携带幂等键、输入快照、Prompt 版本、模型和费用；页面刷新仍可恢复。</li><li>所有读写 API 统一校验 owner/member 权限，修复现有通过 ID 越权更新的风险。</li></ul>
+</div>
+
+<div class="sectionx">
+  <h3>9. 异常与用户保护</h3>
+  <div class="grid3x"><div class="panel"><h4>草稿保护</h4><p>本地草稿 + 服务端自动保存；乐观锁冲突时保留两份并提供对比。</p></div><div class="panel"><h4>AI 失败</h4><p>任务保留原始输入和错误；可重试/换模型。生产环境不使用 mock 冒充成功。</p></div><div class="panel"><h4>上下文过长</h4><p>使用设定索引、章节摘要和相关性召回；必选事实始终注入，避免人设漂移。</p></div></div>
+</div>
+
+<div class="sectionx">
+  <h3>10. 验收与测试</h3>
+  <div class="grid2x"><div class="panel"><h4>核心验收场景</h4><ul><li>修改梗概后，大纲必须使用修订稿。</li><li>切换集/章时内容独立，刷新后位置和草稿不丢。</li><li>人物事实修改后，只标记受影响内容。</li><li>改编/分镜能追溯到源版本。</li><li>地图不建立也能完成长篇前期创作。</li></ul></div><div class="panel"><h4>测试类型</h4><ul><li>Context Assembler 单元测试</li><li>JSON Schema 解析与修复测试</li><li>版本依赖/过期判定集成测试</li><li>短剧和长篇两条 E2E</li><li>权限与并发修改测试</li></ul></div></div>
+</div>
+
+<div class="sectionx">
+  <h3>11. 分期落地</h3>
+  <div class="phase"><b>P0</b><p>先修真实链路：内容项目根、短剧/长篇模式、人物/桥段启动、逐集/逐章独立草稿与版本、Context Assembler、结构化输出、仓库恢复编辑。</p></div>
+  <div class="phase"><b>P1</b><p>长篇核心：人物关系、剧情任务、总纲/分卷/章节树、世界事实、地点 L0/L1、时间线与连续性审核。</p></div>
+  <div class="phase"><b>P2</b><p>派生资产闭环：改编源版本绑定、分镜版本化、过期检测、分阶段审核、锁定分镜导入画布、投流资产编辑。</p></div>
+  <div class="phase"><b>P3</b><p>高级世界构建：可视化世界/区域地图 L2、人物行程、势力范围、地图与剧情冲突检查。</p></div>
+</div>
+
+<div class="options" style="margin-top:26px"><div class="option" data-choice="full-design-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可这套完整方案</h3><p>确认后将把方案写入正式设计文档，自检后再等待你审阅。</p></div></div></div>

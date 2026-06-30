@@ -1,0 +1,146 @@
+<style>
+  .ux,.ux *{box-sizing:border-box;color:#111827}
+  .ux{font-size:14px;line-height:1.62}
+  .ux h2{padding:15px 17px;margin:0 0 8px;border:2px solid #2563eb;border-radius:12px;background:#fff;color:#172554!important}
+  .ux>.subtitle{padding:8px 12px;margin:0 0 14px;border-radius:8px;background:#f8fafc;color:#111827!important;font-weight:650}
+  .ux h3.sec{padding:10px 13px;margin-top:28px;border-radius:10px;background:#172554;color:#fff!important}
+  .ux h4{margin:0 0 7px;color:#172554!important}
+  .ux p,.ux li,.ux td{color:#1f2937!important}
+  .hero{padding:17px;border:2px solid #2563eb;border-radius:14px;background:#eff6ff}
+  .hero strong{color:#1e3a8a!important}
+  .grid2,.grid3,.grid4{display:grid;gap:12px;margin:13px 0}.grid2{grid-template-columns:repeat(2,1fr)}.grid3{grid-template-columns:repeat(3,1fr)}.grid4{grid-template-columns:repeat(4,1fr)}
+  .card{padding:14px;border:1.5px solid #64748b;border-radius:11px;background:#fff}
+  .card.good{border-color:#15803d;background:#f0fdf4}.card.mid{border-color:#b45309;background:#fffbeb}.card.bad{border-color:#b91c1c;background:#fef2f2}.card.info{border-color:#2563eb;background:#eff6ff}
+  .grade{display:flex;align-items:center;gap:10px}.grade b{padding:8px 11px;border-radius:8px;background:#172554;color:#fff!important;font-size:18px}.grade span{font-weight:750;color:#172554!important}
+  .flow{display:flex;align-items:center;flex-wrap:wrap;gap:7px;margin:13px 0}.arr{font-weight:900;color:#334155!important}
+  .node{padding:8px 10px;border:1.5px solid #475569;border-radius:8px;background:#fff;font-size:12px;font-weight:700}.node.blue{border-color:#2563eb;background:#eff6ff;color:#1e3a8a!important}.node.green{border-color:#15803d;background:#f0fdf4;color:#14532d!important}.node.orange{border-color:#b45309;background:#fffbeb;color:#78350f!important}
+  .branch{padding:12px;border:1.5px solid #64748b;border-radius:10px;background:#fff}.branch-title{font-weight:800;color:#172554!important}.branch small{color:#334155!important}
+  table{width:100%;border-collapse:collapse;border:1px solid #475569;background:#fff;font-size:12px}th,td{padding:9px;border-bottom:1px solid #94a3b8;text-align:left;vertical-align:top}th{background:#1f2937;color:#fff!important}
+  .yes{color:#166534!important;font-weight:800}.warn{color:#92400e!important;font-weight:800}.no{color:#991b1b!important;font-weight:800}
+  .screen{display:grid;grid-template-columns:165px 1fr 225px;border:1.5px solid #475569;border-radius:12px;overflow:hidden;background:#fff;min-height:240px}.screen .left,.screen .right{padding:13px;background:#f8fafc}.screen .left{border-right:1px solid #94a3b8}.screen .right{border-left:1px solid #94a3b8}.screen .main{padding:15px}
+  .stage{padding:7px 8px;margin-bottom:7px;border:1px solid #64748b;border-radius:7px;background:#fff;font-size:12px;font-weight:650}.stage.current{border-color:#2563eb;background:#dbeafe;color:#1e3a8a!important}.stage.optional{border-style:dashed;color:#334155!important}.task{padding:9px;margin:8px 0;border:1px solid #64748b;border-radius:7px;background:#fff}.context{padding:8px;margin-bottom:7px;border:1px solid #64748b;border-radius:7px;background:#fff;font-size:11px}
+  .rule{display:grid;grid-template-columns:42px 1fr;gap:9px;padding:11px;border-bottom:1px solid #94a3b8;background:#fff}.rule b{display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:50%;background:#172554;color:#fff!important}.rule strong{color:#172554!important}
+  .journey{display:grid;grid-template-columns:125px 1fr 1fr 1fr;border:1px solid #475569;background:#fff}.journey>div{padding:9px;border-bottom:1px solid #94a3b8;border-right:1px solid #94a3b8}.journey .head{background:#1f2937;color:#fff!important;font-weight:750}
+  .note{padding:12px;border:1.5px solid #b45309;border-radius:10px;background:#fffbeb;font-weight:700}
+  .option.recommended{border:2px solid #2563eb;background:#eff6ff}
+  @media(max-width:950px){.grid2,.grid3,.grid4{grid-template-columns:1fr}.screen{grid-template-columns:1fr}.screen .left,.screen .right{border:0;border-bottom:1px solid #94a3b8}.journey{grid-template-columns:1fr}.journey .head{display:none}}
+</style>
+
+<div class="ux">
+  <h2>V7.1 已确认方案｜自适应引导流程 + 用户可选分镜</h2>
+  <p class="subtitle">已恢复：采用 C 自适应引导流程；完成内容创作不强制制作分镜，只有进入画布概念验证或生产时才要求相应档位。</p>
+
+  <div class="hero"><strong>确认结论：</strong>V7.1 使用“自适应引导流程”：保留阶段轨道，同时按来源、模式和目标自动完成或收起无关任务。分镜从内容必经步骤改为后续可选能力，用户可“暂不制作”并正常结束内容流程，也可“现在制作”进入 A/B/C 分镜与画布生产。</div>
+
+  <h3 class="sec">1. 三项专项结论</h3>
+  <div class="grid3">
+    <div class="card good"><div class="grade"><b>高</b><span>业务逻辑闭环度</span></div><p>内容项目、版本、审核、分镜、画布、采用和导出已形成事实源链；上游变更不会静默覆盖下游。</p><p class="warn">未闭合点：退回重做、模式转换后的返回关系、市场反馈回流到创作。</p></div>
+    <div class="card mid"><div class="grade"><b>中上</b><span>主流程流畅性</span></div><p>阶段轨道和“确认并继续”能降低迷路概率；项目恢复和任务中心解决跨会话问题。</p><p class="warn">主要阻力：步骤过长、上传路径绕行、长任务阻塞感、频繁审核造成节奏中断。</p></div>
+    <div class="card mid"><div class="grade"><b>中</b><span>首次使用易用性</span></div><p>主编辑区和上下文区清晰，但版本、依赖、Agent、锁稿、分镜档位等专业概念同时出现。</p><p class="warn">需要通过默认值、渐进展示、结果摘要和一键修复降低认知成本。</p></div>
+  </div>
+
+  <h3 class="sec">2. 当前完整链路中仍不顺的地方</h3>
+  <table>
+    <thead><tr><th>环节</th><th>当前风险</th><th>用户感受</th><th>应调整为</th></tr></thead>
+    <tbody>
+      <tr><td>新建项目</td><td>模式、平台、受众、长度、标签同时填写</td><td>还没开始创作就被大量字段阻断</td><td>首屏只问来源、模式和创作目标；其他参数使用推荐值，进入后再确认</td></tr>
+      <tr><td>人物/桥段启动</td><td>两者虽可选其一，但 AI 补全后的确认动作不够直观</td><td>不清楚哪些是自己写的、哪些是 AI 推断</td><td>原始输入、AI 候选、已确认事实三种状态明显区分</td></tr>
+      <tr><td>上传文稿</td><td>可能仍被带回故事种子完整流程</td><td>已有内容却被要求重新填写</td><td>解析确认后直接推荐进入人物校对、分集/分章或改编，自动跳过已满足阶段</td></tr>
+      <tr><td>逐集/逐章生成</td><td>每次生成都可能打断编辑并等待</td><td>流程卡住、无法继续其他工作</td><td>任务后台运行；用户可切换单元，完成后站内提示并展示差异</td></tr>
+      <tr><td>三 Agent 审核</td><td>三份报告和大量建议同时出现</td><td>决策疲劳，不知道先改什么</td><td>先给“阻塞项/建议项/可忽略项”总览，再按 Agent 展开</td></tr>
+      <tr><td>版本与依赖</td><td>每次保存都展示版本会制造噪音</td><td>版本数量多、难理解</td><td>自动保存属于草稿修订；只有提交审核、批准、锁定、手动命名时形成用户可见版本</td></tr>
+      <tr><td>画布准入</td><td>资产成熟度、风险、预算可能一次出现几十项</td><td>不清楚先修哪一项</td><td>按“必须修复/建议修复/可放行”分组，并提供跳转到具体资产</td></tr>
+      <tr><td>失败与返回</td><td>有错误码，但返回哪一步、保留什么仍偏技术化</td><td>担心内容丢失，不敢重试</td><td>所有错误提示统一回答：发生什么、保留了什么、下一步做什么</td></tr>
+    </tbody>
+  </table>
+
+  <h3 class="sec">3. 推荐交互模型：自适应引导流程</h3>
+  <div class="flow">
+    <span class="node blue">选择来源与目标</span><span class="arr">→</span>
+    <span class="node">系统推荐路径</span><span class="arr">→</span>
+    <span class="node green">补齐最少必需信息</span><span class="arr">→</span>
+    <span class="node blue">创作/编辑</span><span class="arr">→</span>
+    <span class="node orange">必要审核</span><span class="arr">→</span>
+    <span class="node green">明确去向</span>
+  </div>
+  <div class="grid4">
+    <div class="branch"><div class="branch-title">从人物/桥段开始</div><small>AI 补全另一项 → 梗概 → 大纲 → 选定单元创作</small></div>
+    <div class="branch"><div class="branch-title">从已有文稿开始</div><small>解析确认 → 人物/结构校对 → 直接进入分章、改编或分镜</small></div>
+    <div class="branch"><div class="branch-title">从 TVC 简报开始</div><small>事实与 Claims → 创意方向 → 概念脚本 → 分秒脚本</small></div>
+    <div class="branch"><div class="branch-title">从已有版本派生</div><small>选择源版本与目标 → 预览复制范围 → 创建派生项目</small></div>
+  </div>
+  <div class="note">关键规则：流程轨道显示完整阶段，但只突出“当前必须做的 1 件事”；已满足阶段自动标记完成，可选阶段默认收起。短剧支持全季规划或滚动规划，不要求用户先完成全部集数大纲才能开始写当前集。</div>
+
+  <h3 class="sec">4. 分镜选择：内容完成不再被生产流程阻塞</h3>
+  <div class="flow">
+    <span class="node green">内容版本锁定</span><span class="arr">→</span>
+    <span class="node blue">选择后续去向</span><span class="arr">→</span>
+    <span class="node orange">是否制作分镜？</span>
+  </div>
+  <div class="grid2">
+    <div class="card good"><h4>暂不制作分镜</h4><p>内容流程正常完成，不创建空分镜，不影响入库、投流、上架或文本导出。项目概览始终保留“制作分镜”入口，可稍后从任一锁定源版本继续。</p></div>
+    <div class="card info"><h4>现在制作分镜</h4><p>选择源版本和范围，展示预计镜头数、时间与费用后生成 A 档。A/B 档用于概念验证，C 档锁定后才允许批量生产。</p></div>
+  </div>
+  <div class="note">无分镜时直接点击“进入画布”，系统必须先解释画布依赖并提供“一键生成 A 档分镜”。用户未确认前，不创建生成任务、不扣费。</div>
+
+  <h3 class="sec">5. 创作台应如何降低认知负担</h3>
+  <div class="screen">
+    <div class="left">
+      <b>你的创作路径</b>
+      <div class="stage">✓ 输入与目标</div>
+      <div class="stage">✓ 人物确认</div>
+      <div class="stage current">● 第 12 集大纲</div>
+      <div class="stage optional">可选：地点关系</div>
+      <div class="stage">○ 第 12 集正文</div>
+      <div class="stage">○ 审核与去向</div>
+    </div>
+    <div class="main">
+      <b>现在只需要：确认本集核心事件和结尾钩子</b>
+      <div class="task"><strong>核心事件</strong><br>林夏发现交易记录被篡改，但暂时没有证据。</div>
+      <div class="task"><strong>结尾钩子</strong><br>监控画面中出现一个不应该在现场的人。</div>
+      <div class="flow"><span class="node">稍后处理</span><span class="node orange">AI 提供 3 个方案</span><span class="node green">确认并进入正文</span></div>
+    </div>
+    <div class="right">
+      <b>AI 为什么这样写</b>
+      <div class="context">使用：人物 V3、梗概 V3、第 11 集连续性</div>
+      <div class="context">保持不变：人物动机、已锁定伏笔</div>
+      <div class="context">修改影响：第 12–15 集大纲</div>
+      <div class="context">专业设置 ▸</div>
+    </div>
+  </div>
+
+  <h3 class="sec">6. 已补入 V7.1 的 10 条易用性规则</h3>
+  <div class="grid2">
+    <div class="card">
+      <div class="rule"><b>1</b><div><strong>最短可行路径</strong><br>每种来源定义最少必需步骤，禁止所有用户走同一条完整向导。</div></div>
+      <div class="rule"><b>2</b><div><strong>渐进展示</strong><br>专业参数、世界设定、Agent 明细和生产配置默认收起。</div></div>
+      <div class="rule"><b>3</b><div><strong>单屏单目标</strong><br>每个页面只突出一个主任务和一个主按钮。</div></div>
+      <div class="rule"><b>4</b><div><strong>智能默认值</strong><br>平台、画幅、时长、Agent 权重使用模板推荐，可随时调整。</div></div>
+      <div class="rule"><b>5</b><div><strong>非阻塞任务</strong><br>长生成进入后台；离开页面不取消，完成后通知。</div></div>
+    </div>
+    <div class="card">
+      <div class="rule"><b>6</b><div><strong>草稿不等于版本</strong><br>隐藏自动保存噪音，关键节点才形成用户可见版本。</div></div>
+      <div class="rule"><b>7</b><div><strong>建议按严重性排序</strong><br>先处理阻塞项，再展示优化建议和可忽略项。</div></div>
+      <div class="rule"><b>8</b><div><strong>结果必须可解释</strong><br>显示 AI 使用了什么、保持了什么、会影响什么。</div></div>
+      <div class="rule"><b>9</b><div><strong>错误必须可恢复</strong><br>明确内容是否保留、返回位置、重试范围和费用。</div></div>
+      <div class="rule"><b>10</b><div><strong>去向始终明确</strong><br>锁稿后只展示与当前目标相关的后续动作，不一次罗列全部能力。</div></div>
+    </div>
+  </div>
+
+  <h3 class="sec">7. 用户旅程闭环检查</h3>
+  <div class="journey">
+    <div class="head">阶段</div><div class="head">用户的问题</div><div class="head">系统必须回答</div><div class="head">闭环条件</div>
+    <div>开始</div><div>我该选哪种模式？</div><div>根据来源和目标推荐路径，可修改</div><div class="yes">能快速开始</div>
+    <div>生成</div><div>AI 用了什么内容？</div><div>显示版本、事实、锁定项和影响范围</div><div class="yes">结果可解释</div>
+    <div>修订</div><div>我的修改保存了吗？</div><div>显示保存状态；刷新恢复同一任务与单元</div><div class="yes">修改不丢失</div>
+    <div>审核</div><div>我应该先改什么？</div><div>阻塞项优先，建议可批量或局部采纳</div><div class="yes">决策可执行</div>
+    <div>派生</div><div>会不会覆盖原稿？</div><div>创建派生版本/项目，明确来源关系</div><div class="yes">上下游可追溯</div>
+    <div>失败</div><div>还能继续吗？</div><div>保留成功结果，只重试失败范围</div><div class="yes">异常可恢复</div>
+    <div>完成</div><div>下一步去哪里？</div><div>根据当前目标推荐入库、改编、分镜、画布或导出</div><div class="yes">有明确出口</div>
+  </div>
+
+  <h3 class="sec">8. 已确认的交互决策</h3>
+  <div class="options">
+    <div class="option recommended" data-choice="adaptive-guided-flow-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>C：自适应引导流程</h3><p>根据来源、目标和已有资产动态缩短路径；可选能力渐进展开；分镜由用户决定是否制作。</p></div></div>
+  </div>
+</div>

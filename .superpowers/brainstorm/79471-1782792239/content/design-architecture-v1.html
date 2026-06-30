@@ -1,0 +1,50 @@
+<h2>设计 1/4：原地迭代的模块架构</h2>
+<p class="subtitle">保留旧版作品编辑器的视觉与操作习惯，内部拆分模块，并接到新版内容项目。旧链接继续可用。</p>
+
+<div class="mockup">
+  <div class="mockup-header">入口与兼容层</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 56px 1.2fr 56px 1fr;gap:12px;align-items:center">
+      <div style="display:grid;gap:10px">
+        <div style="padding:12px;border:1px solid #93c5fd;border-radius:10px;background:#eff6ff"><strong>新版入口</strong><br><code>/script-gen/:projectId/edit/:section?</code></div>
+        <div style="padding:12px;border:1px solid #cbd5e1;border-radius:10px"><strong>旧版兼容</strong><br><code>/tag-editor/:scriptId</code></div>
+      </div>
+      <div style="font-size:24px;text-align:center">→</div>
+      <div style="padding:18px;border:2px solid #2563eb;border-radius:12px;background:#f8fbff;text-align:center">
+        <div class="label">保留旧版外壳</div>
+        <h3 style="margin:6px 0">作品编辑中心</h3>
+        <p>统一解析当前作品、权限、保存状态与离开保护。</p>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px">
+          <span style="padding:5px 8px;border-radius:999px;background:#dbeafe">标签</span>
+          <span style="padding:5px 8px;border-radius:999px;background:#dbeafe">简介</span>
+          <span style="padding:5px 8px;border-radius:999px;background:#dbeafe">总纲</span>
+          <span style="padding:5px 8px;border-radius:999px;background:#dcfce7">角色</span>
+          <span style="padding:5px 8px;border-radius:999px;background:#dcfce7">背景</span>
+          <span style="padding:5px 8px;border-radius:999px;background:#dcfce7">势力</span>
+          <span style="padding:5px 8px;border-radius:999px;background:#dcfce7">地点</span>
+          <span style="padding:5px 8px;border-radius:999px;background:#dcfce7">物品</span>
+        </div>
+      </div>
+      <div style="font-size:24px;text-align:center">→</div>
+      <div style="display:grid;gap:10px">
+        <div style="padding:12px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4"><strong>作品资料</strong><br>标签、简介、总纲</div>
+        <div style="padding:12px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4"><strong>结构化设定库</strong><br>五类实体、关系、版本</div>
+        <div style="padding:12px;border:1px solid #fde68a;border-radius:10px;background:#fffbeb"><strong>AI 提取审核</strong><br>候选项、差异、合并决策</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>关键数据原则</h3>
+  <div class="options">
+    <div class="option" style="cursor:default"><div class="letter">1</div><div class="content"><h3>新版项目为主链路</h3><p>新入口直接读写内容项目；旧 scriptId 通过现有 legacy_script_id 关系解析到项目，不要求用户迁移操作。</p></div></div>
+    <div class="option" style="cursor:default"><div class="letter">2</div><div class="content"><h3>可筛选字段结构化存储</h3><p>四轴标签保留独立列/索引；简介和总纲进入作品资料；五类设定采用统一实体模型加类型字段，减少五套重复代码。</p></div></div>
+    <div class="option" style="cursor:default"><div class="letter">3</div><div class="content"><h3>人工结果优先</h3><p>AI 只生成候选数据。未经用户确认不进入正式设定库；已人工编辑字段绝不静默覆盖。</p></div></div>
+    <div class="option" style="cursor:default"><div class="letter">4</div><div class="content"><h3>确认后进入上下文</h3><p>正式资料与设定生成新参数版本，供后续大纲、正文、分镜和投流生成读取，并保留可追溯版本。</p></div></div>
+  </div>
+</div>
+
+<div style="margin-top:22px;padding:16px;border-radius:12px;background:#eff6ff;border:1px solid #bfdbfe">
+  <strong>需要确认：</strong>是否同意“旧 UI 外壳 + 新项目主链路 + 兼容旧 scriptId + AI 候选经审核后入库”的架构？
+</div>
