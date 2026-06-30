@@ -18,7 +18,6 @@ public class AssetPublishRequest {
     private String reason;          // publish reason (submit) or reject reason (reject)
     private String reviewComment;
 
-    @Version
     private Integer rowVersion;
 
     @TableField(fill = FieldFill.INSERT)

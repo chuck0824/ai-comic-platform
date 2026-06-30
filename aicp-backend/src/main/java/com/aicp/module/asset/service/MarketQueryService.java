@@ -75,7 +75,7 @@ public class MarketQueryService {
                 .map(ml -> toListingCard(ml, ctx))
                 .toList();
 
-        return PageResult.of(cards, (int) result.getTotal(), page, safePageSize);
+        return PageResult.of(cards, page, safePageSize, result.getTotal());
     }
 
     /**

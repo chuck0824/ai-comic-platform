@@ -46,7 +46,7 @@ public class AssetPublishController {
                         pr.getStatus(), pr.getReason(), pr.getReviewComment(),
                         pr.getRowVersion(), pr.getCreatedAt(), pr.getUpdatedAt()))
                 .toList();
-        return ApiResponse.success(PageResult.of(views, (int) result.getTotal(), page, Math.min(pageSize, 50)));
+        return ApiResponse.success(PageResult.of(views, page, Math.min(pageSize, 50), result.getTotal()));
     }
 
     @GetMapping("/publish-requests/{requestId}")

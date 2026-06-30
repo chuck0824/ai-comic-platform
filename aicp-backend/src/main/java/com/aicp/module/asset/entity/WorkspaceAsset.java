@@ -24,7 +24,6 @@ public class WorkspaceAsset {
     private Long currentVersionId;
     private String status;       // ACTIVE / ARCHIVED
 
-    @Version
     private Integer rowVersion;
 
     @TableField(fill = FieldFill.INSERT)

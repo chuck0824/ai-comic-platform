@@ -13,6 +13,8 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -84,12 +86,13 @@ public class AssetClaimService {
         buyerAsset.setWorkspaceType(ctx.workspaceType());
         buyerAsset.setCreatorUserId(ctx.userId());
         buyerAsset.setAssetType(listing.getAssetType());
-        buyerAsset.setName(listing.getPublicSnapshot()); // truncated for display
+        buyerAsset.setName(extractName(listing.getPublicSnapshot()));
         buyerAsset.setSourceType("MARKET_CLAIMED");
         buyerAsset.setSourceListingId(listingId);
         buyerAsset.setSourceVersionId(listing.getSourceVersionId());
         buyerAsset.setAccessScope("PRIVATE");
         buyerAsset.setStatus("ACTIVE");
+        buyerAsset.setCurrentVersionId(listing.getSourceVersionId());
         buyerAsset.setRowVersion(0);
         buyerAsset.setCreatedBy(ctx.userId());
         buyerAsset.setUpdatedBy(ctx.userId());
@@ -115,6 +118,17 @@ public class AssetClaimService {
             favoriteMapper.insert(fav);
         } catch (DuplicateKeyException e) {
             // Already favorited — idempotent
+        }
+    }
+
+    private String extractName(String snapshot) {
+        try {
+            ObjectMapper om = new ObjectMapper();
+            Map<String, Object> map = om.readValue(snapshot, Map.class);
+            Object name = map.get("name");
+            return name != null ? name.toString() : "未命名资产";
+        } catch (Exception e) {
+            return "未命名资产";
         }
     }
 

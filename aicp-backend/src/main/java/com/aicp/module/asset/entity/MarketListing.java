@@ -22,7 +22,6 @@ public class MarketListing {
     private Integer useCount;
     private BigDecimal rating;
 
-    @Version
     private Integer rowVersion;
 
     @TableField(fill = FieldFill.INSERT)

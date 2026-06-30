@@ -43,7 +43,7 @@ public class AssetLibraryService {
         Page<WorkspaceAsset> result = assetMapper.selectPage(mpPage, qw);
 
         List<AssetViews.AssetView> views = result.getRecords().stream().map(this::toAssetView).toList();
-        return PageResult.of(views, (int) result.getTotal(), page, Math.min(pageSize, 50));
+        return PageResult.of(views, page, Math.min(pageSize, 50), result.getTotal());
     }
 
     public AssetViews.AssetView getAsset(WorkspaceContext ctx, Long assetId) {
