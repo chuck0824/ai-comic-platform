@@ -53,7 +53,8 @@ public class WorkspaceContextFilter extends OncePerRequestFilter {
             new PathPattern("/api/v1/asset/market/listings/*/claim", true),
             new PathPattern("/api/v1/asset/market/listings/*/favorite", true),
             new PathPattern("/api/v1/asset/publish-requests/**", true),
-            new PathPattern("/api/v1/asset/applications/**", true)
+            new PathPattern("/api/v1/asset/applications/**", true),
+            new PathPattern("/api/v1/canvas/projects/**", true)
     );
 
     @Override
@@ -110,6 +111,10 @@ public class WorkspaceContextFilter extends OncePerRequestFilter {
     }
 
     private int mapHttpStatus(int bizCode) {
+        // 5xxxx → server error (503 for upstream unavailability)
+        if (bizCode >= 50000) {
+            return HttpServletResponse.SC_SERVICE_UNAVAILABLE;
+        }
         // Use the same mapping as GlobalExceptionHandler
         if (bizCode >= 48000 && bizCode < 49000) {
             return switch (bizCode) {

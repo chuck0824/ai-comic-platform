@@ -47,8 +47,11 @@ public class AssetApplicationService {
                         .eq(AssetApplication::getWorkspaceId, ctx.workspaceId())
                         .eq(AssetApplication::getIdempotencyKey, req.idempotencyKey()));
         if (existing != null) {
+            // Idempotent retry: return the stored result but NOT the raw undo token.
+            // The client must use the token from the original response.
             return new AssetViews.ApplyView(existing.getId(),
-                    existing.getUndoTokenHash(), existing.getChangeSummary());
+                    null, // token not recoverable — client must use original
+                    existing.getChangeSummary() + " (已应用)");
         }
 
         // Verify project belongs to the same workspace
@@ -114,7 +117,8 @@ public class AssetApplicationService {
                             .eq(AssetApplication::getWorkspaceId, ctx.workspaceId())
                             .eq(AssetApplication::getIdempotencyKey, req.idempotencyKey()));
             return new AssetViews.ApplyView(winner.getId(),
-                    winner.getUndoTokenHash(), winner.getChangeSummary());
+                    null, // race condition: original token not recoverable
+                    winner.getChangeSummary() + " (并发重复)");
         }
 
         return new AssetViews.ApplyView(application.getId(), undoToken, changeSummary);

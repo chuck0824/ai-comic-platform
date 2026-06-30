@@ -57,13 +57,19 @@ function load() {
 }
 
 function onPublish(item) {
-  props.market.publishAsset(item.id, {
+  const body = {
     version_id: item.currentVersionId,
     name: item.name,
     tags: item.tags || [],
     author_name: '用户',
     row_version: item.rowVersion
-  }).then(() => load())
+  }
+  // Enterprise workspaces require approval flow
+  const wsType = props.market.getWorkspaceType()
+  const promise = wsType === 'enterprise'
+    ? props.market.requestPublish(item.id, body)
+    : props.market.publishAsset(item.id, body)
+  promise.then(() => load())
 }
 
 load()

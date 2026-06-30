@@ -151,10 +151,12 @@ public class AssetPublicationService {
         Map<String, Object> snapshot = new LinkedHashMap<>();
         snapshot.put("name", req.name());
         snapshot.put("description", req.description());
-        snapshot.put("tags", req.tags());
+        snapshot.put("tags", req.tags() != null ? req.tags() : List.of());
         snapshot.put("author_name", req.authorName());
         snapshot.put("license_scope", req.licenseScope());
-        try { snapshot.put("previews", req.tags()); } catch (Exception e) {}
+        // Previews come from asset version, not request
+        snapshot.put("previews", version.getPreviewUrl() != null
+                ? List.of(version.getPreviewUrl()) : List.of());
 
         // Check for existing listing
         MarketListing listing = listingMapper.selectOne(new LambdaQueryWrapper<MarketListing>()

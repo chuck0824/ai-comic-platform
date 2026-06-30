@@ -99,6 +99,7 @@ class AssetMarketLifecycleE2ETest {
         project.setName("测试画布项目");
         project.setStatus("editing");
         project.setCanvasVersion(1);
+        project.setRevision(0);
         projectMapper.insert(project);
 
         // 7. Apply claimed asset to project

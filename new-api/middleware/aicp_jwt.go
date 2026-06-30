@@ -145,9 +145,17 @@ func AicpJwtOptional() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if userID, ok := claims["userId"].(float64); ok {
-			c.Set("aicp_user_id", int64(userID))
+		// Read "uid" first (8080 JwtUtil emits "uid"), fall back to "userId"
+		var userID int64
+		if uid, ok := claims["uid"].(float64); ok {
+			userID = int64(uid)
+		} else if uid, ok := claims["userId"].(float64); ok {
+			userID = int64(uid)
+		} else {
+			c.Next()
+			return
 		}
+		c.Set("aicp_user_id", userID)
 		c.Next()
 	}
 }

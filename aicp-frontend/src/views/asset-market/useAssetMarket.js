@@ -12,6 +12,19 @@ export function useAssetMarket() {
   const router = useRouter()
 
   // ---- State ----
+  const permissions = ref(tryParsePermissions())
+
+  function tryParsePermissions() {
+    try {
+      const user = JSON.parse(localStorage.getItem('user') || '{}')
+      return user.permissions || []
+    } catch { return [] }
+  }
+
+  function getWorkspaceType() {
+    return localStorage.getItem('active_workspace_type') || 'personal'
+  }
+
   const listings = reactive({ data: null, loading: false, error: null })
   const detail = reactive({ data: null, loading: false, error: null })
   const library = reactive({ data: null, loading: false, error: null })
@@ -167,6 +180,7 @@ export function useAssetMarket() {
   }
 
   return {
+    permissions, getWorkspaceType,
     listings, detail, library, publishRequests, filters,
     fetchListings, fetchDetail, claimListing, favoriteListing, unfavoriteListing,
     fetchLibrary, createAsset, editAsset, publishAsset, unlistAsset, archiveAsset,
