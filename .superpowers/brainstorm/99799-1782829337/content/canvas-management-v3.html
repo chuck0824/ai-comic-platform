@@ -1,0 +1,81 @@
+<h2>画布生产体系 V3 · 归属、入口与恢复</h2>
+<p class="subtitle">每个画布都有明确存储位置；全局与项目内两种入口共享同一份数据。</p>
+
+<div class="section">
+  <div class="label">一、存储层级</div>
+  <div class="mockup">
+    <div class="mockup-body" style="background:#f6f8fc;padding:20px">
+      <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:18px;font-size:12px">
+        <div style="background:white;border:1px solid #e3e7ef;border-radius:10px;padding:18px">
+          <div style="padding:12px;border-radius:8px;background:#26375f;color:white"><b>内容项目</b>　《重生后我接管家族》<br><small style="color:#bbc7e4">short_drama · 项目事实源</small></div>
+          <div style="margin-left:22px;border-left:2px solid #ccd5e8;padding:12px 0 0 18px">
+            <div style="padding:10px;background:#eef3ff;border-radius:7px"><b>生产单元</b>　第 08 集 · 锁稿版本 v5</div>
+            <div style="margin-left:20px;border-left:2px solid #ccd5e8;padding:10px 0 0 16px">
+              <div style="padding:9px;background:#f5efff;border-radius:7px;margin-bottom:7px"><b>画布 A</b>　正式生产方案<br><small>canvas_project · editing</small></div>
+              <div style="padding:9px;background:#fff3e8;border-radius:7px"><b>画布 B</b>　备选美术实验<br><small>canvas_project · archived</small></div>
+            </div>
+            <div style="padding:10px;background:#eef3ff;border-radius:7px;margin-top:12px"><b>生产单元</b>　第 09 集 · 锁稿版本 v2</div>
+          </div>
+        </div>
+        <div style="background:white;border:1px solid #e3e7ef;border-radius:10px;padding:18px">
+          <b style="font-size:14px">每个画布必须记录</b>
+          <div style="margin-top:12px;line-height:2;color:#555e70">
+            ✓ 内容项目 ID<br>
+            ✓ 生产单元类型与 ID（集 / 章 / TVC 版本）<br>
+            ✓ 来源内容版本、分镜 Master 版本<br>
+            ✓ 导入时的不可变生产快照<br>
+            ✓ 画布用途（正式 / 备选 / 实验）<br>
+            ✓ 状态、负责人、更新时间、预览图<br>
+            ✓ 节点、连线、任务、生成资产与导出记录
+          </div>
+          <div style="margin-top:13px;padding:10px;background:#fff5e8;border:1px solid #ffe0b3;border-radius:7px;color:#8c5619">不再自动创建“无归属画布”；新建时必须先选择内容项目与生产单元。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">二、全局中间页：画布项目中心</div>
+  <div class="mockup">
+    <div class="mockup-header">侧栏「画布工作台」 → /canvas-projects</div>
+    <div class="mockup-body" style="background:#f6f8fc;padding:20px;font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px"><div><b style="font-size:20px">画布项目中心</b><br><span style="color:#7b8293">跨项目查看、恢复与管理全部画布</span></div><button style="background:#345edb;color:white;border:0;border-radius:7px;padding:10px 15px">＋ 新建画布</button></div>
+      <div style="display:flex;gap:8px;background:white;border:1px solid #e3e7ef;padding:10px;border-radius:9px;margin-bottom:12px"><span style="padding:7px;background:#eef3ff;color:#345edb;border-radius:6px">全部 8</span><span style="padding:7px">进行中 3</span><span style="padding:7px">生成中 2</span><span style="padding:7px">已完成 2</span><span style="padding:7px">已归档 1</span><span style="margin-left:auto;padding:7px;color:#7b8293">搜索项目 / 画布　　筛选模式 ▾</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:11px">
+        <div style="background:white;border:1px solid #dce3f0;border-radius:10px;overflow:hidden"><div style="height:92px;background:linear-gradient(135deg,#dce6ff,#edf2ff);padding:12px;color:#5f719e">画布缩略图 · 16 个节点</div><div style="padding:12px"><b>第 08 集正式生产</b><br><span style="color:#7b8293">重生后我接管家族 · 第 08 集</span><div style="margin:10px 0"><span style="background:#eef3ff;color:#345edb;padding:3px 7px;border-radius:9px">编辑中</span>　更新于 10 分钟前</div><button style="width:100%;padding:7px;border:0;border-radius:6px;background:#345edb;color:white">继续编辑</button></div></div>
+        <div style="background:white;border:1px solid #dce3f0;border-radius:10px;overflow:hidden"><div style="height:92px;background:linear-gradient(135deg,#f3e8ff,#faf6ff);padding:12px;color:#80609c">画布缩略图 · 24 个节点</div><div style="padding:12px"><b>第一章概念验证</b><br><span style="color:#7b8293">星海遗民 · 第一章</span><div style="margin:10px 0"><span style="background:#f5efff;color:#7148bb;padding:3px 7px;border-radius:9px">生成中</span>　任务 3 / 8</div><button style="width:100%;padding:7px;border:1px solid #cfd6e3;border-radius:6px;background:white">查看进度</button></div></div>
+        <div style="background:white;border:1px solid #dce3f0;border-radius:10px;overflow:hidden"><div style="height:92px;background:linear-gradient(135deg,#ffe9d8,#fff5ec);padding:12px;color:#9b6b44">画布缩略图 · 11 个节点</div><div style="padding:12px"><b>30 秒竖版正式稿</b><br><span style="color:#7b8293">夏季新品广告 · TVC 30s v3</span><div style="margin:10px 0"><span style="background:#e8f7ee;color:#278455;padding:3px 7px;border-radius:9px">已完成</span>　已导出 2 版</div><button style="width:100%;padding:7px;border:1px solid #cfd6e3;border-radius:6px;background:white">查看画布</button></div></div>
+      </div>
+      <div style="margin-top:12px;color:#6f7788">卡片菜单：重命名、复制为新方案、移动生产单元、归档、删除；批量操作仅支持归档与负责人调整。</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">三、项目内中间页：画布生产</div>
+  <div class="mockup">
+    <div class="mockup-header">内容项目工作区 →「画布生产」页签</div>
+    <div class="mockup-body" style="background:#f6f8fc;padding:20px;font-size:12px">
+      <div style="background:white;border:1px solid #e3e7ef;border-radius:10px;padding:15px;margin-bottom:12px"><b style="font-size:17px">《重生后我接管家族》</b><div style="display:flex;gap:18px;margin-top:12px;color:#6f7788"><span>项目概览</span><span>内容创作</span><span>分镜</span><span style="color:#345edb;border-bottom:2px solid #345edb;padding-bottom:8px">画布生产</span><span>资产</span><span>版本</span></div></div>
+      <div style="display:grid;grid-template-columns:180px 1fr;gap:12px">
+        <div style="background:white;border:1px solid #e3e7ef;border-radius:10px;padding:12px"><b>生产单元</b><div style="margin-top:10px;padding:9px;background:#eef3ff;color:#345edb;border-radius:6px">第 08 集　2 个画布</div><div style="padding:9px">第 09 集　1 个画布</div><div style="padding:9px">第 10 集　尚未创建</div></div>
+        <div style="background:white;border:1px solid #e3e7ef;border-radius:10px;padding:14px"><div style="display:flex;justify-content:space-between"><div><b style="font-size:15px">第 08 集</b><br><span style="color:#7b8293">来源：正文 v5 · 分镜 Master C-tier v2</span></div><button style="background:#345edb;color:white;border:0;border-radius:6px;padding:8px 12px">＋ 创建本集画布</button></div><div style="margin-top:12px;padding:12px;border:1px solid #dfe4ee;border-radius:8px;display:flex;justify-content:space-between"><span><b>正式生产方案</b><br><small style="color:#7b8293">16 节点 · 3 个任务 · 更新于 10 分钟前</small></span><button style="border:1px solid #cfd6e3;background:white;border-radius:6px;padding:6px 12px">继续编辑</button></div><div style="margin-top:8px;padding:12px;border:1px solid #dfe4ee;border-radius:8px;display:flex;justify-content:space-between"><span><b>备选美术实验</b><br><small style="color:#7b8293">8 节点 · 已归档</small></span><button style="border:1px solid #cfd6e3;background:white;border-radius:6px;padding:6px 12px">查看画布</button></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">四、入口与跳转</div>
+  <div style="display:flex;align-items:center;justify-content:center;gap:10px;background:white;border:1px solid #e3e7ef;border-radius:10px;padding:18px;font-size:12px">
+    <span style="padding:10px;background:#eef3ff;border-radius:7px">首页 · 画布生产摘要</span><b>→</b><span style="padding:10px;background:#eaf0ff;border-radius:7px">全局画布项目中心</span><b>→</b><span style="padding:10px;background:#26375f;color:white;border-radius:7px">具体画布编辑器</span>
+    <span style="margin:0 9px;color:#a1a7b4">或</span>
+    <span style="padding:10px;background:#f5efff;border-radius:7px">内容项目 · 画布生产</span><b>→</b><span style="padding:10px;background:#26375f;color:white;border-radius:7px">具体画布编辑器</span>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve-canvas-management-v3" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可这套画布管理逻辑</h3><p>继续把它合并进平台首页整体设计。</p></div></div>
+  <div class="option" data-choice="revise-canvas-management-v3" onclick="toggleSelect(this)"><div class="letter">↻</div><div class="content"><h3>需要继续调整</h3><p>画布归属、生产单元或中间页仍需修改。</p></div></div>
+</div>

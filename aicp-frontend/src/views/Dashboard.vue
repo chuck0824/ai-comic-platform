@@ -1,190 +1,140 @@
 <template>
-  <div>
-    <!-- 统计卡片 -->
-    <div class="grid4 mb-lg">
-      <div class="card stat-card">
-        <div class="num">{{ stats.scriptsGenerated }}</div>
-        <div class="lbl">本月剧本生成</div>
-      </div>
-      <div class="card stat-card">
-        <div class="num">{{ stats.exports }}</div>
-        <div class="lbl">本月导出成片</div>
-      </div>
-      <div class="card stat-card">
-        <div class="num">{{ stats.warehouseCount }}</div>
-        <div class="lbl">仓库剧本数</div>
-      </div>
-      <div class="card stat-card">
-        <div class="num" style="color:var(--success)">¥{{ stats.revenue }}</div>
-        <div class="lbl">本月收入</div>
-      </div>
+  <div class="platform-home">
+    <div class="home-header">
+      <h1>AI 漫剧生产工作台</h1>
+      <span class="home-header-subtitle">选择创作模式，开始新的内容项目</span>
     </div>
 
-    <!-- 快捷入口 + 创作灵感 -->
-    <div class="grid2 mb-lg">
-      <div class="card">
-        <h3 class="font-bold mb-md" style="font-size:15px">快捷入口</h3>
-        <div class="grid2 gap-sm">
-          <el-button type="primary" size="large" @click="$router.push('/script-gen/new')">
-            <el-icon><EditPen /></el-icon> 开始创作
-          </el-button>
-          <el-button size="large" @click="$router.push('/script-gen')">
-            <el-icon><FolderAdd /></el-icon> 我的项目
-          </el-button>
-          <el-button size="large" @click="$router.push('/canvas')">
-            <el-icon><Brush /></el-icon> 画布工作台
-          </el-button>
-          <el-button size="large" @click="$router.push('/market')">
-            <el-icon><ShoppingBag /></el-icon> 剧本市场
-          </el-button>
+    <section class="home-section">
+      <div class="creation-cards">
+        <div v-for="card in creationCards" :key="card.mode" class="creation-card" @click="$router.push(`/script-gen/new?mode=${card.mode}`)">
+          <el-icon :size="28" class="creation-card-icon"><component :is="card.icon" /></el-icon>
+          <h3>{{ card.label }}</h3>
+          <p>{{ card.description }}</p>
         </div>
       </div>
-      <div class="card">
-        <h3 class="font-bold mb-md" style="font-size:15px">
-          <el-icon style="vertical-align:-2px"><TrendCharts /></el-icon> 创作灵感
-        </h3>
-        <div class="flex gap-sm flex-wrap">
-          <span class="tag selected" v-for="t in inspirations" :key="t" style="cursor:pointer"
-                @click="$router.push({ path: '/script-gen/new', query: { idea: t } })">
-            {{ t }}
-          </span>
-        </div>
-      </div>
-    </div>
+    </section>
 
-    <!-- 最近项目 -->
-    <div class="card">
-      <div class="flex items-center justify-between mb-md">
-        <h3 class="font-bold" style="font-size:15px">最近项目</h3>
-        <el-button size="small" text @click="loadProjects" :loading="loading">
-          <el-icon><Refresh /></el-icon> 刷新
-        </el-button>
+    <section class="home-section">
+      <h2 class="section-title">继续创作与生产</h2>
+      <div v-if="loading" class="continue-list">
+        <div v-for="i in 3" :key="i" class="continue-skeleton"><el-skeleton :rows="1" animated /></div>
       </div>
-
-      <!-- 加载中 -->
-      <div v-if="loading && !recentProjects.length" class="canvas-mock" style="min-height:80px;display:flex;align-items:center;justify-content:center">
-        <span class="text-muted">加载中...</span>
+      <div v-else-if="viewModel.continueWorkingEmpty" class="empty-state">
+        <el-empty description="暂无进行中的创作">
+          <el-button type="primary" @click="$router.push('/script-gen/new')">开始新创作</el-button>
+        </el-empty>
       </div>
-
-      <!-- 无项目 -->
-      <div v-else-if="!recentProjects.length" class="canvas-mock" style="min-height:80px;display:flex;align-items:center;justify-content:center;flex-direction:column">
-        <p class="text-muted mb-sm">暂无剧本项目</p>
-        <el-button type="primary" size="small" @click="$router.push('/script-gen')">开始创作第一个剧本</el-button>
-      </div>
-
-      <!-- 项目列表 -->
-      <div v-else class="flex flex-col gap-md">
-        <div v-for="proj in recentProjects" :key="proj.id"
-             class="card card-hover" style="padding:16px">
-          <div class="flex items-center justify-between">
-            <div>
-              <span class="font-semibold">{{ proj.title }}</span>
-              <span :class="['badge', statusBadgeClass(proj.status)]" style="margin-left:12px">
-                {{ statusText(proj.status) }}
-              </span>
-            </div>
-            <div class="flex gap-sm">
-              <el-button size="small" @click="proj.uuid ? $router.push('/tag-editor/' + proj.uuid) : ElMessage.info('编辑功能')">
-                <el-icon><Edit /></el-icon> 编辑
-              </el-button>
-              <el-button type="primary" size="small"
-                         @click="$router.push('/canvas/' + (proj.uuid || proj.id))">
-                <el-icon><Brush /></el-icon> 进入画布
-              </el-button>
-            </div>
+      <div v-else class="continue-list">
+        <div v-for="item in viewModel.continueWorking" :key="item.uuid || item.id" class="continue-item" @click="item.action.path && $router.push(item.action.path)">
+          <div class="continue-item-main">
+            <el-tag v-if="item.hasErrors" type="danger" size="small">异常</el-tag>
+            <span class="continue-item-name">{{ item.name }}</span>
+            <el-tag size="small">{{ item.stage || item.status }}</el-tag>
           </div>
-          <p class="text-sm text-muted mt-sm">
-            {{ proj.episodes || 0 }}集 · {{ proj.tags?.join(' · ') || '未分类' }}
-            <span v-if="proj.price" class="badge badge-accent" style="margin-left:8px">¥{{ proj.price }}</span>
-            <span v-if="proj.soldCount" style="margin-left:8px">已售{{ proj.soldCount }}份</span>
-            · {{ proj.time || '刚刚' }}
-          </p>
+          <div class="continue-item-meta">
+            <span class="continue-item-time">{{ item.timeAgo }}</span>
+            <el-button :type="item.hasErrors ? 'danger' : 'primary'" size="small" text>{{ item.action.label }}</el-button>
+          </div>
         </div>
       </div>
-    </div>
+    </section>
+
+    <section class="home-section">
+      <h2 class="section-title">画布生产 <router-link to="/canvas-projects" class="section-link">进入画布项目中心 →</router-link></h2>
+      <div class="canvas-summary-grid">
+        <div class="summary-item"><span class="summary-value">{{ viewModel.canvasSummary.active || 0 }}</span><span class="summary-label">进行中画布</span></div>
+        <div class="summary-item"><span class="summary-value">{{ viewModel.canvasSummary.generating || 0 }}</span><span class="summary-label">生成中</span></div>
+        <div class="summary-item error"><span class="summary-value">{{ viewModel.canvasSummary.errors || 0 }}</span><span class="summary-label">异常任务</span></div>
+      </div>
+    </section>
+
+    <section class="home-section">
+      <h2 class="section-title">内容与交易</h2>
+      <div class="link-grid">
+        <router-link to="/warehouse" class="link-card"><el-icon><Collection /></el-icon> 剧本仓库</router-link>
+        <router-link to="/market" class="link-card"><el-icon><ShoppingBag /></el-icon> 剧本交易市场</router-link>
+        <router-link to="/asset-market" class="link-card"><el-icon><Layers /></el-icon> AI 资产市场</router-link>
+      </div>
+    </section>
+
+    <section class="home-section">
+      <div class="metrics-grid">
+        <div class="metric-item"><span class="metric-value">{{ viewModel.metrics.contentProjects }}</span><span class="metric-label">内容项目数</span></div>
+        <div class="metric-item"><span class="metric-value">{{ viewModel.metrics.monthlyLockedScripts }}</span><span class="metric-label">本月锁稿数</span></div>
+        <div class="metric-item"><span class="metric-value">{{ viewModel.metrics.generatedAssets }}</span><span class="metric-label">生成资产数</span></div>
+        <div class="metric-item"><span class="metric-value">{{ viewModel.metrics.pendingTasks }}</span><span class="metric-label">待处理任务</span></div>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { EditPen, Brush, ShoppingBag, Collection, Edit, TrendCharts, Refresh } from '@element-plus/icons-vue'
-import { scriptApi } from '@/api/script'
+import { ref, onMounted } from 'vue'
+import { buildHomeViewModel } from './dashboard/homeViewModel.js'
+import { canvasApi } from '@/api/canvas.js'
 
-const inspirations = ['重生逆袭', '豪门总裁', '甜宠言情', '悬疑惊悚', '系统流', '古装仙侠']
+const creationCards = [
+  { mode: 'short_drama', label: '短剧创作', description: '创建短剧内容项目，进入完整创作生产流程', icon: 'VideoCamera' },
+  { mode: 'long_form', label: '长篇创作', description: '创建长篇内容项目，按章节管理故事结构', icon: 'Document' },
+  { mode: 'tvc', label: 'TVC 创作', description: '创建 TVC 广告项目，按版本方案管理', icon: 'Promotion' }
+]
 
-const loading = ref(false)
-const recentProjects = ref([])
-const stats = reactive({
-  scriptsGenerated: 0,
-  exports: 0,
-  warehouseCount: 0,
-  revenue: 0
+const loading = ref(true)
+const viewModel = ref(buildHomeViewModel({ continueWorking: [], canvasSummary: { active: 0, generating: 0, errors: 0 }, metrics: {} }))
+
+onMounted(async () => {
+  try {
+    const res = await canvasApi.getHomeContinueWorking()
+    const items = res?.data || []
+    viewModel.value = buildHomeViewModel({ continueWorking: items, canvasSummary: computeCanvasSummary(items), metrics: {} })
+  } catch { /* degrade gracefully */ }
+  loading.value = false
 })
 
-// 加载真实数据
-async function loadProjects() {
-  loading.value = true
-  try {
-    const res = await scriptApi.getScripts({ page: 1, page_size: 8 })
-    const items = res.data?.items || res.data?.records || res.data || []
-    const total = res.data?.pagination?.total || items.length
-
-    recentProjects.value = items.map(s => ({
-      id: s.id || s.uuid,
-      uuid: s.uuid,
-      title: s.title || '未命名剧本',
-      status: s.status || 'draft',
-      episodes: s.episode_count || 0,
-      tags: extractTags(s),
-      price: s.price,
-      soldCount: s.sales_count || s.soldCount || 0,
-      time: formatRelative(s.created_at || s.updatedAt || s.createdAt)
-    }))
-
-    // 统计：从后端总数字段或前端聚合
-    stats.warehouseCount = total
-    stats.scriptsGenerated = total // 近似值（含 ai_generated + uploaded）
-    stats.exports = data.exports_count ?? data.exportCount ?? '--' // 后端暂不返回则显示 --
-    stats.revenue = data.revenue ?? '--'
-  } catch (e) {
-    // 后端不可用时显示零值（非 mock 数字）
-    stats.scriptsGenerated = 0
-    stats.exports = 0
-    stats.warehouseCount = 0
-    stats.revenue = 0
-    if (e?.response?.status !== 401) {
-      ElMessage.warning('无法加载项目数据')
-    }
-  } finally {
-    loading.value = false
+function computeCanvasSummary(items) {
+  const canvasItems = items.filter(i => i.itemType === 'canvas_project')
+  return {
+    active: canvasItems.filter(i => i.status !== 'archived' && i.status !== 'completed').length,
+    generating: canvasItems.filter(i => i.status === 'generating').length,
+    errors: canvasItems.filter(i => i.hasErrors).length
   }
 }
-
-function extractTags(s) {
-  const tags = []
-  if (s.genre_tag) tags.push(s.genre_tag)
-  try {
-    const plots = typeof s.plot_tags === 'string' ? JSON.parse(s.plot_tags) : s.plot_tags
-    if (Array.isArray(plots)) tags.push(...plots.slice(0, 2))
-  } catch { /* ignore */ }
-  return [...new Set(tags)]
-}
-
-function formatRelative(t) {
-  if (!t) return ''
-  try {
-    const diff = Date.now() - new Date(t).getTime()
-    const hours = Math.floor(diff / 3600000)
-    const days = Math.floor(diff / 86400000)
-    if (hours < 1) return '刚刚'
-    if (hours < 24) return hours + '小时前'
-    return days + '天前'
-  } catch { return '' }
-}
-
-function statusText(s) { return { draft: '草稿', listed: '已上架', sold: '已售出', pending_review: '审核中' }[s] || s }
-function statusBadgeClass(s) { return { draft: 'badge-warning', listed: 'badge-success', sold: 'badge-accent', pending_review: 'badge-default' }[s] || 'badge-neutral' }
-
-onMounted(loadProjects)
 </script>
+
+<style scoped>
+.platform-home { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.home-header { margin-bottom: 32px; }
+.home-header h1 { font-size: 24px; margin: 0 0 4px; }
+.home-header-subtitle { color: #71717a; font-size: 14px; }
+.home-section { margin-bottom: 32px; }
+.section-title { font-size: 16px; margin: 0 0 16px; display: flex; align-items: center; gap: 12px; }
+.section-link { font-size: 13px; color: #409eff; text-decoration: none; margin-left: auto; }
+.creation-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.creation-card { padding: 24px; border: 1px solid #e4e7ed; border-radius: 8px; cursor: pointer; transition: box-shadow .2s, border-color .2s; }
+.creation-card:hover { border-color: #409eff; box-shadow: 0 2px 8px rgba(64,158,255,.15); }
+.creation-card-icon { color: #409eff; margin-bottom: 12px; }
+.creation-card h3 { margin: 0 0 8px; font-size: 15px; }
+.creation-card p { margin: 0; color: #71717a; font-size: 13px; }
+.continue-list { display: flex; flex-direction: column; gap: 8px; }
+.continue-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 16px; border: 1px solid #e4e7ed; border-radius: 6px; cursor: pointer; }
+.continue-item:hover { background: #f5f7fa; }
+.continue-item-main { display: flex; align-items: center; gap: 8px; }
+.continue-item-name { font-weight: 500; }
+.continue-item-meta { display: flex; align-items: center; gap: 12px; }
+.continue-item-time { color: #a1a1aa; font-size: 12px; }
+.canvas-summary-grid { display: flex; gap: 24px; }
+.summary-item { text-align: center; }
+.summary-value { font-size: 28px; font-weight: 700; }
+.summary-label { display: block; color: #71717a; font-size: 13px; margin-top: 4px; }
+.summary-item.error .summary-value { color: #f56c6c; }
+.link-grid { display: flex; gap: 16px; }
+.link-card { flex: 1; display: flex; align-items: center; gap: 8px; padding: 16px; border: 1px solid #e4e7ed; border-radius: 6px; color: inherit; text-decoration: none; font-size: 14px; }
+.link-card:hover { border-color: #409eff; color: #409eff; }
+.metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.metric-item { text-align: center; padding: 16px; background: #f5f7fa; border-radius: 6px; }
+.metric-value { font-size: 24px; font-weight: 700; display: block; }
+.metric-label { color: #71717a; font-size: 12px; margin-top: 4px; display: block; }
+.empty-state { padding: 40px 0; }
+.continue-skeleton { border: 1px solid #e4e7ed; border-radius: 6px; padding: 16px; }
+</style>

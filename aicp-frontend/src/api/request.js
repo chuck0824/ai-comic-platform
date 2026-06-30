@@ -15,7 +15,21 @@ request.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`
     }
     // Attach active workspace context for tenant-safe asset operations
-    const workspaceId = localStorage.getItem('active_workspace_id')
+    let workspaceId = localStorage.getItem('active_workspace_id')
+    // Fallback: derive personal workspace from token if not yet stored (e.g. sessions
+    // created before this logic was deployed).
+    if (!workspaceId && token) {
+      try {
+        const base64Url = token.split('.')[1]
+        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+        const payload = JSON.parse(atob(base64))
+        if (payload && payload.uid != null) {
+          workspaceId = `personal_${payload.uid}`
+          localStorage.setItem('active_workspace_id', workspaceId)
+          localStorage.setItem('active_workspace_type', 'personal')
+        }
+      } catch { /* ignore malformed token */ }
+    }
     if (workspaceId) {
       config.headers['X-Workspace-Id'] = workspaceId
     }
@@ -43,6 +57,8 @@ function clearAuthAndRedirect() {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
   localStorage.removeItem('user')
+  localStorage.removeItem('active_workspace_id')
+  localStorage.removeItem('active_workspace_type')
   router.push('/login')
 }
 

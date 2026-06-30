@@ -1,0 +1,40 @@
+<h2>AI 资产市场：当前实现与目标闭环</h2>
+<p class="subtitle">基于现有页面、前端 API、后端 Controller、数据库表和项目 PRD 的初步审计</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">当前页面：静态卡片演示</div>
+    <div class="mockup-body">
+      <div class="mock-nav">风格模型　角色资产　场景资产　提示词　音色/BGM</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px">
+        <div class="placeholder">Preview<br>韩漫风格<br><button class="mock-button">应用到画布</button></div>
+        <div class="placeholder">Preview<br>写实风格<br><button class="mock-button">应用到画布</button></div>
+      </div>
+      <p style="margin-top:14px">实际行为：切换分类不换数据；按钮只弹成功提示；无搜索、详情、购买、收藏、项目选择。</p>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">目标：可发现 → 可判断 → 可获得 → 可复用</div>
+    <div class="mockup-body">
+      <div style="display:grid;gap:10px">
+        <div class="option"><div class="letter">1</div><div class="content"><h3>发现</h3><p>搜索、分类、标签、排序、推荐、分页</p></div></div>
+        <div class="option"><div class="letter">2</div><div class="content"><h3>判断</h3><p>详情、预览/试听、兼容性、推荐参数、授权与作者</p></div></div>
+        <div class="option"><div class="letter">3</div><div class="content"><h3>获得</h3><p>免费领取或付费下单、收藏、下载、企业审批</p></div></div>
+        <div class="option"><div class="letter">4</div><div class="content"><h3>复用</h3><p>进入我的资产库，选择项目/镜头应用，可撤销、可追踪</p></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>已确认的关键缺口</h3>
+  <div class="pros-cons">
+    <div class="cons"><h4>前端</h4><ul><li>资产数据全部硬编码</li><li>分类 Tab 无筛选效果</li><li>没有详情页与“我的资产”</li><li>无加载、空态、错误态和分页</li></ul></div>
+    <div class="cons"><h4>后端</h4><ul><li>仅返回 Mock 风格模型</li><li>其他五类接口返回空数组</li><li>应用/收藏/下载/上架均未持久化</li><li>缺少资产服务、实体、Mapper 和业务校验</li></ul></div>
+  </div>
+  <div class="pros-cons">
+    <div class="cons"><h4>交易与权限</h4><ul><li>付费资产没有订单/权益闭环</li><li>无授权协议、退款和版权状态</li><li>无企业采购审批</li></ul></div>
+    <div class="cons"><h4>生产联动</h4><ul><li>“应用到画布”未选择项目</li><li>未写入 style_config / 角色 / 场景 / 音频资产</li><li>无应用历史与撤销</li></ul></div>
+  </div>
+</div>

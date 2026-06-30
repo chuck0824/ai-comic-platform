@@ -29,15 +29,33 @@ CREATE TABLE IF NOT EXISTS canvas_projects (
     enterprise_id BIGINT,
     workspace_id VARCHAR(64),
     name VARCHAR(200),
-    script_id BIGINT,
-    episode_index INT DEFAULT 1,
+    script_id BIGINT,                           -- legacy: replaced by content_project_id + production_unit_id
+    episode_index INT DEFAULT 1,                -- legacy: replaced by production_unit_id
     style_config VARCHAR(4000),
     applied_asset_ids VARCHAR(4000) DEFAULT '[]',
     status VARCHAR(20) DEFAULT 'editing',
     canvas_version INT DEFAULT 1,
+    -- New ownership columns (2026-07-01)
+    content_project_id BIGINT,
+    production_unit_type VARCHAR(32),
+    production_unit_id BIGINT,
+    source_content_version_id BIGINT,
+    source_storyboard_version_id BIGINT,
+    production_snapshot TEXT,
+    purpose VARCHAR(32) DEFAULT 'official',
+    owner_id BIGINT,
+    thumbnail_url VARCHAR(500),
+    idempotency_key VARCHAR(200),
+    archived_at TIMESTAMP,
+    revision INT DEFAULT 0,
+    is_deleted TINYINT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uk_canvas_idempotency ON canvas_projects(user_id, idempotency_key);
+CREATE INDEX IF NOT EXISTS idx_canvas_owner_status ON canvas_projects(user_id, status, updated_at);
+CREATE INDEX IF NOT EXISTS idx_canvas_content_unit ON canvas_projects(content_project_id, production_unit_id);
 
 CREATE TABLE IF NOT EXISTS canvas_nodes (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -1329,6 +1347,9 @@ VALUES ('shot-005', 1, 2, 'shot-key-5', 'S02-C02', 5000, '全景', '蒙面人缓
 -- ============================================================
 UPDATE canvas_projects SET workspace_id = CONCAT('ent:', enterprise_id) WHERE enterprise_id IS NOT NULL AND workspace_id IS NULL;
 UPDATE canvas_projects SET workspace_id = CONCAT('personal:', user_id) WHERE enterprise_id IS NULL AND workspace_id IS NULL;
+UPDATE canvas_projects SET owner_id = user_id WHERE owner_id IS NULL;
+UPDATE canvas_projects SET revision = 0 WHERE revision IS NULL;
+UPDATE canvas_projects SET is_deleted = 0 WHERE is_deleted IS NULL;
 
 -- ============================================================
 -- AI 资产市场 种子数据

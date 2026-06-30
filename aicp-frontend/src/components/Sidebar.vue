@@ -4,40 +4,31 @@
       <h2>AI漫剧生产工作台</h2>
       <span>V7 工业化</span>
     </div>
-    <div class="sidebar-section">创作</div>
+
+    <router-link to="/home" class="sidebar-item" :class="{ active: isActive('/home') }">
+      <el-icon><HomeFilled /></el-icon> 首页
+    </router-link>
+
+    <div class="sidebar-section">创作与生产</div>
     <router-link to="/script-gen" class="sidebar-item" :class="{ active: isActive('/script-gen') || isActive('/content-projects') }">
       <el-icon><EditPen /></el-icon> 剧本创作
     </router-link>
-    <router-link to="/canvas" class="sidebar-item" :class="{ active: isActive('/canvas') }">
+    <router-link to="/canvas-projects" class="sidebar-item" :class="{ active: isActive('/canvas-projects') }">
       <el-icon><Brush /></el-icon> 画布工作台
     </router-link>
 
-    <div class="sidebar-section">管理</div>
+    <div class="sidebar-section">内容与交易</div>
     <router-link to="/warehouse" class="sidebar-item" :class="{ active: isActive('/warehouse') }">
       <el-icon><Collection /></el-icon> 剧本仓库
     </router-link>
-    <router-link to="/script-gen" class="sidebar-item" :class="{ active: isActive('/script-gen') }">
-      <el-icon><Film /></el-icon> 剧本创作
-    </router-link>
-    <router-link to="/tag-editor/1" class="sidebar-item" :class="{ active: isActive('/tag-editor') }">
-      <el-icon><PriceTag /></el-icon> 标签编辑
-    </router-link>
     <router-link to="/market" class="sidebar-item" :class="{ active: isActive('/market') }">
-      <el-icon><ShoppingBag /></el-icon> 交易市场
+      <el-icon><ShoppingBag /></el-icon> 剧本交易市场
     </router-link>
     <router-link to="/asset-market" class="sidebar-item" :class="{ active: isActive('/asset-market') }">
-      <el-icon><Layers /></el-icon> AI资产市场
+      <el-icon><Layers /></el-icon> AI 资产市场
     </router-link>
 
-    <div class="sidebar-section">企业</div>
-    <router-link to="/enterprise" class="sidebar-item" :class="{ active: isActive('/enterprise') }">
-      <el-icon><OfficeBuilding /></el-icon> 企业工作台
-    </router-link>
-    <router-link to="/sop/1" class="sidebar-item" :class="{ active: isActive('/sop') }">
-      <el-icon><CircleCheck /></el-icon> 生产SOP
-    </router-link>
-
-    <div class="sidebar-section">V1.5 AI</div>
+    <div class="sidebar-section">智能生产</div>
     <router-link to="/agent" class="sidebar-item" :class="{ active: isActive('/agent') }">
       <el-icon><ChatDotRound /></el-icon> Agent 会话
     </router-link>
@@ -46,6 +37,14 @@
     </router-link>
     <router-link to="/task-monitor" class="sidebar-item" :class="{ active: isActive('/task-monitor') }">
       <el-icon><Monitor /></el-icon> 任务监控
+    </router-link>
+
+    <div class="sidebar-section">企业</div>
+    <router-link to="/enterprise" class="sidebar-item" :class="{ active: isActive('/enterprise') }">
+      <el-icon><OfficeBuilding /></el-icon> 企业工作台
+    </router-link>
+    <router-link to="/sop/1" class="sidebar-item" :class="{ active: isActive('/sop') }">
+      <el-icon><CircleCheck /></el-icon> 生产SOP
     </router-link>
 
     <div style="flex:1"></div>

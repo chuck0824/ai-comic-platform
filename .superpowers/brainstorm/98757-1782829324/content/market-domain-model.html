@@ -1,0 +1,55 @@
+<h2>第三部分：领域模型与接口边界</h2>
+<p class="subtitle">公共 Listing 与 Workspace 资产副本分离，避免跨租户直接引用私有资产</p>
+
+<div class="mockup">
+  <div class="mockup-header">免费领取的数据流</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr auto 1fr;gap:10px;align-items:center">
+      <div class="placeholder"><strong>卖方 WorkspaceAsset</strong><br>私有资产本体<br>版本与来源</div>
+      <div style="font-size:24px">→</div>
+      <div class="placeholder"><strong>MarketListing</strong><br>公开展示快照<br>free_license</div>
+      <div style="font-size:24px">→</div>
+      <div class="placeholder"><strong>Entitlement</strong><br>买方 Workspace<br>领取权益</div>
+      <div style="font-size:24px">→</div>
+      <div class="placeholder"><strong>买方 WorkspaceAsset</strong><br>隔离副本/受控引用<br>可在项目中复用</div>
+    </div>
+    <p style="margin-top:14px">公共 API 只暴露 listing_id；卖方私有 asset_id 不作为跨租户访问入口。撤下 Listing 后，已生成的 Entitlement 与买方资产仍有效。</p>
+  </div>
+</div>
+
+<div class="section" style="margin-top:22px">
+  <h3>核心表</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    <div class="option"><div class="content"><h3>workspace_assets</h3><p>workspace_id、creator_user_id、type、visibility、source、status、current_version_id</p></div></div>
+    <div class="option"><div class="content"><h3>asset_versions</h3><p>asset_id、version、metadata、preview、content_ref、checksum、created_by</p></div></div>
+    <div class="option"><div class="content"><h3>market_listings</h3><p>publisher_workspace_id、source_version_id、public_snapshot、license、status</p></div></div>
+    <div class="option"><div class="content"><h3>asset_entitlements</h3><p>beneficiary_workspace_id、listing_id、source_version_id、grant_type、granted_at</p></div></div>
+    <div class="option"><div class="content"><h3>publish_requests</h3><p>enterprise_workspace_id、asset_id、applicant、reviewer、status、reason</p></div></div>
+    <div class="option"><div class="content"><h3>asset_applications</h3><p>workspace_id、asset_id、project_id、target、previous_state、applied_by</p></div></div>
+  </div>
+  <p>收藏记录同时保存 user_id 与 workspace_id：个人偏好不自动共享，但仍受当前 Workspace 上下文隔离。</p>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">面向前端的 8080 API</div>
+    <div class="mockup-body">
+      <p><strong>浏览：</strong>GET /asset/market/listings、GET /listings/{id}</p>
+      <p><strong>领取：</strong>POST /listings/{id}/claim</p>
+      <p><strong>资产库：</strong>GET /asset/library、GET/PUT /library/{id}</p>
+      <p><strong>发布：</strong>POST /library/{id}/publish 或 /publish-requests</p>
+      <p><strong>审批：</strong>GET /publish-requests、POST /{id}/approve|reject</p>
+      <p><strong>应用：</strong>POST /library/{id}/applications</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">每个请求的固定校验链</div>
+    <div class="mockup-body">
+      <p>1. 解析登录用户与 8080 当前组织上下文</p>
+      <p>2. 通过 3001 校验成员状态与操作权限</p>
+      <p>3. 注入可信 workspace_id</p>
+      <p>4. Repository 查询强制携带 workspace_id</p>
+      <p>5. 写审计日志与幂等记录</p>
+    </div>
+  </div>
+</div>

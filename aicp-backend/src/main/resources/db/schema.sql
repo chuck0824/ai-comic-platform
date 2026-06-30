@@ -325,19 +325,38 @@ CREATE TABLE canvas_projects (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     uuid VARCHAR(36) NOT NULL UNIQUE,
     name VARCHAR(200) NOT NULL COMMENT '项目名称',
-    script_id BIGINT COMMENT '关联剧本',
-    episode_index INT DEFAULT 1 COMMENT '当前编辑集数',
     user_id BIGINT NOT NULL COMMENT '创建者',
+    enterprise_id BIGINT COMMENT '企业ID',
+    workspace_id VARCHAR(64) COMMENT '工作区ID',
+    script_id BIGINT COMMENT 'legacy: replaced by content_project_id + production_unit_id',
+    episode_index INT DEFAULT 1 COMMENT 'legacy: replaced by production_unit_id',
     style_config JSON COMMENT '风格配置(style_id/aspect_ratio/resolution/fps)',
-    canvas_state LONGTEXT COMMENT '画布完整状态JSON(shots+timeline)',
-    status ENUM('editing','composing','exporting','completed') DEFAULT 'editing',
+    applied_asset_ids JSON DEFAULT ('[]') COMMENT '已应用资产ID列表',
+    status ENUM('editing','generating','composing','exporting','completed','archived') DEFAULT 'editing',
+    canvas_version INT DEFAULT 1 COMMENT '画布版本号',
+    -- New ownership columns (2026-07-01)
+    content_project_id BIGINT COMMENT 'FK to content_projects.id',
+    production_unit_type VARCHAR(32) COMMENT 'episode / chapter / tvc_variant',
+    production_unit_id BIGINT COMMENT 'FK to content_units.id',
+    source_content_version_id BIGINT COMMENT 'FK to content_versions.id',
+    source_storyboard_version_id BIGINT COMMENT 'FK to cp_storyboard_masters.id',
+    production_snapshot JSON COMMENT 'Immutable source snapshot',
+    purpose VARCHAR(32) DEFAULT 'official' COMMENT 'official / alternative / experiment',
+    owner_id BIGINT COMMENT 'Canvas owner user ID',
+    thumbnail_url VARCHAR(500),
+    idempotency_key VARCHAR(200) COMMENT 'Idempotent creation key',
+    archived_at DATETIME COMMENT 'Archived timestamp',
+    revision INT DEFAULT 0 COMMENT 'Optimistic lock',
+    is_deleted TINYINT DEFAULT 0 COMMENT 'Soft delete',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (script_id) REFERENCES scripts(id),
     FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE KEY uk_canvas_idempotency (user_id, idempotency_key),
     INDEX idx_uuid (uuid),
     INDEX idx_user (user_id),
-    INDEX idx_script (script_id)
+    INDEX idx_script (script_id),
+    INDEX idx_canvas_owner_status (user_id, status, updated_at),
+    INDEX idx_canvas_content_unit (content_project_id, production_unit_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='画布项目表';
 
 -- ============================================================
@@ -549,11 +568,15 @@ VALUES
 
 -- 测试画布项目
 INSERT INTO canvas_projects (uuid, name, script_id, episode_index, user_id,
-  style_config, canvas_state, status)
+  style_config, applied_asset_ids, status, owner_id, content_project_id, production_unit_type,
+  production_unit_id, source_content_version_id, source_storyboard_version_id,
+  production_snapshot, purpose, idempotency_key, revision, is_deleted)
 VALUES
 ('canvas_a1b2c3', '霸道总裁的替身新娘 - 画布项目', 1, 1, 1,
  '{"style_id":"STYLE_KMANGA","aspect_ratio":"9:16","resolution":"1080p","fps":25}',
- '{"version":1,"shots":[]}', 'editing');
+ '[]', 'editing', 1, 1, 'episode', 1, 1, 1,
+ '{"contentVersionId":1,"storyboardVersionId":1,"platformRuleVersion":"v1","aspectRatio":"9:16","resolution":"1080p","fps":25}',
+ 'official', 'migrated:canvas_a1b2c3', 0, 0);
 
 -- 测试订单
 INSERT INTO orders (order_no, buyer_user_id, seller_user_id, script_id, license_type,

@@ -1,0 +1,83 @@
+<style>
+  .summary { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin:14px 0 20px; }
+  .metric { background:#fff; border:1px solid #dce1e8; border-radius:10px; padding:12px 14px; }
+  .metric b { display:block; font-size:21px; color:#1d4ed8; margin-bottom:3px; }
+  .metric span { font-size:12px; color:#6b7280; }
+  .density-options { display:grid; gap:16px; max-width:1180px; margin:0 auto; }
+  .density-option { border:1px solid #d7dbe2; border-radius:14px; overflow:hidden; background:#fff; cursor:pointer; }
+  .density-option:hover { border-color:#4f7cff; box-shadow:0 7px 22px rgba(35,55,90,.10); }
+  .density-option.selected { border:2px solid #2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+  .preview { padding:13px; background:#f5f7fa; }
+  .bar { height:32px; background:#fff; border:1px solid #dbe0e8; border-radius:7px; display:flex; align-items:center; padding:0 10px; gap:16px; font-size:12px; color:#4b5563; }
+  .grid { margin-top:9px; background:#fff; border:1px solid #dbe0e8; border-radius:7px; overflow:hidden; font-size:11px; }
+  .row { display:grid; align-items:center; min-height:34px; border-bottom:1px solid #edf0f4; }
+  .row:last-child { border:0; }
+  .row span { padding:6px 8px; border-right:1px solid #edf0f4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .row.head { background:#eef2f7; font-weight:600; color:#374151; }
+  .all-cols { grid-template-columns:64px 54px 74px 1.4fr 1fr 1fr .9fr 1fr .8fr .8fr .8fr 1.2fr 1.2fr; min-width:1350px; }
+  .scroll-frame { overflow:hidden; position:relative; }
+  .scroll-frame:after { content:'横向滚动 →'; position:absolute; right:8px; bottom:7px; color:#2563eb; background:#fff; padding:2px 6px; border-radius:4px; }
+  .split-work { display:grid; grid-template-columns:minmax(500px,1fr) 300px; gap:9px; margin-top:9px; }
+  .core-cols { grid-template-columns:65px 58px 75px 1fr 1fr 72px; }
+  .inspector { background:#fff; border:1px solid #dbe0e8; border-radius:7px; padding:10px; font-size:11px; line-height:1.6; }
+  .tabs { color:#2563eb; font-weight:600; padding-bottom:7px; border-bottom:1px solid #e5e7eb; margin-bottom:7px; }
+  .field { margin:5px 0; padding:6px; border-radius:5px; background:#f5f7fa; color:#4b5563; }
+  .cardline { display:grid; grid-template-columns:70px 1fr 1fr 1fr; gap:8px; margin-top:9px; }
+  .shotcard { border:1px solid #dbe0e8; border-radius:8px; background:#fff; padding:10px; font-size:11px; line-height:1.7; min-height:112px; }
+  .option-copy { display:grid; grid-template-columns:32px 1fr; gap:10px; padding:12px 15px 14px; }
+  .letter { width:28px; height:28px; border-radius:8px; background:#e8efff; color:#2359c4; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .option-copy h3 { margin:1px 0 4px; font-size:16px; }
+  .option-copy p { margin:0; font-size:13px; color:#6b7280; }
+  .recommend { display:inline-block; margin-left:7px; padding:2px 7px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:11px; }
+</style>
+
+<h2>13 个镜头维度如何进入专业编辑器？</h2>
+<p class="subtitle">参考文件：第一章分镜头脚本_13维细化版。请选择主要编辑方式。</p>
+
+<div class="summary">
+  <div class="metric"><b>45</b><span>镜头</span></div>
+  <div class="metric"><b>6</b><span>场景</span></div>
+  <div class="metric"><b>119.5s</b><span>总时长</span></div>
+  <div class="metric"><b>13 + 6</b><span>主维度 + 辅助工作表</span></div>
+</div>
+
+<div class="density-options">
+  <div class="density-option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="preview scroll-frame">
+      <div class="bar">表格视图　场景 S01　45 镜头　字段：全部 13 项</div>
+      <div class="grid" style="width:1350px">
+        <div class="row head all-cols"><span>镜号</span><span>时长</span><span>景别</span><span>画面描述</span><span>光影氛围</span><span>角色动作</span><span>情绪</span><span>对白</span><span>场景标签</span><span>音效</span><span>参考</span><span>分镜提示词</span><span>视频动作提示词</span></div>
+        <div class="row all-cols"><span>S01-C04</span><span>2s</span><span>特写</span><span>侧后方 45°，雨水沿下颌线汇聚……</span><span>侧逆光，冷暖分割</span><span>闭眼→嘴角缓慢上提</span><span>克制的不甘 ★★★</span><span>你最好祈祷……</span><span>#雨夜 #微表情</span><span>暴雨、低雷</span><span>《小丑》</span><span>Oscar-caliber cinematic…</span><span>0–0.5s mouth twitch…</span></div>
+      </div>
+    </div>
+    <div class="option-copy"><div class="letter">A</div><div><h3>完整 Excel 式横向表格</h3><p>与参考表最一致，但长文本与 13 列会造成频繁横向滚动，单镜头深度编辑效率较低。</p></div></div>
+  </div>
+
+  <div class="density-option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="bar"><b style="color:#2563eb">编导视图</b>　生产视图　提示词视图　情绪与连续性　　字段预设 ▾</div>
+      <div class="split-work">
+        <div class="grid" style="margin:0">
+          <div class="row head core-cols"><span>镜号</span><span>时长</span><span>景别</span><span>画面摘要</span><span>对白</span><span>状态</span></div>
+          <div class="row core-cols"><span>S01-C04</span><span>2s</span><span>特写</span><span>闭眼形成不对称半笑</span><span>你最好祈祷……</span><span style="color:#d97706">待确认</span></div>
+          <div class="row core-cols"><span>S01-C05</span><span>4s</span><span>POV</span><span>坠落中世界翻转</span><span>要是还有下一次……</span><span style="color:#16a34a">已确认</span></div>
+        </div>
+        <div class="inspector"><div class="tabs">内容　导演　声音　提示词　连续性</div><div class="field"><b>光影氛围</b><br>侧逆光，半边暖光、半边冷暗</div><div class="field"><b>角色动作 / 情绪</b><br>闭眼 → 嘴角肌肉试探 → 半笑定型</div><div class="field"><b>人物识别锁</b><br>林野：红绳、湿黑发、黑色任务服</div></div>
+      </div>
+    </div>
+    <div class="option-copy"><div class="letter">B</div><div><h3>核心表格 + 右侧分组检查器 <span class="recommend">推荐</span></h3><p>主表保持可扫读；13 个字段按编导、声音、提示词、连续性分组编辑，并提供字段预设切换。</p></div></div>
+  </div>
+
+  <div class="density-option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="bar">卡片视图　场景 S01　按情绪分组　批量折叠</div>
+      <div class="cardline">
+        <div class="shotcard"><b>S01</b><br>天台雨夜<br>6 镜 · 19s<br>★★★☆</div>
+        <div class="shotcard"><b>S01-C03 · 中景</b><br>背影推近，肩胛随呼吸起伏<br><span style="color:#2563eb">动作 / 情绪 / 声音 / 提示词</span></div>
+        <div class="shotcard"><b>S01-C04 · 特写</b><br>不对称闭眼笑形成<br><span style="color:#2563eb">动作 / 情绪 / 声音 / 提示词</span></div>
+        <div class="shotcard"><b>S01-C05 · POV</b><br>坠落中世界翻转<br><span style="color:#2563eb">动作 / 情绪 / 声音 / 提示词</span></div>
+      </div>
+    </div>
+    <div class="option-copy"><div class="letter">C</div><div><h3>镜头卡片为主</h3><p>适合逐镜审核和预览，但批量对比时长、景别、提示词与跨镜连续性不如表格直接。</p></div></div>
+  </div>
+</div>

@@ -1,0 +1,69 @@
+<style>
+  .layout-options { display:grid; grid-template-columns:1fr; gap:18px; max-width:1180px; margin:0 auto; }
+  .layout-option { border:1px solid #d7dbe2; border-radius:14px; background:#fff; overflow:hidden; cursor:pointer; transition:.18s ease; }
+  .layout-option:hover { border-color:#4f7cff; box-shadow:0 8px 24px rgba(35,55,90,.10); transform:translateY(-1px); }
+  .layout-option.selected { border:2px solid #2563eb; box-shadow:0 0 0 3px rgba(37,99,235,.12); }
+  .preview { background:#f4f6f9; padding:14px; min-height:172px; }
+  .topbar { height:34px; display:flex; align-items:center; padding:0 12px; border:1px solid #d8dde6; border-radius:7px; background:#fff; font-size:12px; color:#374151; white-space:nowrap; overflow:hidden; }
+  .workspace { display:grid; grid-template-columns:180px minmax(420px,1fr) 220px; gap:10px; margin-top:10px; min-height:112px; }
+  .pane { border:1px solid #d8dde6; border-radius:7px; background:#fff; padding:12px; font-size:12px; line-height:1.8; color:#4b5563; overflow:hidden; }
+  .pane strong { color:#111827; display:block; margin-bottom:3px; }
+  .main-pane { background:#fff; }
+  .view-tabs { color:#2563eb; font-weight:600; margin-bottom:8px; }
+  .shot-row { display:grid; grid-template-columns:58px 70px 1fr 90px; gap:8px; padding:5px 7px; margin-top:5px; background:#f7f8fa; border-radius:5px; white-space:nowrap; }
+  .hybrid { display:grid; grid-template-columns:1fr 52px 1fr; gap:12px; align-items:center; margin-top:10px; min-height:112px; }
+  .hybrid-box { border:1px solid #d8dde6; border-radius:8px; background:#fff; padding:18px; min-height:100px; font-size:12px; line-height:1.7; }
+  .arrow { text-align:center; color:#2563eb; font-weight:700; }
+  .option-copy { padding:13px 16px 15px; display:grid; grid-template-columns:34px 1fr; gap:10px; }
+  .letter-pill { width:28px; height:28px; border-radius:8px; background:#e8efff; color:#2359c4; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .option-copy h3 { margin:1px 0 4px; font-size:16px; }
+  .option-copy p { margin:0; color:#6b7280; font-size:13px; }
+  .recommend { display:inline-block; margin-left:8px; padding:2px 7px; border-radius:999px; background:#dcfce7; color:#15803d; font-size:11px; vertical-align:2px; }
+  @media (max-width:900px) {
+    .workspace { grid-template-columns:130px minmax(280px,1fr); }
+    .workspace .pane:last-child { grid-column:1 / -1; }
+    .shot-row { grid-template-columns:48px 56px 1fr; }
+    .shot-row span:last-child { display:none; }
+  }
+</style>
+
+<h2>分镜专业编辑器应如何承载？</h2>
+<p class="subtitle">已调整为纵向全宽对比。点击一项进行选择。</p>
+
+<div class="layout-options">
+  <div class="layout-option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="topbar">项目创作台　　正文　　审核　　<strong style="color:#2563eb;margin:0 8px">分镜</strong>　　画布</div>
+      <div class="workspace">
+        <div class="pane"><strong>创作流程</strong>✓ 正文<br>✓ 审核<br><span style="color:#2563eb">● 分镜</span></div>
+        <div class="pane main-pane"><strong>嵌入式分镜面板</strong><div class="shot-row"><span>SC01</span><span>镜头 01</span><span>人物推门进入仓库</span><span>3.5 秒</span></div><div class="shot-row"><span>SC01</span><span>镜头 02</span><span>特写：桌面上的旧照片</span><span>2.0 秒</span></div></div>
+        <div class="pane"><strong>项目上下文</strong>正文版本 v4<br>角色设定 8<br>连续性提示 2</div>
+      </div>
+    </div>
+    <div class="option-copy"><div class="letter-pill">A</div><div><h3>继续嵌入创作台</h3><p>流程连续，但专业编辑空间有限，时间轴、生产三表和批量操作容易拥挤。</p></div></div>
+  </div>
+
+  <div class="layout-option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="topbar">← 返回项目　　《逆光追凶》分镜编辑器　　A 档 · v3　　<span style="color:#16a34a">已保存</span><span style="margin-left:auto;color:#2563eb">锁定版本　导出　送入画布</span></div>
+      <div class="workspace">
+        <div class="pane"><strong>场景导航</strong><span style="color:#2563eb">01 仓库夜 · 3镜</span><br>02 天台 · 5镜<br>03 街道 · 4镜</div>
+        <div class="pane main-pane"><div class="view-tabs">表格视图　卡片视图　时间轴视图</div><div class="shot-row"><span>#001</span><span>中景</span><span>人物推门进入仓库，镜头缓慢跟进</span><span>3.5 秒</span></div><div class="shot-row"><span>#002</span><span>特写</span><span>旧照片沾满灰尘，手指划过表面</span><span>2.0 秒</span></div></div>
+        <div class="pane"><strong>镜头检查器</strong>基础属性<br>导演意图<br>生成提示词<br>资产与问题</div>
+      </div>
+    </div>
+    <div class="option-copy"><div class="letter-pill">B</div><div><h3>独立全屏专业编辑器 <span class="recommend">推荐</span></h3><p>创作台负责入口和状态；独立页面承载编辑、审核、版本、导出与生产。</p></div></div>
+  </div>
+
+  <div class="layout-option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="preview">
+      <div class="topbar">项目创作台　　分镜工作区　　<span style="margin-left:auto;color:#2563eb">展开全屏</span></div>
+      <div class="hybrid">
+        <div class="hybrid-box"><strong>嵌入概览</strong><br>最近分镜版本：A 档 v3<br>12 个镜头 · 42 秒 · 2 个待处理问题<br><span style="color:#2563eb">快速审核 / 继续编辑</span></div>
+        <div class="arrow">展开<br>→</div>
+        <div class="hybrid-box"><strong>独立编辑器</strong><br>完整表格 / 卡片 / 时间轴<br>版本对比 / 连续性检查 / 生产三表<br><span style="color:#2563eb">批量生产 / 导出 / 画布快照</span></div>
+      </div>
+    </div>
+    <div class="option-copy"><div class="letter-pill">C</div><div><h3>嵌入概览 + 独立编辑双形态</h3><p>体验最完整，但需要维护两套状态呈现和跳转同步，实施与回归成本最高。</p></div></div>
+  </div>
+</div>

@@ -3,6 +3,37 @@ import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
 import router from '@/router'
 
+/** Decode the payload of a JWT without verification. */
+function decodeJwtPayload(token) {
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+/** Derive and persist workspace context from the access token. */
+function deriveAndStoreWorkspace(token) {
+  const payload = decodeJwtPayload(token)
+  if (payload && payload.uid != null) {
+    localStorage.setItem('active_workspace_id', `personal_${payload.uid}`)
+    localStorage.setItem('active_workspace_type', 'personal')
+  }
+}
+
+function clearWorkspace() {
+  localStorage.removeItem('active_workspace_id')
+  localStorage.removeItem('active_workspace_type')
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('access_token') || '')
   const refreshToken = ref(localStorage.getItem('refresh_token') || '')
@@ -37,6 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('access_token', token.value)
     localStorage.setItem('refresh_token', refreshToken.value)
     localStorage.setItem('user', JSON.stringify(user.value))
+    deriveAndStoreWorkspace(token.value)
   }
 
   async function logout() {
@@ -53,7 +85,13 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')
+    clearWorkspace()
     router.push('/login')
+  }
+
+  // Ensure workspace context is initialized from an existing token (page-refresh scenario).
+  if (token.value && !localStorage.getItem('active_workspace_id')) {
+    deriveAndStoreWorkspace(token.value)
   }
 
   return {

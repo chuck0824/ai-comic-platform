@@ -1,0 +1,54 @@
+<h2>第二部分：AI 资产市场页面结构</h2>
+<p class="subtitle">在 8080 内形成“发现、管理、发布、审批、应用”的完整入口</p>
+
+<div class="mockup">
+  <div class="mockup-header">AI 资产市场</div>
+  <div class="mockup-body">
+    <div class="mock-nav">公共市场　｜　我的资产 / 企业资产　｜　发布管理　｜　审批中心（有权限时显示）</div>
+    <div style="display:flex;gap:10px;margin:14px 0">
+      <input class="mock-input" style="flex:1" placeholder="搜索资产名称、作者或标签">
+      <button class="mock-button">筛选</button><button class="mock-button">发布资产</button>
+    </div>
+    <div class="mock-nav">全部　风格模型　角色　场景　提示词　<span style="opacity:.45">音色（即将开放）　BGM（即将开放）</span></div>
+    <div style="display:grid;grid-template-columns:220px 1fr;gap:16px;margin-top:14px">
+      <div class="mock-sidebar">
+        <strong>筛选</strong><br><br>
+        风格标签<br>题材标签<br>资产来源<br>免费/已领取<br>最新/热门/评分
+      </div>
+      <div class="mock-content">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+          <div class="placeholder">预览图<br><strong>韩漫都市风格</strong><br>公开 · 免费<br><button class="mock-button">查看详情</button></div>
+          <div class="placeholder">角色多视图<br><strong>冷艳女总裁</strong><br>公开 · 已领取<br><button class="mock-button">立即应用</button></div>
+          <div class="placeholder">场景预览<br><strong>现代总裁办公室</strong><br>企业资产<br><button class="mock-button">查看详情</button></div>
+        </div>
+        <p style="text-align:center;margin-top:14px">分页 / 空态 / 错误重试 / 骨架屏</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="split" style="margin-top:22px">
+  <div class="mockup">
+    <div class="mockup-header">资产详情抽屉 / 独立详情页</div>
+    <div class="mockup-body">
+      <div class="placeholder">多图预览 / Prompt 示例 / 参数</div>
+      <p><strong>兼容信息：</strong>底模、推荐参数、适用题材、版本</p>
+      <p><strong>授权信息：</strong>来源、作者、可用范围、是否已领取</p>
+      <button class="mock-button">免费领取</button>
+      <button class="mock-button">领取并应用到项目</button>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">Workspace 资产库</div>
+    <div class="mockup-body">
+      <div class="mock-nav">全部　我创建的　市场领取　项目生成　收藏</div>
+      <div class="placeholder">状态：私有 / 企业可见 / 申请中 / 已公开 / 已撤下</div>
+      <p>支持编辑、版本记录、应用项目、提交公开、撤下和归档；按钮由 RBAC 控制。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:22px">
+  <h3>企业审批中心</h3>
+  <p>待审批列表 → 查看资产预览、描述、来源和授权声明 → 通过 / 驳回并填写理由 → 自动创建或更新公共 Listing。个人空间不显示审批中心。</p>
+</div>

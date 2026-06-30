@@ -1,8 +1,13 @@
 package com.aicp.module.canvas.controller;
 
 import com.aicp.common.dto.ApiResponse;
+import com.aicp.common.dto.PageResult;
 import com.aicp.common.exception.ErrorCode;
+import com.aicp.common.util.SecurityUtil;
+import com.aicp.module.canvas.dto.CanvasProjectRequests.*;
+import com.aicp.module.canvas.dto.CanvasProjectViews.*;
 import com.aicp.module.canvas.entity.*;
+import com.aicp.module.canvas.service.CanvasProjectManagementService;
 import com.aicp.module.canvas.service.CanvasService;
 import com.aicp.module.generation.entity.GenerationTask;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -21,19 +26,87 @@ import java.util.*;
 public class CanvasController {
 
     private final CanvasService canvasService;
+    private final CanvasProjectManagementService managementService;
     private final ObjectMapper objectMapper;
 
-    // ===== Projects =====
-    @PostMapping("/projects")
-    public ApiResponse<CanvasProject> createProject(@RequestBody Map<String, Object> body) {
-        return ApiResponse.success(canvasService.createProject(body));
+    // ===== Projects (Management) =====
+
+    @GetMapping("/projects")
+    public ApiResponse<PageResult<CanvasProjectSummary>> listProjects(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) Long contentProjectId,
+            @RequestParam(required = false) String keyword) {
+        var query = new CanvasProjectQuery(page, pageSize, status, null, contentProjectId, keyword);
+        return ApiResponse.success(managementService.list(SecurityUtil.requireCurrentUserId(), query));
     }
 
     @GetMapping("/projects/{id}")
     public ApiResponse<?> getProject(@PathVariable String id) {
-        CanvasProject p = canvasService.getProject(id);
-        return p == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(p);
+        try {
+            return ApiResponse.success(managementService.getDetail(SecurityUtil.requireCurrentUserId(), id));
+        } catch (Exception e) {
+            CanvasProject p = canvasService.getProject(id);
+            return p == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(p);
+        }
     }
+
+    @PostMapping("/projects")
+    public ApiResponse<CanvasProjectDetail> createManagedProject(
+            @RequestBody CreateCanvasProjectRequest request) {
+        return ApiResponse.success(managementService.create(
+                SecurityUtil.requireCurrentUserId(), request));
+    }
+
+    @GetMapping("/production-admission")
+    public ApiResponse<ProductionAdmissionResult> checkAdmission(
+            @RequestParam Long contentProjectId,
+            @RequestParam Long productionUnitId,
+            @RequestParam(defaultValue = "official") String purpose) {
+        return ApiResponse.success(managementService.checkAdmission(
+                contentProjectId, productionUnitId, purpose));
+    }
+
+    @GetMapping("/projects/{id}/source-diff")
+    public ApiResponse<SourceDiffResult> getSourceDiff(@PathVariable String id) {
+        return ApiResponse.success(managementService.computeSourceDiff(
+                SecurityUtil.requireCurrentUserId(), id));
+    }
+
+    @PostMapping("/projects/{id}/copy")
+    public ApiResponse<CanvasProjectDetail> copyProject(
+            @PathVariable String id, @RequestBody CopyCanvasProjectRequest request) {
+        return ApiResponse.success(managementService.copy(
+                SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/projects/{id}/move")
+    public ApiResponse<CanvasProjectDetail> moveProject(
+            @PathVariable String id, @RequestBody MoveCanvasProjectRequest request) {
+        return ApiResponse.success(managementService.move(
+                SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/projects/{id}/archive")
+    public ApiResponse<CanvasProjectDetail> archiveProject(@PathVariable String id) {
+        return ApiResponse.success(managementService.archive(
+                SecurityUtil.requireCurrentUserId(), id));
+    }
+
+    @PostMapping("/projects/{id}/restore")
+    public ApiResponse<CanvasProjectDetail> restoreProject(@PathVariable String id) {
+        return ApiResponse.success(managementService.restore(
+                SecurityUtil.requireCurrentUserId(), id));
+    }
+
+    @DeleteMapping("/projects/{id}")
+    public ApiResponse<Void> deleteProject(@PathVariable String id) {
+        managementService.delete(SecurityUtil.requireCurrentUserId(), id);
+        return ApiResponse.success();
+    }
+
+    // ===== Projects (Legacy) =====
 
     @PutMapping("/projects/{id}")
     public ApiResponse<?> updateProject(@PathVariable String id, @RequestBody Map<String, Object> body) {

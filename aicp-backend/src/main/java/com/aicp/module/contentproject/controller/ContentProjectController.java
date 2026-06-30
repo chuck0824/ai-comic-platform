@@ -3,6 +3,9 @@ package com.aicp.module.contentproject.controller;
 import com.aicp.common.dto.ApiResponse;
 import com.aicp.common.dto.PageResult;
 import com.aicp.common.util.SecurityUtil;
+import com.aicp.module.canvas.dto.CanvasProjectRequests.CanvasProjectQuery;
+import com.aicp.module.canvas.dto.CanvasProjectViews.CanvasProjectSummary;
+import com.aicp.module.canvas.service.CanvasProjectManagementService;
 import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
 import com.aicp.module.contentproject.service.ContentProjectService;
@@ -27,6 +30,7 @@ public class ContentProjectController {
     private final ProjectWorkflowService workflow;
     private final ContentUnitService unitService;
     private final LegacyProjectProjectionService legacy;
+    private final CanvasProjectManagementService canvasProjects;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectDetail>> create(@Valid @RequestBody CreateProjectRequest request) {
@@ -103,6 +107,20 @@ public class ContentProjectController {
                                                   @RequestBody StoryboardIntentRequest request) {
         workflow.setStoryboardIntent(id, request);
         return ApiResponse.success();
+    }
+
+    // ===== Canvas Projects (under content project) =====
+
+    @GetMapping("/{projectId}/canvas-projects")
+    public ApiResponse<PageResult<CanvasProjectSummary>> listCanvasProjects(
+            @PathVariable Long projectId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String keyword) {
+        var query = new CanvasProjectQuery(page, pageSize, status, null, projectId, keyword);
+        return ApiResponse.success(canvasProjects.listByContentProject(
+                SecurityUtil.requireCurrentUserId(), projectId, query));
     }
 
     // ===== Content Units (under project) =====

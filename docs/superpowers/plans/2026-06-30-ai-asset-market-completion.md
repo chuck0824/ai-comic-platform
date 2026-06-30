@@ -190,7 +190,7 @@ public record WorkspaceContext(String workspaceId, String workspaceType, Long us
 }
 ```
 
-`WorkspaceContextFilter` must read `X-Workspace-Id`, forward the original bearer token to `GET {new-api.base-url}/api/aicp/workspaces/{id}/membership`, verify the returned `user_id` equals the authenticated user, and store the resulting context as a request attribute. Missing headers, mismatched users, inactive memberships, and upstream failures must fail closed for `/api/v1/asset/library/**`, claims, publishing, approvals, applications, and undo. Public `GET /api/v1/asset/market/listings/**` remains readable.
+`WorkspaceContextFilter` must read `X-Workspace-Id`, forward the original bearer token to `GET {new-api.base-url}/api/aicp/workspaces/{id}/membership`, verify the returned `user_id` equals the authenticated user, and store the resulting context as a request attribute. Missing `X-Workspace-Id` on a protected path returns `400`; mismatched users, inactive memberships, and upstream failures must fail closed for `/api/v1/asset/library/**`, claims, publishing, approvals, applications, and undo. Public `GET /api/v1/asset/market/listings/**` remains readable without Workspace context.
 
 Add the filter after JWT authentication. In `request.js` attach only the locally stored active context returned by login/account APIs:
 
@@ -259,6 +259,13 @@ public enum PublishStatus { PENDING, APPROVED, REJECTED, CANCELLED }
 ```
 
 Create the seven tables from the approved design. Use `VARCHAR(64)` Workspace IDs, JSON-as-text fields compatible with H2/MySQL, `row_version INT NOT NULL DEFAULT 0`, and the unique constraints named `uk_entitlement_workspace_listing`, `uk_application_workspace_key`, `uk_favorite_user_workspace_listing`, and `uk_pending_publish_asset_version`. Remove the obsolete `market_assets` runtime definition after migrating its four seed rows into the new tables.
+
+Insert seed data in both schema files covering all four asset categories:
+- **4 style models** — migrate existing Mock data (韩漫风格—都市言情, 日系唯美—校园青春, 美式写实—科幻冒险, 国风古装—仙侠奇幻) into `workspace_assets` + `asset_versions` + `market_listings` under a platform seed Workspace `platform_seed`.
+- **≥2 characters** — 都市男主角—青年, 校园女主角—少女.
+- **≥2 scenes** — 现代都市街道, 教室与走廊.
+- **≥2 prompts** — 韩漫都市对话提示词模板, 日系校园氛围提示词模板.
+- All seed listings are `LISTED`, `license_type=FREE`, `price=0`. Use idempotent INSERT (e.g. `MERGE` or `INSERT ... WHERE NOT EXISTS`) so migration scripts are repeatable.
 
 - [ ] **Step 4: Run schema and application-context tests**
 
@@ -342,6 +349,30 @@ git commit -m "feat: add public asset listing queries"
     WorkspaceContext ctx = enterprise("ent_100", 9L, "asset.publish.request");
     assertThatThrownBy(() -> service.publishPersonal(ctx, assetId, request)).isInstanceOf(BizException.class);
     assertThat(service.requestEnterprisePublish(ctx, assetId, request).status()).isEqualTo("PENDING");
+}
+
+@Test void createAndEditAssetInWorkspaceScope() {
+    WorkspaceContext ctx = personal("personal_7", 7L, "asset.manage");
+    AssetView created = service.create(ctx, new CreateAssetRequest("测试角色", "CHARACTER", "测试描述", List.of("测试"), "PRIVATE"));
+    assertThat(created.workspaceId()).isEqualTo("personal_7");
+    AssetView edited = service.edit(ctx, created.id(), new EditAssetRequest("更新名称", null, null, 0));
+    assertThat(edited.name()).isEqualTo("更新名称");
+}
+
+@Test void archiveAndUnlistPreserveEntitlements() {
+    WorkspaceContext ctx = personal("personal_7", 7L, "asset.manage");
+    service.archive(ctx, assetId, assetRowVersion);
+    assertThat(readAsset(assetId).status()).isEqualTo("ARCHIVED");
+    service.unlist(ctx, assetId, listingRowVersion);
+    assertThat(readListing(listingId).status()).isEqualTo("UNLISTED");
+}
+
+@Test void createVersionSnapshotsImmutableCopy() {
+    WorkspaceContext ctx = personal("personal_7", 7L, "asset.manage");
+    VersionView v1 = readAsset(assetId).currentVersion();
+    VersionView v2 = service.createVersion(ctx, assetId, new CreateVersionRequest(metadata, previewUrl));
+    assertThat(v2.versionNumber()).isGreaterThan(v1.versionNumber());
+    assertThat(v1.metadata()).isNotEqualTo(v2.metadata()); // v1 unchanged
 }
 ```
 
@@ -524,7 +555,38 @@ Expected: FAIL because `48xxx` mappings are absent.
 
 Define `ASSET_NOT_FOUND(48001)`, `ASSET_PERMISSION_DENIED(48002)`, `LISTING_UNAVAILABLE(48003)`, `ASSET_VERSION_CONFLICT(48004)`, `ASSET_INCOMPATIBLE(48005)`, `PUBLISH_STATE_CONFLICT(48006)`, and `ASSET_TYPE_UNSUPPORTED(48007)`. Map `48001→404`, `48002→403`, `48003/48004/48006→409`, and `48005/48007→422`.
 
-Export frontend methods for every API in design section 8. Preserve old method names as wrappers during migration, for example `getModels(params) => listMarket({ ...params, type: 'model' })`.
+Export the following frontend methods from `aicp-frontend/src/api/asset.js`:
+
+```js
+// 公共市场
+export function listMarket(params)           // GET  /market/listings
+export function getListingDetail(id)        // GET  /market/listings/{id}
+export function claimListing(id)            // POST /market/listings/{id}/claim
+export function favoriteListing(id)         // PUT  /market/listings/{id}/favorite
+export function unfavoriteListing(id)       // DELETE /market/listings/{id}/favorite
+
+// Workspace 资产库
+export function listLibrary(params)         // GET  /library
+export function createAsset(body)           // POST /library
+export function getLibraryAsset(id)         // GET  /library/{id}
+export function editLibraryAsset(id, body)  // PUT  /library/{id}
+export function createAssetVersion(id, body)// POST /library/{id}/versions
+export function archiveAsset(id)            // POST /library/{id}/archive
+export function publishAsset(id, body)      // POST /library/{id}/publish
+export function unlistAsset(id)             // POST /library/{id}/unlist
+export function applyAsset(id, body)        // POST /library/{id}/applications
+export function undoApplication(id, body)   // POST /applications/{id}/undo
+
+// 企业审批
+export function requestPublish(id, body)    // POST /library/{id}/publish-requests
+export function listPublishRequests(params) // GET  /publish-requests
+export function getPublishRequest(id)       // GET  /publish-requests/{id}
+export function approveRequest(id, body)    // POST /publish-requests/{id}/approve
+export function rejectRequest(id, body)     // POST /publish-requests/{id}/reject
+export function cancelRequest(id)           // POST /publish-requests/{id}/cancel
+```
+
+Preserve old method names as wrappers during migration, for example `getModels(params) => listMarket({ ...params, type: 'checkpoint' })`.
 
 - [ ] **Step 4: Run controller tests and frontend build**
 
@@ -711,9 +773,31 @@ Run: `cd aicp-backend && mvn -Dtest=AssetMarketLifecycleE2ETest,AssetMarketSecur
 
 Expected before final fixes: failures identify only integration wiring, seed, or response-contract gaps; no test may be disabled.
 
-- [ ] **Step 3: Fix wiring and update the three canonical documents**
+- [ ] **Step 3: Fix wiring and update the canonical documents**
 
-Document the final endpoint table, Workspace isolation rules, personal/enterprise publishing differences, four supported asset types, voice/BGM deferral, error codes, and migration from old market tables. Remove statements claiming that `AssetController` Mock responses are production behavior.
+Update the following three documents to reflect the completed asset market:
+
+**`docs/01-core/API接口文档_V1.5.md`:**
+- Replace old `/market/models|characters|scenes|prompts` with the new endpoint table (design sections 8.1–8.3).
+- Document `X-Workspace-Id` header requirement for protected endpoints.
+- Add pagination request/response format.
+- Add all business error codes (48001–48007) and their HTTP mappings.
+- Mark old endpoints as deprecated with migration paths.
+
+**`docs/01-core/用户端PRD.md`:**
+- Add asset market channels: public market, Workspace library, publish management, approval center.
+- Document personal vs enterprise publishing workflow differences.
+- Add free claim → library → apply → undo user flow.
+- Note voice/BGM as "即将开放" with disabled state.
+- Remove any references to Mock/hardcoded data being production behavior.
+
+**`docs/01-core/后端产品功能设计_V1.5.md`:**
+- Document Workspace isolation rules (design section 4.3).
+- Add permission mapping table (design section 4.2).
+- Document the `WorkspaceContextFilter` and `3001` contract dependency.
+- Add domain model with the seven tables.
+- Document seed data strategy.
+- Remove statements claiming that `AssetController` Mock responses are production behavior.
 
 - [ ] **Step 4: Run the complete verification suite**
 

@@ -1,0 +1,55 @@
+<h2>第四部分：应用语义、状态机与验收</h2>
+<p class="subtitle">四类资产共享领取/权限框架，但应用到项目时执行不同的领域动作</p>
+
+<div class="section">
+  <h3>应用到项目</h3>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+    <div class="option"><div class="letter">风</div><div class="content"><h3>风格模型</h3><p>合并到项目 style_config；记录旧配置，支持撤销。</p></div></div>
+    <div class="option"><div class="letter">角</div><div class="content"><h3>角色资产</h3><p>加入项目角色资产引用；画布可继续创建角色节点。</p></div></div>
+    <div class="option"><div class="letter">景</div><div class="content"><h3>场景资产</h3><p>加入项目场景资产引用；可绑定到分镜或场景节点。</p></div></div>
+    <div class="option"><div class="letter">词</div><div class="content"><h3>提示词</h3><p>复制到项目 Prompt 库；可插入指定文本/生成节点。</p></div></div>
+  </div>
+  <p>应用前校验项目与资产属于同一 Workspace；应用成功写入 asset_applications，并返回具体变更与 undo_token。</p>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">发布状态机</div>
+  <div class="mockup-body">
+    <p><strong>个人资产：</strong>private → listed → unlisted；本人直接操作。</p>
+    <p><strong>企业资产：</strong>workspace → pending_review → approved/listed，或 rejected → 修改后重新提交。</p>
+    <p><strong>归档：</strong>任意非审批中状态可归档；归档后禁止新应用，但保留历史记录。</p>
+    <p><strong>并发：</strong>审批、撤下和版本更新使用 version 字段做乐观锁，避免重复审批或覆盖。</p>
+  </div>
+</div>
+
+<div class="split" style="margin-top:22px">
+  <div class="mockup">
+    <div class="mockup-header">错误处理</div>
+    <div class="mockup-body">
+      <p><strong>401：</strong>登录过期，保留当前页面并引导重新登录</p>
+      <p><strong>403：</strong>缺少使用/发布/审批权限</p>
+      <p><strong>404：</strong>不存在或不属于当前 Workspace，防止枚举</p>
+      <p><strong>409：</strong>已撤下、审批状态冲突、版本冲突</p>
+      <p><strong>422：</strong>资产与目标项目不兼容</p>
+      <p><strong>3001 不可用：</strong>公共浏览可继续；所有依赖权限的写操作明确阻止，不伪造成功</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">幂等与一致性</div>
+    <div class="mockup-body">
+      <p>重复领取同一 Listing：返回已有权益与资产，不创建重复数据。</p>
+      <p>重复应用请求：使用 idempotency_key，避免重复写入项目。</p>
+      <p>领取事务：权益与买方资产同时成功或同时回滚。</p>
+      <p>审批事务：申请状态与 Listing 同时更新并记录审计人。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:22px">
+  <h3>必须通过的测试</h3>
+  <div class="pros-cons">
+    <div class="pros"><h4>租户与权限</h4><ul><li>两个个人空间、两个企业空间交叉访问全部失败</li><li>篡改 workspace_id 无法越权</li><li>成员可浏览但不能执行未授权操作</li><li>只有企业管理员能审批公开</li></ul></div>
+    <div class="pros"><h4>业务闭环</h4><ul><li>四类资产发布、检索、领取、入库和应用</li><li>领取与应用具备幂等性</li><li>撤下后已领取权益仍可使用</li><li>风格应用可撤销并恢复旧配置</li></ul></div>
+  </div>
+  <p>前端补充筛选、分页、骨架屏、空态、错误重试、权限按钮及“即将开放”测试；E2E 覆盖个人发布和企业审批两条主链路。</p>
+</div>

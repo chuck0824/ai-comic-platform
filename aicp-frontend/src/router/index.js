@@ -11,13 +11,17 @@ const routes = [
   {
     path: '/',
     component: () => import('@/components/AppLayout.vue'),
-    redirect: '/canvas',
+    redirect: '/home',
     children: [
       {
-        path: 'dashboard',
-        name: 'Dashboard',
+        path: 'home',
+        name: 'Home',
         component: () => import('@/views/Dashboard.vue'),
-        meta: { title: '工作台' }
+        meta: { title: '首页' }
+      },
+      {
+        path: 'dashboard',
+        redirect: '/home'
       },
       // === V7 剧本创作（主入口，直接加载V7组件） ===
       {
@@ -59,16 +63,24 @@ const routes = [
         meta: { title: '剧本创作（旧版）' }
       },
       {
-        path: 'canvas/:projectId?',
+        path: 'canvas-projects',
+        name: 'CanvasProjectCenter',
+        component: () => import('@/views/canvas-project/CanvasProjectCenter.vue'),
+        meta: { title: '画布项目中心' }
+      },
+      {
+        path: 'canvas',
+        redirect: '/canvas-projects'
+      },
+      {
+        path: 'canvas/:projectId',
         name: 'Canvas',
         component: () => import('@/views/Canvas.vue'),
-        meta: { title: '画布工作台', canvasWorkspace: true }
+        meta: { title: '画布编辑器', canvasWorkspace: true }
       },
       {
         path: '画布工作台/:projectId?',
-        name: 'CanvasWorkbench',
-        component: () => import('@/views/Canvas.vue'),
-        meta: { title: '画布工作台', canvasWorkspace: true }
+        redirect: to => `/canvas-projects`
       },
       {
         path: 'warehouse',

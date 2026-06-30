@@ -1,0 +1,86 @@
+<h2>首页采用哪种信息层级？</h2>
+<p class="subtitle">三种方案都保留短剧 / 长篇 / TVC 入口，并统一侧栏：新增“首页”，只保留一个“剧本创作”。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#f7f8fb">
+      <div style="display:flex;height:300px;border:1px solid #dfe3ea;border-radius:8px;overflow:hidden;background:white;font-size:11px">
+        <div style="width:90px;background:#171923;color:white;padding:12px 8px;line-height:2.2">
+          <b>AI漫剧</b><br><span style="color:#8ea8ff">● 首页</span><br>剧本创作<br>画布工作台<br><br><span style="color:#888">管理</span><br>剧本仓库<br>交易市场
+        </div>
+        <div style="flex:1;padding:13px">
+          <b style="font-size:15px">今天想创作什么？</b>
+          <div style="display:flex;gap:7px;margin:12px 0">
+            <div style="flex:1;padding:14px 6px;background:#eef3ff;border-radius:6px"><b>短剧</b><br><small>快速成稿</small></div>
+            <div style="flex:1;padding:14px 6px;background:#f5efff;border-radius:6px"><b>长篇</b><br><small>世界观创作</small></div>
+            <div style="flex:1;padding:14px 6px;background:#fff3e8;border-radius:6px"><b>TVC</b><br><small>营销脚本</small></div>
+          </div>
+          <div style="padding:25px 8px;border:1px solid #e4e7ed;border-radius:6px"><b>最近项目</b><br><br>项目列表占主要空间</div>
+          <div style="display:flex;gap:6px;margin-top:8px"><div style="flex:1;background:#f5f6f8;padding:9px">待处理任务</div><div style="flex:1;background:#f5f6f8;padding:9px">本月数据</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · 创作入口优先</h3>
+      <p>三个模式入口最醒目，最近项目居中，任务和数据降级。适合首次进入和高频新建。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)" style="border:2px solid #5b7cff">
+    <div class="card-image" style="padding:12px;background:#f7f8fb;position:relative">
+      <span style="position:absolute;right:18px;top:17px;background:#5b7cff;color:white;padding:3px 8px;border-radius:10px;font-size:10px">推荐</span>
+      <div style="display:flex;height:300px;border:1px solid #dfe3ea;border-radius:8px;overflow:hidden;background:white;font-size:11px">
+        <div style="width:90px;background:#171923;color:white;padding:12px 8px;line-height:2.2">
+          <b>AI漫剧</b><br><span style="color:#8ea8ff">● 首页</span><br>剧本创作<br>画布工作台<br><br><span style="color:#888">管理</span><br>剧本仓库<br>交易市场
+        </div>
+        <div style="flex:1;padding:13px">
+          <div style="display:flex;justify-content:space-between"><b style="font-size:15px">创作工作台</b><span>3 个进行中项目</span></div>
+          <div style="display:flex;gap:7px;margin:12px 0">
+            <div style="flex:1;padding:13px 6px;background:#eef3ff;border-radius:6px"><b>＋ 短剧创作</b><br><small>快节奏、强钩子</small></div>
+            <div style="flex:1;padding:13px 6px;background:#f5efff;border-radius:6px"><b>＋ 长篇创作</b><br><small>人物与世界观</small></div>
+            <div style="flex:1;padding:13px 6px;background:#fff3e8;border-radius:6px"><b>＋ TVC 创作</b><br><small>品牌与转化</small></div>
+          </div>
+          <div style="display:flex;gap:8px">
+            <div style="flex:2;padding:12px;border:1px solid #e4e7ed;border-radius:6px"><b>继续创作</b><br><br>项目 A　62%　继续<br><br>项目 B　35%　继续</div>
+            <div style="flex:1;padding:12px;border:1px solid #e4e7ed;border-radius:6px"><b>待处理</b><br><br>审核 2<br>生成任务 1<br>异常 0</div>
+          </div>
+          <div style="display:flex;gap:6px;margin-top:8px"><div style="flex:1;background:#f5f6f8;padding:7px">内容项目 12</div><div style="flex:1;background:#f5f6f8;padding:7px">本月成稿 6</div><div style="flex:1;background:#f5f6f8;padding:7px">资产 138</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · 启动与续作平衡</h3>
+      <p>上方三入口，中部“继续创作 + 待处理”，底部轻量数据。兼顾新建、恢复工作和状态感知。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#f7f8fb">
+      <div style="display:flex;height:300px;border:1px solid #dfe3ea;border-radius:8px;overflow:hidden;background:white;font-size:11px">
+        <div style="width:90px;background:#171923;color:white;padding:12px 8px;line-height:2.2">
+          <b>AI漫剧</b><br><span style="color:#8ea8ff">● 首页</span><br>剧本创作<br>画布工作台<br><br><span style="color:#888">管理</span><br>剧本仓库<br>交易市场
+        </div>
+        <div style="flex:1;padding:13px">
+          <b style="font-size:15px">我的内容项目</b>
+          <div style="padding:11px;margin:10px 0;border:1px solid #e4e7ed;border-radius:6px"><b>最近项目</b><br><br>项目 A　继续创作<br><br>项目 B　进入分镜<br><br>项目 C　进入画布</div>
+          <b>新建项目</b>
+          <div style="display:flex;gap:7px;margin-top:8px">
+            <div style="flex:1;padding:12px 6px;background:#eef3ff;border-radius:6px">短剧</div>
+            <div style="flex:1;padding:12px 6px;background:#f5efff;border-radius:6px">长篇</div>
+            <div style="flex:1;padding:12px 6px;background:#fff3e8;border-radius:6px">TVC</div>
+          </div>
+          <div style="background:#f5f6f8;padding:9px;margin-top:8px">任务与数据摘要</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · 项目恢复优先</h3>
+      <p>最近项目占据首屏，新建入口下沉。适合成熟团队高频续作，但会弱化首页的“创作启动”概念。</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:18px">
+  <div class="pros"><h4>建议选择 B</h4><ul><li>符合“创作启动为主，兼顾任务与数据”</li><li>三种创作模式不会被合并或隐藏</li><li>老用户能一键恢复进行中的工作</li></ul></div>
+  <div class="cons"><h4>需要控制</h4><ul><li>首页只展示轻量数据，不复制完整数据看板</li><li>最近项目控制在 3–5 个，避免首页退化为项目列表</li></ul></div>
+</div>

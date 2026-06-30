@@ -1,0 +1,71 @@
+<style>
+  .flow { max-width:1180px; margin:0 auto; }
+  .lane { border:1px solid #d8dde6; border-radius:13px; background:#fff; padding:14px; margin-bottom:14px; }
+  .lane-title { display:flex; align-items:center; gap:9px; margin-bottom:12px; }
+  .lane-title b { font-size:15px; }
+  .num { width:26px; height:26px; border-radius:8px; background:#e8efff; color:#1d4ed8; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .entities { display:grid; grid-template-columns:1.05fr 1.2fr 1fr 1.1fr; gap:11px; }
+  .entity { border:1px solid #dbe1e9; border-radius:9px; overflow:hidden; background:#fbfcfe; }
+  .entity h4 { margin:0; padding:9px 10px; background:#eef3fb; color:#1e3a5f; font-size:12px; }
+  .entity ul { margin:0; padding:9px 10px 10px 25px; color:#5b6472; font-size:11px; line-height:1.65; }
+  .version-flow { display:flex; align-items:center; gap:8px; overflow:hidden; }
+  .state { flex:1; min-height:92px; border:1px solid #dbe1e9; border-radius:9px; padding:10px; background:#fbfcfe; font-size:11px; color:#5b6472; line-height:1.55; }
+  .state b { display:block; color:#111827; margin-bottom:5px; font-size:12px; }
+  .state.locked { background:#effaf4; border-color:#b7e4ca; }
+  .state.derived { background:#f5f0ff; border-color:#d8c6f6; }
+  .arrow { color:#2563eb; font-size:18px; font-weight:700; }
+  .xlsx-flow { display:grid; grid-template-columns:1fr 60px 1.25fr 60px 1fr; gap:8px; align-items:center; }
+  .book,.service,.result { border:1px solid #dbe1e9; border-radius:10px; padding:11px; min-height:130px; background:#fbfcfe; font-size:11px; color:#5b6472; line-height:1.65; }
+  .book b,.service b,.result b { display:block; color:#111827; margin-bottom:6px; }
+  .service { background:#eef5ff; border-color:#bfd2f6; }
+  .error { color:#b45309; }
+  .rule-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+  .rule { border-left:3px solid #2563eb; background:#f5f7fa; padding:9px 11px; border-radius:5px; font-size:11px; line-height:1.6; color:#5b6472; }
+  .rule b { color:#111827; }
+</style>
+
+<h2>分镜领域模型与版本流</h2>
+<p class="subtitle">核心原则：Master 表示作品中的分镜资产；Version 是可审计版本；场景、镜头和辅助模块全部归属版本。</p>
+
+<div class="flow">
+  <section class="lane">
+    <div class="lane-title"><span class="num">1</span><b>领域实体</b></div>
+    <div class="entities">
+      <div class="entity"><h4>Storyboard Master</h4><ul><li>project_id / content_unit_id</li><li>源正文版本</li><li>当前草稿 / 当前锁定版本</li><li>制作状态与生产准入</li></ul></div>
+      <div class="entity"><h4>Storyboard Version</h4><ul><li>parent_version_id</li><li>A / B / C 档与版本号</li><li>draft / reviewing / locked</li><li>revision 乐观锁</li><li>总镜头、总时长、schema_version</li></ul></div>
+      <div class="entity"><h4>Scene + Shot</h4><ul><li>场景稳定键与排序</li><li>镜号、时长、景别</li><li>13 维镜头字段</li><li>角色 / 场景 / 资产引用</li><li>逐镜确认状态</li></ul></div>
+      <div class="entity"><h4>Professional Modules</h4><ul><li>情绪区间与节拍</li><li>图片 / 视频提示词模板</li><li>类型修订与一致性规则</li><li>人物视觉规范与镜头绑定</li><li>审核问题与任务记录</li></ul></div>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-title"><span class="num">2</span><b>版本生命周期与升档</b></div>
+    <div class="version-flow">
+      <div class="state"><b>A 档草稿 v3</b>自动保存<br>revision=18<br>可增删改排镜头</div><div class="arrow">→</div>
+      <div class="state"><b>审核中</b>连续性检查<br>规则校验<br>人工处理问题</div><div class="arrow">→</div>
+      <div class="state locked"><b>A 档锁定 v3</b>不可修改<br>可导出 / 概念画布<br>保留完整审计</div><div class="arrow">→</div>
+      <div class="state derived"><b>派生 B 档 v1</b>复制 A 档稳定键<br>AI 补充导演维度<br>原 A 档永久保留</div><div class="arrow">→</div>
+      <div class="state derived"><b>派生 C 档 v1</b>补齐生产三表<br>锁定后允许批量生产</div>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-title"><span class="num">3</span><b>XLSX 双向往返</b></div>
+    <div class="xlsx-flow">
+      <div class="book"><b>7 张工作表</b>分镜头脚本<br>情绪强度总览<br>提示词模板<br>类型修订 / 设定一致性<br>人物三视图 / 应用表</div>
+      <div class="arrow">→</div>
+      <div class="service"><b>导入预检任务</b>模板版本识别 → 列映射 → 镜号与引用校验 → 枚举标准化 → 生成差异预览<br><span class="error">有错误：不写库，返回逐单元格报告</span><br>通过：一次事务创建新草稿版本</div>
+      <div class="arrow">↔</div>
+      <div class="result"><b>系统 / 导出文件</b>编辑后按同一模板生成 7 张表<br>保留工作表顺序、字段语义、样式基线<br>增加隐藏 schema_version 与稳定 ID，确保再次导入能精确匹配</div>
+    </div>
+  </section>
+
+  <section class="lane">
+    <div class="lane-title"><span class="num">4</span><b>强制规则</b></div>
+    <div class="rule-grid">
+      <div class="rule"><b>归属隔离</b><br>所有 Version、Scene、Shot 查询必须同时带 storyboard_id 与 project_id。</div>
+      <div class="rule"><b>锁定不可变</b><br>锁定版本只能读取、导出或派生；任何编辑请求直接拒绝。</div>
+      <div class="rule"><b>稳定引用</b><br>镜号可以重排，shot_key 不变；人物规范、问题和资产绑定使用稳定键。</div>
+    </div>
+  </section>
+</div>

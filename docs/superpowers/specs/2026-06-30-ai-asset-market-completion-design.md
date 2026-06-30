@@ -82,6 +82,65 @@
 - 公共 API 只暴露 `listing_id`；卖方私有 `asset_id` 不能作为跨租户访问入口。
 - Repository 提供按 Workspace 查询的方法，不提供业务层可直接调用的无租户私有查询方法。
 
+### 4.4 `3001` 权限合约
+
+`8080` 通过以下合约从 `3001` 获取 Workspace 成员资格和权限：
+
+**端点：** `GET /api/aicp/workspaces/{workspaceId}/membership`
+
+**认证：** 请求携带原始 Bearer Token（由 `8080` 签发，`3001` 验证 JWT 签名和 `sub`/`uid` claim）。
+
+**响应（200）：**
+```json
+{
+  "success": true,
+  "data": {
+    "workspace_id": "ent_100",
+    "workspace_type": "enterprise",
+    "user_id": 9,
+    "permissions": ["asset.view", "asset.use"]
+  }
+}
+```
+
+**错误场景：**
+- `401` — Token 无效或过期。
+- `404` — Workspace 不存在，或当前用户不是有效成员（统一返回 404 防止 Workspace ID 枚举）。
+- `503` — 数据库或服务不可用。
+
+`3001` 不提供批量查询或按用户查询 Workspace 列表的接口；`8080` 通过登录响应中的 `workspace_id` 确定当前上下文。
+
+### 4.5 请求拦截与上下文解析（`WorkspaceContextFilter`）
+
+`8080` 通过 `OncePerRequestFilter` 在 JWT 认证之后解析 Workspace 上下文：
+
+1. 读取请求头 `X-Workspace-Id`。
+2. 转发原始 `Authorization` 头到 `3001` 成员资格端点。
+3. 验证返回的 `user_id` 与当前认证用户一致。
+4. 将 `WorkspaceContext(workspaceId, workspaceType, userId, permissions)` 存入 `request.setAttribute`。
+5. 对以下路径前缀强制要求有效 Workspace 上下文（缺失或无效时拒绝请求）：
+   - `/api/v1/asset/library/**`
+   - `/api/v1/asset/market/listings/*/claim`
+   - `/api/v1/asset/market/listings/*/favorite`
+   - `/api/v1/asset/publish-requests/**`
+   - `/api/v1/asset/applications/**`
+6. 公共 `GET /api/v1/asset/market/listings/**` 不受 Workspace 过滤器限制。
+
+`3001` 不可用时过滤器对受保护路径全部拒绝（fail-closed），返回 `503`；公共市场浏览可继续。
+
+### 4.6 JWT Claim 映射
+
+`8080` 签发的 JWT 包含以下 claim，`3001` 中间件据此解析用户身份：
+
+| Claim | 说明 |
+|---|---|
+| `sub` | 用户唯一标识（与 `uid` 一致） |
+| `uid` | 用户 ID（数字类型，`3001` 以此匹配 `user_id`） |
+| `iat` | 签发时间 |
+| `exp` | 过期时间 |
+
+`3001` 的 `AicpJwtAuth` 中间件验证 `uid` claim 存在且 JWT 签名有效，不单独维护用户表。
+
 ## 5. 页面信息架构
 
 ### 5.1 顶级频道
@@ -268,6 +327,150 @@ Listing 撤下后，已领取权益和买方资产继续有效；未领取用户
 
 旧的 `/market/models`、`/characters`、`/scenes` 和 `/prompts` 在迁移期映射到新的 Listing 查询，前端切换完成后标记废弃，避免一次性破坏其他调用方。
 
+### 8.4 请求/响应 Schema
+
+**分页请求参数（Query）：**
+
+| 参数 | 类型 | 说明 |
+|---|---|---|
+| `keyword` | string | 搜索关键词（名称、作者、标签） |
+| `type` | string | `checkpoint`、`lora`、`style_pack`、`character`、`scene`、`prompt` |
+| `sort` | string | `latest`（默认）、`popular`、`rating`、`relevance` |
+| `page` | int | 页码，从 1 开始，默认 1 |
+| `page_size` | int | 每页条数，默认 20，最大 50 |
+
+**分页响应格式：**
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "items": [...],
+    "pagination": {
+      "page": 1,
+      "page_size": 20,
+      "total": 142,
+      "total_pages": 8
+    }
+  }
+}
+```
+
+**ListingCard 响应字段：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `id` | long | Listing ID（公共标识） |
+| `name` | string | 资产名称 |
+| `author_name` | string | 作者展示名 |
+| `asset_type` | string | 资产类型 |
+| `tags` | string[] | 标签列表 |
+| `thumbnail_url` | string | 预览缩略图 |
+| `use_count` | int | 使用量 |
+| `license_type` | string | 本期固定 `FREE` |
+| `claimed` | boolean | 当前 Workspace 是否已领取（需 Workspace 上下文） |
+| `created_at` | string | 发布时间 |
+
+**ListingDetail 响应字段（在 ListingCard 基础上增加）：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `description` | string | 详细说明 |
+| `previews` | string[] | 多图预览地址 |
+| `version_info` | object | 版本号和兼容信息 |
+| `recommended_params` | object | 推荐参数 |
+| `license_scope` | string | 授权范围说明 |
+
+**领取请求（空 Body）：**
+`POST /api/v1/asset/market/listings/{listingId}/claim` — 无需请求体，幂等。
+
+**领取响应：**
+```json
+{
+  "code": 0,
+  "data": {
+    "listing_id": 1,
+    "workspace_asset_id": 42,
+    "entitlement_id": 7,
+    "claimed": true
+  }
+}
+```
+
+**发布请求 Body（`POST /library/{assetId}/publish`）：**
+```json
+{
+  "version_id": 3,
+  "name": "展示名称",
+  "description": "公开说明",
+  "tags": ["韩漫", "都市"],
+  "author_name": "作者昵称",
+  "license_scope": "可自由使用于个人和商业项目",
+  "row_version": 0
+}
+```
+
+**企业发布申请 Body（`POST /library/{assetId}/publish-requests`）：**
+与个人发布请求结构相同，增加 `reason` 字段说明申请理由。
+
+**审批 Body（`POST /publish-requests/{requestId}/approve`）：**
+```json
+{
+  "row_version": 0,
+  "review_comment": "可选审批备注"
+}
+```
+
+**驳回 Body（`POST /publish-requests/{requestId}/reject`）：**
+```json
+{
+  "row_version": 0,
+  "reason": "驳回原因（必填，非空）"
+}
+```
+
+**应用到项目 Body（`POST /library/{assetId}/applications`）：**
+```json
+{
+  "project_id": 100,
+  "target_type": "PROJECT",
+  "target_id": null,
+  "idempotency_key": "uuid-v4"
+}
+```
+
+**应用响应：**
+```json
+{
+  "code": 0,
+  "data": {
+    "application_id": 15,
+    "undo_token": "hashed-random-token",
+    "change_summary": "已将韩漫风格模型应用到项目「都市传说」"
+  }
+}
+```
+
+**撤销 Body（`POST /applications/{applicationId}/undo`）：**
+```json
+{
+  "undo_token": "hashed-random-token",
+  "project_row_version": 5
+}
+```
+
+### 8.5 `X-Workspace-Id` 请求头规范
+
+所有需要 Workspace 上下文的 API 必须携带 `X-Workspace-Id` 请求头：
+
+| 请求头 | 说明 |
+|---|---|
+| `X-Workspace-Id` | 当前活跃 Workspace ID。前端从登录响应获取并持久化到 `localStorage`，每次请求由 `request.js` 拦截器自动附加 |
+
+- 公共市场列表和详情查询不需要此头（可携带但忽略）。
+- 携带的 `X-Workspace-Id` 与会话中的用户成员资格不一致时返回 `403`。
+- 未携带且 API 要求 Workspace 上下文时返回 `400`。
+
 ## 9. 前端组件边界
 
 - `AssetMarketPage`：频道、URL 查询状态和权限上下文。
@@ -282,6 +485,32 @@ Listing 撤下后，已领取权益和买方资产继续有效；未领取用户
 - `ApplyAssetDialog`：选择项目和目标位置，展示变更摘要。
 
 API 状态按组件作用域管理，避免把市场筛选、详情、资产库和审批状态集中到一个超大页面组件中。
+
+### 9.1 前端路由
+
+资产市场相关路由均在 `8080` 前端注册，不需要跳转 `3001`：
+
+| 路由路径 | 组件 | 说明 |
+|---|---|---|
+| `/asset-market` | `AssetMarket.vue` | 市场主页，包含四个频道 Tab |
+| `/asset-market?tab=public` | `PublicMarketPanel` | 公共市场（默认 Tab） |
+| `/asset-market?tab=library` | `WorkspaceAssetPanel` | Workspace 资产库 |
+| `/asset-market?tab=publish` | `PublishRequestPanel` | 发布管理 |
+| `/asset-market?tab=review` | `PublishReviewDrawer` | 审批中心（仅权限可见） |
+
+频道切换通过 URL query `?tab=` 驱动，支持浏览器前进/后退。筛选、搜索和分页参数同样同步到 URL query，确保可分享和刷新恢复。
+
+Workspace 资产选择器（`WorkspaceAssetPicker`）作为画布页面的内嵌组件，通过 `Canvas.vue` 工具栏按钮触发，不占用独立路由。
+
+### 9.2 撤销 Token 设计
+
+`undo_token` 是应用资产时服务端生成的一次性哈希令牌：
+
+- 生成：`SHA-256(application_id + workspace_id + random_bytes + secret)` 取前 16 字符。
+- 在 `asset_applications` 记录中存储哈希值，响应中返回明文。
+- 撤销时校验明文哈希与存储值匹配，防止令牌猜测。
+- 撤销成功后令牌失效（应用记录标记为 `UNDONE`）。
+- 令牌不包含时间信息，不设过期时间；撤销的安全性由 Workspace 隔离和 `project_row_version` 并发控制共同保证。
 
 ## 10. 错误处理与一致性
 
@@ -330,12 +559,66 @@ API 状态按组件作用域管理，避免把市场筛选、详情、资产库�
 
 ## 12. 数据迁移与兼容
 
+### 12.1 迁移策略
+
 1. 以本设计的 `workspace_assets`、`asset_versions`、`market_listings`、`asset_entitlements`、`asset_publish_requests` 和 `asset_applications` 为统一目标模型。
 2. 对现有 `market_assets`、`asset_market_items` 等重复定义做一次性迁移映射；迁移完成后只保留一套运行时表。
 3. 四条 Mock 风格模型转为平台种子 Workspace 的真实资产、版本和 Listing。
 4. 为角色、场景和提示词补充可检索的种子数据，保证四个分类具备可验证内容。
 5. 旧列表接口临时适配新查询；新前端完成后再移除旧接口。
 6. 迁移脚本必须可重复执行，并通过记录数、唯一约束和公开状态核对。
+
+### 12.2 种子数据规格
+
+迁移后需包含以下种子数据，确保四类资产在市场中有可检索、可领取的内容：
+
+**种子 Workspace：** 创建平台系统 Workspace `platform_seed`（类型 `enterprise`，所有者 `user_id=1`），所有种子资产归属此 Workspace。
+
+**风格模型（4 条 → 继承现有 Mock 数据）：**
+
+| 名称 | 风格 | 标签 | 预览 |
+|---|---|---|---|
+| 韩漫风格 — 都市言情 | 韩漫 | `["韩漫","都市","言情"]` | 沿用现有预览 |
+| 日系唯美 — 校园青春 | 日系 | `["日系","唯美","校园"]` | 沿用现有预览 |
+| 美式写实 — 科幻冒险 | 美式 | `["美式","写实","科幻"]` | 沿用现有预览 |
+| 国风古装 — 仙侠奇幻 | 国风 | `["国风","古装","仙侠"]` | 沿用现有预览 |
+
+每条对应一个 `workspace_asset`（`CREATED`） + 一个 `asset_version`（v1） + 一个 `market_listing`（`LISTED`）。
+
+**角色（≥ 2 条）：**
+
+| 名称 | 标签 |
+|---|---|
+| 都市男主角 — 青年 | `["角色","男性","青年","都市"]` |
+| 校园女主角 — 少女 | `["角色","女性","少女","校园"]` |
+
+**场景（≥ 2 条）：**
+
+| 名称 | 标签 |
+|---|---|
+| 现代都市街道 | `["场景","现代","都市","室外"]` |
+| 教室与走廊 | `["场景","校园","室内","日系"]` |
+
+**提示词（≥ 2 条）：**
+
+| 名称 | 标签 |
+|---|---|
+| 韩漫都市对话提示词模板 | `["提示词","韩漫","对话"]` |
+| 日系校园氛围提示词模板 | `["提示词","日系","氛围"]` |
+
+所有种子资产初始状态为 `LISTED`，`license_type=FREE`，`price=0`。种子数据在 `schema-h2.sql`（开发/测试）和 `schema-mysql.sql`（部署）中以 INSERT 语句提供，确保可重复执行（使用 `INSERT ... ON DUPLICATE KEY UPDATE` 或先 `DELETE` 再 `INSERT` 的幂等写法）。
+
+### 12.3 旧接口兼容路径
+
+| 旧路径 | 迁移行为 |
+|---|---|
+| `GET /market/models?style=&page=&size=` | 适配 → `GET /market/listings?type=checkpoint&...` |
+| `GET /market/characters` | 适配 → `GET /market/listings?type=character` |
+| `GET /market/scenes` | 适配 → `GET /market/listings?type=scene` |
+| `GET /market/prompts` | 适配 → `GET /market/listings?type=prompt` |
+| `POST /market/download/{id}` | 适配 → `POST /market/listings/{id}/claim` |
+
+旧接口方法保留到前端完全切换到新 API 后，在下个迭代移除。
 
 ## 13. 交付顺序
 

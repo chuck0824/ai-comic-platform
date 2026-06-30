@@ -1,0 +1,103 @@
+<style>
+  .editor { border:1px solid #d8dde6; border-radius:14px; overflow:hidden; background:#fff; min-width:1040px; box-shadow:0 12px 32px rgba(31,41,55,.08); }
+  .editor-top { height:54px; display:flex; align-items:center; gap:14px; padding:0 15px; border-bottom:1px solid #e5e7eb; background:#fff; font-size:12px; }
+  .crumb { color:#6b7280; }
+  .title { font-size:15px; font-weight:700; color:#111827; }
+  .badge { padding:3px 8px; border-radius:999px; background:#e8efff; color:#1d4ed8; }
+  .saved { color:#16a34a; }
+  .spacer { flex:1; }
+  .button { padding:6px 10px; border:1px solid #cfd6e1; border-radius:6px; color:#374151; background:#fff; }
+  .button.primary { color:#fff; border-color:#2563eb; background:#2563eb; }
+  .module-tabs { height:40px; display:flex; align-items:end; gap:21px; padding:0 15px; border-bottom:1px solid #e5e7eb; background:#fbfcfe; font-size:12px; }
+  .module-tab { height:40px; display:flex; align-items:center; color:#6b7280; }
+  .module-tab.active { color:#2563eb; font-weight:700; border-bottom:2px solid #2563eb; }
+  .editor-body { display:grid; grid-template-columns:180px minmax(580px,1fr) 300px; min-height:460px; }
+  .scene-nav { border-right:1px solid #e5e7eb; background:#f8fafc; padding:12px; font-size:11px; }
+  .scene-nav h4,.inspector h4 { margin:0 0 10px; font-size:12px; }
+  .search { border:1px solid #dbe0e8; background:#fff; border-radius:6px; padding:7px; color:#9ca3af; margin-bottom:10px; }
+  .scene { padding:9px; border-radius:7px; margin-bottom:5px; line-height:1.6; color:#4b5563; }
+  .scene.active { background:#e9f0ff; color:#1d4ed8; }
+  .scene b { display:block; color:inherit; }
+  .center { min-width:0; }
+  .viewbar { height:46px; display:flex; align-items:center; padding:0 12px; gap:15px; border-bottom:1px solid #e5e7eb; font-size:11px; }
+  .viewbar strong { color:#2563eb; }
+  .grid { font-size:11px; }
+  .row { display:grid; grid-template-columns:34px 70px 52px 65px 1fr 1fr 70px; min-height:39px; border-bottom:1px solid #edf0f3; align-items:center; }
+  .row.head { min-height:34px; background:#f1f4f8; font-weight:700; color:#4b5563; }
+  .row.selected { background:#f4f7ff; box-shadow:inset 3px 0 #2563eb; }
+  .row span { padding:6px 7px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .check { text-align:center; color:#9ca3af; }
+  .status-ok { color:#16a34a; }
+  .status-warn { color:#d97706; }
+  .inspector { border-left:1px solid #e5e7eb; padding:12px; font-size:11px; background:#fcfdff; }
+  .inspector-tabs { display:flex; gap:11px; padding-bottom:9px; border-bottom:1px solid #e5e7eb; color:#6b7280; margin-bottom:10px; }
+  .inspector-tabs b { color:#2563eb; }
+  .field { margin-bottom:9px; }
+  .label { display:block; color:#6b7280; margin-bottom:4px; font-size:10px; }
+  .control { border:1px solid #dbe0e8; background:#fff; border-radius:6px; padding:7px; line-height:1.55; color:#374151; }
+  .lock { display:inline-block; color:#7c3aed; background:#f2eaff; border-radius:4px; padding:1px 5px; margin-right:4px; }
+  .bottom { height:38px; display:flex; align-items:center; padding:0 15px; border-top:1px solid #e5e7eb; background:#fbfcfe; font-size:11px; color:#6b7280; }
+  .map { margin-top:18px; display:grid; grid-template-columns:repeat(6,1fr); gap:8px; }
+  .map-card { border:1px solid #d8dde6; border-radius:9px; background:#fff; padding:10px; font-size:11px; color:#6b7280; min-height:70px; }
+  .map-card b { display:block; color:#111827; margin-bottom:5px; }
+  @media(max-width:1150px){ .editor{min-width:900px}.editor-body{grid-template-columns:150px minmax(480px,1fr) 250px}.map{grid-template-columns:repeat(3,1fr)} }
+</style>
+
+<h2>独立分镜专业编辑器 · 页面结构</h2>
+<p class="subtitle">主工作区采用核心表格 + 右侧检查器；XLSX 的 6 张辅助表映射为顶部专业模块。</p>
+
+<div class="editor">
+  <div class="editor-top">
+    <span class="crumb">剧本创作 / 逆光追凶 / 第一章</span>
+    <span class="title">分镜专业编辑器</span>
+    <span class="badge">A 档 · v3</span>
+    <span class="saved">● 已保存</span>
+    <span class="spacer"></span>
+    <span class="button">导入 XLSX</span><span class="button">导出 ▾</span><span class="button">版本</span><span class="button">升档至 B</span><span class="button primary">锁定版本</span>
+  </div>
+  <div class="module-tabs">
+    <span class="module-tab active">镜头编辑</span><span class="module-tab">情绪节奏</span><span class="module-tab">提示词模板</span><span class="module-tab">类型修订</span><span class="module-tab">设定一致性</span><span class="module-tab">人物视觉规范</span><span class="module-tab">版本与审核</span>
+  </div>
+  <div class="editor-body">
+    <aside class="scene-nav">
+      <h4>场景导航</h4><div class="search">搜索镜号 / 场景</div>
+      <div class="scene active"><b>S01 · 天台雨夜</b>6 镜 · 19s　★★★☆</div>
+      <div class="scene"><b>S02 · 出租屋重生</b>6 镜 · 12s　★★★☆</div>
+      <div class="scene"><b>S03 · 系统绑定</b>7 镜 · 16.5s　★★★☆</div>
+      <div class="scene"><b>S04 · 能力觉醒</b>4 镜 · 11s　★★★☆</div>
+      <div class="scene"><b>S05 · 电话控场</b>8 镜 · 20.5s　★★★☆</div>
+      <div class="scene"><b>S06 · 冰系对峙</b>14 镜 · 40.5s　★★★★</div>
+    </aside>
+    <main class="center">
+      <div class="viewbar"><strong>编导视图</strong><span>生产视图</span><span>提示词视图</span><span>卡片</span><span>时间轴</span><span class="spacer"></span><span>＋镜头</span><span>批量编辑</span><span>字段预设 ▾</span></div>
+      <div class="grid">
+        <div class="row head"><span></span><span>镜号</span><span>时长</span><span>景别</span><span>画面摘要</span><span>对白</span><span>状态</span></div>
+        <div class="row"><span class="check">□</span><span>S01-C01</span><span>3s</span><span>远景</span><span>暴雨中的城市与天台剪影</span><span>无对白</span><span class="status-ok">已确认</span></div>
+        <div class="row"><span class="check">□</span><span>S01-C02</span><span>4s</span><span>全景</span><span>侧移掠过天台，封锁线摇晃</span><span>无对白</span><span class="status-ok">已确认</span></div>
+        <div class="row"><span class="check">□</span><span>S01-C03</span><span>3s</span><span>中景</span><span>推向背影，肩胛随呼吸起伏</span><span>林野，你这种人……</span><span class="status-warn">待检查</span></div>
+        <div class="row selected"><span class="check">☑</span><span>S01-C04</span><span>2s</span><span>特写</span><span>侧后 45°，形成不对称闭眼笑</span><span>你最好祈祷……</span><span class="status-warn">编辑中</span></div>
+        <div class="row"><span class="check">□</span><span>S01-C05</span><span>4s</span><span>POV</span><span>坠落中画面翻转，世界颠倒</span><span>要是还有下一次……</span><span class="status-ok">已确认</span></div>
+        <div class="row"><span class="check">□</span><span>S01-C06</span><span>3s</span><span>UI</span><span>黑屏后冷蓝系统面板展开</span><span>系统绑定成功</span><span class="status-ok">已确认</span></div>
+      </div>
+    </main>
+    <aside class="inspector">
+      <h4>S01-C04 · 镜头检查器</h4>
+      <div class="inspector-tabs"><b>内容</b><span>导演</span><span>声音</span><span>提示词</span><span>连续性</span></div>
+      <div class="field"><span class="label">画面描述</span><div class="control">侧后方 45° 角，雨水沿太阳穴滑过颧骨……</div></div>
+      <div class="field"><span class="label">光影氛围</span><div class="control">侧逆光，半边暖光、半边冷暗</div></div>
+      <div class="field"><span class="label">角色动作 / 情绪</span><div class="control">闭眼 → 嘴角肌肉试探 → 不对称半笑定型</div></div>
+      <div class="field"><span class="label">人物视觉锁</span><div class="control"><span class="lock">林野</span>湿黑发 · 黑色任务服 · 左腕红绳</div></div>
+      <div class="field"><span class="label">连续性问题</span><div class="control" style="color:#d97706">⚠ 与上一镜口罩位置不一致</div></div>
+    </aside>
+  </div>
+  <div class="bottom"><span>45 镜头 · 119.5 秒 · 6 场景</span><span class="spacer"></span><span>2 个连续性问题　1 个提示词缺失　最后保存 13:26</span></div>
+</div>
+
+<div class="map">
+  <div class="map-card"><b>情绪节奏</b>映射“情绪强度总览”，展示曲线、区间与节拍风险。</div>
+  <div class="map-card"><b>提示词模板</b>管理图片/视频模板并批量应用到镜头。</div>
+  <div class="map-card"><b>类型修订</b>承载喜剧、爱情、科幻、人物等创作规则。</div>
+  <div class="map-card"><b>设定一致性</b>问题、修订动作、落实镜号与处理状态。</div>
+  <div class="map-card"><b>人物视觉规范</b>角色造型、识别点、表演锚点与提示词锁。</div>
+  <div class="map-card"><b>版本与审核</b>版本差异、审核问题、锁定与派生升档。</div>
+</div>

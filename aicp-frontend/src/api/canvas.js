@@ -1,9 +1,22 @@
 import request from './request'
 
 export const canvasApi = {
+  // ===== Management APIs =====
+  listProjects: (params) => request.get('/canvas/projects', { params }),
   createProject: (data) => request.post('/canvas/projects', data),
   getProject: (id) => request.get(`/canvas/projects/${id}`),
   updateProject: (id, data) => request.put(`/canvas/projects/${id}`, data),
+  deleteProject: (id) => request.delete(`/canvas/projects/${id}`),
+  copyProject: (id, data) => request.post(`/canvas/projects/${id}/copy`, data),
+  moveProject: (id, data) => request.post(`/canvas/projects/${id}/move`, data),
+  archiveProject: (id) => request.post(`/canvas/projects/${id}/archive`),
+  restoreProject: (id) => request.post(`/canvas/projects/${id}/restore`),
+  getSourceDiff: (id) => request.get(`/canvas/projects/${id}/source-diff`),
+  checkAdmission: (params) => request.get('/canvas/production-admission', { params }),
+  getHomeContinueWorking: () => request.get('/home/continue-working'),
+  listByContentProject: (projectId, params) => request.get(`/content-projects/${projectId}/canvas-projects`, { params }),
+
+  // ===== Legacy =====
   importScript: (id, scriptId) => request.post(`/canvas/projects/${id}/import-script`, { script_id: scriptId }),
   getShots: (id) => request.get(`/canvas/projects/${id}/shots`),
   updateShot: (id, shotId, data) => request.put(`/canvas/projects/${id}/shots/${shotId}`, data),

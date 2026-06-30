@@ -9,9 +9,14 @@ export function useCanvasState() {
   const route = useRoute()
 
   // 项目
-  const projectId = ref(route.params.projectId || 'canvas_a1b2c3')
+  const projectId = ref(route.params.projectId || null)
   const projectName = ref('未命名画布项目')
   const projectStatus = ref('editing')
+
+  // Breadcrumb context
+  const breadcrumbReferrer = ref(null)
+  const upstreamChanges = ref(null)  // SourceDiffResult or null
+  const canvasNotFound = ref(false)
 
   // 缩放 & 平移
   const zoomLevel = ref(100)

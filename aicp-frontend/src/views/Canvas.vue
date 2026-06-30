@@ -935,13 +935,32 @@ onMounted(async () => {
     canvasResizeObserver = new ResizeObserver(updateViewport)
     canvasResizeObserver.observe(canvasAreaRef.value)
   }
+  // Require explicit canvas ID — redirect if missing
+  if (!state.projectId.value) {
+    router.replace('/canvas-projects')
+    return
+  }
   try {
-    await ensureProject()
+    const res = await canvasApi.getProject(state.projectId.value)
+    if (res.data) {
+      const p = res.data
+      state.projectName.value = p.name || state.projectName.value
+      state.projectStatus.value = p.status || state.projectStatus.value
+      // Check upstream changes
+      try {
+        const diffRes = await canvasApi.getSourceDiff(state.projectId.value)
+        if (diffRes?.data) state.upstreamChanges.value = diffRes.data
+      } catch { /* diff is optional */ }
+    }
     await canvas.loadNodes()
     await canvas.loadWorkflows()
     state.markSaved()
   } catch (e) {
-    ElMessage.warning('后端画布暂不可用，使用本地编辑模式')
+    if (e?.response?.status === 404 || e?.response?.data?.code === 40002) {
+      state.canvasNotFound.value = true
+    } else {
+      ElMessage.warning('画布加载失败，请刷新重试')
+    }
   }
 })
 
@@ -951,34 +970,6 @@ onUnmounted(() => {
   cleanupDirectorTransformListeners()
   cleanupDocumentListeners()
 })
-
-async function ensureProject() {
-  try {
-    const res = await canvasApi.getProject(state.projectId.value)
-    if (res.data) {
-      state.projectName.value = res.data.name || state.projectName.value
-      state.projectStatus.value = res.data.status || state.projectStatus.value
-    }
-  } catch (e) {
-    try {
-      const created = await canvasApi.createProject({
-        name: '漫剧自由画布项目',
-        status: 'editing',
-        style_config: { aspect_ratio: '9:16', fps: 25, resolution: '1080x1920' }
-      })
-      if (created.data) {
-        state.projectId.value = created.data.uuid || String(created.data.id)
-        state.projectName.value = created.data.name || '漫剧自由画布项目'
-        state.projectStatus.value = created.data.status || 'editing'
-      }
-    } catch {
-      state.projectId.value = state.projectId.value || 'local_canvas'
-      state.projectName.value = '本地漫剧自由画布'
-      state.projectStatus.value = 'editing'
-      canvas.localMode.value = true
-    }
-  }
-}
 
 async function renameCanvas() {
   try {

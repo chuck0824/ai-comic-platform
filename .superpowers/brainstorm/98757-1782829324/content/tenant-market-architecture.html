@@ -1,0 +1,37 @@
+<h2>第一部分：资产市场与 Workspace 隔离架构</h2>
+<p class="subtitle">资产本体归 Workspace；公共市场只展示主动发布且已通过规则校验的上架记录</p>
+
+<div class="mockup">
+  <div class="mockup-header">用户切换当前 Workspace 后，所有写操作都固定携带 workspace_id</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:12px;align-items:center">
+      <div class="placeholder"><strong>个人空间</strong><br>本人资产<br>本人可直接发布</div>
+      <div style="font-size:26px">→</div>
+      <div class="placeholder"><strong>Workspace 资产库</strong><br>资产本体、版本、来源<br>领取权益、应用记录</div>
+      <div style="font-size:26px">→</div>
+      <div class="placeholder"><strong>公共市场</strong><br>仅公开 listing<br>全平台可检索</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:12px;align-items:center;margin-top:14px">
+      <div class="placeholder"><strong>企业空间</strong><br>成员默认可浏览<br>操作受 RBAC 控制</div>
+      <div style="font-size:26px">→</div>
+      <div class="placeholder"><strong>企业发布审批</strong><br>成员提交<br>管理员通过/驳回</div>
+      <div style="font-size:26px">→</div>
+      <div class="placeholder"><strong>公共市场</strong><br>审核通过才公开<br>撤下不影响已领取权益</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:22px">
+  <h3>核心隔离规则</h3>
+  <div class="options">
+    <div class="option"><div class="letter">1</div><div class="content"><h3>服务端决定数据范围</h3><p>JWT 提供 user_id；当前 workspace_id 必须经 3001 账户中心校验成员关系，不能相信前端传值。</p></div></div>
+    <div class="option"><div class="letter">2</div><div class="content"><h3>每张业务表带 Workspace</h3><p>资产、权益、收藏、申请、应用记录均保存 workspace_id；所有查询强制追加租户条件。</p></div></div>
+    <div class="option"><div class="letter">3</div><div class="content"><h3>公开展示与所有权分离</h3><p>Market Listing 是公开索引；Asset 是私有业务本体。公开、撤下或审核不会改变资产归属。</p></div></div>
+    <div class="option"><div class="letter">4</div><div class="content"><h3>企业内浏览 + RBAC 操作</h3><p>成员默认可查看企业资产；领取、使用、编辑、删除、提交公开和审批分别校验权限。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>本期闭环</h3>
+  <p>创建/导入资产 → 保存到个人或企业 Workspace → 个人直接发布 / 企业申请审批 → 公共市场发现 → 免费领取授权 → 进入当前 Workspace 资产库 → 立即选择项目应用或稍后从画布调用。</p>
+</div>

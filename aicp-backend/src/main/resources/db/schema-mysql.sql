@@ -222,14 +222,32 @@ CREATE TABLE IF NOT EXISTS canvas_projects (
     user_id BIGINT NOT NULL, enterprise_id BIGINT,
     workspace_id VARCHAR(64),
     name VARCHAR(200) NOT NULL DEFAULT '未命名画布项目',
-    script_id BIGINT, episode_index INT DEFAULT 1,
+    script_id BIGINT COMMENT 'legacy: replaced by content_project_id + production_unit_id',
+    episode_index INT DEFAULT 1 COMMENT 'legacy: replaced by production_unit_id',
     style_config JSON,
     applied_asset_ids JSON DEFAULT ('[]'),
     status ENUM('editing','generating','composing','exporting','completed','archived') DEFAULT 'editing',
     canvas_version INT DEFAULT 1,
+    -- New ownership columns (2026-07-01)
+    content_project_id BIGINT COMMENT 'FK to content_projects.id',
+    production_unit_type VARCHAR(32) COMMENT 'episode / chapter / tvc_variant',
+    production_unit_id BIGINT COMMENT 'FK to content_units.id',
+    source_content_version_id BIGINT COMMENT 'FK to content_versions.id',
+    source_storyboard_version_id BIGINT COMMENT 'FK to cp_storyboard_masters.id',
+    production_snapshot JSON COMMENT 'Immutable source snapshot',
+    purpose VARCHAR(32) DEFAULT 'official' COMMENT 'official / alternative / experiment',
+    owner_id BIGINT COMMENT 'Canvas owner user ID',
+    thumbnail_url VARCHAR(500),
+    idempotency_key VARCHAR(200) COMMENT 'Idempotent creation key',
+    archived_at DATETIME COMMENT 'Archived timestamp',
+    revision INT DEFAULT 0 COMMENT 'Optimistic lock',
+    is_deleted TINYINT DEFAULT 0 COMMENT 'Soft delete',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id)
+    FOREIGN KEY (user_id) REFERENCES users(id),
+    UNIQUE KEY uk_canvas_idempotency (user_id, idempotency_key),
+    INDEX idx_canvas_owner_status (user_id, status, updated_at),
+    INDEX idx_canvas_content_unit (content_project_id, production_unit_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='画布项目表';
 
 CREATE TABLE IF NOT EXISTS canvas_nodes (
@@ -1396,6 +1414,9 @@ CREATE INDEX idx_sec_batch ON setting_extraction_candidates(batch_id);
 -- ============================================================
 UPDATE canvas_projects SET workspace_id = CONCAT('ent:', enterprise_id) WHERE enterprise_id IS NOT NULL AND workspace_id IS NULL;
 UPDATE canvas_projects SET workspace_id = CONCAT('personal:', user_id) WHERE enterprise_id IS NULL AND workspace_id IS NULL;
+UPDATE canvas_projects SET owner_id = user_id WHERE owner_id IS NULL;
+UPDATE canvas_projects SET revision = 0 WHERE revision IS NULL;
+UPDATE canvas_projects SET is_deleted = 0 WHERE is_deleted IS NULL;
 
 -- ============================================================
 -- AI 资产市场 种子数据 (幂等: INSERT IGNORE)
