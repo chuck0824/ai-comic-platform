@@ -20,12 +20,15 @@ public class CanvasProject {
 
     private Long enterpriseId;
 
+    private String workspaceId;
+
     @NotBlank
     private String name;
 
     private Long scriptId;
     private Integer episodeIndex;
     private String styleConfig;
+    private String appliedAssetIds;
     private String status;
     private Integer canvasVersion;
 

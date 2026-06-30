@@ -220,9 +220,11 @@ CREATE TABLE IF NOT EXISTS canvas_projects (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     uuid VARCHAR(36) NOT NULL UNIQUE,
     user_id BIGINT NOT NULL, enterprise_id BIGINT,
+    workspace_id VARCHAR(64),
     name VARCHAR(200) NOT NULL DEFAULT '未命名画布项目',
     script_id BIGINT, episode_index INT DEFAULT 1,
     style_config JSON,
+    applied_asset_ids JSON DEFAULT ('[]'),
     status ENUM('editing','generating','composing','exporting','completed','archived') DEFAULT 'editing',
     canvas_version INT DEFAULT 1,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -441,35 +443,127 @@ CREATE TABLE IF NOT EXISTS withdrawals (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提现记录表';
 
 -- === 8. AI资产市场 (asset-market-svc) ===
-CREATE TABLE IF NOT EXISTS market_assets (
+-- ============================================================
+-- AI 资产市场 统一模型 (V2 — 替换旧 market_assets/asset_favorites/asset_downloads)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS workspace_assets (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    asset_type ENUM('checkpoint','lora','style_pack','character','scene','prompt','voice','sound') NOT NULL,
-    name VARCHAR(200) NOT NULL, author_id BIGINT NOT NULL,
-    description TEXT, preview_urls JSON, tags JSON,
-    price DECIMAL(10,2) DEFAULT 0, recommended_params JSON,
-    use_count INT DEFAULT 0, rating DECIMAL(2,1) DEFAULT 0, review_count INT DEFAULT 0,
-    status ENUM('listed','unlisted','removed') DEFAULT 'listed',
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    workspace_id VARCHAR(64) NOT NULL,
+    workspace_type ENUM('personal','enterprise') NOT NULL,
+    creator_user_id BIGINT NOT NULL,
+    asset_type ENUM('CHECKPOINT','LORA','STYLE_PACK','CHARACTER','SCENE','PROMPT') NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    description TEXT,
+    tags JSON DEFAULT ('[]'),
+    access_scope ENUM('PRIVATE','WORKSPACE') NOT NULL DEFAULT 'PRIVATE',
+    source_type ENUM('CREATED','MARKET_CLAIMED','PROJECT_GENERATED','IMPORTED') NOT NULL DEFAULT 'CREATED',
+    source_listing_id BIGINT,
+    source_version_id BIGINT,
+    current_version_id BIGINT,
+    status ENUM('ACTIVE','ARCHIVED') NOT NULL DEFAULT 'ACTIVE',
+    row_version INT NOT NULL DEFAULT 0,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (author_id) REFERENCES users(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='AI资产市场表';
+    created_by BIGINT,
+    updated_by BIGINT,
+    INDEX idx_ws_asset_workspace (workspace_id),
+    INDEX idx_ws_asset_type (asset_type),
+    INDEX idx_ws_asset_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Workspace资产本体';
+
+CREATE TABLE IF NOT EXISTS asset_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    asset_id BIGINT NOT NULL,
+    version_number INT NOT NULL DEFAULT 1,
+    metadata JSON,
+    preview_url VARCHAR(500),
+    content_ref VARCHAR(500),
+    checksum VARCHAR(128),
+    created_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_av_asset (asset_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产版本(不可变)';
+
+CREATE TABLE IF NOT EXISTS market_listings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    publisher_workspace_id VARCHAR(64) NOT NULL,
+    publisher_user_id BIGINT NOT NULL,
+    source_asset_id BIGINT NOT NULL,
+    source_version_id BIGINT NOT NULL,
+    asset_type ENUM('CHECKPOINT','LORA','STYLE_PACK','CHARACTER','SCENE','PROMPT') NOT NULL,
+    public_snapshot JSON NOT NULL,
+    license_type ENUM('FREE','PAID','SUBSCRIPTION') NOT NULL DEFAULT 'FREE',
+    price DECIMAL(10,2) DEFAULT 0,
+    status ENUM('LISTED','UNLISTED','REMOVED') NOT NULL DEFAULT 'LISTED',
+    use_count INT DEFAULT 0,
+    rating DECIMAL(2,1) DEFAULT 0,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_ml_status_type (status, asset_type),
+    INDEX idx_ml_publisher (publisher_workspace_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公共市场上架记录';
+
+CREATE TABLE IF NOT EXISTS asset_entitlements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    beneficiary_workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL,
+    source_version_id BIGINT NOT NULL,
+    grant_type ENUM('FREE_CLAIM','PAID_PURCHASE','GIFTED') NOT NULL DEFAULT 'FREE_CLAIM',
+    claimed_by BIGINT,
+    claimed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_entitlement_workspace_listing (beneficiary_workspace_id, listing_id),
+    INDEX idx_ae_workspace (beneficiary_workspace_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产使用授权';
 
 CREATE TABLE IF NOT EXISTS asset_favorites (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL, asset_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (asset_id) REFERENCES market_assets(id) ON DELETE CASCADE,
-    UNIQUE KEY uk_fav_user_asset (user_id, asset_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产收藏表';
+    UNIQUE KEY uk_favorite_user_workspace_listing (user_id, workspace_id, listing_id),
+    INDEX idx_af_user_workspace (user_id, workspace_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产收藏';
 
-CREATE TABLE IF NOT EXISTS asset_downloads (
+CREATE TABLE IF NOT EXISTS asset_publish_requests (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    user_id BIGINT NOT NULL, asset_id BIGINT NOT NULL,
-    downloaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (user_id) REFERENCES users(id),
-    FOREIGN KEY (asset_id) REFERENCES market_assets(id) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产下载表';
+    workspace_id VARCHAR(64) NOT NULL,
+    asset_id BIGINT NOT NULL,
+    version_id BIGINT NOT NULL,
+    requester_id BIGINT NOT NULL,
+    reviewer_id BIGINT,
+    status ENUM('PENDING','APPROVED','REJECTED','CANCELLED') NOT NULL DEFAULT 'PENDING',
+    reason VARCHAR(500),
+    review_comment VARCHAR(500),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_apr_workspace_status (workspace_id, status),
+    UNIQUE KEY uk_pending_publish_asset_version (workspace_id, asset_id, version_id, status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业资产发布申请';
+
+CREATE TABLE IF NOT EXISTS asset_applications (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    asset_id BIGINT NOT NULL,
+    asset_version_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    target_type VARCHAR(20),
+    target_id BIGINT,
+    change_summary VARCHAR(500),
+    previous_state JSON,
+    undo_token_hash VARCHAR(64),
+    applied_by BIGINT,
+    idempotency_key VARCHAR(64) NOT NULL,
+    status ENUM('APPLIED','UNDONE') NOT NULL DEFAULT 'APPLIED',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_application_workspace_key (workspace_id, idempotency_key),
+    INDEX idx_aa_workspace (workspace_id),
+    INDEX idx_aa_project (project_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产应用记录';
 
 -- === 9. Agent与Skill (agent-svc) — V1.5 新增 ===
 CREATE TABLE IF NOT EXISTS agent_sessions (
@@ -1296,3 +1390,103 @@ CREATE TABLE IF NOT EXISTS setting_extraction_candidates (
     FOREIGN KEY (batch_id) REFERENCES setting_extraction_batches(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设定提取候选项表';
 CREATE INDEX idx_sec_batch ON setting_extraction_candidates(batch_id);
+
+-- ============================================================
+-- Canvas 迁移: 回填 workspace_id
+-- ============================================================
+UPDATE canvas_projects SET workspace_id = CONCAT('ent:', enterprise_id) WHERE enterprise_id IS NOT NULL AND workspace_id IS NULL;
+UPDATE canvas_projects SET workspace_id = CONCAT('personal:', user_id) WHERE enterprise_id IS NULL AND workspace_id IS NULL;
+
+-- ============================================================
+-- AI 资产市场 种子数据 (幂等: INSERT IGNORE)
+-- ============================================================
+
+-- 风格模型 1: 韩漫风格 — 都市言情
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (1, 'seed-style-1', 'platform_seed', 'enterprise', 1, 'STYLE_PACK', '韩漫风格 — 都市言情', '经典韩漫都市言情风格模型', '["韩漫","都市","言情"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (1, 1, 1, '{"style":"korean_manhwa","genre":"urban_romance","trigger_words":"korean manhwa style"}', '/assets/preview/style-1.jpg', 1);
+UPDATE workspace_assets SET current_version_id = 1 WHERE id = 1 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (1, 'platform_seed', 1, 1, 1, 'STYLE_PACK', '{"name":"韩漫风格 — 都市言情","description":"经典韩漫都市言情风格模型，适用于都市恋爱题材的漫画创作","tags":["韩漫","都市","言情"],"previews":["/assets/preview/style-1.jpg"],"author_name":"AI视觉师","recommended_params":{"trigger_words":"korean manhwa style","strength":0.8}}', 'FREE', 'LISTED', 2300, 4.9, 0);
+
+-- 风格模型 2: 日系唯美 — 校园青春
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (2, 'seed-style-2', 'platform_seed', 'enterprise', 1, 'STYLE_PACK', '日系唯美 — 校园青春', '日系唯美校园青春风格模型', '["日系","唯美","校园"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (2, 2, 1, '{"style":"japanese_aesthetic","genre":"school_life","trigger_words":"anime style, beautiful, school"}', '/assets/preview/style-2.jpg', 1);
+UPDATE workspace_assets SET current_version_id = 2 WHERE id = 2 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (2, 'platform_seed', 1, 2, 2, 'STYLE_PACK', '{"name":"日系唯美 — 校园青春","description":"日系唯美校园青春风格","tags":["日系","唯美","校园"],"previews":["/assets/preview/style-2.jpg"],"author_name":"二次元画师","recommended_params":{"trigger_words":"anime style, beautiful"}}', 'FREE', 'LISTED', 1800, 4.6, 0);
+
+-- 风格模型 3: 美式写实 — 科幻冒险
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (3, 'seed-style-3', 'platform_seed', 'enterprise', 1, 'STYLE_PACK', '美式写实 — 科幻冒险', '美式写实科幻冒险风格模型', '["美式","写实","科幻"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (3, 3, 1, '{"style":"american_realistic","genre":"sci_fi","trigger_words":"realistic modern, sci-fi"}', '/assets/preview/style-3.jpg', 1);
+UPDATE workspace_assets SET current_version_id = 3 WHERE id = 3 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (3, 'platform_seed', 1, 3, 3, 'STYLE_PACK', '{"name":"美式写实 — 科幻冒险","description":"美式写实科幻冒险风格","tags":["美式","写实","科幻"],"previews":["/assets/preview/style-3.jpg"],"author_name":"写实派","recommended_params":{"trigger_words":"realistic modern, sci-fi"}}', 'FREE', 'LISTED', 5100, 4.7, 0);
+
+-- 风格模型 4: 国风古装 — 仙侠奇幻
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (4, 'seed-style-4', 'platform_seed', 'enterprise', 1, 'STYLE_PACK', '国风古装 — 仙侠奇幻', '国风古装仙侠奇幻风格模型', '["国风","古装","仙侠"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (4, 4, 1, '{"style":"chinese_ink","genre":"xianxia","trigger_words":"ink wash painting, chinese ancient style"}', '/assets/preview/style-4.jpg', 1);
+UPDATE workspace_assets SET current_version_id = 4 WHERE id = 4 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (4, 'platform_seed', 1, 4, 4, 'STYLE_PACK', '{"name":"国风古装 — 仙侠奇幻","description":"国风古装仙侠奇幻风格","tags":["国风","古装","仙侠"],"previews":["/assets/preview/style-4.jpg"],"author_name":"国风画师","recommended_params":{"trigger_words":"ink wash painting, chinese ancient style"}}', 'FREE', 'LISTED', 890, 4.8, 0);
+
+-- 角色 1
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (5, 'seed-char-1', 'platform_seed', 'enterprise', 1, 'CHARACTER', '都市男主角 — 青年', '现代都市题材青年男性角色', '["角色","男性","青年","都市"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (5, 5, 1, '{"character_type":"protagonist","gender":"male","age":"young_adult","setting":"urban"}', '/assets/preview/char-1.jpg', 1);
+UPDATE workspace_assets SET current_version_id = 5 WHERE id = 5 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (5, 'platform_seed', 1, 5, 5, 'CHARACTER', '{"name":"都市男主角 — 青年","description":"现代都市题材青年男性角色资产","tags":["角色","男性","青年","都市"],"previews":["/assets/preview/char-1.jpg"],"author_name":"AI视觉师"}', 'FREE', 'LISTED', 420, 4.3, 0);
+
+-- 角色 2
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (6, 'seed-char-2', 'platform_seed', 'enterprise', 1, 'CHARACTER', '校园女主角 — 少女', '校园题材少女角色资产', '["角色","女性","少女","校园"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (6, 6, 1, '{"character_type":"heroine","gender":"female","age":"teen","setting":"school"}', '/assets/preview/char-2.jpg', 1);
+UPDATE workspace_assets SET current_version_id = 6 WHERE id = 6 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (6, 'platform_seed', 1, 6, 6, 'CHARACTER', '{"name":"校园女主角 — 少女","description":"校园题材少女角色资产","tags":["角色","女性","少女","校园"],"previews":["/assets/preview/char-2.jpg"],"author_name":"二次元画师"}', 'FREE', 'LISTED', 680, 4.5, 0);
+
+-- 场景 1
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (7, 'seed-scene-1', 'platform_seed', 'enterprise', 1, 'SCENE', '现代都市街道', '现代都市街道场景资产', '["场景","现代","都市","室外"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (7, 7, 1, '{"scene_type":"exterior","setting":"urban","time_of_day":"day","mood":"busy"}', '/assets/preview/scene-1.jpg', 1);
+UPDATE workspace_assets SET current_version_id = 7 WHERE id = 7 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (7, 'platform_seed', 1, 7, 7, 'SCENE', '{"name":"现代都市街道","description":"现代都市街道场景","tags":["场景","现代","都市","室外"],"previews":["/assets/preview/scene-1.jpg"],"author_name":"写实派"}', 'FREE', 'LISTED', 310, 4.1, 0);
+
+-- 场景 2
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (8, 'seed-scene-2', 'platform_seed', 'enterprise', 1, 'SCENE', '教室与走廊', '日系校园教室走廊场景', '["场景","校园","室内","日系"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (8, 8, 1, '{"scene_type":"interior","setting":"school","time_of_day":"afternoon","mood":"nostalgic"}', '/assets/preview/scene-2.jpg', 1);
+UPDATE workspace_assets SET current_version_id = 8 WHERE id = 8 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (8, 'platform_seed', 1, 8, 8, 'SCENE', '{"name":"教室与走廊","description":"日系校园教室走廊场景","tags":["场景","校园","室内","日系"],"previews":["/assets/preview/scene-2.jpg"],"author_name":"二次元画师"}', 'FREE', 'LISTED', 250, 4.0, 0);
+
+-- 提示词 1
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (9, 'seed-prompt-1', 'platform_seed', 'enterprise', 1, 'PROMPT', '韩漫都市对话提示词模板', '韩漫都市题材对话场景提示词', '["提示词","韩漫","对话"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (9, 9, 1, '{"prompt_type":"dialogue","style":"korean_manhwa","setting":"urban","tone":"romantic"}', NULL, 1);
+UPDATE workspace_assets SET current_version_id = 9 WHERE id = 9 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (9, 'platform_seed', 1, 9, 9, 'PROMPT', '{"name":"韩漫都市对话提示词模板","description":"韩漫都市题材对话场景提示词模板","tags":["提示词","韩漫","对话"],"previews":[],"author_name":"AI视觉师"}', 'FREE', 'LISTED', 150, 4.2, 0);
+
+-- 提示词 2
+INSERT IGNORE INTO workspace_assets (id, uuid, workspace_id, workspace_type, creator_user_id, asset_type, name, description, tags, access_scope, source_type, status, row_version, created_by, updated_by)
+VALUES (10, 'seed-prompt-2', 'platform_seed', 'enterprise', 1, 'PROMPT', '日系校园氛围提示词模板', '日系校园氛围场景提示词模板', '["提示词","日系","氛围"]', 'PRIVATE', 'CREATED', 'ACTIVE', 0, 1, 1);
+INSERT IGNORE INTO asset_versions (id, asset_id, version_number, metadata, preview_url, created_by)
+VALUES (10, 10, 1, '{"prompt_type":"atmosphere","style":"japanese_aesthetic","setting":"school","tone":"nostalgic"}', NULL, 1);
+UPDATE workspace_assets SET current_version_id = 10 WHERE id = 10 AND current_version_id IS NULL;
+INSERT IGNORE INTO market_listings (id, publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
+VALUES (10, 'platform_seed', 1, 10, 10, 'PROMPT', '{"name":"日系校园氛围提示词模板","description":"日系校园氛围场景提示词模板","tags":["提示词","日系","氛围"],"previews":[],"author_name":"二次元画师"}', 'FREE', 'LISTED', 200, 4.4, 0);
