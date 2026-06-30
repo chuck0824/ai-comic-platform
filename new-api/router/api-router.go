@@ -414,5 +414,12 @@ func SetApiRouter(router *gin.Engine) {
 			deploymentsRoute.POST("/:id/extend", controller.ExtendDeployment)
 			deploymentsRoute.DELETE("/:id", controller.DeleteDeployment)
 		}
+
+		// AICP Workspace permission contract (for 8080 backend consumption)
+		aicpRoute := apiRouter.Group("/aicp")
+		aicpRoute.Use(middleware.AicpJwtAuth(), middleware.UserAuth())
+		{
+			aicpRoute.GET("/workspaces/:id/membership", controller.GetAicpWorkspaceMembership)
+		}
 	}
 }

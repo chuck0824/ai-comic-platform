@@ -47,8 +47,13 @@ func AicpJwtAuth() gin.HandlerFunc {
 			return
 		}
 
-		// Extract user identity from AICP JWT claims
-		userIDFloat, ok := claims["userId"].(float64)
+		// Extract user identity from AICP JWT claims.
+		// The 8080 JwtUtil writes claims["uid"] (Long), not claims["userId"].
+		// Read "uid" first, fall back to "userId" for backward compatibility.
+		userIDFloat, ok := claims["uid"].(float64)
+		if !ok {
+			userIDFloat, ok = claims["userId"].(float64)
+		}
 		if !ok {
 			c.Next()
 			return
