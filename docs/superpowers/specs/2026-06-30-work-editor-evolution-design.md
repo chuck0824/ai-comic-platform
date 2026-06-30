@@ -101,11 +101,13 @@ AI 只产生候选数据。候选未经用户确认时：
 
 后端按领域职责拆分：
 
-1. `ProjectProfileService`：作品资料、标签校验、保存和旧接口委托。
-2. `ProjectSettingService`：正式设定、关系、版本和归档。
-3. `SettingExtractionService`：提取任务、候选匹配、审核结果应用和幂等控制。
-4. `ProjectContextPublisher`：基于已确认资料与设定生成参数快照和刷新事件。
-5. `LegacyWorkResolver`：将旧 `scriptId` 映射到内容项目。
+1. `LegacyWorkResolver`：将旧 `scriptId` 映射到内容项目，确保旧入口和新入口进入同一套业务逻辑。
+2. `ProjectProfileService`（即计划中的 `WorkEditorService`）：作品资料、标签校验、保存和旧接口委托。标签字典由此服务提供。
+3. `ProjectSettingService`：正式设定 CRUD、复制、关系管理、版本追踪和归档恢复。
+4. `SettingExtractionService`：提取任务、候选匹配、审核决策草稿、事务回写应用和幂等控制。
+5. `ProjectContextPublisher`：基于已确认资料与正式设定，调用 `ProjectWorkflowService.appendParameters()` 生成新参数快照，并向 `outbox_events` 写入 `CONTEXT_REFRESH` 事件供下游消费。
+
+**注意**：前端组件在设计层面列出 8 个单元，实施计划出于效率将 `SynopsisPanel` + `OutlinePanel` 合并为 `TextProfilePanel`，`SettingListPanel` + `SettingDetailPanel` 合并为 `SettingPanel`，`WorkEditorShell` 由重构后的 `TagEditor.vue` 承担。此简化为有意设计，不改变功能覆盖。
 
 ## 6. 页面与交互
 
@@ -225,6 +227,27 @@ AI 只产生候选数据。候选未经用户确认时：
 
 题材和时空为单值；情节和情绪为受控多值。实现时可根据数据库能力选择 JSON 数组加辅助索引或规范化关联表，但查询接口必须支持四轴组合筛选。
 
+**DDL 参考（H2/MySQL）：**
+
+```sql
+CREATE TABLE IF NOT EXISTS content_project_profiles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL UNIQUE,
+    genre_tag VARCHAR(50),
+    plot_tags JSON,
+    tone_tags JSON,
+    setting_tag VARCHAR(50),
+    synopsis TEXT,
+    outline TEXT,
+    revision INT DEFAULT 0,
+    updated_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_cpp_genre ON content_project_profiles(genre_tag);
+CREATE INDEX IF NOT EXISTS idx_cpp_setting ON content_project_profiles(setting_tag);
+```
+
 ### 8.2 `project_setting_entities`
 
 建议字段：
@@ -236,6 +259,7 @@ AI 只产生候选数据。候选未经用户确认时：
 - `aliases_json`；
 - `summary`；
 - `details_json`；
+- `relationships_json`：存储与其他设定实体、内容单元的引用关系；
 - `status`：`draft`、`confirmed`、`needs_enrichment`、`archived`；
 - `source_type`：`manual`、`ai_extracted`、`merged`；
 - `current_version_no`；
@@ -244,9 +268,65 @@ AI 只产生候选数据。候选未经用户确认时：
 
 项目、类型、规范名和未归档状态建立唯一约束，避免同类正式设定重复。
 
+**DDL 参考（H2/MySQL）：**
+
+```sql
+CREATE TABLE IF NOT EXISTS project_setting_entities (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    setting_type VARCHAR(20) NOT NULL,
+    canonical_name VARCHAR(200) NOT NULL,
+    aliases_json JSON,
+    summary TEXT,
+    details_json JSON,
+    relationships_json JSON,
+    status VARCHAR(20) DEFAULT 'draft',
+    source_type VARCHAR(20) DEFAULT 'manual',
+    current_version_no INT DEFAULT 0,
+    revision INT DEFAULT 0,
+    created_by BIGINT,
+    updated_by BIGINT,
+    archived_at TIMESTAMP NULL,
+    archived_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_setting_entity UNIQUE (project_id, setting_type, canonical_name, status)
+);
+CREATE INDEX IF NOT EXISTS idx_pse_project_type ON project_setting_entities(project_id, setting_type);
+CREATE INDEX IF NOT EXISTS idx_pse_status ON project_setting_entities(status);
+```
+
+**类型化属性约定**：`details_json` 按 `setting_type` 存储不同结构：
+
+- `character`：`{ "role", "archetype", "appearance", "personality", "motivation", "backstory", ... }`
+- `background`：`{ "era", "world_type", "rules", "history", ... }`
+- `faction`：`{ "scale", "structure", "goal", "members", ... }`
+- `location`：`{ "type", "climate", "features", "inhabitants", ... }`
+- `item`：`{ "category", "origin", "abilities", "restrictions", ... }`
+
+每种类型的详情面板按此结构渲染对应表单字段。API 和版本机制保持统一。
+
 ### 8.3 `project_setting_versions`
 
 保存实体完整快照、字段级变更、来源、操作者、证据和创建时间。正式确认、AI 合并和人工回退都会创建版本。
+
+**DDL 参考：**
+
+```sql
+CREATE TABLE IF NOT EXISTS project_setting_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    entity_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    snapshot_json JSON NOT NULL,
+    field_changes_json JSON,
+    source_type VARCHAR(20),
+    operated_by BIGINT,
+    evidence_json JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_setting_version UNIQUE (entity_id, version_no)
+);
+CREATE INDEX IF NOT EXISTS idx_psv_entity ON project_setting_versions(entity_id);
+```
 
 ### 8.4 `setting_extraction_batches`
 
@@ -254,9 +334,76 @@ AI 只产生候选数据。候选未经用户确认时：
 
 任务状态为：`queued`、`running`、`review_ready`、`partially_failed`、`failed`、`applied`、`cancelled`。
 
+**DDL 参考：**
+
+```sql
+CREATE TABLE IF NOT EXISTS setting_extraction_batches (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    source_version_id BIGINT,
+    chapter_version_ids_json JSON,
+    target_setting_types JSON NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    status VARCHAR(20) DEFAULT 'queued',
+    model_id VARCHAR(50),
+    prompt_version VARCHAR(20),
+    extraction_config_json JSON,
+    error_message TEXT,
+    applied_at TIMESTAMP NULL,
+    applied_by BIGINT,
+    revision INT DEFAULT 0,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_extraction_idempotent UNIQUE (project_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_seb_project ON setting_extraction_batches(project_id);
+```
+
 ### 8.5 `setting_extraction_candidates`
 
 保存候选数据、证据、置信度、匹配目标、差异状态、用户逐字段决策和审核状态。
+
+**DDL 参考：**
+
+```sql
+CREATE TABLE IF NOT EXISTS setting_extraction_candidates (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    batch_id BIGINT NOT NULL,
+    setting_type VARCHAR(20) NOT NULL,
+    canonical_name VARCHAR(200) NOT NULL,
+    aliases_json JSON,
+    field_values_json JSON NOT NULL,
+    evidence_text TEXT,
+    evidence_position_json JSON,
+    confidence DECIMAL(3,2),
+    matched_entity_id BIGINT,
+    match_reason TEXT,
+    match_status VARCHAR(20) DEFAULT 'new',
+    field_decisions_json JSON,
+    review_status VARCHAR(20) DEFAULT 'pending',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_candidate_batch FOREIGN KEY (batch_id) REFERENCES setting_extraction_batches(id)
+);
+CREATE INDEX IF NOT EXISTS idx_sec_batch ON setting_extraction_candidates(batch_id);
+```
+
+### 8.6 现有 `character_profiles` 迁移策略
+
+当前代码库已有 [`character_profiles`](../../../aicp-backend/src/main/resources/db/schema-h2.sql) 表，字段为 `name`、`role`、`archetype`、`appearance`、`personality`、`motivation`、`long_term_goal`、`knowledge_boundary`、`dialogue_style`、`backstory`、`relationships_json`、`status`，**无版本追踪、无 revision 乐观锁、无 uuid**。
+
+**策略**：
+
+1. **新建 `project_setting_entities` 表**，不修改 `character_profiles` 结构。
+2. **P1 阶段**：五类设定统一读写 `project_setting_entities`。`character_profiles` 保留但不再写入。
+3. **P2 阶段**：提供一次性迁移脚本，将 `character_profiles` 数据转为 `setting_type='character'` 的 `project_setting_entities` 记录，映射规则：
+   - `name` → `canonical_name`
+   - 各专属字段（`appearance`、`personality` 等）→ `details_json`
+   - `relationships_json` → 直接复制
+   - `status` → 映射为 `draft`（原 `draft`）或 `confirmed`（其他状态）
+4. **迁移后可重复执行**（按 `project_id` 去重，已有记录则跳过）。
+5. **`character_profiles` 表保留为只读**，供旧版世界构建视图查询；不再新增或更新。
+6. **世界构建功能**（`WorldbuildingService`）逐步切换读取源到 `project_setting_entities`。
 
 ## 9. API 设计
 
@@ -295,6 +442,38 @@ PUT /api/v1/script/repo/scripts/{scriptId}/tags
 
 旧接口先解析兼容项目，再委托 `ProjectProfileService`；在过渡期同步旧 `scripts` 投影字段。接口不得复制标签校验规则。
 
+**标签字典接口**：
+
+```http
+GET /api/v1/tag-dictionary
+```
+
+返回四轴标签的有效选项，供前端渲染选择器和后端校验使用。字典数据来源于数据库配置表或受版本控制的配置文件，前后端共享同一来源。响应格式：
+
+```json
+{
+  "genres": [
+    { "value": "言情", "label": "言情" },
+    { "value": "悬疑", "label": "悬疑" }
+  ],
+  "plots": [
+    { "value": "重生", "label": "重生" },
+    { "value": "先婚后爱", "label": "先婚后爱" }
+  ],
+  "tones": [
+    { "value": "甜宠", "label": "甜宠" },
+    { "value": "爽文", "label": "爽文" }
+  ],
+  "settings": [
+    { "value": "现代", "label": "现代" },
+    { "value": "古代", "label": "古代" }
+  ],
+  "version": 1
+}
+```
+
+前端启动时加载此字典，不再硬编码标签选项。字典 `version` 变更时前端可提示用户刷新。
+
 ### 9.3 设定 CRUD
 
 ```http
@@ -304,10 +483,13 @@ GET    /api/v1/content-projects/{id}/settings/{settingId}
 PATCH  /api/v1/content-projects/{id}/settings/{settingId}
 DELETE /api/v1/content-projects/{id}/settings/{settingId}
 POST   /api/v1/content-projects/{id}/settings/{settingId}/restore
+POST   /api/v1/content-projects/{id}/settings/{settingId}/copy
 GET    /api/v1/content-projects/{id}/settings/{settingId}/versions
 ```
 
 列表接口支持 `type`、`status`、`keyword`、分页和更新时间排序。
+
+`POST .../copy` 创建当前设定的完整副本，规范名追加"（副本）"后缀，状态重置为 `draft`，`source_type` 设为 `manual`，版本号从 1 重新计数。
 
 ### 9.4 AI 提取
 
@@ -328,7 +510,7 @@ POST /api/v1/content-projects/{id}/setting-extractions/{batchId}/retry
 - 情绪最多 3 个，去重后校验；
 - 时空最多 1 个且必须来自当前有效字典；
 - 空数组和空字符串表示清空；
-- 前后端共享同一份标签字典版本或由后端提供字典接口。
+- 前后端共享同一份标签字典：后端通过 `GET /api/v1/tag-dictionary` 提供，前端启动时加载，不再硬编码标签选项。字典 `version` 字段变更时前端提示用户刷新，避免使用过期标签值。
 
 ### 10.2 权限
 
@@ -443,11 +625,12 @@ P1 通过后，五类设定入口不得再有“待接入”。
 ## 14. 迁移与兼容
 
 1. 部署 P0 数据表和接口，但默认不改变旧路由行为。
-2. 为已有 scripts 批量建立或复用 `legacy_script_id` 内容项目映射。
-3. 将旧标签、简介和可用总纲投影到项目资料；迁移脚本必须可重复执行。
-4. 新入口灰度到内部用户，比较新旧读取结果。
-5. 打开新版入口后，旧 tags 接口改为委托新服务并同步旧字段投影。
-6. 数据稳定后，旧字段只保留兼容读取，不再作为业务真相来源。
+2. 为已有 scripts 批量建立或复用 `legacy_script_id` 内容项目映射。此步骤通过**可重复执行的迁移脚本**完成：遍历 `scripts` 表，对尚无对应 `content_projects` 记录（按 `legacy_script_id` 判断）的脚本创建项目和资料，已有映射则跳过。
+3. 将旧标签、简介和可用总纲投影到项目资料；迁移脚本必须可重复执行。标签值在迁移时不做校验（历史数据可能包含已废弃的标签），仅在用户下次编辑时提示更新。
+4. **旧 tags 接口双写策略**：过渡期内，`PUT /scripts/{scriptId}/tags` 同时写入 `scripts` 表（兼容旧字段）和 `content_project_profiles` 表（新真相来源）。灰度验证数据一致后，`scripts` 表标签字段降级为只读投影，不再作为业务真相来源。
+5. 新入口灰度到内部用户，比较新旧读取结果。
+6. 打开新版入口后，旧 tags 接口改为委托新服务并同步旧字段投影。
+7. 数据稳定后，旧字段只保留兼容读取，不再作为业务真相来源。
 
 回滚时关闭新版入口和新写路径，保留旧字段投影；已创建的新表和版本数据不删除，以便恢复发布。
 
