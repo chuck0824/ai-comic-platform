@@ -14,6 +14,11 @@ request.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`
     }
+    // Attach active workspace context for tenant-safe asset operations
+    const workspaceId = localStorage.getItem('active_workspace_id')
+    if (workspaceId) {
+      config.headers['X-Workspace-Id'] = workspaceId
+    }
     return config
   },
   (error) => Promise.reject(error)

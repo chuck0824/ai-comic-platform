@@ -2,6 +2,7 @@ package com.aicp.common.config;
 
 import com.aicp.common.util.JwtUtil;
 import com.aicp.common.util.RedisUtil;
+import com.aicp.common.workspace.WorkspaceContextFilter;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -43,6 +44,7 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final RateLimitFilter rateLimitFilter;
+    private final WorkspaceContextFilter workspaceContextFilter;
     private final Environment environment;
 
     /** 生产环境 CORS 允许的前端域名（可通过环境变量覆盖） */
@@ -142,8 +144,10 @@ public class SecurityConfig {
 
             // 速率限制（先执行，Ordered 确保在 JWT 之前）
             .addFilterBefore(rateLimitFilter, UsernamePasswordAuthenticationFilter.class)
-            // JWT 认证过滤器
-            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+            // JWT 认证过滤器（先执行，设置 SecurityContext）
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+            // Workspace 上下文过滤器（JWT 之后执行，解析 X-Workspace-Id）
+            .addFilterBefore(workspaceContextFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

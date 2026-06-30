@@ -83,7 +83,16 @@ public enum ErrorCode {
     PRODUCTION_GATE_FAILED(45008, "生产准入未通过"),
     XLSX_TEMPLATE_UNSUPPORTED(45009, "不支持的分镜工作簿模板"),
     XLSX_VALIDATION_FAILED(45010, "分镜工作簿校验失败"),
-    STORYBOARD_JOB_CONFLICT(45011, "同类分镜任务正在运行");
+    STORYBOARD_JOB_CONFLICT(45011, "同类分镜任务正在运行"),
+
+    // 资产市场 48xxx
+    ASSET_NOT_FOUND(48001, "资产不存在"),
+    ASSET_PERMISSION_DENIED(48002, "无资产操作权限"),
+    LISTING_UNAVAILABLE(48003, "资产已下架或不可用"),
+    ASSET_VERSION_CONFLICT(48004, "资产版本冲突，请刷新后重试"),
+    ASSET_INCOMPATIBLE(48005, "资产与目标不兼容"),
+    PUBLISH_STATE_CONFLICT(48006, "发布状态冲突，当前状态不允许此操作"),
+    ASSET_TYPE_UNSUPPORTED(48007, "不支持的资产类型");
 
     private final int code;
     private final String message;

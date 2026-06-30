@@ -73,6 +73,16 @@ public class GlobalExceptionHandler {
                 default -> HttpStatus.CONFLICT; // 45003–45008, 45011 → 409
             };
         }
+        // 48xxx → asset market errors
+        if (code >= 48000 && code < 49000) {
+            return switch (code) {
+                case 48001 -> HttpStatus.NOT_FOUND;               // ASSET_NOT_FOUND → 404
+                case 48002 -> HttpStatus.FORBIDDEN;               // ASSET_PERMISSION_DENIED → 403
+                case 48003, 48004, 48006 -> HttpStatus.CONFLICT;  // LISTING_UNAVAILABLE, VERSION_CONFLICT, PUBLISH_STATE_CONFLICT → 409
+                case 48005, 48007 -> HttpStatus.UNPROCESSABLE_ENTITY; // INCOMPATIBLE, TYPE_UNSUPPORTED → 422
+                default -> HttpStatus.BAD_REQUEST;
+            };
+        }
         return switch (code) {
             case 40003 -> HttpStatus.UNAUTHORIZED;
             case 40004 -> HttpStatus.FORBIDDEN;
