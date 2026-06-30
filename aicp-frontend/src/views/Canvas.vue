@@ -25,6 +25,9 @@
         <el-button size="small" circle @click="state.zoomIn()">+</el-button>
         <el-button size="small" circle @click="state.zoomOut()">−</el-button>
         <el-button size="small" @click="state.resetZoom()">1:1</el-button>
+        <el-button size="small" @click="showAssetPicker = true">
+          <el-icon><FolderOpened /></el-icon> Workspace资产
+        </el-button>
         <el-button type="primary" size="small" @click="openTimeline">
           <el-icon><VideoPlay /></el-icon> 合成导出
         </el-button>
@@ -592,13 +595,20 @@
       </div>
     </div>
   </div>
+
+  <!-- Workspace 资产选择器 -->
+  <WorkspaceAssetPicker
+    v-model="showAssetPicker"
+    :project-id="state.projectId.value"
+    @applied="onAssetApplied"
+  />
 </template>
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, VideoPlay } from '@element-plus/icons-vue'
+import { Plus, VideoPlay, FolderOpened } from '@element-plus/icons-vue'
 import { canvasApi } from '@/api/canvas'
 import { generationApi } from '@/api/generation'
 import { useCanvasState } from './canvas/composables/useCanvasState'
@@ -607,12 +617,14 @@ import NodeCreateMenu from './canvas/components/NodeCreateMenu.vue'
 import NodeFloatingEditor from './canvas/components/NodeFloatingEditor.vue'
 import ShotTableEditor from './canvas/components/ShotTableEditor.vue'
 import VideoComposeTimeline from './canvas/components/VideoComposeTimeline.vue'
+import WorkspaceAssetPicker from './canvas/components/WorkspaceAssetPicker.vue'
 import { computeFloatingEditorPosition } from './canvas/utils/floatingEditorPosition'
 import { shouldSelectNode } from './canvas/utils/nodeEditorData'
 
 const route = useRoute()
 const router = useRouter()
 const state = useCanvasState()
+const showAssetPicker = ref(false)
 const canvas = useCanvasNodes(state.projectId)
 
 const canvasAreaRef = ref(null)
@@ -980,6 +992,15 @@ async function renameCanvas() {
       state.markSaved()
     }
   } catch { /* cancelled */ }
+}
+
+function onAssetApplied({ asset, result }) {
+  showAssetPicker.value = false
+  ElMessage.success(result?.changeSummary || `「${asset.name}」已应用到画布`)
+  // Refresh canvas state to pick up style/config changes
+  if (state.projectId.value) {
+    state.fetchProject(state.projectId.value)
+  }
 }
 
 function resetLocalCanvas() {
