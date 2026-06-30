@@ -31,6 +31,11 @@ jwt:
   access-token-expire: 7200
   refresh-token-expire: 2592000
 
+storyboard:
+  export-root: ${STORYBOARD_EXPORT_ROOT:./data/storyboard-exports}
+  export-signing-secret: ${STORYBOARD_EXPORT_SIGNING_SECRET:${jwt.secret}}
+  download-expiry-seconds: 300
+
 ---
 # ================================================================
 # DEV Profile：H2 内存数据库，零依赖即可启动后端
