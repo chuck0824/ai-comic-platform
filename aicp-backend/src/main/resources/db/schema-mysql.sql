@@ -1000,3 +1000,45 @@ CREATE TABLE IF NOT EXISTS project_setting_versions (
     CONSTRAINT uk_setting_version UNIQUE (entity_id, version_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='项目设定版本表';
 CREATE INDEX idx_psv_entity ON project_setting_versions(entity_id);
+
+CREATE TABLE IF NOT EXISTS setting_extraction_batches (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    source_version_id BIGINT,
+    chapter_version_ids_json JSON,
+    target_setting_types JSON NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    status VARCHAR(20) DEFAULT 'queued',
+    model_id VARCHAR(50),
+    prompt_version VARCHAR(20),
+    extraction_config_json JSON,
+    error_message TEXT,
+    applied_at DATETIME NULL,
+    applied_by BIGINT,
+    revision INT DEFAULT 0,
+    created_by BIGINT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_extraction_idempotent UNIQUE (project_id, idempotency_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设定提取批次表';
+CREATE INDEX idx_seb_project ON setting_extraction_batches(project_id);
+
+CREATE TABLE IF NOT EXISTS setting_extraction_candidates (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    batch_id BIGINT NOT NULL,
+    setting_type VARCHAR(20) NOT NULL,
+    canonical_name VARCHAR(200) NOT NULL,
+    aliases_json JSON,
+    field_values_json JSON NOT NULL,
+    evidence_text TEXT,
+    evidence_position_json JSON,
+    confidence DECIMAL(3,2),
+    matched_entity_id BIGINT,
+    match_reason TEXT,
+    match_status VARCHAR(20) DEFAULT 'new',
+    field_decisions_json JSON,
+    review_status VARCHAR(20) DEFAULT 'pending',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (batch_id) REFERENCES setting_extraction_batches(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设定提取候选项表';
+CREATE INDEX idx_sec_batch ON setting_extraction_candidates(batch_id);

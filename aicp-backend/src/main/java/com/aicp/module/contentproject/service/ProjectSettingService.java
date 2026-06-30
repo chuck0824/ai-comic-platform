@@ -90,7 +90,7 @@ public class ProjectSettingService {
         entityMapper.insert(entity);
 
         // 创建初始版本
-        createVersion(entity, "manual", userId, null);
+        createSettingVersion(entity, "manual", userId, null);
 
         return toMap(entity);
     }
@@ -119,7 +119,7 @@ public class ProjectSettingService {
         entity.setUpdatedBy(userId);
         entityMapper.updateById(entity);
 
-        createVersion(entity, "manual", userId, null);
+        createSettingVersion(entity, "manual", userId, null);
 
         return toMap(entity);
     }
@@ -177,7 +177,7 @@ public class ProjectSettingService {
         copy.setUpdatedBy(userId);
         entityMapper.insert(copy);
 
-        createVersion(copy, "manual", userId, null);
+        createSettingVersion(copy, "manual", userId, null);
 
         return toMap(copy);
     }
@@ -216,7 +216,7 @@ public class ProjectSettingService {
         return entity;
     }
 
-    private void createVersion(ProjectSettingEntity entity, String sourceType, Long operatedBy, String evidenceJson) {
+    public void createSettingVersion(ProjectSettingEntity entity, String sourceType, Long operatedBy, String evidenceJson) {
         int nextVersion = entity.getCurrentVersionNo() + 1;
         ProjectSettingVersion version = new ProjectSettingVersion();
         version.setEntityId(entity.getId());

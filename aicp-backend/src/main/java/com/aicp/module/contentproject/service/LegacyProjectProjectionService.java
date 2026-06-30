@@ -203,5 +203,67 @@ public class LegacyProjectProjectionService {
         }
     }
 
+    // ===== character_profiles → project_setting_entities migration =====
+
+    private final CharacterProfileMapper characterProfileMapper;
+    private final ProjectSettingEntityMapper settingEntityMapper;
+
+    /**
+     * 可重复执行的迁移：将 character_profiles 转为 setting_type='character' 的
+     * project_setting_entities。已有映射则跳过。
+     */
+    @Transactional
+    public Map<String, Integer> migrateCharacterProfiles() {
+        List<CharacterProfile> profiles = characterProfileMapper.selectList(
+                new LambdaQueryWrapper<CharacterProfile>());
+        int migrated = 0;
+        int skipped = 0;
+
+        for (CharacterProfile cp : profiles) {
+            // 按 project_id + canonical_name 检查是否已迁移
+            Long count = settingEntityMapper.selectCount(
+                    new LambdaQueryWrapper<ProjectSettingEntity>()
+                            .eq(ProjectSettingEntity::getProjectId, cp.getProjectId())
+                            .eq(ProjectSettingEntity::getSettingType, "character")
+                            .eq(ProjectSettingEntity::getCanonicalName, cp.getName()));
+            if (count > 0) {
+                skipped++;
+                continue;
+            }
+
+            // 组装 details_json
+            Map<String, Object> details = new LinkedHashMap<>();
+            details.put("role", cp.getRole());
+            details.put("archetype", cp.getArchetype());
+            details.put("appearance", cp.getAppearance());
+            details.put("personality", cp.getPersonality());
+            details.put("motivation", cp.getMotivation());
+            details.put("long_term_goal", cp.getLongTermGoal());
+            details.put("knowledge_boundary", cp.getKnowledgeBoundary());
+            details.put("dialogue_style", cp.getDialogueStyle());
+            details.put("backstory", cp.getBackstory());
+
+            ProjectSettingEntity entity = new ProjectSettingEntity();
+            entity.setProjectId(cp.getProjectId());
+            entity.setSettingType("character");
+            entity.setCanonicalName(cp.getName());
+            entity.setSummary(cp.getRole());
+            entity.setDetailsJson(toJson(details));
+            entity.setRelationshipsJson(cp.getRelationshipsJson());
+            entity.setStatus("draft".equals(cp.getStatus()) ? "draft" : "confirmed");
+            entity.setSourceType("manual");
+            entity.setCurrentVersionNo(0);
+            entity.setRevision(0);
+            entity.setCreatedBy(0L);
+            entity.setUpdatedBy(0L);
+            settingEntityMapper.insert(entity);
+
+            migrated++;
+        }
+
+        log.info("character_profiles 迁移完成: migrated={} skipped={}", migrated, skipped);
+        return Map.of("migrated", migrated, "skipped", skipped);
+    }
+
     public record BackfillResult(int projects, int units, int versions, int skipped) {}
 }

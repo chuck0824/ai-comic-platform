@@ -6,6 +6,7 @@ import com.aicp.common.util.SecurityUtil;
 import com.aicp.module.contentproject.dto.WorkEditorRequests.*;
 import com.aicp.module.contentproject.dto.WorkEditorViews.*;
 import com.aicp.module.contentproject.service.ProjectSettingService;
+import com.aicp.module.contentproject.service.SettingExtractionService;
 import com.aicp.module.contentproject.service.WorkEditorService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
@@ -21,6 +22,7 @@ public class WorkEditorController {
 
     private final WorkEditorService workEditorService;
     private final ProjectSettingService settingService;
+    private final SettingExtractionService extractionService;
 
     // ===== Legacy entry =====
 
@@ -120,5 +122,43 @@ public class WorkEditorController {
                                                                        @PathVariable Long settingId) {
         Long userId = SecurityUtil.requireCurrentUserId();
         return ApiResponse.success(settingService.listVersions(userId, id, settingId));
+    }
+
+    // ===== AI Extraction =====
+
+    @PostMapping("/{id}/setting-extractions")
+    public ApiResponse<Map<String, Object>> createExtraction(@PathVariable Long id,
+                                                              @RequestBody Map<String, Object> body) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(extractionService.createExtraction(userId, id, body));
+    }
+
+    @GetMapping("/{id}/setting-extractions/{batchId}")
+    public ApiResponse<Map<String, Object>> getExtraction(@PathVariable Long id,
+                                                           @PathVariable Long batchId) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(extractionService.getExtraction(userId, id, batchId));
+    }
+
+    @PutMapping("/{id}/setting-extractions/{batchId}/decisions")
+    public ApiResponse<Map<String, Object>> saveDecisions(@PathVariable Long id,
+                                                           @PathVariable Long batchId,
+                                                           @RequestBody Map<String, Object> body) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(extractionService.saveDecisions(userId, id, batchId, body));
+    }
+
+    @PostMapping("/{id}/setting-extractions/{batchId}/apply")
+    public ApiResponse<Map<String, Object>> applyExtraction(@PathVariable Long id,
+                                                             @PathVariable Long batchId) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(extractionService.applyExtraction(userId, id, batchId));
+    }
+
+    @PostMapping("/{id}/setting-extractions/{batchId}/retry")
+    public ApiResponse<Map<String, Object>> retryExtraction(@PathVariable Long id,
+                                                             @PathVariable Long batchId) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(extractionService.retryExtraction(userId, id, batchId));
     }
 }
