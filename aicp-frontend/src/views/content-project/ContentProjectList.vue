@@ -43,7 +43,10 @@
             </span>
             <span v-if="p.storyboard_intent_status === 'requested'" class="badge badge-accent">分镜制作中</span>
           </div>
-          <el-button size="small" type="primary" @click.stop="openProject(p)">继续创作</el-button>
+          <div class="flex items-center gap-sm">
+            <el-button size="small" @click.stop="$router.push(`/script-gen/${p.id}/edit`)">编辑资料</el-button>
+            <el-button size="small" type="primary" @click.stop="openProject(p)">继续创作</el-button>
+          </div>
         </div>
       </div>
 

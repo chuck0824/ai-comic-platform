@@ -38,6 +38,12 @@ const routes = [
         component: () => import('@/views/content-project/ContentProjectWorkspace.vue'),
         meta: { title: '流程化创作台' }
       },
+      {
+        path: 'script-gen/:projectId/edit/:section?',
+        name: 'ScriptGenEditor',
+        component: () => import('@/views/TagEditor.vue'),
+        meta: { title: '作品编辑中心' }
+      },
       // === 旧版兼容（仅维护） ===
       {
         path: 'script-gen-legacy',
