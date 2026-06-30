@@ -83,10 +83,12 @@ public class QualityAgentService {
 
     @Transactional
     public void resolveReport(Long reportId, String resolution) {
+        if (!List.of("resolved", "wont_fix").contains(resolution)) {
+            throw new IllegalArgumentException("Invalid resolution: " + resolution + ". Expected: resolved or wont_fix");
+        }
         QualityReport report = reportMapper.selectById(reportId);
         if (report != null) {
-            report.setStatus(resolution); // "resolved" or "wont_fix"
-            report.setUpdatedAt(java.time.LocalDateTime.now());
+            report.setStatus(resolution);
             reportMapper.updateById(report);
         }
     }

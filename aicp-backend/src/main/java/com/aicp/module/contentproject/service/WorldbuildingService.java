@@ -317,6 +317,7 @@ public class WorldbuildingService {
     /** Resolve a unit reference string (display_no or title) to a unit ID. */
     private Long parseUnitRef(Long projectId, String ref) {
         if (ref == null || ref.isBlank()) return null;
+        // Try numeric display_no first
         try {
             int displayNo = Integer.parseInt(ref.trim());
             ContentUnit unit = unitMapper.selectOne(new LambdaQueryWrapper<ContentUnit>()
@@ -325,7 +326,12 @@ public class WorldbuildingService {
                     .eq(ContentUnit::getIsDeleted, 0));
             if (unit != null) return unit.getId();
         } catch (NumberFormatException ignored) {}
-        return null;
+        // Fallback: resolve by title
+        ContentUnit unit = unitMapper.selectOne(new LambdaQueryWrapper<ContentUnit>()
+                .eq(ContentUnit::getProjectId, projectId)
+                .eq(ContentUnit::getTitle, ref.trim())
+                .eq(ContentUnit::getIsDeleted, 0));
+        return unit != null ? unit.getId() : null;
     }
 
     public Map<String, Object> getWorldSummary(Long projectId) {
