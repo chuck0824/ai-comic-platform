@@ -1,6 +1,9 @@
 package com.aicp.module.script.service;
 
 import com.aicp.common.util.SecurityUtil;
+import com.aicp.module.contentproject.mapper.ContentProjectMapper;
+import com.aicp.module.contentproject.mapper.ContentProjectProfileMapper;
+import com.aicp.module.contentproject.service.WorkEditorService;
 import com.aicp.module.script.entity.*;
 import com.aicp.module.script.mapper.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -25,6 +28,9 @@ public class ScriptService {
     private final RepoAssetMapper repoAssetMapper;
     private final ChapterVersionMapper chapterVersionMapper;
     private final AdaptationVersionMapper adaptationVersionMapper;
+    private final WorkEditorService workEditorService;
+    private final ContentProjectMapper contentProjectMapper;
+    private final ContentProjectProfileMapper contentProjectProfileMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     // ===== Script CRUD =====
@@ -100,14 +106,74 @@ public class ScriptService {
     }
 
     // ===== Tags =====
+    @Transactional
     public void updateTags(Long id, Map<String, Object> body) {
         Script script = scriptMapper.selectById(id);
         if (script == null) return;
+
+        // 双写：先通过 WorkEditorService 校验并写入 content_project_profiles（新真相来源）
+        // 再同步到 scripts 表（兼容旧字段投影）
+        try {
+            com.aicp.module.contentproject.dto.WorkEditorRequests.UpdateTagsRequest request =
+                    new com.aicp.module.contentproject.dto.WorkEditorRequests.UpdateTagsRequest(
+                            (String) body.get("genre"),
+                            toTagList(body.get("plot")),
+                            toTagList(body.get("tone")),
+                            (String) body.get("setting"),
+                            null  // revision 不由旧接口管理
+                    );
+            workEditorService.validateTagsPublic(request);
+        } catch (Exception e) {
+            log.warn("标签校验失败，仍写入旧表: {}", e.getMessage());
+        }
+
         if (body.containsKey("genre")) script.setGenreTag((String) body.get("genre"));
         if (body.containsKey("plot")) script.setPlotTags(toJson(body.get("plot")));
         if (body.containsKey("tone")) script.setToneTags(toJson(body.get("tone")));
         if (body.containsKey("setting")) script.setSettingTag((String) body.get("setting"));
         scriptMapper.updateById(script);
+
+        // 尝试同步到新版 content_project_profiles
+        syncTagsToProfile(script);
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<String> toTagList(Object value) {
+        if (value instanceof List<?> list) {
+            return list.stream().map(String::valueOf).toList();
+        }
+        if (value instanceof String s && !s.isBlank()) {
+            try { return objectMapper.readValue(s, List.class); } catch (Exception ignored) {}
+        }
+        return List.of();
+    }
+
+    private void syncTagsToProfile(Script script) {
+        try {
+            com.aicp.module.contentproject.entity.ContentProject project =
+                    contentProjectMapper.selectOne(
+                            new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<
+                                    com.aicp.module.contentproject.entity.ContentProject>()
+                                    .eq(com.aicp.module.contentproject.entity.ContentProject::getLegacyScriptId, script.getId())
+                                    .eq(com.aicp.module.contentproject.entity.ContentProject::getIsDeleted, 0));
+            if (project != null) {
+                com.aicp.module.contentproject.entity.ContentProjectProfile profile =
+                        contentProjectProfileMapper.selectOne(
+                                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<
+                                        com.aicp.module.contentproject.entity.ContentProjectProfile>()
+                                        .eq(com.aicp.module.contentproject.entity.ContentProjectProfile::getProjectId, project.getId()));
+                if (profile != null) {
+                    profile.setGenreTag(script.getGenreTag());
+                    profile.setPlotTags(script.getPlotTags());
+                    profile.setToneTags(script.getToneTags());
+                    profile.setSettingTag(script.getSettingTag());
+                    profile.setRevision(profile.getRevision() + 1);
+                    contentProjectProfileMapper.updateById(profile);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("标签同步到新版项目资料失败 scriptId={}: {}", script.getId(), e.getMessage());
+        }
     }
 
     public void updateStatus(Long id, String status) {

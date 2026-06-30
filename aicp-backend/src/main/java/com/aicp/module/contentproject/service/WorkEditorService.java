@@ -2,23 +2,22 @@ package com.aicp.module.contentproject.service;
 
 import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
-import com.aicp.module.contentproject.entity.ContentProject;
-import com.aicp.module.contentproject.entity.ContentProjectProfile;
-import com.aicp.module.contentproject.entity.ProjectMember;
-import com.aicp.module.contentproject.entity.ProjectParameterVersion;
-import com.aicp.module.contentproject.mapper.ContentProjectMapper;
-import com.aicp.module.contentproject.mapper.ContentProjectProfileMapper;
-import com.aicp.module.contentproject.mapper.ProjectMemberMapper;
-import com.aicp.module.contentproject.mapper.ProjectParameterVersionMapper;
+import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
+import com.aicp.module.contentproject.dto.WorkEditorRequests.*;
+import com.aicp.module.contentproject.dto.WorkEditorViews.*;
+import com.aicp.module.contentproject.entity.*;
+import com.aicp.module.contentproject.mapper.*;
 import com.aicp.module.script.entity.Script;
 import com.aicp.module.script.mapper.ScriptMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Slf4j
@@ -31,6 +30,8 @@ public class WorkEditorService {
     private final ProjectMemberMapper memberMapper;
     private final ContentProjectProfileMapper profileMapper;
     private final ProjectParameterVersionMapper parameterVersionMapper;
+    private final TagDictionaryMapper tagDictionaryMapper;
+    private final ProjectAccessService accessService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -160,6 +161,222 @@ public class WorkEditorService {
         } catch (Exception e) {
             return String.valueOf(value);
         }
+    }
+
+    // ===== Editor Aggregation =====
+
+    /**
+     * 旧入口：通过 scriptId 解析后返回编辑器聚合视图。
+     */
+    public EditorView getLegacyEditor(Long userId, Long scriptId) {
+        ContentProject project = resolveLegacy(userId, scriptId);
+        return buildEditorView(project.getId());
+    }
+
+    /**
+     * 新入口：通过 projectId 返回编辑器聚合视图。
+     */
+    public EditorView getEditor(Long userId, Long projectId) {
+        accessService.require(projectId, userId, Action.VIEW);
+        ContentProject project = projectMapper.selectById(projectId);
+        if (project == null || project.getIsDeleted() == 1) {
+            throw new BizException(ErrorCode.PROJECT_NOT_FOUND);
+        }
+        return buildEditorView(projectId);
+    }
+
+    private EditorView buildEditorView(Long projectId) {
+        ContentProject project = projectMapper.selectById(projectId);
+        ContentProjectProfile profile = profileMapper.selectOne(
+                new LambdaQueryWrapper<ContentProjectProfile>()
+                        .eq(ContentProjectProfile::getProjectId, projectId));
+
+        // 权限取第一个匹配成员的角色
+        ProjectMember member = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getProjectId, projectId)).stream().findFirst().orElse(null);
+        String permissions = member != null ? member.getRole() : "viewer";
+
+        // 设定数量占位（Task 3 实现）
+        Map<String, Integer> settingCounts = new LinkedHashMap<>();
+        settingCounts.put("character", 0);
+        settingCounts.put("background", 0);
+        settingCounts.put("faction", 0);
+        settingCounts.put("location", 0);
+        settingCounts.put("item", 0);
+
+        ProfileView pv = profile != null ? toProfileView(profile) : null;
+
+        return new EditorView(
+                project.getId(),
+                project.getName(),
+                0, // wordCount 后续从 content_units 汇总
+                permissions,
+                pv,
+                project.getRevision(),
+                settingCounts,
+                0, // pendingExtractionCount 后续从 extraction batches 汇总
+                project.getCreatedAt(),
+                project.getUpdatedAt()
+        );
+    }
+
+    // ===== Tags =====
+
+    @Transactional
+    public ProfileView updateTags(Long userId, Long projectId, UpdateTagsRequest request) {
+        accessService.require(projectId, userId, Action.EDIT_CONTENT);
+
+        ContentProjectProfile profile = getProfileOrFail(projectId);
+
+        // 乐观锁校验
+        if (request.revision() != null && !request.revision().equals(profile.getRevision())) {
+            throw new BizException(ErrorCode.EDIT_CONFLICT,
+                    "资料已被他人修改，请刷新后重试。当前服务端 revision=" + profile.getRevision());
+        }
+
+        // 标签校验
+        validateTags(request);
+
+        // 更新标签
+        profile.setGenreTag(request.genre());
+        profile.setPlotTags(toJson(request.plot()));
+        profile.setToneTags(toJson(request.tone()));
+        profile.setSettingTag(request.setting());
+        profile.setRevision(profile.getRevision() + 1);
+        profile.setUpdatedBy(userId);
+        profileMapper.updateById(profile);
+
+        return toProfileView(profile);
+    }
+
+    void validateTags(UpdateTagsRequest request) {
+        // 加载活跃字典
+        List<TagDictionary> dict = tagDictionaryMapper.selectList(
+                new LambdaQueryWrapper<TagDictionary>()
+                        .eq(TagDictionary::getIsActive, 1));
+
+        Set<String> genreSet = dictValues(dict, "genre");
+        Set<String> plotSet = dictValues(dict, "plot");
+        Set<String> toneSet = dictValues(dict, "tone");
+        Set<String> settingSet = dictValues(dict, "setting");
+
+        // 题材：最多 1 个，必须合法
+        if (request.genre() != null && !request.genre().isEmpty()) {
+            if (!genreSet.contains(request.genre())) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "无效题材: " + request.genre());
+            }
+        }
+
+        // 情节：最多 3 个，去重后校验
+        if (request.plot() != null) {
+            List<String> deduped = request.plot().stream().distinct().toList();
+            if (deduped.size() > 3) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "情节标签最多 3 个");
+            }
+            for (String p : deduped) {
+                if (!plotSet.contains(p)) {
+                    throw new BizException(ErrorCode.PARAM_INVALID, "无效情节标签: " + p);
+                }
+            }
+        }
+
+        // 情绪：最多 3 个，去重后校验
+        if (request.tone() != null) {
+            List<String> deduped = request.tone().stream().distinct().toList();
+            if (deduped.size() > 3) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "情绪标签最多 3 个");
+            }
+            for (String t : deduped) {
+                if (!toneSet.contains(t)) {
+                    throw new BizException(ErrorCode.PARAM_INVALID, "无效情绪标签: " + t);
+                }
+            }
+        }
+
+        // 时空：最多 1 个，必须合法
+        if (request.setting() != null && !request.setting().isEmpty()) {
+            if (!settingSet.contains(request.setting())) {
+                throw new BizException(ErrorCode.PARAM_INVALID, "无效时空标签: " + request.setting());
+            }
+        }
+    }
+
+    // ===== Profile (synopsis/outline) =====
+
+    @Transactional
+    public ProfileView updateProfile(Long userId, Long projectId, UpdateProfileRequest request) {
+        accessService.require(projectId, userId, Action.EDIT_CONTENT);
+
+        ContentProjectProfile profile = getProfileOrFail(projectId);
+
+        // 乐观锁校验
+        if (request.revision() != null && !request.revision().equals(profile.getRevision())) {
+            throw new BizException(ErrorCode.EDIT_CONFLICT,
+                    "资料已被他人修改，请刷新后重试。当前服务端 revision=" + profile.getRevision());
+        }
+
+        if (request.synopsis() != null) {
+            profile.setSynopsis(request.synopsis());
+        }
+        if (request.outline() != null) {
+            profile.setOutline(request.outline());
+        }
+        profile.setRevision(profile.getRevision() + 1);
+        profile.setUpdatedBy(userId);
+        profileMapper.updateById(profile);
+
+        return toProfileView(profile);
+    }
+
+    // ===== Internal helpers =====
+
+    private ContentProjectProfile getProfileOrFail(Long projectId) {
+        ContentProjectProfile profile = profileMapper.selectOne(
+                new LambdaQueryWrapper<ContentProjectProfile>()
+                        .eq(ContentProjectProfile::getProjectId, projectId));
+        if (profile == null) {
+            throw new BizException(ErrorCode.NOT_FOUND, "项目资料不存在: " + projectId);
+        }
+        return profile;
+    }
+
+    private Set<String> dictValues(List<TagDictionary> dict, String axis) {
+        Set<String> values = new HashSet<>();
+        for (TagDictionary entry : dict) {
+            if (axis.equals(entry.getAxis())) {
+                values.add(entry.getTagValue());
+            }
+        }
+        return values;
+    }
+
+    private ProfileView toProfileView(ContentProjectProfile profile) {
+        return new ProfileView(
+                profile.getGenreTag(),
+                parseJsonList(profile.getPlotTags()),
+                parseJsonList(profile.getToneTags()),
+                profile.getSettingTag(),
+                profile.getSynopsis(),
+                profile.getOutline(),
+                profile.getRevision(),
+                profile.getUpdatedBy(),
+                profile.getUpdatedAt()
+        );
+    }
+
+    private List<String> parseJsonList(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    /** 对外暴露标签校验，供 ScriptService 双写时复用。 */
+    public void validateTagsPublic(UpdateTagsRequest request) {
+        validateTags(request);
     }
 
     private String sha256(String input) {
