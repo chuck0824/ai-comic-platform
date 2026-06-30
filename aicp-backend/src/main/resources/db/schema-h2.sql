@@ -795,3 +795,37 @@ CREATE TABLE IF NOT EXISTS plugin_packs (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_plugin_pack_version UNIQUE (storyboard_master_id, version_no)
 );
+
+-- ============================================================
+-- M6: Work editor — profiles, tag dictionary, settings, extraction
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS content_project_profiles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL UNIQUE,
+    genre_tag VARCHAR(50),
+    plot_tags JSON,
+    tone_tags JSON,
+    setting_tag VARCHAR(50),
+    synopsis TEXT,
+    outline TEXT,
+    revision INT DEFAULT 0,
+    updated_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_cpp_genre ON content_project_profiles(genre_tag);
+CREATE INDEX IF NOT EXISTS idx_cpp_setting ON content_project_profiles(setting_tag);
+
+CREATE TABLE IF NOT EXISTS tag_dictionary (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    axis VARCHAR(20) NOT NULL,
+    tag_value VARCHAR(50) NOT NULL,
+    tag_label VARCHAR(50) NOT NULL,
+    sort_order INT DEFAULT 0,
+    is_active TINYINT DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_tag_dict_axis_value UNIQUE (axis, tag_value)
+);
+CREATE INDEX IF NOT EXISTS idx_td_axis ON tag_dictionary(axis);

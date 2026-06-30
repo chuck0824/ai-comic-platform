@@ -928,3 +928,37 @@ CREATE TABLE IF NOT EXISTS plugin_packs (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_plugin_pack_version UNIQUE (storyboard_master_id, version_no)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='插件包表';
+
+-- ============================================================
+-- M6: Work editor — profiles, tag dictionary, settings, extraction
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS content_project_profiles (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL UNIQUE,
+    genre_tag VARCHAR(50),
+    plot_tags JSON,
+    tone_tags JSON,
+    setting_tag VARCHAR(50),
+    synopsis TEXT,
+    outline TEXT,
+    revision INT DEFAULT 0,
+    updated_by BIGINT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='作品资料表';
+CREATE INDEX idx_cpp_genre ON content_project_profiles(genre_tag);
+CREATE INDEX idx_cpp_setting ON content_project_profiles(setting_tag);
+
+CREATE TABLE IF NOT EXISTS tag_dictionary (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    axis VARCHAR(20) NOT NULL,
+    tag_value VARCHAR(50) NOT NULL,
+    tag_label VARCHAR(50) NOT NULL,
+    sort_order INT DEFAULT 0,
+    is_active TINYINT DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_tag_dict_axis_value UNIQUE (axis, tag_value)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='标签字典表';
+CREATE INDEX idx_td_axis ON tag_dictionary(axis);
