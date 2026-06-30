@@ -115,6 +115,11 @@ public class StoryboardQueryService {
         return toDetail(sb);
     }
 
+    public List<StoryboardSummary> projectSummaries(Long projectId, Long userId) {
+        projectAccessService.require(projectId, userId, Action.VIEW);
+        return listStoryboards(projectId, userId);
+    }
+
     private StoryboardDetail toDetail(Storyboard sb) {
         return new StoryboardDetail(
                 sb.getId(), sb.getUuid(), sb.getProjectId(), sb.getContentUnitId(),
