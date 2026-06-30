@@ -44,6 +44,13 @@ const routes = [
         component: () => import('@/views/TagEditor.vue'),
         meta: { title: '作品编辑中心' }
       },
+      // === V7 分镜专业编辑器 ===
+      {
+        path: 'content-projects/:projectId/storyboards/:storyboardId',
+        name: 'StoryboardEditorV2',
+        component: () => import('@/views/storyboard/StoryboardEditor.vue'),
+        meta: { title: '分镜专业编辑器' }
+      },
       // === 旧版兼容（仅维护） ===
       {
         path: 'script-gen-legacy',
