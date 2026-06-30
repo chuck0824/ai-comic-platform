@@ -65,6 +65,14 @@ public class GlobalExceptionHandler {
                 default -> HttpStatus.CONFLICT; // 43003–43007 → 409
             };
         }
+        // 45xxx → storyboard professional editor errors
+        if (code >= 45000 && code < 46000) {
+            return switch (code) {
+                case 45001, 45002 -> HttpStatus.NOT_FOUND;
+                case 45009, 45010 -> HttpStatus.BAD_REQUEST;
+                default -> HttpStatus.CONFLICT; // 45003–45008, 45011 → 409
+            };
+        }
         return switch (code) {
             case 40003 -> HttpStatus.UNAUTHORIZED;
             case 40004 -> HttpStatus.FORBIDDEN;

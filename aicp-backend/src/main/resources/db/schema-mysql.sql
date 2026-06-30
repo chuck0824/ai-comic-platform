@@ -780,6 +780,260 @@ CREATE TABLE IF NOT EXISTS cp_storyboard_shots (
     INDEX idx_cp_sbsh_master (master_id, sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜镜头表(V7)';
 
+-- ============================================================
+-- Storyboard Professional Domain (V2)
+-- 独立分镜专业领域：Master、Version、Scene、Shot、6类专业模块、Job、Audit、Snapshot
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS storyboards (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    content_unit_id BIGINT NOT NULL,
+    source_content_version_id BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    purpose VARCHAR(30) NOT NULL DEFAULT 'default',
+    current_draft_version_id BIGINT,
+    current_locked_version_id BIGINT,
+    production_status VARCHAR(30) NOT NULL DEFAULT 'not_ready',
+    created_by BIGINT NOT NULL,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sb_source UNIQUE(project_id, content_unit_id, source_content_version_id, purpose),
+    INDEX idx_sb_project (project_id, updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜资产根表(V2)';
+
+CREATE TABLE IF NOT EXISTS storyboard_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    storyboard_id BIGINT NOT NULL,
+    parent_version_id BIGINT,
+    source_content_version_id BIGINT NOT NULL,
+    tier VARCHAR(1) NOT NULL,
+    version_no INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    revision INT NOT NULL DEFAULT 0,
+    schema_version INT NOT NULL DEFAULT 1,
+    total_scenes INT NOT NULL DEFAULT 0,
+    total_shots INT NOT NULL DEFAULT 0,
+    total_duration_ms BIGINT NOT NULL DEFAULT 0,
+    created_from VARCHAR(20) NOT NULL,
+    locked_by BIGINT,
+    locked_at DATETIME,
+    created_by BIGINT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sb_version UNIQUE(storyboard_id, tier, version_no),
+    INDEX idx_sbv_master (storyboard_id, tier, version_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜版本表(V2)';
+
+CREATE TABLE IF NOT EXISTS storyboard_version_scenes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    scene_key VARCHAR(36) NOT NULL,
+    scene_no INT NOT NULL,
+    title VARCHAR(255),
+    dramatic_goal TEXT,
+    beat_description TEXT,
+    location_ref_id BIGINT,
+    duration_ms BIGINT NOT NULL DEFAULT 0,
+    emotion_label VARCHAR(100),
+    emotion_intensity INT,
+    sort_order INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sb_scene_key UNIQUE(version_id, scene_key),
+    CONSTRAINT uk_sb_scene_no UNIQUE(version_id, scene_no),
+    INDEX idx_sbscene_version (version_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜场景表(V2)';
+
+CREATE TABLE IF NOT EXISTS storyboard_version_shots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    version_id BIGINT NOT NULL,
+    scene_id BIGINT NOT NULL,
+    shot_key VARCHAR(36) NOT NULL,
+    shot_code VARCHAR(30) NOT NULL,
+    duration_ms BIGINT NOT NULL DEFAULT 0,
+    shot_size VARCHAR(50),
+    visual_description TEXT,
+    lighting_atmosphere TEXT,
+    character_action TEXT,
+    emotion_description TEXT,
+    dialogue_text TEXT,
+    scene_tags_json JSON,
+    sound_effect TEXT,
+    reference_text TEXT,
+    image_prompt LONGTEXT,
+    video_motion_prompt LONGTEXT,
+    director_intention TEXT COMMENT 'B-tier: 导演意图',
+    action_motivation TEXT COMMENT 'B-tier: 动作动机',
+    relationship_blocking TEXT COMMENT 'B-tier: 关系调度',
+    information_gap TEXT COMMENT 'B-tier: 信息差设计',
+    audio_visual_relation TEXT COMMENT 'B-tier: 声画关系',
+    edit_point TEXT COMMENT 'B-tier: 剪辑点',
+    dub_text TEXT COMMENT 'C-tier: 配音文本',
+    subtitle_text TEXT COMMENT 'C-tier: 字幕文本',
+    failure_strategy VARCHAR(30) COMMENT 'C-tier: 失败策略',
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    sort_order INT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sb_shot_key UNIQUE(version_id, shot_key),
+    CONSTRAINT uk_sb_shot_code UNIQUE(version_id, shot_code),
+    INDEX idx_sbshot_version (version_id, scene_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜镜头表(V2)';
+
+-- 6类专业辅助表
+
+CREATE TABLE IF NOT EXISTS storyboard_emotion_segments (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    emotion_type VARCHAR(100) NOT NULL,
+    shot_range VARCHAR(255) NOT NULL,
+    intensity INT NOT NULL,
+    core_expression TEXT,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_sbemotion_version (version_id, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='情绪节奏段表';
+
+CREATE TABLE IF NOT EXISTS storyboard_prompt_templates (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    template_code VARCHAR(50) NOT NULL,
+    emotion_name VARCHAR(100),
+    shot_refs_json JSON,
+    image_prompt LONGTEXT,
+    video_motion_prompt LONGTEXT,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sbprompt_code UNIQUE(version_id, template_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提示词模板表';
+
+CREATE TABLE IF NOT EXISTS storyboard_creative_rules (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    rule_type VARCHAR(30) NOT NULL,
+    dimension_name VARCHAR(100) NOT NULL,
+    principle TEXT,
+    implementation_text TEXT,
+    target_refs_json JSON,
+    effect_text TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_sbrule_version (version_id, rule_type, sort_order)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='创意规则表';
+
+CREATE TABLE IF NOT EXISTS storyboard_character_visuals (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    character_ref_id BIGINT,
+    character_name VARCHAR(100) NOT NULL,
+    core_identity TEXT,
+    daily_look TEXT,
+    task_look TEXT,
+    performance_anchor TEXT,
+    prompt_lock LONGTEXT,
+    sort_order INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sbvisual_character UNIQUE(version_id, character_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='人物视觉规范表';
+
+CREATE TABLE IF NOT EXISTS storyboard_shot_visual_bindings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    shot_id BIGINT NOT NULL,
+    character_visual_id BIGINT NOT NULL,
+    application_note TEXT,
+    anti_drift_requirement TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sbbinding UNIQUE(version_id, shot_id, character_visual_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='镜头-人物视觉绑定表';
+
+CREATE TABLE IF NOT EXISTS storyboard_review_issues (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    fingerprint VARCHAR(64) NOT NULL,
+    issue_type VARCHAR(50) NOT NULL,
+    severity VARCHAR(20) NOT NULL,
+    shot_id BIGINT,
+    message TEXT NOT NULL,
+    evidence TEXT,
+    suggestion TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'open',
+    resolution_note TEXT,
+    resolved_by BIGINT,
+    resolved_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sbissue_fingerprint UNIQUE(version_id, fingerprint),
+    INDEX idx_sbissue_status (version_id, status, severity)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='审核问题表';
+
+CREATE TABLE IF NOT EXISTS storyboard_jobs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    storyboard_id BIGINT NOT NULL,
+    version_id BIGINT,
+    job_type VARCHAR(30) NOT NULL,
+    status VARCHAR(20) NOT NULL,
+    idempotency_key VARCHAR(100) NOT NULL,
+    progress_percent INT NOT NULL DEFAULT 0,
+    current_stage VARCHAR(100),
+    request_json LONGTEXT,
+    result_json LONGTEXT,
+    error_code VARCHAR(100),
+    error_message TEXT,
+    created_by BIGINT NOT NULL,
+    started_at DATETIME,
+    finished_at DATETIME,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sbjob_idem UNIQUE(project_id, job_type, idempotency_key),
+    INDEX idx_sbjob_status (project_id, status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜异步任务表';
+
+CREATE TABLE IF NOT EXISTS storyboard_audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    actor_user_id BIGINT NOT NULL,
+    action_type VARCHAR(50) NOT NULL,
+    target_type VARCHAR(50),
+    target_id BIGINT,
+    operation_id VARCHAR(100),
+    before_json LONGTEXT,
+    after_json LONGTEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_sbaudit_version (version_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜审计日志表';
+
+CREATE TABLE IF NOT EXISTS storyboard_canvas_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    storyboard_id BIGINT NOT NULL,
+    version_id BIGINT NOT NULL,
+    snapshot_type VARCHAR(20) NOT NULL,
+    idempotency_key VARCHAR(100) NOT NULL,
+    parameter_version_id BIGINT,
+    source_content_version_id BIGINT NOT NULL,
+    snapshot_json LONGTEXT NOT NULL,
+    snapshot_hash VARCHAR(64) NOT NULL,
+    gate_report_json LONGTEXT,
+    created_by BIGINT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sbsnapshot_idem UNIQUE(project_id, idempotency_key),
+    INDEX idx_sbsnapshot_version (version_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='画布生产快照表';
 
 -- M1: Upload files
 CREATE TABLE IF NOT EXISTS content_upload_files (

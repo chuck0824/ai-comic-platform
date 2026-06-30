@@ -70,7 +70,20 @@ public enum ErrorCode {
     SOP_CHECK_FAILED(47001, "生产准入未通过"),
     ASSET_LOCKED(47002, "资产已锁定，无法修改"),
     VERSION_CONFLICT(47003, "版本冲突"),
-    AI_FAILURE_LIMIT(47004, "AI失败次数超限");
+    AI_FAILURE_LIMIT(47004, "AI失败次数超限"),
+
+    // 分镜专业编辑器 45xxx
+    STORYBOARD_NOT_FOUND(45001, "分镜不存在"),
+    STORYBOARD_VERSION_NOT_FOUND(45002, "分镜版本不存在"),
+    STORYBOARD_VERSION_LOCKED(45003, "分镜版本已锁定"),
+    STORYBOARD_REVISION_CONFLICT(45004, "分镜版本已被他人修改"),
+    SOURCE_CONTENT_VERSION_STALE(45005, "源正文版本已更新"),
+    INVALID_TIER_TRANSITION(45006, "分镜升档路径无效"),
+    REVIEW_ISSUES_UNRESOLVED(45007, "仍有未处理的审核问题"),
+    PRODUCTION_GATE_FAILED(45008, "生产准入未通过"),
+    XLSX_TEMPLATE_UNSUPPORTED(45009, "不支持的分镜工作簿模板"),
+    XLSX_VALIDATION_FAILED(45010, "分镜工作簿校验失败"),
+    STORYBOARD_JOB_CONFLICT(45011, "同类分镜任务正在运行");
 
     private final int code;
     private final String message;

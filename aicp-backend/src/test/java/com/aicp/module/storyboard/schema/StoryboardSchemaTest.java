@@ -1,0 +1,78 @@
+package com.aicp.module.storyboard.schema;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@SpringBootTest
+@ActiveProfiles("dev")
+@DisplayName("分镜专业领域 Schema 验证")
+class StoryboardSchemaTest {
+
+    @Autowired
+    JdbcTemplate jdbc;
+
+    @Test
+    @DisplayName("13张分镜领域表均存在")
+    void createsAllStoryboardDomainTables() {
+        var expected = List.of(
+            "storyboards", "storyboard_versions", "storyboard_version_scenes",
+            "storyboard_version_shots", "storyboard_emotion_segments",
+            "storyboard_prompt_templates", "storyboard_creative_rules",
+            "storyboard_character_visuals", "storyboard_shot_visual_bindings",
+            "storyboard_review_issues", "storyboard_jobs", "storyboard_audit_logs",
+            "storyboard_canvas_snapshots"
+        );
+        for (String table : expected) {
+            Integer count = jdbc.queryForObject(
+                "select count(*) from information_schema.tables where table_name = ?",
+                Integer.class, table.toUpperCase());
+            assertThat(count).as("表 %s 应存在", table).isEqualTo(1);
+        }
+    }
+
+    @Test
+    @DisplayName("storyboards 表包含所有核心列")
+    void storyboardsHasCoreColumns() {
+        var columns = jdbc.queryForList(
+            "select column_name from information_schema.columns where table_name = 'STORYBOARDS'");
+        var names = columns.stream().map(c -> c.get("COLUMN_NAME").toString()).toList();
+        assertThat(names).contains(
+            "ID", "UUID", "PROJECT_ID", "CONTENT_UNIT_ID",
+            "SOURCE_CONTENT_VERSION_ID", "TITLE", "PURPOSE",
+            "CURRENT_DRAFT_VERSION_ID", "CURRENT_LOCKED_VERSION_ID",
+            "PRODUCTION_STATUS", "CREATED_BY", "IS_DELETED");
+    }
+
+    @Test
+    @DisplayName("storyboard_versions 表包含版本控制列")
+    void versionsHasLifecycleColumns() {
+        var columns = jdbc.queryForList(
+            "select column_name from information_schema.columns where table_name = 'STORYBOARD_VERSIONS'");
+        var names = columns.stream().map(c -> c.get("COLUMN_NAME").toString()).toList();
+        assertThat(names).contains(
+            "ID", "UUID", "STORYBOARD_ID", "PARENT_VERSION_ID",
+            "TIER", "VERSION_NO", "STATUS", "REVISION",
+            "CREATED_FROM", "LOCKED_BY");
+    }
+
+    @Test
+    @DisplayName("storyboard_version_shots 表包含13维镜头字段")
+    void shotsHasThirteenDimensions() {
+        var columns = jdbc.queryForList(
+            "select column_name from information_schema.columns where table_name = 'STORYBOARD_VERSION_SHOTS'");
+        var names = columns.stream().map(c -> c.get("COLUMN_NAME").toString()).toList();
+        assertThat(names).contains(
+            "SHOT_CODE", "DURATION_MS", "SHOT_SIZE",
+            "VISUAL_DESCRIPTION", "LIGHTING_ATMOSPHERE", "CHARACTER_ACTION",
+            "EMOTION_DESCRIPTION", "DIALOGUE_TEXT", "SCENE_TAGS_JSON",
+            "SOUND_EFFECT", "REFERENCE_TEXT", "IMAGE_PROMPT", "VIDEO_MOTION_PROMPT");
+    }
+}
