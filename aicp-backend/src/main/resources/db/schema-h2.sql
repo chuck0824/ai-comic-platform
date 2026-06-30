@@ -1165,3 +1165,56 @@ CREATE TABLE IF NOT EXISTS setting_extraction_candidates (
     FOREIGN KEY (batch_id) REFERENCES setting_extraction_batches(id)
 );
 CREATE INDEX IF NOT EXISTS idx_sec_batch ON setting_extraction_candidates(batch_id);
+
+-- ============================================================
+-- DEV Storyboard 专业编辑器实例数据
+-- 重启后自动创建，访问 http://localhost:8080/content-projects/1/storyboards/1
+-- ============================================================
+
+INSERT INTO content_projects (uuid, tenant_type, tenant_id, owner_user_id, name, creation_mode, source_mode, storyboard_intent_status, content_status, production_status, market_status)
+VALUES ('demo-proj-001', 'personal', 1, 1, '第一章·血月之夜', 'short_drama', 'ai_manual', 'in_progress', 'draft', 'not_started', 'private');
+
+INSERT INTO project_members (project_id, user_id, role) VALUES (1, 1, 'owner');
+
+INSERT INTO content_units (stable_key, project_id, unit_type, display_no, title, status, revision)
+VALUES ('unit-001', 1, 'episode', 1, '第一集', 'draft', 0);
+
+INSERT INTO content_versions (project_id, content_unit_id, version_no, status, content_json, plain_text, source, content_hash, created_by)
+VALUES (1, 1, 1, 'locked', '{"title":"血月之夜"}', '血月之夜正文...', 'ai_generated', 'hash-001', 1);
+
+-- 分镜 Master
+INSERT INTO storyboards (uuid, project_id, content_unit_id, source_content_version_id, title, purpose, current_draft_version_id, production_status, created_by)
+VALUES ('sb-demo-001', 1, 1, 1, '第一章分镜', 'default', NULL, 'not_ready', 1);
+
+-- 分镜版本 (A档草稿, 2场景5镜头)
+INSERT INTO storyboard_versions (uuid, storyboard_id, source_content_version_id, tier, version_no, status, revision, schema_version, total_scenes, total_shots, total_duration_ms, created_from, created_by)
+VALUES ('sv-demo-001', 1, 1, 'A', 1, 'draft', 0, 1, 2, 5, 19500, 'manual', 1);
+
+UPDATE storyboards SET current_draft_version_id = 1 WHERE id = 1;
+
+-- 场景1: 月下古巷
+INSERT INTO storyboard_version_scenes (version_id, scene_key, scene_no, title, dramatic_goal, beat_description, duration_ms, emotion_label, emotion_intensity, sort_order)
+VALUES (1, 'scene-key-1', 1, '月下古巷', '建立世界观与主角处境', '主角在月夜小巷中独行，暗示危机降临', 10000, '紧张', 7, 0);
+-- 场景2: 屋顶对峙
+INSERT INTO storyboard_version_scenes (version_id, scene_key, scene_no, title, dramatic_goal, beat_description, duration_ms, emotion_label, emotion_intensity, sort_order)
+VALUES (1, 'scene-key-2', 2, '屋顶对峙', '首次冲突，揭示反派动机', '主角跃上屋顶，与蒙面人对峙', 9500, '愤怒', 8, 1);
+
+-- 场景1 镜头1: 全景入场
+INSERT INTO storyboard_version_shots (uuid, version_id, scene_id, shot_key, shot_code, duration_ms, shot_size, visual_description, lighting_atmosphere, character_action, emotion_description, dialogue_text, scene_tags_json, sound_effect, reference_text, image_prompt, video_motion_prompt, status, sort_order)
+VALUES ('shot-001', 1, 1, 'shot-key-1', 'S01-C01', 4000, '全景', '血月高悬，古巷石板路反射暗红光芒，主角林夜缓步走入画面，风衣下摆被夜风掀起', '顶光+逆光，血月红光为主光源，暗部冷蓝补光', '缓步前行，右手按在腰间刀柄上', '警惕、压抑的紧张感', '', '["血月","古巷","夜景"]', '风声、远处犬吠', '《银翼杀手》开场街景', 'cinematic wide shot, blood moon over ancient alley, cobblestone reflecting crimson light, lone figure in trench coat, volumetric lighting, hyperrealistic, 8k', 'slow dolly forward, wind blowing coat', 'draft', 0);
+
+-- 场景1 镜头2: 中景警觉
+INSERT INTO storyboard_version_shots (uuid, version_id, scene_id, shot_key, shot_code, duration_ms, shot_size, visual_description, lighting_atmosphere, character_action, emotion_description, dialogue_text, scene_tags_json, sound_effect, reference_text, image_prompt, video_motion_prompt, status, sort_order)
+VALUES ('shot-002', 1, 1, 'shot-key-2', 'S01-C02', 3000, '中景', '主角停下脚步，侧头望向巷口阴影处，手电筒光束扫过墙角', '手电筒冷白光束与血月红光形成冷暖对比', '停下、侧头、举电筒扫视', '警觉、发现异常', '什么人在那儿？', '["血月","古巷","手电筒"]', '手电筒开关声、脚步停止', '《真探》手电筒戏', 'medium shot, detective shining flashlight into dark alley corner, fog particles in beam, cold white light vs warm red moonlight, cinematic noir style', 'static, flashlight beam sweeps slowly across frame', 'draft', 1);
+
+-- 场景1 镜头3: 特写血迹
+INSERT INTO storyboard_version_shots (uuid, version_id, scene_id, shot_key, shot_code, duration_ms, shot_size, visual_description, lighting_atmosphere, character_action, emotion_description, dialogue_text, scene_tags_json, sound_effect, reference_text, image_prompt, video_motion_prompt, status, sort_order)
+VALUES ('shot-003', 1, 1, 'shot-key-3', 'S01-C03', 3000, '特写', '主角瞳孔收缩，手电光束照亮墙角一抹新鲜血迹', '电筒光束聚焦血迹，周围暗部压低', '瞳孔收缩、握紧刀柄', '震惊、确认危险', '', '["血月","古巷","血迹","特写"]', '心跳声渐强', '《七宗罪》证据发现', 'extreme close-up, eye pupils dilating, flashlight beam revealing fresh blood on stone wall, shallow depth of field, tense atmosphere', 'crash zoom to blood, handheld micro-shake', 'confirmed', 2);
+
+-- 场景2 镜头4: 屋顶跃上
+INSERT INTO storyboard_version_shots (uuid, version_id, scene_id, shot_key, shot_code, duration_ms, shot_size, visual_description, lighting_atmosphere, character_action, emotion_description, dialogue_text, scene_tags_json, sound_effect, reference_text, image_prompt, video_motion_prompt, status, sort_order)
+VALUES ('shot-004', 1, 2, 'shot-key-4', 'S02-C01', 4500, '中近景', '主角跃上屋顶瓦面，月光勾勒出剪影轮廓，对面站着一个身披斗篷的蒙面人', '逆光剪影，月光银白为主，远处城市灯火星点', '翻身跃上屋顶、站稳、抬头直视对手', '决绝、毫不畏惧', '追了你三条街，该现身了。', '["屋顶","对峙","月光","蒙面人"]', '瓦片滑动声、衣袂破风声', '《卧虎藏龙》屋顶追逐', 'low angle hero shot, figure standing on curved roof tiles against full moon silhouette, cape fluttering, distant city lights, wuxia cinematic', 'camera tilts up from street to rooftop, dramatic reveal', 'draft', 0);
+
+-- 场景2 镜头5: 摘面具
+INSERT INTO storyboard_version_shots (uuid, version_id, scene_id, shot_key, shot_code, duration_ms, shot_size, visual_description, lighting_atmosphere, character_action, emotion_description, dialogue_text, scene_tags_json, sound_effect, reference_text, image_prompt, video_motion_prompt, status, sort_order)
+VALUES ('shot-005', 1, 2, 'shot-key-5', 'S02-C02', 5000, '全景', '蒙面人缓缓摘下面具，露出半张机械改造的脸，月光在金属表面流动', '月光在机械面部形成高光反射，周围氛围光转为冷蓝', '摘面具、露出机械脸、嘴角微扬', '揭示、亦敌亦友的复杂', '你还记得五年前的那个夜晚吗？', '["屋顶","对峙","机械脸","月光","反转"]', '金属机械音、风声骤停', '《攻壳机动队》赛博格', 'dramatic unmasking, half cyborg face revealed under moonlight, liquid metal surface reflections, cyberpunk meets wuxia aesthetic', 'slow push-in on unmasking, depth of field racks to cyborg face', 'needs_review', 1);
