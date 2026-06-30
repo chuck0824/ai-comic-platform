@@ -55,5 +55,29 @@ export const contentProjectApi = {
   generatePromotion: (projectId, sourceUnitId) =>
     request.post(`/content-projects/${projectId}/promote`, { source_unit_id: sourceUnitId }),
   // Legacy
-  backfillLegacy: () => request.post('/content-projects/backfill-legacy')
+  backfillLegacy: () => request.post('/content-projects/backfill-legacy'),
+  // M6: Work Editor
+  getLegacyEditor: (scriptId) => request.get(`/content-projects/legacy-scripts/${scriptId}/editor`),
+  getEditor: (projectId) => request.get(`/content-projects/${projectId}/editor`),
+  updateTags: (projectId, data) => request.put(`/content-projects/${projectId}/tags`, data),
+  updateProfile: (projectId, data) => request.patch(`/content-projects/${projectId}/profile`, data),
+  // Settings
+  listSettings: (projectId, params) => request.get(`/content-projects/${projectId}/settings`, { params }),
+  createSetting: (projectId, data) => request.post(`/content-projects/${projectId}/settings`, data),
+  getSetting: (projectId, settingId) => request.get(`/content-projects/${projectId}/settings/${settingId}`),
+  updateSetting: (projectId, settingId, data) => request.patch(`/content-projects/${projectId}/settings/${settingId}`, data),
+  archiveSetting: (projectId, settingId) => request.delete(`/content-projects/${projectId}/settings/${settingId}`),
+  restoreSetting: (projectId, settingId) => request.post(`/content-projects/${projectId}/settings/${settingId}/restore`),
+  copySetting: (projectId, settingId) => request.post(`/content-projects/${projectId}/settings/${settingId}/copy`),
+  listSettingVersions: (projectId, settingId) => request.get(`/content-projects/${projectId}/settings/${settingId}/versions`),
+  // AI Extraction
+  createExtraction: (projectId, data) => request.post(`/content-projects/${projectId}/setting-extractions`, data),
+  getExtraction: (projectId, batchId) => request.get(`/content-projects/${projectId}/setting-extractions/${batchId}`),
+  saveDecisions: (projectId, batchId, data) => request.put(`/content-projects/${projectId}/setting-extractions/${batchId}/decisions`, data),
+  applyExtraction: (projectId, batchId) => request.post(`/content-projects/${projectId}/setting-extractions/${batchId}/apply`),
+  retryExtraction: (projectId, batchId) => request.post(`/content-projects/${projectId}/setting-extractions/${batchId}/retry`)
+}
+
+export const tagDictionaryApi = {
+  get: () => request.get('/tag-dictionary')
 }
