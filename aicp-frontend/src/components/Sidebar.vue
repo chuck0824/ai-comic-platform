@@ -16,8 +16,8 @@
     <router-link to="/warehouse" class="sidebar-item" :class="{ active: isActive('/warehouse') }">
       <el-icon><Collection /></el-icon> 剧本仓库
     </router-link>
-    <router-link to="/storyboard/1" class="sidebar-item" :class="{ active: isActive('/storyboard') }">
-      <el-icon><Film /></el-icon> 分镜编辑
+    <router-link to="/script-gen" class="sidebar-item" :class="{ active: isActive('/script-gen') }">
+      <el-icon><Film /></el-icon> 剧本创作
     </router-link>
     <router-link to="/tag-editor/1" class="sidebar-item" :class="{ active: isActive('/tag-editor') }">
       <el-icon><PriceTag /></el-icon> 标签编辑

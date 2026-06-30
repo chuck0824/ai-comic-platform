@@ -59,12 +59,6 @@ const routes = [
         meta: { title: '剧本创作（旧版）' }
       },
       {
-        path: 'storyboard/:scriptId',
-        name: 'Storyboard',
-        component: () => import('@/views/Storyboard.vue'),
-        meta: { title: '分镜编辑' }
-      },
-      {
         path: 'canvas/:projectId?',
         name: 'Canvas',
         component: () => import('@/views/Canvas.vue'),

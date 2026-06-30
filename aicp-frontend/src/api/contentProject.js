@@ -28,14 +28,14 @@ export const contentProjectApi = {
   restoreVersion: (unitId, versionId) => request.post(`/content-units/${unitId}/versions/${versionId}/restore`),
   // M1: Three-Agent Review
   reviewUnit: (unitId) => request.post(`/content-units/${unitId}/review`),
-  // M1: Storyboard
+  // M1: Storyboard — now delegates to V2 professional editor APIs
   generateStoryboard: (projectId, contentUnitId) =>
-    request.post(`/content-projects/${projectId}/storyboard/generate`, { content_unit_id: contentUnitId }),
-  listStoryboardMasters: (projectId) => request.get(`/content-projects/${projectId}/storyboard`),
-  getStoryboardMaster: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboard/${masterId}`),
-  listStoryboardScenes: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboard/${masterId}/scenes`),
-  listStoryboardShots: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboard/${masterId}/shots`),
-  lockStoryboardMaster: (projectId, masterId) => request.post(`/content-projects/${projectId}/storyboard/${masterId}/lock`),
+    request.post(`/content-projects/${projectId}/storyboards`, { contentUnitId, sourceContentVersionId: 1, title: '分镜草稿', purpose: 'default' }),
+  listStoryboardMasters: (projectId) => request.get(`/content-projects/${projectId}/storyboards`),
+  getStoryboardMaster: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboards/${masterId}`),
+  listStoryboardScenes: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboards/${masterId}/versions/${masterId}/scenes`),
+  listStoryboardShots: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboards/${masterId}/versions/${masterId}/shots`),
+  lockStoryboardMaster: (projectId, masterId) => request.post(`/content-projects/${projectId}/storyboards/${masterId}/versions/${masterId}/lock`, { revision: 0 }),
   // M1: Upload
   uploadFile: (formData) => request.post('/content-projects/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getUpload: (uploadId) => request.get(`/content-projects/upload/${uploadId}`),
