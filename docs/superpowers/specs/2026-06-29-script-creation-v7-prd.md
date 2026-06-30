@@ -23,6 +23,7 @@
 |---|---|---|
 | V7.0 | 2026-06-29 | 形成内容项目、三模式、版本、Agent、分镜与画布开发基线 |
 | V7.1 | 2026-06-29 | 确认自适应引导流程；分镜改为用户可选；补充最短路径和易用性规则 |
+| V7.2 | 2026-06-30 | 代码审查修复：Entity @TableName 与 DDL 对齐、5 个 Controller 接入 ProjectAccessService、幂等键改为确定性键、StoryboardService 竞态条件修复、新建 AiResponseParser 消除 200 行重复代码、parseJson 增加错误日志、next_promise 钩子补全、getNextSort 实现真实 DB 查询、compareSnapshots 扩展为 4 维度对比、数据字典补充 M1–M4 新增表 |
 
 ### 0.2 已确定的产品决策
 
@@ -680,16 +681,16 @@ content_projects
 ├─ source_files / import_jobs / import_units
 ├─ story_seed_versions
 ├─ characters / character_versions / character_relations
-├─ plot_tasks / plot_task_links
+├─ plot_tasks
 ├─ world_facts / factions
 ├─ locations / location_relations / map_versions
 ├─ timelines / foreshadowings / continuity_snapshots
 ├─ outline_nodes / outline_versions
 ├─ content_units / content_versions
-├─ hook_strategies / unit_hooks
-├─ tvc_briefs / brand_profiles / product_profiles / tvc_concepts / tvc_script_versions
+├─ unit_hooks
+├─ tvc_briefs / brand_facts / creative_strategies / tvc_scripts
 ├─ adaptation_versions
-├─ storyboard_masters / storyboard_versions / storyboard_shots
+├─ cp_storyboard_masters / cp_storyboard_scenes / cp_storyboard_shots
 ├─ project_plugin_packs / plugin_pack_versions / asset_bindings
 ├─ review_reports / review_items
 ├─ artifact_dependencies
@@ -719,7 +720,17 @@ content_projects
 | `unit_hooks` | `id, project_id, content_unit_id, content_version_id, hook_json, locked_fields, score, revision` | 必须绑定内容版本；锁定字段批量更新时跳过 |
 | `artifact_dependencies` | `id, project_id, source_type, source_version_id, target_type, target_version_id, dependency_type, source_hash, sync_status` | `source_version_id+target_version_id+dependency_type` 唯一 |
 | `generation_jobs` | `id, project_id, job_type, target_type, target_id, status, input_snapshot_json, input_snapshot_hash, schema_version, model, prompt_version, skill_versions, estimated_credits, actual_credits, error_code, retry_of_job_id, idempotency_key, created_by, created_at, finished_at` | `project_id+idempotency_key` 唯一；input snapshot 不可修改 |
-| `storyboard_versions` | `id, project_id, storyboard_id, source_version_ids, tier, status, shots_json, plugin_pack_version_id, content_hash, created_by, created_at` | C 档批量生产前必须 locked |
+| `cp_storyboard_masters` | `id, uuid, project_id, content_unit_id, tier, status, total_shots, estimated_duration_sec, source_version_id, locked_by, locked_at, revision, is_deleted, created_at, updated_at` | tier 区分 A/B/C 档；lock 后不可修改 |
+| `cp_storyboard_scenes` | `id, master_id, scene_no, dramatic_goal, beat_description, location_id, character_ids, duration_sec, sort_order` | `master_id+scene_no` 唯一 |
+| `cp_storyboard_shots` | `id, uuid, scene_id, master_id, shot_no, shot_type, duration_sec, description, camera_action, dialogue_ref, visual_ref_url, status, sort_order` | `master_id+shot_no` 唯一；导入画布后关联 canvas_node_id |
+| `content_upload_files` | `id, uuid, user_id, original_name, file_type, file_size, parsed_text, parse_status, error_message, created_at, updated_at` | 支持 TXT/DOCX 上传解析 |
+| `content_unit_hooks` | `id, content_unit_id, content_version_id, previous_promise, promise_payoff, opening_hook, mid_escalation, payoff_or_reversal, closing_hook, next_promise, hook_score, locked_fields, created_at, updated_at` | `content_unit_id` 唯一；7 类钩子 + 评分 |
+| `continuity_snapshots` | `id, project_id, content_unit_id, snapshot_json, content_hash, created_at` | `content_unit_id` 唯一；AI 对比相邻单元检测矛盾 |
+| `character_profiles` | `id, project_id, name, role, archetype, appearance, personality, motivation, long_term_goal, knowledge_boundary, dialogue_style, backstory, relationships_json, status, created_at, updated_at` | M3 长篇角色建模 |
+| `volume_outlines` | `id, project_id, volume_no, title, goal, turns, volume_end_hook, character_changes, chapter_count, status, sort_order, created_at, updated_at` | `project_id+volume_no` 唯一 |
+| `world_locations` | `id, project_id, name, tier, description, parent_location_id, area_type, distance_from_origin, transportation, faction_territory, visual_reference, created_at, updated_at` | L0/L1 地点体系 |
+| `story_timeline` | `id, project_id, event_name, description, relative_time, involved_characters, location_id, foreshadowing_ids, sort_order, created_at` | M3 事件时间线 |
+| `foreshadowing_items` | `id, project_id, description, planted_in_unit_id, payoff_in_unit_id, status, category, character_ids, created_at, updated_at` | 伏笔埋设/回收状态追踪 |
 | `canvas_snapshots` | `id, project_id, canvas_project_id, storyboard_version_id, plugin_pack_version_id, manifest_json, manifest_hash, coupling_mode, created_by, created_at` | `canvas_project_id+manifest_hash` 唯一；快照不可修改 |
 | `canvas_shot_mappings` | `id, canvas_snapshot_id, master_shot_id, canvas_shot_id, canvas_node_id, mapping_status` | `canvas_snapshot_id+master_shot_id` 唯一 |
 

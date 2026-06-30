@@ -1,4 +1,4 @@
-# Script Creation V7.1 M0 API Contract
+# Script Creation V7.2 API Contract
 
 ## Implemented Endpoints
 
@@ -45,6 +45,79 @@
 | GET | `/api/v1/generation-jobs/{id}` | Get job status |
 | POST | `/api/v1/generation-jobs/{id}/cancel` | Cancel pending job |
 
+### M1: Storyboard (A/B/C-tier)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/content-projects/{projectId}/storyboard/generate` | Generate A-tier storyboard |
+| GET | `/api/v1/content-projects/{projectId}/storyboard` | List storyboard masters |
+| GET | `/api/v1/content-projects/{projectId}/storyboard/{masterId}` | Get master detail |
+| GET | `/api/v1/content-projects/{projectId}/storyboard/{masterId}/scenes` | List scenes |
+| GET | `/api/v1/content-projects/{projectId}/storyboard/{masterId}/shots` | List shots |
+| POST | `/api/v1/content-projects/{projectId}/storyboard/{masterId}/lock` | Lock master |
+| POST | `/api/v1/content-projects/{projectId}/storyboard/{masterId}/upgrade-b` | Upgrade A→B tier |
+| POST | `/api/v1/content-projects/{projectId}/storyboard/{masterId}/upgrade-c` | Upgrade B→C tier |
+
+### M1: Upload
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/content-projects/upload` | Upload TXT/DOCX file |
+| GET | `/api/v1/content-projects/upload/{uploadId}` | Get upload status |
+| POST | `/api/v1/content-projects/upload/{uploadId}/ai-extract` | AI extract characters/plot/locations |
+| POST | `/api/v1/content-projects/upload/{uploadId}/confirm` | Confirm import → create units |
+
+### M2: Batch / Hooks / Continuity / Adaptation / Promotion
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/content-projects/{projectId}/batch-generate` | Batch generate for multiple units |
+| POST | `/api/v1/content-projects/{projectId}/generate-hooks` | Generate hooks for all episodes |
+| GET | `/api/v1/content-projects/{projectId}/hook-summary` | Hook summary with average scores |
+| GET | `/api/v1/content-projects/{projectId}/units/{unitId}/hooks` | Get hooks for a unit |
+| POST | `/api/v1/content-projects/{projectId}/capture-snapshots` | Capture continuity snapshots |
+| GET | `/api/v1/content-projects/{projectId}/continuity-conflicts` | Check continuity conflicts |
+| POST | `/api/v1/content-projects/{projectId}/adapt` | Create adaptation from source |
+| POST | `/api/v1/content-projects/{projectId}/promote` | Generate promotional materials |
+
+### M3: Worldbuilding
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/content-projects/{projectId}/world/characters` | Create character |
+| POST | `/api/v1/content-projects/{projectId}/world/characters/ai-generate` | AI generate character |
+| GET | `/api/v1/content-projects/{projectId}/world/characters` | List characters |
+| POST | `/api/v1/content-projects/{projectId}/world/tasks` | Create plot task |
+| POST | `/api/v1/content-projects/{projectId}/world/tasks/ai-generate` | AI generate tasks |
+| GET | `/api/v1/content-projects/{projectId}/world/tasks` | List tasks |
+| POST | `/api/v1/content-projects/{projectId}/world/volumes` | Create volume |
+| POST | `/api/v1/content-projects/{projectId}/world/volumes/ai-generate` | AI generate volumes |
+| GET | `/api/v1/content-projects/{projectId}/world/volumes` | List volumes |
+| POST | `/api/v1/content-projects/{projectId}/world/locations` | Create location |
+| POST | `/api/v1/content-projects/{projectId}/world/locations/ai-extract` | AI extract locations |
+| GET | `/api/v1/content-projects/{projectId}/world/locations` | List locations |
+| POST | `/api/v1/content-projects/{projectId}/world/timeline/ai-generate` | AI generate timeline |
+| GET | `/api/v1/content-projects/{projectId}/world/summary` | World summary counts |
+
+### M4: TVC
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/content-projects/{projectId}/tvc/brief` | Create TVC brief |
+| GET | `/api/v1/content-projects/{projectId}/tvc/brief` | Get TVC brief |
+| POST | `/api/v1/content-projects/{projectId}/tvc/facts/ai-extract` | AI extract brand facts |
+| GET | `/api/v1/content-projects/{projectId}/tvc/facts` | List brand facts |
+| POST | `/api/v1/content-projects/{projectId}/tvc/strategies/ai-generate` | AI generate creative strategies |
+| GET | `/api/v1/content-projects/{projectId}/tvc/strategies` | List strategies |
+| POST | `/api/v1/content-projects/{projectId}/tvc/scripts/generate` | Generate TVC script |
+| POST | `/api/v1/content-projects/{projectId}/tvc/scripts/multi-platform` | Multi-platform scripts |
+| GET | `/api/v1/content-projects/{projectId}/tvc/scripts` | List TVC scripts |
+
+### M5: Production Canvas
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/content-projects/{projectId}/production/import-to-canvas` | Import storyboard to canvas |
+| POST | `/api/v1/content-projects/{projectId}/production/batch-generate-images` | Batch generate images |
+| POST | `/api/v1/content-projects/{projectId}/production/quality-check` | Quality check |
+| POST | `/api/v1/content-projects/{projectId}/production/adopt-nodes` | Adopt canvas nodes |
+| POST | `/api/v1/content-projects/{projectId}/production/sync-diff` | Sync diff storyboard↔canvas |
+| POST | `/api/v1/content-projects/{projectId}/production/export-manifest` | Export manifest |
+
 ### Legacy
 | Method | Path | Description |
 |--------|------|-------------|
@@ -70,8 +143,10 @@
 | 43005 | ARTIFACT_LOCKED | 409 |
 | 43006 | DEPENDENCY_STALE | 409 |
 | 43007 | IDEMPOTENCY_CONFLICT | 409 |
+| 43008 | SCHEMA_VALIDATION_FAILED | 422 |
 
 ## Database Tables
+**M0 Foundation:**
 - `content_projects` — root project object
 - `project_members` — role-based access control
 - `project_parameter_versions` — immutable parameter history
@@ -81,9 +156,37 @@
 - `content_generation_jobs` — idempotent AI generation jobs
 - `outbox_events` — transaction-bound event persistence
 
+**M1 Storyboard + Upload:**
+- `cp_storyboard_masters` — A/B/C-tier storyboard masters
+- `cp_storyboard_scenes` — scenes within a master
+- `cp_storyboard_shots` — individual shots within a scene
+- `content_upload_files` — uploaded TXT/DOCX source files
+
+**M2 Hooks + Continuity:**
+- `content_unit_hooks` — per-unit 7-type hook analysis
+- `continuity_snapshots` — per-unit continuity state cache
+
+**M3 Long-form Worldbuilding:**
+- `character_profiles` — character deep profiles
+- `plot_tasks` — plot tasks with stage goals
+- `volume_outlines` — volume/chapter outlines
+- `world_locations` — L0/L1 location hierarchy
+- `story_timeline` — event timeline
+- `foreshadowing_items` — foreshadowing planting/payoff
+
+**M4 TVC:**
+- `tvc_briefs` — commercial briefs
+- `brand_facts` — brand/product fact extraction
+- `creative_strategies` — creative strategy angles
+- `tvc_scripts` — timecoded commercial scripts
+
+**Key Services:**
+- `AiResponseParser` — shared AI response parsing (extractText, parseJson with error logging, ellipsis, sha256)
+- `ProjectAccessService` — role-based project access control (VIEW/EDIT_CONTENT/REVIEW/MANAGE_MEMBERS/DELETE_PROJECT)
+- `SchemaValidationService` — JSON Schema validation with one repair retry
+
 ## Verification
 ```bash
-cd aicp-backend && mvn test          # 21 tests pass
-cd aicp-frontend && node --test tests/content-project-workflow.test.js  # 5 tests pass
+cd aicp-backend && mvn test          # 32 tests pass
 cd aicp-frontend && npm run build    # Production build succeeds
 ```
