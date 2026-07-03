@@ -8,6 +8,7 @@ import com.aicp.module.asset.dto.AssetWorkbenchViews.BatchResult;
 import com.aicp.module.asset.entity.*;
 import com.aicp.module.asset.mapper.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -98,11 +99,13 @@ public class AssetCommandService {
         if (!"TRASHED".equals(asset.getStatus())) {
             throw new BizException(ErrorCode.ASSET_LIFECYCLE_CONFLICT);
         }
-        asset.setStatus("ACTIVE");
-        asset.setDeletedAt(null);
-        asset.setDeletedBy(null);
-        asset.setPurgeAt(null);
-        assetMapper.updateById(asset);
+        LambdaUpdateWrapper<WorkspaceAsset> uw = new LambdaUpdateWrapper<>();
+        uw.eq(WorkspaceAsset::getId, asset.getId())
+          .set(WorkspaceAsset::getStatus, "ACTIVE")
+          .set(WorkspaceAsset::getDeletedAt, null)
+          .set(WorkspaceAsset::getDeletedBy, null)
+          .set(WorkspaceAsset::getPurgeAt, null);
+        assetMapper.update(null, uw);
         writeActivity(ctx, asset.getId(), "RESTORE", "TRASHED", "ACTIVE");
     }
 

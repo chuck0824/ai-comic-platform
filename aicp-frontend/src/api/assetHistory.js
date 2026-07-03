@@ -37,5 +37,11 @@ export const assetHistoryApi = {
   regenerate: (assetUuid, body) => request.post(`/assets/${assetUuid}/regenerate`, body),
 
   /** Publish asset to marketplace. */
-  publish: (assetUuid, body) => request.post(`/assets/${assetUuid}/publish`, body)
+  publish: (assetUuid, body) => request.post(`/assets/${assetUuid}/publish`, body),
+
+  /** Send asset to canvas project. */
+  placeOnCanvas: (assetUuid, body) =>
+    request.post(`/assets/${assetUuid}/send-to-canvas`, body, {
+      headers: { 'Idempotency-Key': body._idempotencyKey || crypto.randomUUID?.() || Date.now().toString(36) }
+    })
 }
