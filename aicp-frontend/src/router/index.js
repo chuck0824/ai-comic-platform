@@ -23,11 +23,11 @@ const routes = [
         path: 'dashboard',
         redirect: '/home'
       },
-      // === V7 剧本创作（主入口，直接加载V7组件） ===
+      // === 剧本创作启动台 ===
       {
         path: 'script-gen',
         name: 'ScriptGen',
-        component: () => import('@/views/content-project/ContentProjectList.vue'),
+        component: () => import('@/views/content-project/ScriptCreationHome.vue'),
         meta: { title: '剧本创作' }
       },
       {
@@ -55,12 +55,10 @@ const routes = [
         component: () => import('@/views/storyboard/StoryboardEditor.vue'),
         meta: { title: '分镜专业编辑器' }
       },
-      // === 旧版兼容（仅维护） ===
+      // === 旧版兼容 → 重定向到统一创作台 ===
       {
         path: 'script-gen-legacy',
-        name: 'ScriptGenLegacy',
-        component: () => import('@/views/ScriptGen.vue'),
-        meta: { title: '剧本创作（旧版）' }
+        redirect: '/script-gen'
       },
       {
         path: 'canvas-projects',
@@ -89,6 +87,12 @@ const routes = [
         meta: { title: '剧本仓库' }
       },
       {
+        path: 'warehouse/:projectId',
+        name: 'WarehouseProjectDetail',
+        component: () => import('@/views/content-project/ContentProjectDetail.vue'),
+        meta: { title: '剧本详情' }
+      },
+      {
         path: 'tag-editor/:scriptId',
         name: 'TagEditor',
         component: () => import('@/views/TagEditor.vue'),
@@ -99,6 +103,48 @@ const routes = [
         name: 'Market',
         component: () => import('@/views/Market.vue'),
         meta: { title: '交易市场' }
+      },
+      {
+        path: 'market/:listingId',
+        name: 'MarketDetail',
+        component: () => import('@/views/trade/ScriptMarketDetail.vue'),
+        meta: { title: '剧本详情' }
+      },
+      {
+        path: 'trade/orders',
+        name: 'MyOrders',
+        component: () => import('@/views/trade/MyPurchases.vue'),
+        meta: { title: '我的订单' }
+      },
+      {
+        path: 'trade/orders/:orderNo',
+        name: 'OrderDetail',
+        component: () => import('@/views/trade/MyPurchases.vue'),
+        meta: { title: '订单详情' }
+      },
+      {
+        path: 'trade/checkout/:listingId',
+        name: 'TradeCheckout',
+        component: () => import('@/views/trade/TradeCheckout.vue'),
+        meta: { title: '确认订单' }
+      },
+      {
+        path: 'wallet/topup',
+        name: 'WalletTopUp',
+        component: () => import('@/views/trade/WalletTopUp.vue'),
+        meta: { title: '充值' }
+      },
+      {
+        path: 'trade/seller',
+        name: 'SellerTradeCenter',
+        component: () => import('@/views/trade/SellerTradeCenter.vue'),
+        meta: { title: '卖家中心' }
+      },
+      {
+        path: 'trade/enterprise',
+        name: 'EnterprisePurchaseCenter',
+        component: () => import('@/views/trade/EnterprisePurchaseCenter.vue'),
+        meta: { title: '企业采购' }
       },
       {
         path: 'asset-market',
@@ -140,7 +186,7 @@ const routes = [
       {
         path: 'task-monitor',
         name: 'TaskMonitor',
-        component: () => import('@/views/generation/TaskMonitor.vue'),
+        redirect: '/asset-history?status=pending,running,failed',
         meta: { title: '任务监控' }
       }
     ]
