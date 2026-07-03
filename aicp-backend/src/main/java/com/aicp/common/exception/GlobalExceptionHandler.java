@@ -73,13 +73,25 @@ public class GlobalExceptionHandler {
                 default -> HttpStatus.CONFLICT; // 45003–45008, 45011 → 409
             };
         }
-        // 48xxx → asset market errors
+        // 46xxx → canvas / generation-task errors
+        if (code >= 46000 && code < 47000) {
+            return switch (code) {
+                case 46020 -> HttpStatus.NOT_FOUND;                // GENERATION_TASK_NOT_FOUND → 404
+                case 46021 -> HttpStatus.CONFLICT;                 // GENERATION_TASK_STATE_CONFLICT → 409
+                default -> HttpStatus.BAD_REQUEST;
+            };
+        }
+        // 48xxx → asset market / workbench errors
         if (code >= 48000 && code < 49000) {
             return switch (code) {
                 case 48001 -> HttpStatus.NOT_FOUND;               // ASSET_NOT_FOUND → 404
                 case 48002 -> HttpStatus.FORBIDDEN;               // ASSET_PERMISSION_DENIED → 403
-                case 48003, 48004, 48006 -> HttpStatus.CONFLICT;  // LISTING_UNAVAILABLE, VERSION_CONFLICT, PUBLISH_STATE_CONFLICT → 409
-                case 48005, 48007 -> HttpStatus.UNPROCESSABLE_ENTITY; // INCOMPATIBLE, TYPE_UNSUPPORTED → 422
+                case 48011 -> HttpStatus.GONE;                    // ASSET_PURGED → 410
+                case 48003, 48004, 48006, 48009, 48013, 46021 -> HttpStatus.CONFLICT;
+                case 48005, 48007, 48008, 48010, 48014 -> HttpStatus.UNPROCESSABLE_ENTITY;
+                case 48015 -> HttpStatus.SERVICE_UNAVAILABLE;     // DOWNLOAD_SIGN_FAILED → 503
+                case 48016 -> HttpStatus.CONFLICT;                // SETTLEMENT_FAILED → 409
+                case 48017 -> HttpStatus.INTERNAL_SERVER_ERROR;   // COMPENSATION_EXHAUSTED → 500
                 default -> HttpStatus.BAD_REQUEST;
             };
         }

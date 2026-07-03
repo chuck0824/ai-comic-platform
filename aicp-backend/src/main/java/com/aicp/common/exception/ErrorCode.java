@@ -47,6 +47,17 @@ public enum ErrorCode {
     ALREADY_PURCHASED(44004, "已购买过该剧本"),
     BALANCE_INSUFFICIENT(44005, "余额不足"),
     WITHDRAW_BELOW_MINIMUM(44006, "提现金额低于最低限额"),
+    LISTING_NOT_AVAILABLE(44007, "上架Listing不可用"),
+    ORDER_STATE_CONFLICT(44008, "订单状态冲突，当前状态不允许此操作"),
+    LICENSE_OPTION_NOT_AVAILABLE(44009, "授权方案不可用"),
+    EXCLUSIVE_LICENSE_RESERVED(44010, "独家/买断授权已被保留"),
+    EXCLUSIVE_LICENSE_SOLD(44011, "独家/买断授权已售出"),
+    PURCHASE_APPROVAL_REQUIRED(44012, "企业采购需要审批"),
+    WORKSPACE_WALLET_REQUIRED(44013, "企业订单必须使用企业钱包"),
+    PAYMENT_RESULT_UNKNOWN(44014, "支付结果未知，请稍后查询"),
+    DELIVERY_COMPENSATING(44015, "交付补偿中"),
+    REFUND_NOT_ALLOWED(44016, "当前状态不允许退款"),
+    INSUFFICIENT_BALANCE(44017, "余额不足"),
 
     // 内容项目 43xxx
     PROJECT_NOT_FOUND(43001, "项目不存在"),
@@ -92,7 +103,19 @@ public enum ErrorCode {
     ASSET_VERSION_CONFLICT(48004, "资产版本冲突，请刷新后重试"),
     ASSET_INCOMPATIBLE(48005, "资产与目标不兼容"),
     PUBLISH_STATE_CONFLICT(48006, "发布状态冲突，当前状态不允许此操作"),
-    ASSET_TYPE_UNSUPPORTED(48007, "不支持的资产类型");
+    ASSET_TYPE_UNSUPPORTED(48007, "不支持的资产类型"),
+    ASSET_FILE_MISSING(48008, "资产文件缺失"),
+    ASSET_LIFECYCLE_CONFLICT(48009, "资产生命周期状态冲突"),
+    ASSET_CATEGORY_INVALID(48010, "资产分类无效"),
+    ASSET_PURGED(48011, "资产已清理不可恢复"),
+    ASSET_BATCH_LIMIT(48012, "批量操作数量超限"),
+    ASSET_IDEMPOTENCY_CONFLICT(48013, "幂等键冲突"),
+    ASSET_CANVAS_TARGET_INVALID(48014, "目标画布无效"),
+    ASSET_DOWNLOAD_SIGN_FAILED(48015, "下载签名失败"),
+    ASSET_SETTLEMENT_FAILED(48016, "资产结算失败"),
+    ASSET_COMPENSATION_EXHAUSTED(48017, "资产补偿已耗尽"),
+    GENERATION_TASK_NOT_FOUND(46020, "生成任务不存在"),
+    GENERATION_TASK_STATE_CONFLICT(46021, "生成任务状态冲突");
 
     private final int code;
     private final String message;
