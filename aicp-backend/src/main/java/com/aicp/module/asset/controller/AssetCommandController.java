@@ -6,7 +6,9 @@ import com.aicp.common.exception.ErrorCode;
 import com.aicp.common.workspace.WorkspaceContext;
 import com.aicp.module.asset.dto.AssetWorkbenchRequests.*;
 import com.aicp.module.asset.dto.AssetWorkbenchViews.BatchResult;
+import com.aicp.module.asset.dto.AssetWorkbenchViews.CanvasPlacementView;
 import com.aicp.module.asset.service.AssetCommandService;
+import com.aicp.module.asset.service.CanvasPlacementService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.*;
 public class AssetCommandController {
 
     private final AssetCommandService commandService;
+    private final CanvasPlacementService placementService;
 
     @PatchMapping("/{assetUuid}")
     public ApiResponse<Void> edit(@PathVariable String assetUuid,
@@ -96,8 +99,20 @@ public class AssetCommandController {
             @Valid @RequestBody PublishAssetRequest body,
             HttpServletRequest request) {
         var ctx = requireContext(request);
-        // Deferred: full publication
+        // Deferred: full publication via AssetPublicationAdapter
         return ApiResponse.success();
+    }
+
+    @PostMapping("/{assetUuid}/send-to-canvas")
+    public ApiResponse<CanvasPlacementView> sendToCanvas(@PathVariable String assetUuid,
+            @Valid @RequestBody CanvasPlacementRequest body,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+            HttpServletRequest request) {
+        var ctx = requireContext(request);
+        if (idempotencyKey == null || idempotencyKey.isBlank()) {
+            idempotencyKey = java.util.UUID.randomUUID().toString();
+        }
+        return ApiResponse.success(placementService.place(ctx, assetUuid, body, idempotencyKey));
     }
 
     private WorkspaceContext requireContext(HttpServletRequest request) {
