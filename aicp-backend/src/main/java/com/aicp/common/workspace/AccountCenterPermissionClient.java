@@ -26,6 +26,9 @@ public class AccountCenterPermissionClient {
     @Value("${new-api.base-url:http://localhost:3001}")
     private String baseUrl;
 
+    @Value("${spring.profiles.active:dev}")
+    private String activeProfile;
+
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
@@ -46,6 +49,19 @@ public class AccountCenterPermissionClient {
      * @throws UpstreamUnavailableException if 3001 is unreachable or returns 5xx
      */
     public MembershipResponse membership(String workspaceId, String bearerToken) throws UpstreamUnavailableException {
+        // Dev mode: return a trusted mock membership without calling 3001
+        if ("dev".equals(activeProfile)) {
+            log.debug("Dev mode: returning mock membership for workspace={}", workspaceId);
+            String workspaceType = workspaceId.startsWith("enterprise_") || workspaceId.startsWith("ent_") ? "enterprise" : "personal";
+            long userId = extractUserIdFromWorkspace(workspaceId);
+            List<String> permissions = List.of(
+                    "can_generate_script", "can_purchase_script",
+                    "can_generate_video", "can_export_no_watermark",
+                    "can_manage_assets"
+            );
+            return new MembershipResponse(workspaceId, workspaceType, userId, permissions);
+        }
+
         String url = baseUrl + "/api/aicp/workspaces/" + workspaceId + "/membership";
 
         HttpHeaders headers = new HttpHeaders();
@@ -123,5 +139,21 @@ public class AccountCenterPermissionClient {
         public UpstreamUnavailableException(String message, Throwable cause) {
             super(message, cause);
         }
+    }
+
+    /**
+     * Extract user ID from workspace ID format (e.g., "personal_1" → 1).
+     */
+    private long extractUserIdFromWorkspace(String workspaceId) {
+        if (workspaceId == null) return 1L;
+        int underscoreIdx = workspaceId.lastIndexOf('_');
+        if (underscoreIdx >= 0 && underscoreIdx < workspaceId.length() - 1) {
+            try {
+                return Long.parseLong(workspaceId.substring(underscoreIdx + 1));
+            } catch (NumberFormatException e) {
+                // fall through
+            }
+        }
+        return 1L; // default fallback
     }
 }

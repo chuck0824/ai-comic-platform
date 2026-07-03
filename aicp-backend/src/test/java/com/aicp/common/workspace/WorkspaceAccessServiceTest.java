@@ -124,6 +124,46 @@ class WorkspaceAccessServiceTest {
     }
 
     @Nested
+    @DisplayName("Workspace ID 格式规范化")
+    class IdentityNormalization {
+
+        @Test
+        @DisplayName("personal_7 格式为个人 workspace")
+        void personalUnderscoreFormatResolvesPersonal() throws Exception {
+            when(client.membership(eq("personal_7"), anyString()))
+                    .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
+                            "personal_7", "personal", 7L, List.of("asset.view")));
+
+            WorkspaceContext ctx = service.resolve("personal_7", "Bearer token", 7L);
+            assertThat(ctx.workspaceType()).isEqualTo("personal");
+            assertThat(ctx.workspaceId()).isEqualTo("personal_7");
+        }
+
+        @Test
+        @DisplayName("enterprise_ 前缀为 enterprise workspace")
+        void enterpriseUnderscoreFormatResolvesEnterprise() throws Exception {
+            when(client.membership(eq("enterprise_42"), anyString()))
+                    .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
+                            "enterprise_42", "enterprise", 9L, List.of("asset.view")));
+
+            WorkspaceContext ctx = service.resolve("enterprise_42", "Bearer token", 9L);
+            assertThat(ctx.workspaceType()).isEqualTo("enterprise");
+        }
+
+        @Test
+        @DisplayName("ent_ 格式也识别为 enterprise")
+        void entPrefixFormatResolvesEnterprise() throws Exception {
+            when(client.membership(eq("ent_100"), anyString()))
+                    .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
+                            "ent_100", "enterprise", 10L, List.of("asset.view")));
+
+            WorkspaceContext ctx = service.resolve("ent_100", "Bearer token", 10L);
+            assertThat(ctx.workspaceType()).isEqualTo("enterprise");
+            assertThat(ctx.workspaceId()).isEqualTo("ent_100");
+        }
+    }
+
+    @Nested
     @DisplayName("账户中心不可用时 fail-closed")
     class UpstreamFailure {
 

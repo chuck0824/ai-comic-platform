@@ -32,6 +32,15 @@ import java.util.List;
  *   <li>{@code /api/v1/asset/market/listings/*\/favorite}</li>
  *   <li>{@code /api/v1/asset/publish-requests/**}</li>
  *   <li>{@code /api/v1/asset/applications/**}</li>
+ *   <li>{@code /api/v1/assets/**} — asset workbench (queries + commands)</li>
+ *   <li>{@code /api/v1/generation/tasks/**} — task cancel / retry / detail</li>
+ *   <li>{@code /api/v1/canvas/projects/**}</li>
+ *   <li>{@code /api/v1/trade/listings/**}</li>
+ *   <li>{@code /api/v1/trade/orders/**}</li>
+ *   <li>{@code /api/v1/trade/entitlements/**}</li>
+ *   <li>{@code /api/v1/trade/seller/**}</li>
+ *   <li>{@code /api/v1/trade/purchase-requests/**}</li>
+ *   <li>{@code /api/v1/trade/refund-requests/**}</li>
  * </ul>
  *
  * Public market read endpoints ({@code GET /api/v1/asset/market/listings/**})
@@ -54,7 +63,16 @@ public class WorkspaceContextFilter extends OncePerRequestFilter {
             new PathPattern("/api/v1/asset/market/listings/*/favorite", true),
             new PathPattern("/api/v1/asset/publish-requests/**", true),
             new PathPattern("/api/v1/asset/applications/**", true),
-            new PathPattern("/api/v1/canvas/projects/**", true)
+            // ── Asset workbench ──
+            new PathPattern("/api/v1/assets/**", true),
+            new PathPattern("/api/v1/generation/tasks/**", true),
+            new PathPattern("/api/v1/canvas/projects/**", true),
+            new PathPattern("/api/v1/trade/listings/**", true),
+            new PathPattern("/api/v1/trade/orders/**", true),
+            new PathPattern("/api/v1/trade/entitlements/**", true),
+            new PathPattern("/api/v1/trade/seller/**", true),
+            new PathPattern("/api/v1/trade/purchase-requests/**", true),
+            new PathPattern("/api/v1/trade/refund-requests/**", true)
     );
 
     @Override
