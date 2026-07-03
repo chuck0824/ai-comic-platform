@@ -11,10 +11,24 @@ public class AssetVersion {
     private Long id;
     private Long assetId;
     private Integer versionNumber;
+
+    // ── Workbench extension ──
+    private Long sourceTaskId;
+    private String storageProvider;
+    private String storageBucket;
+    private String storageKey;
+    private String mimeType;
+    private Long fileSize;
+    private Integer width;
+    private Integer height;
+    private Integer durationMs;
+
     private String metadata;    // JSON: structured asset data
     private String previewUrl;
     private String contentRef;
     private String checksum;
+    private String generationSnapshot;  // JSON: provider/model/prompt snapshot
+
     private Long createdBy;
 
     @TableField(fill = FieldFill.INSERT)

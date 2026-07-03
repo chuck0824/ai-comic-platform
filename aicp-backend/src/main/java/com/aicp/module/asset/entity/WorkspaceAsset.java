@@ -22,8 +22,21 @@ public class WorkspaceAsset {
     private Long sourceListingId;
     private Long sourceVersionId;
     private Long currentVersionId;
-    private String status;       // ACTIVE / ARCHIVED
 
+    // ── Workbench extension ──
+    private Long contentProjectId;
+    private Long sourceCanvasProjectId;
+    private Long sourceNodeId;
+    private Long sourceTaskId;
+    private String mediaType;    // IMAGE / VIDEO / AUDIO / DATA / OTHER
+    private String status;       // ACTIVE / ARCHIVED / TRASHED
+    private LocalDateTime deletedAt;
+    private Long deletedBy;
+    private LocalDateTime purgeAt;
+    private String purgeBlockedReason;
+    private Long legacyPlatformAssetId;
+
+    @Version
     private Integer rowVersion;
 
     @TableField(fill = FieldFill.INSERT)

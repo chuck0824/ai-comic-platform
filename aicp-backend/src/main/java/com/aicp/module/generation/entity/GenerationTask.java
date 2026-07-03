@@ -24,6 +24,16 @@ public class GenerationTask {
     private String errorCode;
     private String errorMessage;
     private String outputAssets;
+
+    // ── Workbench extension ──
+    private String workspaceId;
+    private Long createdBy;
+    private Long contentProjectId;
+    private String assetType;
+    private Long retryOfTaskId;
+    private String idempotencyKey;
+    private String requestId;
+
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;
     @TableField(fill = FieldFill.INSERT)

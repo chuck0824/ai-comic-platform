@@ -125,7 +125,15 @@ CREATE TABLE IF NOT EXISTS generation_tasks (
     type VARCHAR(30), sub_type VARCHAR(30), provider VARCHAR(50), model_id VARCHAR(100),
     parameters VARCHAR(8000), status VARCHAR(20) DEFAULT 'pending', progress INT DEFAULT 0,
     credit_cost INT DEFAULT 0, error_code VARCHAR(50), error_message VARCHAR(2000),
-    output_assets VARCHAR(4000), started_at TIMESTAMP, completed_at TIMESTAMP,
+    output_assets VARCHAR(4000),
+    workspace_id VARCHAR(64) NOT NULL DEFAULT 'personal_1',
+    created_by BIGINT NOT NULL DEFAULT 0,
+    content_project_id BIGINT,
+    asset_type VARCHAR(32) NOT NULL DEFAULT 'OTHER',
+    retry_of_task_id BIGINT,
+    idempotency_key VARCHAR(64),
+    request_id VARCHAR(64),
+    started_at TIMESTAMP, completed_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -140,8 +148,15 @@ CREATE TABLE IF NOT EXISTS generation_variants (
 CREATE TABLE IF NOT EXISTS platform_assets (
     id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36) NOT NULL UNIQUE,
     project_id BIGINT, source_node_id BIGINT, source_task_id BIGINT,
-    type VARCHAR(30), name VARCHAR(200), prompt VARCHAR(4000), model_id VARCHAR(100),
-    owner_user_id BIGINT, maturity_level VARCHAR(10) DEFAULT 'L0',
+    type VARCHAR(30), name VARCHAR(200),
+    file_url VARCHAR(500), thumbnail_url VARCHAR(500),
+    prompt VARCHAR(4000), model_id VARCHAR(100), parameters VARCHAR(4000),
+    file_size BIGINT DEFAULT 0, duration_ms INT,
+    width INT, height INT, metadata VARCHAR(4000), tags VARCHAR(2000),
+    favorite TINYINT DEFAULT 0,
+    owner_user_id BIGINT, enterprise_id BIGINT,
+    visibility VARCHAR(20) DEFAULT 'private',
+    maturity_level VARCHAR(10) DEFAULT 'L0',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -182,22 +197,178 @@ CREATE TABLE IF NOT EXISTS skills (
 
 CREATE TABLE IF NOT EXISTS agent_sessions (
     id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36) NOT NULL UNIQUE,
-    user_id BIGINT NOT NULL, skill_id BIGINT, title VARCHAR(200),
+    user_id BIGINT NOT NULL, skill_id BIGINT, project_id BIGINT,
+    title VARCHAR(200), agent_config VARCHAR(4000),
     status VARCHAR(20) DEFAULT 'active',
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    estimated_seconds INT, total_credit_cost INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    completed_at TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS agent_messages (
     id BIGINT AUTO_INCREMENT PRIMARY KEY, session_id BIGINT NOT NULL,
-    role VARCHAR(20), content VARCHAR(16000), created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    role VARCHAR(20), content VARCHAR(16000),
+    tool_calls VARCHAR(4000), tool_results VARCHAR(4000),
+    confidence DECIMAL(3,2), tokens_used INT DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS orders (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36) NOT NULL UNIQUE,
-    buyer_id BIGINT NOT NULL, seller_id BIGINT NOT NULL, script_id BIGINT,
-    amount DECIMAL(10,2), status VARCHAR(20) DEFAULT 'pending',
+-- ============================================================
+-- Script Trading Market (V6 — unified trade domain)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS script_listings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL, seller_user_id BIGINT NOT NULL,
+    script_id BIGINT NOT NULL, script_version_id BIGINT NOT NULL,
+    title VARCHAR(200) NOT NULL, synopsis VARCHAR(5000),
+    cover_url VARCHAR(500), tags_json VARCHAR(2000) DEFAULT '[]',
+    characters_json TEXT, episode_count INT DEFAULT 0,
+    author_display_name VARCHAR(100),
+    preview_episode_count INT NOT NULL DEFAULT 1, preview_episodes_json TEXT,
+    review_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT', review_reason VARCHAR(2000),
+    reviewed_by BIGINT, reviewed_at TIMESTAMP NULL,
+    listing_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    exclusive_license_type VARCHAR(10) NULL,
+    historical_normal_count INT NOT NULL DEFAULT 0,
+    reserved_order_no VARCHAR(32) NULL, reservation_expires_at TIMESTAMP NULL,
+    row_version INT NOT NULL DEFAULT 0,
+    listed_at TIMESTAMP NULL, delisted_at TIMESTAMP NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX IF NOT EXISTS idx_listings_status ON script_listings(listing_status);
+CREATE INDEX IF NOT EXISTS idx_listings_workspace ON script_listings(workspace_id);
+
+CREATE TABLE IF NOT EXISTS listing_license_options (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    listing_id BIGINT NOT NULL, license_type VARCHAR(10) NOT NULL,
+    price_cents BIGINT NOT NULL DEFAULT 0, currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    term_json TEXT, agreement_text TEXT,
+    agreement_version VARCHAR(20), agreement_hash VARCHAR(64),
+    enabled TINYINT NOT NULL DEFAULT 1, row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_license_listing_type UNIQUE (listing_id, license_type)
+);
+
+CREATE TABLE IF NOT EXISTS trade_orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL, status VARCHAR(24) NOT NULL DEFAULT 'PENDING_PAYMENT',
+    buyer_user_id BIGINT NOT NULL, buyer_workspace_id VARCHAR(64) NOT NULL,
+    buyer_workspace_type VARCHAR(16) NOT NULL DEFAULT 'PERSONAL',
+    seller_user_id BIGINT NOT NULL, seller_workspace_id VARCHAR(64) NOT NULL,
+    total_amount_cents BIGINT NOT NULL DEFAULT 0,
+    platform_fee_cents BIGINT NOT NULL DEFAULT 0,
+    seller_income_cents BIGINT NOT NULL DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    wallet_transfer_no VARCHAR(64) NULL, wallet_status VARCHAR(20) NULL,
+    create_idempotency_key VARCHAR(128) NOT NULL,
+    expires_at TIMESTAMP NULL, paid_at TIMESTAMP NULL,
+    fulfilled_at TIMESTAMP NULL, completed_at TIMESTAMP NULL,
+    refunded_at TIMESTAMP NULL,
+    row_version INT NOT NULL DEFAULT 0, failure_reason VARCHAR(2000),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_trade_order_no UNIQUE (order_no),
+    CONSTRAINT uk_trade_order_idempotent UNIQUE (buyer_workspace_id, create_idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_trade_orders_buyer ON trade_orders(buyer_user_id, buyer_workspace_id);
+CREATE INDEX IF NOT EXISTS idx_trade_orders_seller ON trade_orders(seller_user_id);
+CREATE INDEX IF NOT EXISTS idx_trade_orders_status ON trade_orders(status);
+
+CREATE TABLE IF NOT EXISTS trade_order_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL, listing_id BIGINT NOT NULL,
+    script_id BIGINT NOT NULL, script_version_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL, price_cents BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    title_snapshot VARCHAR(200), author_snapshot VARCHAR(100),
+    tags_snapshot VARCHAR(2000),
+    agreement_text TEXT, agreement_version VARCHAR(20), agreement_hash VARCHAR(64),
+    historical_normal_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_order_item UNIQUE (order_id)
+);
+
+CREATE TABLE IF NOT EXISTS script_entitlements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL, beneficiary_workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL, script_version_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL, status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    effective_from TIMESTAMP DEFAULT CURRENT_TIMESTAMP, effective_until TIMESTAMP NULL,
+    max_accounts INT NULL, allow_commercial TINYINT NOT NULL DEFAULT 0,
+    allow_adaptation TINYINT NOT NULL DEFAULT 0,
+    allow_sublicense TINYINT NOT NULL DEFAULT 0,
+    territory_restriction VARCHAR(200),
+    revoked_at TIMESTAMP NULL, revoke_reason VARCHAR(2000),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_entitlement_order_item UNIQUE (order_item_id)
+);
+
+CREATE TABLE IF NOT EXISTS purchased_script_copies (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL, workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL, source_version_id BIGINT NOT NULL,
+    content_json TEXT, title VARCHAR(200),
+    created_by_user_id BIGINT NOT NULL,
+    source_listing_id BIGINT, source_author_name VARCHAR(100),
+    status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_copy_order_item UNIQUE (order_item_id)
+);
+
+CREATE TABLE IF NOT EXISTS purchase_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL, requester_user_id BIGINT NOT NULL,
+    listing_id BIGINT NOT NULL, license_type VARCHAR(10) NOT NULL,
+    amount_cents BIGINT NOT NULL, currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    reason VARCHAR(2000),
+    approver_user_id BIGINT NULL, approval_comment VARCHAR(2000),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING_APPROVAL',
+    order_no VARCHAR(32) NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_pr_workspace_status ON purchase_requests(workspace_id, status);
+
+CREATE TABLE IF NOT EXISTS refund_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL, requester_user_id BIGINT NOT NULL,
+    reason_code VARCHAR(30), reason_text VARCHAR(2000), evidence_json TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'REQUESTED',
+    reviewer_user_id BIGINT NULL, review_comment VARCHAR(2000), reviewed_at TIMESTAMP NULL,
+    refund_amount_cents BIGINT, wallet_reversal_no VARCHAR(64),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_rf_order ON refund_requests(order_no);
+CREATE INDEX IF NOT EXISTS idx_rf_status ON refund_requests(status);
+
+CREATE TABLE IF NOT EXISTS trade_outbox_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    aggregate_type VARCHAR(50) NOT NULL, aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(50) NOT NULL, payload TEXT,
+    idempotency_key VARCHAR(128) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    retry_count INT NOT NULL DEFAULT 0, max_retries INT NOT NULL DEFAULT 10,
+    next_retry_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_error VARCHAR(2000),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_outbox_idempotent UNIQUE (aggregate_type, aggregate_id, event_type, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_outbox_dispatch ON trade_outbox_events(status, next_retry_at);
+
+CREATE TABLE IF NOT EXISTS trade_audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id BIGINT, workspace_id VARCHAR(64),
+    action VARCHAR(50) NOT NULL, target_type VARCHAR(50) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    before_summary VARCHAR(2000), after_summary VARCHAR(2000),
+    correlation_id VARCHAR(64), client_ip VARCHAR(45),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_audit_target ON trade_audit_logs(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_audit_actor ON trade_audit_logs(actor_user_id, created_at);
 
 -- ============================================================
 -- AI 资产市场 统一模型 (V2 — 替换旧 market_assets)
@@ -209,7 +380,7 @@ CREATE TABLE IF NOT EXISTS workspace_assets (
     workspace_id VARCHAR(64) NOT NULL,
     workspace_type VARCHAR(16) NOT NULL,
     creator_user_id BIGINT NOT NULL,
-    asset_type VARCHAR(20) NOT NULL,
+    asset_type VARCHAR(32) NOT NULL,
     name VARCHAR(200) NOT NULL,
     description VARCHAR(2000),
     tags VARCHAR(1000) DEFAULT '[]',
@@ -218,7 +389,17 @@ CREATE TABLE IF NOT EXISTS workspace_assets (
     source_listing_id BIGINT,
     source_version_id BIGINT,
     current_version_id BIGINT,
+    content_project_id BIGINT,
+    source_canvas_project_id BIGINT,
+    source_node_id BIGINT,
+    source_task_id BIGINT,
+    media_type VARCHAR(16) NOT NULL DEFAULT 'OTHER',
     status VARCHAR(16) NOT NULL DEFAULT 'ACTIVE',
+    deleted_at TIMESTAMP NULL,
+    deleted_by BIGINT,
+    purge_at TIMESTAMP NULL,
+    purge_blocked_reason VARCHAR(64),
+    legacy_platform_asset_id BIGINT,
     row_version INT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -230,10 +411,20 @@ CREATE TABLE IF NOT EXISTS asset_versions (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     asset_id BIGINT NOT NULL,
     version_number INT NOT NULL DEFAULT 1,
+    source_task_id BIGINT,
+    storage_provider VARCHAR(24),
+    storage_bucket VARCHAR(128),
+    storage_key VARCHAR(768),
+    mime_type VARCHAR(128),
+    file_size BIGINT DEFAULT 0,
+    width INT,
+    height INT,
+    duration_ms INT,
     metadata VARCHAR(4000),
     preview_url VARCHAR(500),
     content_ref VARCHAR(500),
     checksum VARCHAR(128),
+    generation_snapshot VARCHAR(4000),
     created_by BIGINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -307,6 +498,72 @@ CREATE TABLE IF NOT EXISTS asset_applications (
     status VARCHAR(16) NOT NULL DEFAULT 'APPLIED',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_application_workspace_key UNIQUE (workspace_id, idempotency_key)
+);
+
+-- ── Asset workbench tables ──────────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS workspace_asset_favorites (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    workspace_id VARCHAR(64) NOT NULL,
+    asset_id BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_waf_user_workspace_asset UNIQUE (user_id, workspace_id, asset_id)
+);
+
+CREATE TABLE IF NOT EXISTS asset_activity_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    asset_id BIGINT NOT NULL,
+    actor_user_id BIGINT NOT NULL,
+    action VARCHAR(50) NOT NULL,
+    before_data VARCHAR(2000),
+    after_data VARCHAR(2000),
+    request_id VARCHAR(64),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS canvas_asset_placements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    asset_id BIGINT NOT NULL,
+    asset_version_id BIGINT NOT NULL,
+    canvas_project_id BIGINT NOT NULL,
+    node_id BIGINT NOT NULL,
+    placed_by BIGINT NOT NULL,
+    idempotency_key VARCHAR(64) NOT NULL,
+    released_at TIMESTAMP NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_cap_workspace_idem_key UNIQUE (workspace_id, idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS asset_command_idempotencies (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    user_id BIGINT NOT NULL,
+    idempotency_key VARCHAR(64) NOT NULL,
+    command_type VARCHAR(32) NOT NULL,
+    request_hash VARCHAR(128) NOT NULL,
+    response_code INT,
+    response_body VARCHAR(4000),
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_aci_workspace_user_key UNIQUE (workspace_id, user_id, idempotency_key)
+);
+
+CREATE TABLE IF NOT EXISTS generation_settlement_outbox (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT NOT NULL,
+    workspace_id VARCHAR(64) NOT NULL,
+    stage VARCHAR(32) NOT NULL,
+    payload VARCHAR(4000),
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    retry_count INT NOT NULL DEFAULT 0,
+    next_retry_at TIMESTAMP,
+    last_error VARCHAR(2000),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_gso_task_stage UNIQUE (task_id, stage)
 );
 
 CREATE TABLE IF NOT EXISTS sop_audits (
@@ -388,6 +645,84 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
     amount INT NOT NULL, type VARCHAR(30), description VARCHAR(500),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ============================================================
+-- P0 创作圣经基础表
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS creative_bible_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    source_version_id BIGINT NULL,
+    summary VARCHAR(500) NULL,
+    snapshot_json JSON NOT NULL,
+    snapshot_hash VARCHAR(64) NULL,
+    confirmed_by BIGINT NULL,
+    confirmed_at TIMESTAMP NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_cbv_project_version UNIQUE (project_id, version_no)
+);
+
+CREATE TABLE IF NOT EXISTS ecosystem_rules (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    bible_version_id BIGINT NOT NULL,
+    rule_type VARCHAR(40) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    summary TEXT NULL,
+    details_json JSON NULL,
+    scope_json JSON NULL,
+    exceptions_json JSON NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    source_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+    evidence_json JSON NULL,
+    revision INT NOT NULL DEFAULT 0,
+    created_by BIGINT NOT NULL,
+    updated_by BIGINT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_eco_project_bible ON ecosystem_rules(project_id, bible_version_id);
+
+CREATE TABLE IF NOT EXISTS project_writing_guides (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    bible_version_id BIGINT NOT NULL,
+    scope_type VARCHAR(20) NOT NULL,
+    scope_id BIGINT NOT NULL DEFAULT 0,
+    version_no INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    guide_json JSON NOT NULL,
+    parent_guide_id BIGINT NULL,
+    source_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+    confirmed_by BIGINT NULL,
+    confirmed_at TIMESTAMP NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_pwg_scope_version UNIQUE
+        (project_id, bible_version_id, scope_type, scope_id, version_no)
+);
+CREATE INDEX IF NOT EXISTS idx_pwg_project_scope ON project_writing_guides(project_id, scope_type, scope_id);
+
+CREATE TABLE IF NOT EXISTS generation_context_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    generation_job_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    bible_version_id BIGINT NOT NULL,
+    project_guide_id BIGINT NULL,
+    character_guide_ids_json JSON NULL,
+    unit_guide_id BIGINT NULL,
+    selected_versions_json JSON NOT NULL,
+    resolved_guide_json JSON NOT NULL,
+    payload_json JSON NOT NULL,
+    payload_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_gcs_job UNIQUE (generation_job_id)
+);
+CREATE INDEX IF NOT EXISTS idx_gcs_project ON generation_context_snapshots(project_id);
 
 -- === DEV 测试数据 (每次重启自动创建) ===
 -- 账号: admin  密码: admin123
@@ -488,6 +823,8 @@ CREATE TABLE IF NOT EXISTS content_projects (
     legacy_script_id BIGINT,
     converted_from_project_id BIGINT,
     copied_from_project_id BIGINT,
+    lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'active',
+    adopted_version_id BIGINT,
     revision INT NOT NULL DEFAULT 0,
     is_deleted TINYINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -602,6 +939,8 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 
 CREATE INDEX IF NOT EXISTS idx_cp_tenant_updated ON content_projects(tenant_type, tenant_id, updated_at);
 CREATE INDEX IF NOT EXISTS idx_cp_owner_updated ON content_projects(owner_user_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_cp_owner_lifecycle_updated ON content_projects(owner_user_id, lifecycle_status, updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_cp_legacy_script ON content_projects(legacy_script_id);
 CREATE INDEX IF NOT EXISTS idx_pm_user_project ON project_members(user_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_cu_project_display ON content_units(project_id, display_no);
 CREATE INDEX IF NOT EXISTS idx_cv_project_created ON content_versions(project_id, created_at);
@@ -1502,3 +1841,1046 @@ UPDATE workspace_assets SET current_version_id = (SELECT id FROM asset_versions 
 INSERT INTO market_listings (publisher_workspace_id, publisher_user_id, source_asset_id, source_version_id, asset_type, public_snapshot, license_type, status, use_count, rating, row_version)
 SELECT 'platform_seed', 1, 10, (SELECT id FROM asset_versions WHERE asset_id = 10 AND version_number = 1), 'PROMPT', '{"name":"日系校园氛围提示词模板","description":"日系校园氛围场景提示词模板","tags":["提示词","日系","氛围"],"previews":[],"author_name":"二次元画师"}', 'FREE', 'LISTED', 200, 4.4, 0
 WHERE NOT EXISTS (SELECT 1 FROM market_listings WHERE source_asset_id = 10);
+
+-- ============================================================
+-- 综合演示种子数据 (Comprehensive Demo Seed Data)
+-- 覆盖除画布工作台外的所有模块，支持完整功能演示
+-- 所有 INSERT 使用 WHERE NOT EXISTS 保证幂等
+-- ============================================================
+
+-- ============================================================
+-- A. 更多测试用户
+-- ============================================================
+INSERT INTO users (uuid, nickname, phone, password_hash, account_type, member_level, real_name_status, status)
+SELECT 'dev-user-002', '编剧小李', '13800000002', '$2a$04$YaRTTXEk1gK50gdoa8ZHKuwmTUu8REzBDEkrygu4HRWVz0LH.8agS', 'free_user', 'creator', 'verified', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE uuid = 'dev-user-002');
+
+INSERT INTO users (uuid, nickname, phone, password_hash, account_type, member_level, real_name_status, status)
+SELECT 'dev-user-003', '导演小王', '13800000003', '$2a$04$YaRTTXEk1gK50gdoa8ZHKuwmTUu8REzBDEkrygu4HRWVz0LH.8agS', 'free_user', 'creator', 'verified', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE uuid = 'dev-user-003');
+
+INSERT INTO users (uuid, nickname, phone, password_hash, account_type, member_level, real_name_status, status)
+SELECT 'dev-user-004', '张总', '13800000004', '$2a$04$YaRTTXEk1gK50gdoa8ZHKuwmTUu8REzBDEkrygu4HRWVz0LH.8agS', 'free_user', 'enterprise', 'verified', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE uuid = 'dev-user-004');
+
+INSERT INTO users (uuid, nickname, phone, password_hash, account_type, member_level, real_name_status, status)
+SELECT 'dev-user-005', '漫迷小赵', '13800000005', '$2a$04$YaRTTXEk1gK50gdoa8ZHKuwmTUu8REzBDEkrygu4HRWVz0LH.8agS', 'free_user', 'free', 'unverified', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE uuid = 'dev-user-005');
+
+-- ============================================================
+-- 补充表定义: 企业、脚本上架、采购申请 (schema-h2未包含)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS enterprises (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    owner_user_id BIGINT NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    license_number VARCHAR(100),
+    license_image_url VARCHAR(500),
+    contact_name VARCHAR(100),
+    contact_phone VARCHAR(20),
+    verify_status VARCHAR(20) DEFAULT 'unverified',
+    member_limit INT DEFAULT 10,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS enterprise_members (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    enterprise_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    role VARCHAR(50) DEFAULT 'writer',
+    permissions VARCHAR(4000),
+    department VARCHAR(100),
+    purchase_budget_monthly DECIMAL(10,2) DEFAULT 0,
+    purchase_budget_single DECIMAL(10,2) DEFAULT 0,
+    status VARCHAR(20) DEFAULT 'pending',
+    joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_ent_user UNIQUE (enterprise_id, user_id)
+);
+
+CREATE TABLE IF NOT EXISTS enterprise_purchase_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    enterprise_id BIGINT NOT NULL,
+    requester_user_id BIGINT NOT NULL,
+    script_id BIGINT NOT NULL,
+    license_type VARCHAR(20) NOT NULL,
+    amount DECIMAL(10,2) NOT NULL,
+    reason VARCHAR(500),
+    budget_remaining DECIMAL(10,2),
+    status VARCHAR(20) DEFAULT 'pending',
+    approver_user_id BIGINT,
+    approval_note VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS script_listings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    script_id BIGINT NOT NULL,
+    seller_id BIGINT NOT NULL,
+    license_types VARCHAR(1000),
+    status VARCHAR(20) DEFAULT 'active',
+    listed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    delisted_at TIMESTAMP,
+    CONSTRAINT uk_listing_script UNIQUE (script_id)
+);
+
+-- ============================================================
+-- B. 企业数据
+-- ============================================================
+INSERT INTO enterprises (owner_user_id, name, license_number, verify_status, member_limit)
+SELECT 4, '星辰动漫工作室', 'SC20260601001', 'verified', 20
+WHERE NOT EXISTS (SELECT 1 FROM enterprises WHERE name = '星辰动漫工作室');
+
+INSERT INTO enterprises (owner_user_id, name, license_number, verify_status, member_limit)
+SELECT 4, '梦想影视有限公司', 'SC20260602002', 'verified', 50
+WHERE NOT EXISTS (SELECT 1 FROM enterprises WHERE name = '梦想影视有限公司');
+
+-- 企业成员
+INSERT INTO enterprise_members (enterprise_id, user_id, role, department, purchase_budget_monthly, purchase_budget_single, status)
+SELECT 1, 4, 'admin', '管理层', 10000.00, 2000.00, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM enterprise_members WHERE enterprise_id = 1 AND user_id = 4);
+
+INSERT INTO enterprise_members (enterprise_id, user_id, role, department, purchase_budget_monthly, purchase_budget_single, status)
+SELECT 1, 2, 'writer', '编剧组', 5000.00, 1000.00, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM enterprise_members WHERE enterprise_id = 1 AND user_id = 2);
+
+INSERT INTO enterprise_members (enterprise_id, user_id, role, department, purchase_budget_monthly, purchase_budget_single, status)
+SELECT 1, 3, 'artist', '美术组', 3000.00, 500.00, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM enterprise_members WHERE enterprise_id = 1 AND user_id = 3);
+
+INSERT INTO enterprise_members (enterprise_id, user_id, role, department, purchase_budget_monthly, purchase_budget_single, status)
+SELECT 2, 4, 'admin', '管理层', 20000.00, 5000.00, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM enterprise_members WHERE enterprise_id = 2 AND user_id = 4);
+
+-- ============================================================
+-- C. 旧版剧本数据 (脚本仓库/交易市场使用)
+-- ============================================================
+INSERT INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+SELECT 'scr-demo-001', 'PROJ_DEMO_001', '暗夜追光者', 1, 1, 'personal', 60, 60, 95000, '前刑警队长林深为追查妹妹失踪真相，卧底进入神秘组织"暗夜"。在正义与黑暗的边缘，他发现了一个惊天秘密…', '悬疑', '["卧底","复仇","悬疑"]', '["紧张","反转","暗黑"]', '现代', 'ai_generated', 'listed', 'v2.0', 'L2', 4.7, 128, 45
+WHERE NOT EXISTS (SELECT 1 FROM scripts WHERE uuid = 'scr-demo-001');
+
+INSERT INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+SELECT 'scr-demo-002', 'PROJ_DEMO_002', '星海迷航', 2, 2, 'personal', 80, 45, 72000, '公元2250年，人类星际移民船团在深空遭遇未知文明。年轻的领航员苏瑾被迫在人类存亡与外星文明之间做出抉择…', '科幻', '["星际","文明冲突","冒险"]', '["宏大","紧张","感人"]', '未来', 'ai_generated', 'listed', 'v1.5', 'L1', 4.4, 89, 32
+WHERE NOT EXISTS (SELECT 1 FROM scripts WHERE uuid = 'scr-demo-002');
+
+INSERT INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+SELECT 'scr-demo-003', 'PROJ_DEMO_003', '长安十二时辰之幻术师', 1, 1, 'personal', 40, 40, 68000, '盛唐长安，天才幻术师白鹤在朱雀大街摆摊卖艺，却卷入了一场涉及皇室秘宝的惊天阴谋。真幻交织，谁才是幕后黑手？', '奇幻', '["古装","探案","玄幻"]', '["奇幻","紧张","史诗"]', '古代', 'ai_generated', 'listed', 'v1.0', 'L1', 4.9, 256, 98
+WHERE NOT EXISTS (SELECT 1 FROM scripts WHERE uuid = 'scr-demo-003');
+
+INSERT INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+SELECT 'scr-demo-004', 'PROJ_DEMO_004', '校园奇妙物语', 3, 3, 'personal', 24, 24, 35000, '平凡高中生在校园角落发现一扇通往"里世界"的门，与同伴们一起在表里世界之间守护日常的奇妙冒险。', '奇幻', '["校园","冒险","青春"]', '["轻松","治愈","搞笑"]', '现代', 'ai_generated', 'draft', 'v0.5', 'L0', 3.8, 15, 0
+WHERE NOT EXISTS (SELECT 1 FROM scripts WHERE uuid = 'scr-demo-004');
+
+INSERT INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+SELECT 'scr-demo-005', 'PROJ_DEMO_005', '锦绣未央之医女倾城', 1, 1, 'personal', 52, 30, 58000, '现代女医生穿越古代成为落魄医女，凭借精湛医术与智慧在乱世中立足，收获爱情与事业的双重逆袭。', '言情', '["穿越","医术","逆袭"]', '["甜宠","励志","虐心"]', '古代', 'ai_generated', 'pending_review', 'v0.8', 'L1', 4.2, 42, 12
+WHERE NOT EXISTS (SELECT 1 FROM scripts WHERE uuid = 'scr-demo-005');
+
+-- 剧本分集 (为暗夜追光者添加前5集)
+INSERT INTO script_episodes (script_id, episode_number, title, content, word_count, status)
+SELECT 1, 1, '消失的妹妹', '林深站在废弃码头的集装箱前，手电筒的光束扫过斑驳的铁皮。三天前，妹妹林小雨在这里最后一次出现在监控画面中……', 3200, 'completed'
+WHERE NOT EXISTS (SELECT 1 FROM script_episodes WHERE script_id = 1 AND episode_number = 1);
+
+INSERT INTO script_episodes (script_id, episode_number, title, content, word_count, status)
+SELECT 1, 2, '暗夜初现', '「暗夜不是你想的那样。」神秘人留下这句话后消失在夜色中。林深握紧拳头，他决定深入虎穴，以卧底身份潜入这个组织……', 3100, 'completed'
+WHERE NOT EXISTS (SELECT 1 FROM script_episodes WHERE script_id = 1 AND episode_number = 2);
+
+INSERT INTO script_episodes (script_id, episode_number, title, content, word_count, status)
+SELECT 1, 3, '卧底试炼', '加入暗夜的仪式比想象中复杂。林深必须在72小时内完成三项不可能的任务，证明自己的「价值」……', 2900, 'completed'
+WHERE NOT EXISTS (SELECT 1 FROM script_episodes WHERE script_id = 1 AND episode_number = 3);
+
+INSERT INTO script_episodes (script_id, episode_number, title, content, word_count, status)
+SELECT 1, 4, '第一层真相', '暗夜的内部档案室，林深颤抖着翻开了那本标着「林小雨」的卷宗。里面的内容让他几乎窒息……', 3050, 'completed'
+WHERE NOT EXISTS (SELECT 1 FROM script_episodes WHERE script_id = 1 AND episode_number = 4);
+
+INSERT INTO script_episodes (script_id, episode_number, title, content, word_count, status)
+SELECT 1, 5, '背叛还是救赎', '林深被迫在自己的原则和妹妹的生命之间做出选择。暗夜的领导者「夜王」终于现身，却带来了一个意想不到的提议……', 3300, 'completed'
+WHERE NOT EXISTS (SELECT 1 FROM script_episodes WHERE script_id = 1 AND episode_number = 5);
+
+-- 剧本版本
+INSERT INTO script_versions (script_id, version, content, change_summary, created_by)
+SELECT 1, 'v1.0', '{"version":"v1.0","chapters":60}', '初始版本：完成全部60集剧本', 2
+WHERE NOT EXISTS (SELECT 1 FROM script_versions WHERE script_id = 1 AND version = 'v1.0');
+
+INSERT INTO script_versions (script_id, version, content, change_summary, created_by)
+SELECT 1, 'v2.0', '{"version":"v2.0","chapters":60}', '修订版：优化前10集钩子节奏，增加反转密度', 2
+WHERE NOT EXISTS (SELECT 1 FROM script_versions WHERE script_id = 1 AND version = 'v2.0');
+
+-- 剧集审核报告
+INSERT INTO episode_review_reports (script_id, episode_id, episode_number, overall_status, overall_score, hook_score, showrunner_score, director_score, report_json)
+SELECT 1, 1, 1, 'approved', 8.5, 8.2, 8.7, 8.5, '{"summary":"开场钩子有力，人物动机清晰，建议增加环境描写","strengths":["节奏紧凑","对白真实"],"weaknesses":["描写略少"]}'
+WHERE NOT EXISTS (SELECT 1 FROM episode_review_reports WHERE script_id = 1 AND episode_id = 1);
+
+INSERT INTO episode_review_reports (script_id, episode_id, episode_number, overall_status, overall_score, hook_score, showrunner_score, director_score, report_json)
+SELECT 1, 2, 2, 'approved', 8.8, 9.0, 8.5, 8.8, '{"summary":"第二集转折精彩，神秘人塑造成功","strengths":["悬念设置","角色塑造"],"weaknesses":[]}'
+WHERE NOT EXISTS (SELECT 1 FROM episode_review_reports WHERE script_id = 1 AND episode_id = 2);
+
+INSERT INTO episode_review_reports (script_id, episode_id, episode_number, overall_status, overall_score, hook_score, showrunner_score, director_score, report_json)
+SELECT 1, 3, 3, 'needs_revision', 6.5, 5.8, 7.0, 6.8, '{"summary":"试炼场景节奏偏慢，钩子力度不足","strengths":["世界观扩展"],"weaknesses":["节奏拖沓","钩子薄弱"]}'
+WHERE NOT EXISTS (SELECT 1 FROM episode_review_reports WHERE script_id = 1 AND episode_id = 3);
+
+-- 剧本钩子
+INSERT INTO episode_hooks (episode_id, script_id, hook_type, content, strength_score, position, status)
+SELECT 1, 1, 'opening', '林深的手电筒照见了什么？妹妹失踪的背后隐藏着什么？', 8.5, 0, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM episode_hooks WHERE episode_id = 1 AND hook_type = 'opening');
+
+INSERT INTO episode_hooks (episode_id, script_id, hook_type, content, strength_score, position, status)
+SELECT 1, 1, 'closing', '码头尽头，一个与妹妹背影一模一样的身影一闪而过…', 9.2, 1, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM episode_hooks WHERE episode_id = 1 AND hook_type = 'closing');
+
+INSERT INTO episode_hooks (episode_id, script_id, hook_type, content, strength_score, position, status)
+SELECT 2, 1, 'opening', '神秘人说的"暗夜不是你想的那样"到底意味着什么？', 8.0, 0, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM episode_hooks WHERE episode_id = 2 AND hook_type = 'opening');
+
+INSERT INTO episode_hooks (episode_id, script_id, hook_type, content, strength_score, position, status)
+SELECT 2, 1, 'closing', '林深踏入了暗夜的大门，他能否守住自己的身份？', 9.0, 1, 'active'
+WHERE NOT EXISTS (SELECT 1 FROM episode_hooks WHERE episode_id = 2 AND hook_type = 'closing');
+
+-- ============================================================
+-- D. 脚本仓库资产 (旧 assets 表)
+-- ============================================================
+INSERT INTO repo_assets (asset_id, asset_type, name, description, owner_user_id, maturity_level)
+SELECT 'CH_NIGHT_KING', 'character', '夜王 (反派)', '暗夜组织的神秘领导者，身份成谜，智商超群', 2, 'L2'
+WHERE NOT EXISTS (SELECT 1 FROM repo_assets WHERE asset_id = 'CH_NIGHT_KING');
+
+INSERT INTO repo_assets (asset_id, asset_type, name, description, owner_user_id, maturity_level)
+SELECT 'CH_LIN_SHEN', 'character', '林深 (男主)', '前刑警队长，冷峻坚毅，为救妹妹甘愿化身卧底', 2, 'L2'
+WHERE NOT EXISTS (SELECT 1 FROM repo_assets WHERE asset_id = 'CH_LIN_SHEN');
+
+INSERT INTO repo_assets (asset_id, asset_type, name, description, owner_user_id, maturity_level)
+SELECT 'LOC_DOCK', 'scene', '废弃码头', '城市边缘的废弃货运码头，集装箱堆叠如迷宫', 2, 'L1'
+WHERE NOT EXISTS (SELECT 1 FROM repo_assets WHERE asset_id = 'LOC_DOCK');
+
+INSERT INTO repo_assets (asset_id, asset_type, name, description, owner_user_id, maturity_level)
+SELECT 'LOC_NIGHT_BASE', 'scene', '暗夜秘密基地', '地下深处的秘密基地，高科技与黑暗风格并存', 2, 'L1'
+WHERE NOT EXISTS (SELECT 1 FROM repo_assets WHERE asset_id = 'LOC_NIGHT_BASE');
+
+INSERT INTO repo_assets (asset_id, asset_type, name, description, owner_user_id, maturity_level)
+SELECT 'PROP_AMULET', 'prop', '妹妹的护身符', '林小雨留给哥哥的最后一件物品，暗藏线索', 2, 'L1'
+WHERE NOT EXISTS (SELECT 1 FROM repo_assets WHERE asset_id = 'PROP_AMULET');
+
+-- ============================================================
+-- E. 交易市场数据 (V6 schema)
+-- ============================================================
+-- 脚本上架 (seed listings for demo)
+INSERT INTO script_listings (workspace_id, seller_user_id, script_id, script_version_id, title, synopsis, listing_status, review_status)
+SELECT 'ws_personal_2', 2, 1, 1, '霸道总裁的替身新娘', '都市甜宠短剧', 'LISTED', 'LISTED'
+WHERE NOT EXISTS (SELECT 1 FROM script_listings WHERE script_id = 1 AND seller_user_id = 2);
+
+INSERT INTO script_listings (workspace_id, seller_user_id, script_id, script_version_id, title, synopsis, listing_status, review_status)
+SELECT 'ws_personal_3', 3, 2, 1, '重生之商业帝国', '商战复仇长篇', 'LISTED', 'LISTED'
+WHERE NOT EXISTS (SELECT 1 FROM script_listings WHERE script_id = 2 AND seller_user_id = 3);
+
+INSERT INTO script_listings (workspace_id, seller_user_id, script_id, script_version_id, title, synopsis, listing_status, review_status)
+SELECT 'ws_personal_2', 2, 3, 1, '古剑奇谭外传', '古装奇幻冒险', 'LISTED', 'LISTED'
+WHERE NOT EXISTS (SELECT 1 FROM script_listings WHERE script_id = 3 AND seller_user_id = 2);
+
+-- Demo orders (free claims for testing)
+INSERT INTO trade_orders (order_no, status, buyer_user_id, buyer_workspace_id, buyer_workspace_type,
+    seller_user_id, seller_workspace_id, total_amount_cents, create_idempotency_key)
+SELECT 'ORD-DEMO-001', 'FULFILLED', 5, 'ws_personal_5', 'PERSONAL', 2, 'ws_personal_2', 0, 'demo-key-001'
+WHERE NOT EXISTS (SELECT 1 FROM trade_orders WHERE order_no = 'ORD-DEMO-001');
+
+INSERT INTO trade_orders (order_no, status, buyer_user_id, buyer_workspace_id, buyer_workspace_type,
+    seller_user_id, seller_workspace_id, total_amount_cents, create_idempotency_key)
+SELECT 'ORD-DEMO-002', 'FULFILLED', 5, 'ws_personal_5', 'PERSONAL', 3, 'ws_personal_3', 0, 'demo-key-002'
+WHERE NOT EXISTS (SELECT 1 FROM trade_orders WHERE order_no = 'ORD-DEMO-002');
+
+INSERT INTO trade_orders (order_no, status, buyer_user_id, buyer_workspace_id, buyer_workspace_type,
+    seller_user_id, seller_workspace_id, total_amount_cents, create_idempotency_key)
+SELECT 'ORD-DEMO-003', 'PENDING_PAYMENT', 1, 'ws_personal_1', 'PERSONAL', 2, 'ws_personal_2', 4990, 'demo-key-003'
+WHERE NOT EXISTS (SELECT 1 FROM trade_orders WHERE order_no = 'ORD-DEMO-003');
+
+-- 企业采购申请
+INSERT INTO purchase_requests (workspace_id, requester_user_id, listing_id, license_type, amount_cents, reason, status)
+SELECT 'ws_ent_1', 2, 3, 'EXCLUSIVE', 19900, '公司新项目需要优质古装奇幻剧本进行漫改，此剧本评分较高且题材契合', 'PENDING_APPROVAL'
+WHERE NOT EXISTS (SELECT 1 FROM purchase_requests WHERE workspace_id = 'ws_ent_1' AND listing_id = 3 AND requester_user_id = 2);
+
+INSERT INTO purchase_requests (workspace_id, requester_user_id, listing_id, license_type, amount_cents, reason, status)
+SELECT 'ws_ent_1', 3, 1, 'NORMAL', 2990, '悬疑题材与公司储备方向一致，建议采购作为素材库补充', 'APPROVED'
+WHERE NOT EXISTS (SELECT 1 FROM purchase_requests WHERE workspace_id = 'ws_ent_1' AND listing_id = 1 AND requester_user_id = 3);
+
+-- ============================================================
+-- F. AI生成任务历史 (用于任务监控 + 资产历史)
+-- ============================================================
+INSERT INTO gen_tasks (user_id, project_id, gen_type, storyboard_tier, input_params, output_data, prompt_used, model_used, status, progress, tokens_used, duration_ms)
+SELECT 1, 'PROJ_DEMO_001', 'synopsis', NULL, '{"topic":"悬疑卧底","length":"long"}', '{"synopsis":"前刑警队长卧底神秘组织..."}', '你是一位悬疑小说大师，请为以下题材创作故事梗概...', 'gpt-4o', 'completed', 100, 4500, 12000
+WHERE NOT EXISTS (SELECT 1 FROM gen_tasks WHERE user_id = 1 AND project_id = 'PROJ_DEMO_001' AND gen_type = 'synopsis');
+
+INSERT INTO gen_tasks (user_id, project_id, gen_type, storyboard_tier, input_params, output_data, prompt_used, model_used, status, progress, tokens_used, duration_ms)
+SELECT 1, 'PROJ_DEMO_001', 'outline', NULL, '{"episodes":60}', '{"outline":"60集分集大纲..."}', '基于以下梗概，为60集剧本创作详细分集大纲...', 'claude-opus-4-8', 'completed', 100, 12000, 45000
+WHERE NOT EXISTS (SELECT 1 FROM gen_tasks WHERE user_id = 1 AND project_id = 'PROJ_DEMO_001' AND gen_type = 'outline');
+
+INSERT INTO gen_tasks (user_id, project_id, gen_type, storyboard_tier, input_params, output_data, prompt_used, model_used, status, progress, tokens_used, duration_ms)
+SELECT 1, 'PROJ_DEMO_001', 'episode', 'A', '{"episode":1}', '{"content":"第一集完整剧本..."}', '基于大纲创作第一集完整剧本，要求开场即高能...', 'claude-sonnet-4-6', 'completed', 100, 8500, 28000
+WHERE NOT EXISTS (SELECT 1 FROM gen_tasks WHERE user_id = 1 AND project_id = 'PROJ_DEMO_001' AND gen_type = 'episode');
+
+INSERT INTO gen_tasks (user_id, project_id, gen_type, storyboard_tier, input_params, output_data, prompt_used, model_used, status, progress, tokens_used, duration_ms)
+SELECT 1, 'PROJ_DEMO_001', 'storyboard', 'A', '{"episode":1,"style":"korean_manhwa"}', '{"shots":45,"duration_sec":180}', '为第一集剧本创建A档分镜...', 'gpt-4o', 'processing', 65, 3200, 15000
+WHERE NOT EXISTS (SELECT 1 FROM gen_tasks WHERE user_id = 1 AND project_id = 'PROJ_DEMO_001' AND gen_type = 'storyboard' AND status = 'processing');
+
+INSERT INTO gen_tasks (user_id, project_id, gen_type, storyboard_tier, input_params, output_data, prompt_used, model_used, status, progress, tokens_used, duration_ms, error_msg)
+SELECT 2, 'PROJ_DEMO_002', 'adaptation', NULL, '{"source":"novel","target":"comic"}', NULL, '将以下小说章节改编为漫画脚本...', 'gpt-4o', 'failed', 45, 2100, 8000, 'AI服务暂时不可用，请稍后重试'
+WHERE NOT EXISTS (SELECT 1 FROM gen_tasks WHERE user_id = 2 AND project_id = 'PROJ_DEMO_002' AND gen_type = 'adaptation');
+
+INSERT INTO gen_tasks (user_id, project_id, gen_type, storyboard_tier, input_params, output_data, prompt_used, model_used, status, progress, tokens_used, duration_ms)
+SELECT 3, 'PROJ_DEMO_003', 'topic', NULL, '{"genre":"奇幻","length":"medium"}', '{"topics":["长安幻术师","时空旅人","魔法学院"]}', '生成3个奇幻题材的剧本选题...', 'claude-sonnet-4-6', 'completed', 100, 3200, 10000
+WHERE NOT EXISTS (SELECT 1 FROM gen_tasks WHERE user_id = 3 AND project_id = 'PROJ_DEMO_003' AND gen_type = 'topic');
+
+INSERT INTO gen_tasks (user_id, project_id, gen_type, storyboard_tier, input_params, output_data, prompt_used, model_used, status, progress, tokens_used, duration_ms)
+SELECT 3, 'PROJ_DEMO_003', 'promotion', NULL, '{"platform":"douyin","duration":30}', '{"script":"30秒抖音推广文案..."}', '为剧本创作30秒短视频推广文案...', 'gpt-4o', 'completed', 100, 1800, 5000
+WHERE NOT EXISTS (SELECT 1 FROM gen_tasks WHERE user_id = 3 AND project_id = 'PROJ_DEMO_003' AND gen_type = 'promotion');
+
+INSERT INTO gen_tasks (user_id, project_id, gen_type, storyboard_tier, input_params, output_data, prompt_used, model_used, status, progress, tokens_used, duration_ms)
+SELECT 1, 'PROJ_DEMO_001', 'quick', NULL, '{"message":"帮我润色这个开场白"}', '{"result":"已润色的开场白..."}', '润色以下文本...', 'claude-haiku-4-5', 'completed', 100, 500, 2000
+WHERE NOT EXISTS (SELECT 1 FROM gen_tasks WHERE user_id = 1 AND project_id = 'PROJ_DEMO_001' AND gen_type = 'quick');
+
+-- 画布相关的生成任务 (generation_tasks — 属于画布模块但提供任务监控数据)
+INSERT INTO generation_tasks (uuid, project_id, type, sub_type, provider, model_id, parameters, status, progress, credit_cost, started_at, completed_at)
+SELECT 'gen-task-001', 1, 'image', 'character_design', 'openai', 'dall-e-3', '{"prompt":"暗夜组织首领角色设计图","size":"1024x1792","style":"anime"}', 'succeeded', 100, 5, DATEADD('MINUTE', -120, CURRENT_TIMESTAMP), DATEADD('MINUTE', -118, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM generation_tasks WHERE uuid = 'gen-task-001');
+
+INSERT INTO generation_tasks (uuid, project_id, type, sub_type, provider, model_id, parameters, status, progress, credit_cost, started_at, completed_at)
+SELECT 'gen-task-002', 1, 'image', 'scene', 'openai', 'dall-e-3', '{"prompt":"废弃码头夜景全景","size":"1792x1024"}', 'succeeded', 100, 3, DATEADD('MINUTE', -90, CURRENT_TIMESTAMP), DATEADD('MINUTE', -88, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM generation_tasks WHERE uuid = 'gen-task-002');
+
+INSERT INTO generation_tasks (uuid, project_id, type, sub_type, provider, model_id, parameters, status, progress, credit_cost, error_message)
+SELECT 'gen-task-003', 1, 'video', 'shot_render', 'kling', 'kling-v1', '{"duration":4,"resolution":"1080p","fps":25}', 'failed', 30, 20, '视频生成超时，请降低分辨率后重试'
+WHERE NOT EXISTS (SELECT 1 FROM generation_tasks WHERE uuid = 'gen-task-003');
+
+INSERT INTO generation_tasks (uuid, project_id, type, sub_type, provider, model_id, parameters, status, progress, credit_cost)
+SELECT 'gen-task-004', 1, 'audio', 'dubbing', 'openai', 'tts-1', '{"text":"你还记得五年前的那个夜晚吗？","voice":"echo"}', 'pending', 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM generation_tasks WHERE uuid = 'gen-task-004');
+
+-- 生成变体
+INSERT INTO generation_variants (uuid, parent_task_id, variant_index, parameters, output_url, status, selected)
+SELECT 'variant-001', 1, 1, '{"seed":42}', '/generated/char-night-king-v1.png', 'completed', 1
+WHERE NOT EXISTS (SELECT 1 FROM generation_variants WHERE uuid = 'variant-001');
+
+INSERT INTO generation_variants (uuid, parent_task_id, variant_index, parameters, output_url, status, selected)
+SELECT 'variant-002', 1, 2, '{"seed":123}', '/generated/char-night-king-v2.png', 'completed', 0
+WHERE NOT EXISTS (SELECT 1 FROM generation_variants WHERE uuid = 'variant-002');
+
+INSERT INTO generation_variants (uuid, parent_task_id, variant_index, parameters, output_url, status, selected)
+SELECT 'variant-003', 2, 1, '{"seed":77}', '/generated/scene-dock-v1.png', 'completed', 1
+WHERE NOT EXISTS (SELECT 1 FROM generation_variants WHERE uuid = 'variant-003');
+
+-- ============================================================
+-- G. 平台资产库 (资产历史页面使用)
+-- ============================================================
+INSERT INTO platform_assets (uuid, project_id, source_task_id, type, name, prompt, model_id, owner_user_id, maturity_level)
+SELECT 'plat-asset-001', 1, 1, 'image', '夜王角色设计图 v1', '暗夜组织首领角色设计图，黑色风衣，半机械面具', 'dall-e-3', 1, 'L2'
+WHERE NOT EXISTS (SELECT 1 FROM platform_assets WHERE uuid = 'plat-asset-001');
+
+INSERT INTO platform_assets (uuid, project_id, source_task_id, type, name, prompt, model_id, owner_user_id, maturity_level)
+SELECT 'plat-asset-002', 1, 2, 'image', '废弃码头夜景全景', '城市边缘废弃货运码头夜景，月光透过集装箱间隙，氛围暗黑紧张', 'dall-e-3', 1, 'L1'
+WHERE NOT EXISTS (SELECT 1 FROM platform_assets WHERE uuid = 'plat-asset-002');
+
+INSERT INTO platform_assets (uuid, project_id, source_node_id, type, name, prompt, model_id, owner_user_id, maturity_level)
+SELECT 'plat-asset-003', 1, NULL, 'image', '林深角色立绘', '前刑警队长角色立绘，冷峻坚毅，黑色短发，穿便装夹克', 'midjourney-v6', 1, 'L2'
+WHERE NOT EXISTS (SELECT 1 FROM platform_assets WHERE uuid = 'plat-asset-003');
+
+INSERT INTO platform_assets (uuid, project_id, source_task_id, type, name, prompt, model_id, owner_user_id, maturity_level)
+SELECT 'plat-asset-004', 1, NULL, 'audio', '背景音乐-紧张氛围', '悬疑紧张氛围背景音乐，低音弦乐+电子合成器', 'suno-v3', 1, 'L1'
+WHERE NOT EXISTS (SELECT 1 FROM platform_assets WHERE uuid = 'plat-asset-004');
+
+INSERT INTO platform_assets (uuid, project_id, source_node_id, type, name, prompt, model_id, owner_user_id, maturity_level)
+SELECT 'plat-asset-005', 1, NULL, 'image', '暗夜基地内景概念图', '地下高科技基地内景，暗色调金属质感，全息屏幕闪烁', 'dall-e-3', 1, 'L1'
+WHERE NOT EXISTS (SELECT 1 FROM platform_assets WHERE uuid = 'plat-asset-005');
+
+-- ============================================================
+-- H. 积分交易记录
+-- ============================================================
+INSERT INTO credit_transactions (user_id, amount, type, description)
+SELECT 1, 1000, 'charge', '充值1000积分'
+WHERE NOT EXISTS (SELECT 1 FROM credit_transactions WHERE user_id = 1 AND amount = 1000 AND type = 'charge');
+
+INSERT INTO credit_transactions (user_id, amount, type, description)
+SELECT 1, -5, 'consumption', '生成任务 gen-task-001: 角色设计图'
+WHERE NOT EXISTS (SELECT 1 FROM credit_transactions WHERE user_id = 1 AND amount = -5 AND type = 'consumption');
+
+INSERT INTO credit_transactions (user_id, amount, type, description)
+SELECT 1, -3, 'consumption', '生成任务 gen-task-002: 场景图'
+WHERE NOT EXISTS (SELECT 1 FROM credit_transactions WHERE user_id = 1 AND amount = -3 AND type = 'consumption');
+
+INSERT INTO credit_transactions (user_id, amount, type, description)
+SELECT 1, 500, 'bonus', '新用户注册奖励'
+WHERE NOT EXISTS (SELECT 1 FROM credit_transactions WHERE user_id = 1 AND amount = 500 AND type = 'bonus');
+
+INSERT INTO credit_transactions (user_id, amount, type, description)
+SELECT 1, -20, 'consumption', '生成任务 gen-task-003: 视频渲染(失败已退款)'
+WHERE NOT EXISTS (SELECT 1 FROM credit_transactions WHERE user_id = 1 AND amount = -20 AND type = 'consumption');
+
+INSERT INTO credit_transactions (user_id, amount, type, description)
+SELECT 1, 20, 'refund', '任务 gen-task-003 失败退款'
+WHERE NOT EXISTS (SELECT 1 FROM credit_transactions WHERE user_id = 1 AND amount = 20 AND type = 'refund');
+
+INSERT INTO credit_transactions (user_id, amount, type, description)
+SELECT 2, 500, 'charge', '充值500积分'
+WHERE NOT EXISTS (SELECT 1 FROM credit_transactions WHERE user_id = 2 AND amount = 500 AND type = 'charge');
+
+INSERT INTO credit_transactions (user_id, amount, type, description)
+SELECT 2, 100, 'gift', '邀请好友注册奖励'
+WHERE NOT EXISTS (SELECT 1 FROM credit_transactions WHERE user_id = 2 AND amount = 100 AND type = 'gift');
+
+-- ============================================================
+-- I. 通知数据
+-- ============================================================
+INSERT INTO notifications (user_id, type, title, content, action_url, is_read)
+SELECT 1, 'script_generated', '剧本生成完成', '您的剧本《暗夜追光者》第1-3集已生成完毕，点击查看。', '/script-gen-legacy', 0
+WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = 1 AND type = 'script_generated' AND content LIKE '%暗夜追光者%');
+
+INSERT INTO notifications (user_id, type, title, content, action_url, is_read)
+SELECT 1, 'order_paid', '订单支付成功', '您的剧本《长安十二时辰之幻术师》已被购买，收入49.90元已到账。', '/market', 0
+WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = 1 AND type = 'order_paid' AND content LIKE '%长安%');
+
+INSERT INTO notifications (user_id, type, title, content, action_url, is_read)
+SELECT 1, 'asset_published', '资产上架成功', '您的角色资产"夜王"已通过审核，正式上架AI资产市场。', '/asset-market', 1
+WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = 1 AND type = 'asset_published' AND content LIKE '%夜王%');
+
+INSERT INTO notifications (user_id, type, title, content, action_url, is_read)
+SELECT 1, 'system', '系统维护通知', '平台将于2026年7月5日凌晨2:00-4:00进行系统升级维护，届时部分功能可能不可用。', '', 1
+WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = 1 AND type = 'system' AND content LIKE '%系统升级%');
+
+INSERT INTO notifications (user_id, type, title, content, action_url, is_read)
+SELECT 1, 'agent_completed', 'Agent任务完成', '编剧Agent已完成《暗夜追光者》第4-5集的钩子优化建议，点击查看审核报告。', '/agent', 0
+WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = 1 AND type = 'agent_completed' AND content LIKE '%钩子优化%');
+
+INSERT INTO notifications (user_id, type, title, content, action_url, is_read)
+SELECT 1, 'audit_failed', '审核未通过', '第3集审核未通过（评分6.5），请根据建议修改后重新提交。', '/script-gen-legacy', 0
+WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = 1 AND type = 'audit_failed' AND content LIKE '%第3集%');
+
+INSERT INTO notifications (user_id, type, title, content, action_url, is_read)
+SELECT 2, 'script_listed', '剧本上架成功', '您的剧本《暗夜追光者》已成功上架交易市场。', '/market', 0
+WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = 2 AND type = 'script_listed' AND content LIKE '%暗夜追光者%');
+
+INSERT INTO notifications (user_id, type, title, content, action_url, is_read)
+SELECT 2, 'export_completed', '导出完成', '您的画布项目导出已完成，点击下载MP4文件。', '/canvas-projects', 0
+WHERE NOT EXISTS (SELECT 1 FROM notifications WHERE user_id = 2 AND type = 'export_completed');
+
+-- ============================================================
+-- J. Agent会话与消息
+-- ============================================================
+INSERT INTO agent_sessions (uuid, user_id, skill_id, title, status)
+SELECT 'agent-session-001', 1, NULL, '暗夜追光者 角色设定讨论', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM agent_sessions WHERE uuid = 'agent-session-001');
+
+INSERT INTO agent_sessions (uuid, user_id, skill_id, title, status)
+SELECT 'agent-session-002', 1, NULL, '第3集钩子优化', 'completed'
+WHERE NOT EXISTS (SELECT 1 FROM agent_sessions WHERE uuid = 'agent-session-002');
+
+INSERT INTO agent_sessions (uuid, user_id, skill_id, title, status)
+SELECT 'agent-session-003', 2, NULL, '星海迷航 世界观构建', 'active'
+WHERE NOT EXISTS (SELECT 1 FROM agent_sessions WHERE uuid = 'agent-session-003');
+
+-- Agent消息
+INSERT INTO agent_messages (session_id, role, content)
+SELECT 1, 'user', '我想为悬疑剧本《暗夜追光者》设计一个复杂的反派角色"夜王"，你能帮我吗？'
+WHERE NOT EXISTS (SELECT 1 FROM agent_messages WHERE session_id = 1 AND content LIKE '我想为悬疑剧本%');
+
+INSERT INTO agent_messages (session_id, role, content)
+SELECT 1, 'assistant', '当然可以！让我们一步步来构建"夜王"这个角色。首先，我们需要确定几个核心问题：\n\n1. **动机层**：他创建"暗夜"组织的真正目的是什么？\n2. **身份层**：他的真实身份是否与主角有关联？\n3. **能力层**：他的优势是什么？（智力/资源/武力）\n\n基于悬疑题材的特点，我建议给夜王一个"灰色"动机——他不是纯粹的反派。比如：他可能也在追查同一个幕后势力，只是手段不同。这样能让角色更有深度。'
+WHERE NOT EXISTS (SELECT 1 FROM agent_messages WHERE session_id = 1 AND content LIKE '当然可以！让我们一步步%');
+
+INSERT INTO agent_messages (session_id, role, content)
+SELECT 1, 'user', '好主意！让我确定一下：夜王的真实身份就是林深失踪的妹妹林小雨的导师，他创建暗夜是为了对抗一个更大的犯罪集团。但他的手段过于极端。'
+WHERE NOT EXISTS (SELECT 1 FROM agent_messages WHERE session_id = 1 AND content LIKE '好主意！让我确定一下%');
+
+INSERT INTO agent_messages (session_id, role, content)
+SELECT 1, 'assistant', '这个设定非常棒！兄妹关系的反转（导师VS哥哥）可以制造强烈的情感冲突。让我帮你深化这个角色：\n\n**夜王角色卡**\n- 真实身份：陆砚秋，前国安特工，林小雨的导师\n- 年龄：42岁\n- 外貌：半张脸被机械义体替代（某次任务中的"代价"）\n- 性格：冷静到近乎冷酷，但对林小雨有父亲般的保护欲\n- 标志台词："这个世界从来不是非黑即白，林警官。"\n\n需要我继续设计他的能力体系和与主角团的互动关系吗？'
+WHERE NOT EXISTS (SELECT 1 FROM agent_messages WHERE session_id = 1 AND content LIKE '这个设定非常棒！%');
+
+INSERT INTO agent_messages (session_id, role, content)
+SELECT 2, 'user', '第3集的钩子审核没过，说节奏太慢，帮我分析一下问题在哪。'
+WHERE NOT EXISTS (SELECT 1 FROM agent_messages WHERE session_id = 2 AND content LIKE '第3集的钩子审核没过%');
+
+INSERT INTO agent_messages (session_id, role, content)
+SELECT 2, 'assistant', '我来分析第3集《卧底试炼》的节奏问题：\n\n**诊断结果：**\n1. 试炼场景占全集的65%，但每项试炼的紧张感在递减（读者预期疲劳）\n2. 关键转折（夜王现身）被放在了末尾5%，来不及展开\n3. 缺少"微观钩子"——每个试炼场景结尾缺少短悬念\n\n**优化建议：**\n- 将三项试炼压缩为两项，增加每项的深度\n- 在第二项试炼中途插入夜王的暗中观察视角\n- 每项试炼结尾增加一个"微观hook"\n\n需要我帮你重写这部分吗？'
+WHERE NOT EXISTS (SELECT 1 FROM agent_messages WHERE session_id = 2 AND content LIKE '我来分析第3集%');
+
+INSERT INTO agent_messages (session_id, role, content)
+SELECT 3, 'user', '帮我构建《星海迷航》的世界观基础设定，这是一部星际科幻题材。'
+WHERE NOT EXISTS (SELECT 1 FROM agent_messages WHERE session_id = 3 AND content LIKE '帮我构建《星海迷航》%');
+
+-- ============================================================
+-- K. Skill 数据
+-- ============================================================
+INSERT INTO skills (uuid, name, description, content, type, version, visibility, owner_id, usage_count, rating, status)
+SELECT 'skill-001', '悬疑剧本钩子优化器', '专门优化悬疑题材剧本的钩子结构和反转节奏', '{"prompt":"你是一位悬疑小说编辑，擅长分析钩子结构...","parameters":{"genre":"悬疑","focus":"hook","style":"tight"}}', 'script', '1.0.0', 'public', 1, 230, 4.6, 'published'
+WHERE NOT EXISTS (SELECT 1 FROM skills WHERE uuid = 'skill-001');
+
+INSERT INTO skills (uuid, name, description, content, type, version, visibility, owner_id, usage_count, rating, status)
+SELECT 'skill-002', '韩漫角色设计助手', '基于角色文字描述生成韩漫风格的角色设计提示词', '{"prompt":"你是一位韩漫角色设计师，将文字描述转化为专业的角色设计提示词...","parameters":{"style":"korean_manhwa","output":"prompt"}}', 'image', '2.1.0', 'public', 1, 450, 4.8, 'published'
+WHERE NOT EXISTS (SELECT 1 FROM skills WHERE uuid = 'skill-002');
+
+INSERT INTO skills (uuid, name, description, content, type, version, visibility, owner_id, usage_count, rating, status)
+SELECT 'skill-003', '分镜节奏分析器', '分析分镜版本的节奏曲线，识别拖沓和高能段落', '{"prompt":"分析以下分镜版本的节奏分布...","parameters":{"metrics":["pacing","tension","variety"]}}', 'storyboard', '1.2.0', 'public', 1, 180, 4.3, 'published'
+WHERE NOT EXISTS (SELECT 1 FROM skills WHERE uuid = 'skill-003');
+
+INSERT INTO skills (uuid, name, description, content, type, version, visibility, owner_id, usage_count, rating, status)
+SELECT 'skill-004', '视频分镜自动配乐', '根据分镜情感标签和节奏数据自动推荐BGM', '{"prompt":"基于分镜数据推荐合适的背景音乐...","parameters":{"source":"storyboard","output":"bgm_playlist"}}', 'audio', '1.0.0', 'private', 2, 12, 4.0, 'draft'
+WHERE NOT EXISTS (SELECT 1 FROM skills WHERE uuid = 'skill-004');
+
+INSERT INTO skills (uuid, name, description, content, type, version, visibility, owner_id, usage_count, rating, status)
+SELECT 'skill-005', '漫画质量检查员', '全自动检查漫画输出的视觉一致性和质量问题', '{"prompt":"检查以下漫画页面的质量...","parameters":{"checks":["consistency","anatomy","composition","color"]}}', 'quality', '3.0.0', 'public', 1, 890, 4.9, 'published'
+WHERE NOT EXISTS (SELECT 1 FROM skills WHERE uuid = 'skill-005');
+
+-- ============================================================
+-- L. SOP审计数据
+-- ============================================================
+INSERT INTO sop_audits (uuid, project_id, auditor_id, status, result)
+SELECT 'sop-001', 1, 1, 'completed', '{"score":92,"issues":[],"summary":"所有检查项通过，质量优秀"}'
+WHERE NOT EXISTS (SELECT 1 FROM sop_audits WHERE uuid = 'sop-001');
+
+INSERT INTO sop_audits (uuid, project_id, auditor_id, status, result)
+SELECT 'sop-002', 1, 1, 'completed', '{"score":65,"issues":[{"type":"continuity","severity":"P1","description":"第3集与第2集角色位置不一致"}],"summary":"发现1个P1问题需修复"}'
+WHERE NOT EXISTS (SELECT 1 FROM sop_audits WHERE uuid = 'sop-002');
+
+INSERT INTO sop_audits (uuid, project_id, auditor_id, status, result)
+SELECT 'sop-003', 1, 2, 'pending', NULL
+WHERE NOT EXISTS (SELECT 1 FROM sop_audits WHERE uuid = 'sop-003');
+
+-- ============================================================
+-- M. 更多内容项目 (V7 Content Projects)
+-- ============================================================
+INSERT INTO content_projects (uuid, tenant_type, tenant_id, owner_user_id, name, creation_mode, source_mode, storyboard_intent_status, content_status, production_status, market_status, last_stage_key)
+SELECT 'demo-proj-002', 'personal', 2, 2, '暗夜追光者·漫改项目', 'short_drama', 'ai_manual', 'in_progress', 'approved', 'in_progress', 'private', 'storyboard'
+WHERE NOT EXISTS (SELECT 1 FROM content_projects WHERE uuid = 'demo-proj-002');
+
+INSERT INTO content_projects (uuid, tenant_type, tenant_id, owner_user_id, name, creation_mode, source_mode, storyboard_intent_status, content_status, production_status, market_status, last_stage_key)
+SELECT 'demo-proj-003', 'personal', 1, 1, '长安幻术师·动画短片', 'short_drama', 'ai_generated', 'not_decided', 'draft', 'not_started', 'private', 'synopsis'
+WHERE NOT EXISTS (SELECT 1 FROM content_projects WHERE uuid = 'demo-proj-003');
+
+INSERT INTO content_projects (uuid, tenant_type, tenant_id, owner_user_id, name, creation_mode, source_mode, storyboard_intent_status, content_status, production_status, market_status, last_stage_key)
+SELECT 'demo-proj-004', 'enterprise', 1, 4, '星辰动漫·都市爱情系列', 'long_form', 'uploaded', 'not_decided', 'reviewing', 'not_started', 'private', 'import_review'
+WHERE NOT EXISTS (SELECT 1 FROM content_projects WHERE uuid = 'demo-proj-004');
+
+INSERT INTO content_projects (uuid, tenant_type, tenant_id, owner_user_id, name, creation_mode, source_mode, storyboard_intent_status, content_status, production_status, market_status, last_stage_key)
+SELECT 'demo-proj-005', 'personal', 1, 1, 'TVC·新能量饮料推广', 'tvc', 'ai_manual', 'not_decided', 'draft', 'not_started', 'private', 'tvc_brief'
+WHERE NOT EXISTS (SELECT 1 FROM content_projects WHERE uuid = 'demo-proj-005');
+
+-- 项目成员
+INSERT INTO project_members (project_id, user_id, role)
+SELECT 2, 2, 'owner'
+WHERE NOT EXISTS (SELECT 1 FROM project_members WHERE project_id = 2 AND user_id = 2);
+
+INSERT INTO project_members (project_id, user_id, role)
+SELECT 3, 1, 'owner'
+WHERE NOT EXISTS (SELECT 1 FROM project_members WHERE project_id = 3 AND user_id = 1);
+
+INSERT INTO project_members (project_id, user_id, role)
+SELECT 4, 4, 'owner'
+WHERE NOT EXISTS (SELECT 1 FROM project_members WHERE project_id = 4 AND user_id = 4);
+
+INSERT INTO project_members (project_id, user_id, role)
+SELECT 4, 2, 'writer'
+WHERE NOT EXISTS (SELECT 1 FROM project_members WHERE project_id = 4 AND user_id = 2);
+
+INSERT INTO project_members (project_id, user_id, role)
+SELECT 5, 1, 'owner'
+WHERE NOT EXISTS (SELECT 1 FROM project_members WHERE project_id = 5 AND user_id = 1);
+
+-- 内容单元 (为项目2添加多个episode)
+INSERT INTO content_units (stable_key, project_id, unit_type, display_no, title, status, revision)
+SELECT 'unit-002', 2, 'episode', 1, '第一集·消失的妹妹', 'completed', 0
+WHERE NOT EXISTS (SELECT 1 FROM content_units WHERE stable_key = 'unit-002');
+
+INSERT INTO content_units (stable_key, project_id, unit_type, display_no, title, status, revision)
+SELECT 'unit-003', 2, 'episode', 2, '第二集·暗夜初现', 'completed', 0
+WHERE NOT EXISTS (SELECT 1 FROM content_units WHERE stable_key = 'unit-003');
+
+INSERT INTO content_units (stable_key, project_id, unit_type, display_no, title, status, revision)
+SELECT 'unit-004', 2, 'episode', 3, '第三集·卧底试炼', 'reviewing', 0
+WHERE NOT EXISTS (SELECT 1 FROM content_units WHERE stable_key = 'unit-004');
+
+INSERT INTO content_units (stable_key, project_id, unit_type, display_no, title, status, revision)
+SELECT 'unit-005', 3, 'episode', 1, '第一集·长安幻术师', 'draft', 0
+WHERE NOT EXISTS (SELECT 1 FROM content_units WHERE stable_key = 'unit-005');
+
+INSERT INTO content_units (stable_key, project_id, unit_type, display_no, title, status, revision)
+SELECT 'unit-006', 4, 'chapter', 1, '第一章', 'draft', 0
+WHERE NOT EXISTS (SELECT 1 FROM content_units WHERE stable_key = 'unit-006');
+
+-- 内容版本
+INSERT INTO content_versions (project_id, content_unit_id, version_no, status, content_json, plain_text, source, content_hash, created_by)
+SELECT 2, 2, 1, 'locked', '{"title":"消失的妹妹","scenes":["码头搜查","神秘人出现"]}', '林深站在废弃码头的集装箱前...', 'ai_generated', 'hash-002', 2
+WHERE NOT EXISTS (SELECT 1 FROM content_versions WHERE project_id = 2 AND content_unit_id = 2 AND version_no = 1);
+
+INSERT INTO content_versions (project_id, content_unit_id, version_no, status, content_json, plain_text, source, content_hash, created_by)
+SELECT 2, 3, 1, 'locked', '{"title":"暗夜初现"}', '暗夜不是你想的那样...', 'ai_generated', 'hash-003', 2
+WHERE NOT EXISTS (SELECT 1 FROM content_versions WHERE project_id = 2 AND content_unit_id = 3 AND version_no = 1);
+
+INSERT INTO content_versions (project_id, content_unit_id, version_no, status, content_json, plain_text, source, content_hash, created_by)
+SELECT 2, 4, 1, 'draft', '{"title":"卧底试炼"}', '加入暗夜的仪式比想象中复杂...', 'ai_generated', 'hash-004', 2
+WHERE NOT EXISTS (SELECT 1 FROM content_versions WHERE project_id = 2 AND content_unit_id = 4 AND version_no = 1);
+
+-- 内容单元钩子
+INSERT INTO content_unit_hooks (content_unit_id, content_version_id, opening_hook, closing_hook, hook_score)
+SELECT 2, 2, '妹妹失踪的真相究竟是什么？', '码头尽头的神秘身影...', 8.5
+WHERE NOT EXISTS (SELECT 1 FROM content_unit_hooks WHERE content_unit_id = 2);
+
+INSERT INTO content_unit_hooks (content_unit_id, content_version_id, opening_hook, closing_hook, hook_score)
+SELECT 3, 3, '暗夜组织到底是敌是友？', '林深踏入暗夜之门...', 8.8
+WHERE NOT EXISTS (SELECT 1 FROM content_unit_hooks WHERE content_unit_id = 3);
+
+INSERT INTO content_unit_hooks (content_unit_id, content_version_id, opening_hook, closing_hook, hook_score)
+SELECT 4, 4, '72小时的极限试炼开始！', '夜王的真面目即将揭晓...', 7.2
+WHERE NOT EXISTS (SELECT 1 FROM content_unit_hooks WHERE content_unit_id = 4);
+
+-- ============================================================
+-- N. 内容生成任务
+-- ============================================================
+INSERT INTO content_generation_jobs (uuid, project_id, job_type, target_type, target_id, status, input_snapshot_json, input_snapshot_hash, schema_version, model, estimated_credits, actual_credits, idempotency_key, created_by, finished_at)
+SELECT 'cgj-001', 2, 'episode_generation', 'content_unit', 2, 'completed', '{"params":{"episode":1,"genre":"悬疑"}}', 'hash-input-001', 'v7.1', 'claude-sonnet-4-6', 50, 48, 'idem-cgj-001', 2, DATEADD('HOUR', -3, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM content_generation_jobs WHERE uuid = 'cgj-001');
+
+INSERT INTO content_generation_jobs (uuid, project_id, job_type, target_type, target_id, status, input_snapshot_json, input_snapshot_hash, schema_version, model, estimated_credits, actual_credits, idempotency_key, created_by)
+SELECT 'cgj-002', 2, 'storyboard_generation', 'cp_storyboard_master', 1, 'running', '{"params":{"tier":"A","episode":1}}', 'hash-input-002', 'v7.1', 'gpt-4o', 30, 0, 'idem-cgj-002', 2
+WHERE NOT EXISTS (SELECT 1 FROM content_generation_jobs WHERE uuid = 'cgj-002');
+
+INSERT INTO content_generation_jobs (uuid, project_id, job_type, target_type, target_id, status, input_snapshot_json, input_snapshot_hash, schema_version, model, estimated_credits, actual_credits, error_code, idempotency_key, created_by, finished_at)
+SELECT 'cgj-003', 2, 'hook_analysis', 'content_unit', 4, 'failed', '{"params":{"unit_id":4}}', 'hash-input-003', 'v7.1', 'claude-haiku-4-5', 10, 10, 'AI_TIMEOUT', 'idem-cgj-003', 2, DATEADD('HOUR', -1, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM content_generation_jobs WHERE uuid = 'cgj-003');
+
+-- ============================================================
+-- O. CP Storyboard 数据 (V7分镜)
+-- ============================================================
+INSERT INTO cp_storyboard_masters (uuid, project_id, content_unit_id, tier, status, total_shots, estimated_duration_sec, source_version_id, revision)
+SELECT 'cp-sbm-001', 2, 2, 'A', 'draft', 35, 150, 2, 0
+WHERE NOT EXISTS (SELECT 1 FROM cp_storyboard_masters WHERE uuid = 'cp-sbm-001');
+
+INSERT INTO cp_storyboard_scenes (master_id, scene_no, dramatic_goal, beat_description, duration_sec, sort_order)
+SELECT 1, 1, '建立悬疑氛围，引出主角动机', '码头夜查→发现线索→神秘人现身', 45, 0
+WHERE NOT EXISTS (SELECT 1 FROM cp_storyboard_scenes WHERE master_id = 1 AND scene_no = 1);
+
+INSERT INTO cp_storyboard_scenes (master_id, scene_no, dramatic_goal, beat_description, duration_sec, sort_order)
+SELECT 1, 2, '揭示暗夜组织，制造第一次反转', '跟踪神秘人→暗夜入口→初入基地', 55, 1
+WHERE NOT EXISTS (SELECT 1 FROM cp_storyboard_scenes WHERE master_id = 1 AND scene_no = 2);
+
+INSERT INTO cp_storyboard_scenes (master_id, scene_no, dramatic_goal, beat_description, duration_sec, sort_order)
+SELECT 1, 3, '试炼开始，建立规则和代价', '夜王现身→宣布试炼规则→第一项任务', 50, 2
+WHERE NOT EXISTS (SELECT 1 FROM cp_storyboard_scenes WHERE master_id = 1 AND scene_no = 3);
+
+-- CP分镜镜头 (场景1的3个镜头)
+INSERT INTO cp_storyboard_shots (uuid, scene_id, master_id, shot_no, shot_type, duration_sec, description, camera_action, status, sort_order, image_prompt, video_prompt)
+SELECT 'cp-shot-001', 1, 1, 1, '全景', 15, '夜幕下的废弃码头全景，集装箱如巨大墓碑林立，月光透过缝隙洒下冷光', '缓慢推进(Dolly In)，从码头入口推向深处', 'draft', 0, 'wide shot, abandoned dock at night, moonlight through container gaps, noir atmosphere, cinematic', 'slow dolly forward into the dock'
+WHERE NOT EXISTS (SELECT 1 FROM cp_storyboard_shots WHERE uuid = 'cp-shot-001');
+
+INSERT INTO cp_storyboard_shots (uuid, scene_id, master_id, shot_no, shot_type, duration_sec, description, camera_action, status, sort_order, image_prompt, video_prompt)
+SELECT 'cp-shot-002', 1, 1, 2, '中景', 12, '林深手持电筒在集装箱间穿行，光束扫过角落，照到一只沾血的鞋子', '跟拍(Tracking)，跟随主角移动', 'draft', 1, 'medium shot, detective with flashlight walking between containers, beam of light revealing clues, tense', 'tracking shot following detective'
+WHERE NOT EXISTS (SELECT 1 FROM cp_storyboard_shots WHERE uuid = 'cp-shot-002');
+
+INSERT INTO cp_storyboard_shots (uuid, scene_id, master_id, shot_no, shot_type, duration_sec, description, camera_action, status, sort_order, image_prompt, video_prompt)
+SELECT 'cp-shot-003', 1, 1, 3, '特写', 8, '林深瞳孔收缩，手中的手电筒照亮角落里的血迹和妹妹的护身符', '快速推进(Crash Zoom)到护身符', 'draft', 2, 'extreme close-up, eyes widening, flashlight beam on bloodstained amulet, shallow depth of field', 'crash zoom to amulet, handheld shake'
+WHERE NOT EXISTS (SELECT 1 FROM cp_storyboard_shots WHERE uuid = 'cp-shot-003');
+
+-- ============================================================
+-- P. Storyboard Professional V2 附加数据
+-- ============================================================
+-- 情绪节奏段
+INSERT INTO storyboard_emotion_segments (version_id, emotion_type, shot_range, intensity, core_expression, sort_order)
+SELECT 1, '紧张/悬疑', 'S01-C01 ~ S01-C03', 7, '从平静到警觉，紧张感逐步升级', 0
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_emotion_segments WHERE version_id = 1 AND emotion_type = '紧张/悬疑');
+
+INSERT INTO storyboard_emotion_segments (version_id, emotion_type, shot_range, intensity, core_expression, sort_order)
+SELECT 1, '对峙/冲突', 'S02-C01 ~ S02-C02', 8, '屋顶对峙，愤怒与揭示交织', 1
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_emotion_segments WHERE version_id = 1 AND emotion_type = '对峙/冲突');
+
+-- 提示词模板
+INSERT INTO storyboard_prompt_templates (version_id, template_code, emotion_name, shot_refs_json, image_prompt, video_motion_prompt, sort_order)
+SELECT 1, 'TEMPLATE_NIGHT_ALLEY', '紧张悬疑', '["shot-key-1","shot-key-2","shot-key-3"]', 'cinematic shot, {location} at night, {lighting}, {character_action}, volumetric lighting, hyperrealistic, 8k, noir style', 'slow {camera_motion}, atmospheric fog particles', 0
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_prompt_templates WHERE version_id = 1 AND template_code = 'TEMPLATE_NIGHT_ALLEY');
+
+INSERT INTO storyboard_prompt_templates (version_id, template_code, emotion_name, shot_refs_json, image_prompt, video_motion_prompt, sort_order)
+SELECT 1, 'TEMPLATE_ROOFTOP', '对峙冲突', '["shot-key-4","shot-key-5"]', 'low angle, {character} on rooftop against moon, silhouette, dramatic lighting, wuxia cinematic style', 'camera {camera_motion}, wind effects, dramatic reveal', 1
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_prompt_templates WHERE version_id = 1 AND template_code = 'TEMPLATE_ROOFTOP');
+
+-- 创意规则
+INSERT INTO storyboard_creative_rules (version_id, rule_type, dimension_name, principle, implementation_text, status, sort_order)
+SELECT 1, 'visual', '色彩对比', '冷蓝vs血红：体现主角理性与暗夜暴力的冲突', '夜景场景使用冷蓝色调（色温5600K），关键物品（血迹/护身符）用暖红色强调', 'active', 0
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_creative_rules WHERE version_id = 1 AND rule_type = 'visual' AND dimension_name = '色彩对比');
+
+INSERT INTO storyboard_creative_rules (version_id, rule_type, dimension_name, principle, implementation_text, status, sort_order)
+SELECT 1, 'camera', '手持感', '跟踪镜头使用微晃手持风格，增强第一人称代入感', '林深POV镜头使用4-8Hz微震动，对峙场景使用稳定锁头', 'active', 1
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_creative_rules WHERE version_id = 1 AND rule_type = 'camera' AND dimension_name = '手持感');
+
+INSERT INTO storyboard_creative_rules (version_id, rule_type, dimension_name, principle, implementation_text, status, sort_order)
+SELECT 1, 'editing', '节奏控制', '每3-4个慢镜头后插入一个快速剪辑，制造呼吸感', '悬疑段落平均镜头长度3-5秒，动作段落1-2秒', 'active', 2
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_creative_rules WHERE version_id = 1 AND rule_type = 'editing' AND dimension_name = '节奏控制');
+
+-- 人物视觉规范
+INSERT INTO storyboard_character_visuals (version_id, character_name, core_identity, daily_look, task_look, performance_anchor, prompt_lock, sort_order)
+SELECT 1, '林夜(主角)', '25岁，前刑警，冷峻内敛，身高182cm，习惯性按刀柄', '黑色风衣、深灰高领毛衣、深色牛仔裤', '黑色战术夹克、腰间配刀、手套', '眼神先动→身体再跟→最后是动作', 'Chinese male detective, 25yo, short black hair, sharp jawline, tall lean build, wearing black trench coat, cold expression, realistic anime style', 0
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_character_visuals WHERE version_id = 1 AND character_name = '林夜(主角)');
+
+INSERT INTO storyboard_character_visuals (version_id, character_name, core_identity, daily_look, task_look, performance_anchor, prompt_lock, sort_order)
+SELECT 1, '蒙面人/夜王', '42岁，半机械改造，神秘冷酷，亦敌亦友', '斗篷+面具（前期）/ 高领大衣（后期）', '机械面具、金属义肢、暗色战术装备', '先摘面具→金属反光→嘴角微扬', 'cyborg antagonist, half mechanical face, liquid metal surface, dark cloak, glowing eye, cyberpunk meets wuxia, menacing yet elegant', 1
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_character_visuals WHERE version_id = 1 AND character_name = '蒙面人/夜王');
+
+-- 镜头-人物视觉绑定
+INSERT INTO storyboard_shot_visual_bindings (version_id, shot_id, character_visual_id, application_note, anti_drift_requirement)
+SELECT 1, 1, 1, '全景入场，风衣下摆飘动幅度15-20度', '风衣颜色#1a1a1a，不可偏蓝或偏棕'
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_shot_visual_bindings WHERE version_id = 1 AND shot_id = 1 AND character_visual_id = 1);
+
+INSERT INTO storyboard_shot_visual_bindings (version_id, shot_id, character_visual_id, application_note, anti_drift_requirement)
+SELECT 1, 4, 1, '低角度英雄镜头，月光勾勒剪影', '身形比例保持182cm/78kg视觉标准'
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_shot_visual_bindings WHERE version_id = 1 AND shot_id = 4 AND character_visual_id = 1);
+
+INSERT INTO storyboard_shot_visual_bindings (version_id, shot_id, character_visual_id, application_note, anti_drift_requirement)
+SELECT 1, 5, 2, '摘面具关键帧，机械面部高光需流动', '金属表面反射率0.85，色彩#c0c0d0'
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_shot_visual_bindings WHERE version_id = 1 AND shot_id = 5 AND character_visual_id = 2);
+
+-- 审核问题
+INSERT INTO storyboard_review_issues (version_id, fingerprint, issue_type, severity, shot_id, message, evidence, suggestion, status)
+SELECT 1, 'fp-001', 'visual_continuity', 'P1', 3, '血迹颜色在shot-003和shot-001中不一致', 'shot-001: 暗红色 #8B0000, shot-003: 亮红色 #FF0000', '统一使用暗红色 #8B0000，考虑月光下的色温偏移', 'open'
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_review_issues WHERE version_id = 1 AND fingerprint = 'fp-001');
+
+INSERT INTO storyboard_review_issues (version_id, fingerprint, issue_type, severity, shot_id, message, evidence, suggestion, status)
+SELECT 1, 'fp-002', 'pacing', 'P2', 4, '屋顶跃上镜头时长4.5s偏长，建议压缩至3.5s', '同类动作场景行业标准2.5-3.5s', '将shot-004 duration_ms 调整为3500', 'open'
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_review_issues WHERE version_id = 1 AND fingerprint = 'fp-002');
+
+INSERT INTO storyboard_review_issues (version_id, fingerprint, issue_type, severity, shot_id, message, evidence, suggestion, status, resolution_note, resolved_by, resolved_at)
+SELECT 1, 'fp-003', 'dialogue', 'P2', 5, '台词"你还记得五年前的那个夜晚吗？"与前文缺少铺垫', '前4个镜头未提及五年前事件', '在shot-003中加入一个闪回暗示（如护身符特写）', 'resolved', '已在shot-003中加入护身符特写镜头', 1, DATEADD('HOUR', -2, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_review_issues WHERE version_id = 1 AND fingerprint = 'fp-003');
+
+-- 分镜任务
+INSERT INTO storyboard_jobs (uuid, project_id, storyboard_id, version_id, job_type, status, idempotency_key, progress_percent, current_stage, created_by, started_at, finished_at)
+SELECT 'sb-job-001', 1, 1, 1, 'consistency_check', 'completed', 'idem-check-001', 100, 'done', 1, DATEADD('HOUR', -5, CURRENT_TIMESTAMP), DATEADD('HOUR', -4, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_jobs WHERE uuid = 'sb-job-001');
+
+INSERT INTO storyboard_jobs (uuid, project_id, storyboard_id, version_id, job_type, status, idempotency_key, progress_percent, current_stage, created_by, started_at)
+SELECT 'sb-job-002', 1, 1, 1, 'prompt_generation', 'running', 'idem-prompt-001', 60, 'generating_image_prompts', 1, DATEADD('MINUTE', -30, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_jobs WHERE uuid = 'sb-job-002');
+
+-- 分镜审计日志
+INSERT INTO storyboard_audit_logs (version_id, actor_user_id, action_type, target_type, target_id, operation_id, created_at)
+SELECT 1, 1, 'create_version', 'storyboard_version', 1, 'op-001', DATEADD('HOUR', -6, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_audit_logs WHERE version_id = 1 AND operation_id = 'op-001');
+
+INSERT INTO storyboard_audit_logs (version_id, actor_user_id, action_type, target_type, target_id, operation_id, created_at)
+SELECT 1, 1, 'add_shot', 'storyboard_version_shot', 1, 'op-002', DATEADD('HOUR', -5, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_audit_logs WHERE version_id = 1 AND operation_id = 'op-002');
+
+INSERT INTO storyboard_audit_logs (version_id, actor_user_id, action_type, target_type, target_id, operation_id, created_at)
+SELECT 1, 1, 'resolve_issue', 'storyboard_review_issue', 3, 'op-003', DATEADD('HOUR', -2, CURRENT_TIMESTAMP)
+WHERE NOT EXISTS (SELECT 1 FROM storyboard_audit_logs WHERE version_id = 1 AND operation_id = 'op-003');
+
+-- ============================================================
+-- Q. 世界构建数据 (Worldbuilding — M3 Long-form)
+-- ============================================================
+-- 角色档案 (属于 content_project id=2: 暗夜追光者)
+INSERT INTO character_profiles (project_id, name, role, archetype, appearance, personality, motivation, long_term_goal, dialogue_style, backstory, status)
+SELECT 2, '林深', '主角', '反英雄/孤独的追寻者', '32岁，前刑警队长，身高183cm，黑色短发微乱，眼神锐利但疲惫，常穿深色便装夹克', '冷静、执着、正义感强但手段灵活，有自我毁灭倾向', '找到失踪的妹妹林小雨，揭开她消失背后的真相', '摧毁"暗夜"背后的真正黑手，重建自己的人生', '言简意赅，善于反问，偶尔有黑色幽默', '曾是警队最年轻的刑警队长，因妹妹失踪案与上级发生冲突后辞职。精通刑侦、格斗和心理学。', 'draft'
+WHERE NOT EXISTS (SELECT 1 FROM character_profiles WHERE project_id = 2 AND name = '林深');
+
+INSERT INTO character_profiles (project_id, name, role, archetype, appearance, personality, motivation, long_term_goal, dialogue_style, backstory, status)
+SELECT 2, '夜王/陆砚秋', '反派/导师', '灰色导师/悲剧反派', '42岁，半张脸被机械义体覆盖，身高188cm，穿暗色定制西装或斗篷', '冷酷但不残忍，有自己的一套道德准则，对弟子林小雨有父亲般的保护欲', '用极端手段对抗更大的犯罪集团"深渊"，为过去牺牲的战友复仇', '摧毁"深渊"，然后接受法律的审判', '言谈优雅但暗藏威胁，喜欢用隐喻，标志句："这个世界从来不是非黑即白"', '前国安特工，五年前的一次行动中被背叛，全队覆没。重伤后被机械改造，从此以"夜王"身份活动。在流浪中发现了林小雨的天赋，收为弟子。', 'draft'
+WHERE NOT EXISTS (SELECT 1 FROM character_profiles WHERE project_id = 2 AND name = '夜王/陆砚秋');
+
+INSERT INTO character_profiles (project_id, name, role, archetype, appearance, personality, motivation, long_term_goal, dialogue_style, backstory, status)
+SELECT 2, '林小雨', '关键人物/麦高芬', '失踪的天才/隐藏的钥匙', '19岁，黑色长发，面容与哥哥有七分相似但更柔和', '聪明绝顶但天真，在被导师培养后变得更加沉稳', '在"暗夜"中找到自己的价值和归属', '在哥哥和导师之间找到第三条路', '前期天真好奇，后期沉稳冷静', '计算机天才，16岁即被发现拥有罕见的密码学天赋。三年前被"深渊"盯上，被陆砚秋救下后成为其弟子。她的失踪是推动整个故事的引擎。', 'draft'
+WHERE NOT EXISTS (SELECT 1 FROM character_profiles WHERE project_id = 2 AND name = '林小雨');
+
+-- 情节任务
+INSERT INTO plot_tasks (project_id, task_type, title, description, stage_goals, obstacles, character_ids, status, sort_order)
+SELECT 2, 'main', '潜入暗夜', '林深以卧底身份加入暗夜组织，赢取夜王的信任', '1.通过三轮试炼 2.找到妹妹线索 3.不被识破身份', '组织的严密审查、其他成员的怀疑、道德困境', '1,2,3', 'in_progress', 0
+WHERE NOT EXISTS (SELECT 1 FROM plot_tasks WHERE project_id = 2 AND title = '潜入暗夜');
+
+INSERT INTO plot_tasks (project_id, task_type, title, description, stage_goals, obstacles, character_ids, status, sort_order)
+SELECT 2, 'main', '揭露深渊', '在夜王的引导下，发现真正的敌人——犯罪集团"深渊"', '1.获取深渊情报 2.理解夜王的动机 3.决定是否合作', '信息不对称、FBI/警方介入、信任危机', '1,2', 'planned', 1
+WHERE NOT EXISTS (SELECT 1 FROM plot_tasks WHERE project_id = 2 AND title = '揭露深渊');
+
+INSERT INTO plot_tasks (project_id, task_type, title, description, stage_goals, obstacles, character_ids, status, sort_order)
+SELECT 2, 'sub', '兄妹重逢', '林深最终找到妹妹，但发现她已不再是当年的小女孩', '1.定位妹妹 2.面对她的选择 3.接受或改变', '妹妹不愿意离开暗夜、夜王的反对', '1,3', 'planned', 2
+WHERE NOT EXISTS (SELECT 1 FROM plot_tasks WHERE project_id = 2 AND title = '兄妹重逢');
+
+-- 卷大纲
+INSERT INTO volume_outlines (project_id, volume_no, title, goal, turns, volume_end_hook, chapter_count, status, sort_order)
+SELECT 2, 1, '第一卷·暗夜之门', '林深加入暗夜，通过试炼，获得初步信任', '码头追查→神秘人现身→加入暗夜→三轮试炼→初见夜王', '夜王摘下面具的瞬间，林深发现那张脸上有与妹妹相同的刺青...', 12, 'completed', 0
+WHERE NOT EXISTS (SELECT 1 FROM volume_outlines WHERE project_id = 2 AND volume_no = 1);
+
+INSERT INTO volume_outlines (project_id, volume_no, title, goal, turns, volume_end_hook, chapter_count, status, sort_order)
+SELECT 2, 2, '第二卷·深渊之影', '林深参与第一次暗夜任务，逐渐发现真相', '首次任务→接触深渊→内部叛徒→夜王的过去→矛盾升级', '夜王重伤倒地，对林深说："保护好小雨...她才是他们的目标。"', 15, 'draft', 1
+WHERE NOT EXISTS (SELECT 1 FROM volume_outlines WHERE project_id = 2 AND volume_no = 2);
+
+-- 世界地点
+INSERT INTO world_locations (project_id, name, tier, description, area_type, visual_reference)
+SELECT 2, '废弃货运码头', 'L2', '城市东郊的废弃港口，90年代曾是繁华的货运枢纽。集装箱堆叠如同巨大的钢铁迷宫，海风穿过缝隙发出呜咽声。', 'urban_decay', '参考《银翼杀手2049》中的废弃工厂场景，但保留现代中国港口特色'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE project_id = 2 AND name = '废弃货运码头');
+
+INSERT INTO world_locations (project_id, name, tier, description, area_type, visual_reference)
+SELECT 2, '暗夜基地', 'L2', '位于码头地下30米深处的秘密基地。原为冷战时期的防空洞，被夜王改造为高科技据点。金属走廊、全息屏幕、恒温恒湿。', 'underground_bunker', '参考《攻壳机动队》中的公安九课总部，融合工业风与高科技'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE project_id = 2 AND name = '暗夜基地');
+
+INSERT INTO world_locations (project_id, name, tier, description, area_type, visual_reference)
+SELECT 2, '林深的公寓', 'L1', '城市中心的单身公寓，简约但凌乱。墙上贴满了妹妹失踪案的线索地图和照片。窗户永远半拉着百叶窗。', 'urban_apartment', '参考经典侦探电影的调查墙，体现主角的执念'
+WHERE NOT EXISTS (SELECT 1 FROM world_locations WHERE project_id = 2 AND name = '林深的公寓');
+
+-- 故事时间线
+INSERT INTO story_timeline (project_id, event_name, description, relative_time, involved_characters, sort_order)
+SELECT 2, '林小雨失踪', '19岁的林小雨在放学路上失踪，监控最后拍到她在码头附近出现', '故事开始前3个月', '1,3', 0
+WHERE NOT EXISTS (SELECT 1 FROM story_timeline WHERE project_id = 2 AND event_name = '林小雨失踪');
+
+INSERT INTO story_timeline (project_id, event_name, description, relative_time, involved_characters, sort_order)
+SELECT 2, '林深辞职', '林深因调查方向与上级冲突，从警队辞职开始独立调查', '故事开始前2个月', '1', 1
+WHERE NOT EXISTS (SELECT 1 FROM story_timeline WHERE project_id = 2 AND event_name = '林深辞职');
+
+INSERT INTO story_timeline (project_id, event_name, description, relative_time, involved_characters, sort_order)
+SELECT 2, '码头追踪', '林深在码头追踪线索时首次遭遇暗夜成员', '第1集', '1', 2
+WHERE NOT EXISTS (SELECT 1 FROM story_timeline WHERE project_id = 2 AND event_name = '码头追踪');
+
+INSERT INTO story_timeline (project_id, event_name, description, relative_time, involved_characters, sort_order)
+SELECT 2, '加入暗夜', '林深通过试炼，正式成为暗夜成员', '第3-4集', '1,2,3', 3
+WHERE NOT EXISTS (SELECT 1 FROM story_timeline WHERE project_id = 2 AND event_name = '加入暗夜');
+
+INSERT INTO story_timeline (project_id, event_name, description, relative_time, involved_characters, sort_order)
+SELECT 2, '夜王揭面', '夜王首次摘下面具，揭示真实身份', '第5集末尾', '1,2', 4
+WHERE NOT EXISTS (SELECT 1 FROM story_timeline WHERE project_id = 2 AND event_name = '夜王揭面');
+
+-- 伏笔项
+INSERT INTO foreshadowing_items (project_id, description, planted_in_unit_id, payoff_in_unit_id, status, category, character_ids)
+SELECT 2, '林深公寓墙上的照片中，有一张照到了夜王年轻时的背影', 2, NULL, 'planted', 'visual', '1,2'
+WHERE NOT EXISTS (SELECT 1 FROM foreshadowing_items WHERE project_id = 2 AND description LIKE '%夜王年轻时的背影%');
+
+INSERT INTO foreshadowing_items (project_id, description, planted_in_unit_id, payoff_in_unit_id, status, category, character_ids)
+SELECT 2, '妹妹的护身符内部藏有加密芯片', 2, 4, 'planted', 'prop', '1,3'
+WHERE NOT EXISTS (SELECT 1 FROM foreshadowing_items WHERE project_id = 2 AND description LIKE '%加密芯片%');
+
+INSERT INTO foreshadowing_items (project_id, description, planted_in_unit_id, payoff_in_unit_id, status, category, character_ids)
+SELECT 2, '第一集码头集装箱上的陌生标记，是深渊组织的暗号', 2, NULL, 'planted', 'clue', '1,2'
+WHERE NOT EXISTS (SELECT 1 FROM foreshadowing_items WHERE project_id = 2 AND description LIKE '%陌生标记%');
+
+-- ============================================================
+-- R. TVC 商业脚本数据 (project_id=5)
+-- ============================================================
+INSERT INTO tvc_briefs (project_id, brand_name, product_name, target_audience, budget, platforms, duration, additional_notes, status)
+SELECT 5, '脉动星', '脉动星·觉醒能量饮料', '18-30岁年轻职场人群，追求活力与效率', '50-100万', '抖音,小红书,B站', '30秒', '需要突出"自然能量、快速恢复"的核心卖点，避免传统功能饮料的刻板印象', 'draft'
+WHERE NOT EXISTS (SELECT 1 FROM tvc_briefs WHERE project_id = 5);
+
+INSERT INTO brand_facts (project_id, fact_type, content, evidence_status, is_must_express)
+SELECT 5, 'product_claim', '100%天然植物提取成分，不含人工咖啡因', 'verified', 'yes'
+WHERE NOT EXISTS (SELECT 1 FROM brand_facts WHERE project_id = 5 AND content LIKE '%天然植物%');
+
+INSERT INTO brand_facts (project_id, fact_type, content, evidence_status, is_must_express)
+SELECT 5, 'product_claim', '饮用后15分钟开始发挥作用，持续4-6小时', 'verified', 'yes'
+WHERE NOT EXISTS (SELECT 1 FROM brand_facts WHERE project_id = 5 AND content LIKE '%15分钟%');
+
+INSERT INTO brand_facts (project_id, fact_type, content, evidence_status, is_must_express)
+SELECT 5, 'brand_value', '品牌理念：唤醒每一个奋斗的灵魂', 'verified', 'yes'
+WHERE NOT EXISTS (SELECT 1 FROM brand_facts WHERE project_id = 5 AND content LIKE '%唤醒%');
+
+INSERT INTO brand_facts (project_id, fact_type, content, evidence_status, is_must_not_express)
+SELECT 5, 'competitor_mention', '请勿暗示或比较竞品（红牛、魔爪等）', 'verified', 'yes'
+WHERE NOT EXISTS (SELECT 1 FROM brand_facts WHERE project_id = 5 AND content LIKE '%竞品%');
+
+INSERT INTO creative_strategies (project_id, angle_no, angle_name, opening_hook, value_proposition, brand_memory_point, platform, status)
+SELECT 5, 1, '深夜加班·觉醒时刻', '凌晨2点，办公室里只剩他一个人。他看着屏幕上的倒计时，打开了那罐银色的饮料...', '在每一个需要坚持的深夜，脉动星给你最自然的能量支撑', '银色罐身上的星轨图案在黑暗中微微发光', '抖音', 'draft'
+WHERE NOT EXISTS (SELECT 1 FROM creative_strategies WHERE project_id = 5 AND angle_no = 1);
+
+INSERT INTO creative_strategies (project_id, angle_no, angle_name, opening_hook, value_proposition, brand_memory_point, platform, status)
+SELECT 5, 2, '晨跑·新的一天', '城市还在沉睡，她已经在江边跑了五公里。停下来喝水的那一刻，阳光刚好升起。', '脉动星陪你迎接每一个清晨的第一缕阳光', '易拉罐开启的声音与日出同步', '小红书', 'draft'
+WHERE NOT EXISTS (SELECT 1 FROM creative_strategies WHERE project_id = 5 AND angle_no = 2);
+
+INSERT INTO tvc_scripts (project_id, source_unit_id, version_name, content_json, plain_text, duration_sec, platforms, status, content_hash)
+SELECT 5, NULL, 'v1-深夜加班版', '{"scenes":[{"id":1,"description":"深夜办公室全景","duration":5},{"id":2,"description":"主角困倦特写","duration":5},{"id":3,"description":"打开脉动星","duration":8},{"id":4,"description":"喝下后精力恢复","duration":7},{"id":5,"description":"产品展示+品牌口号","duration":5}]}', '深夜办公室，一个年轻人正在加班。困意袭来，他拿起了脉动星。喝下之后，眼神重新聚焦，手指在键盘上飞舞。脉动星，唤醒每一个奋斗的灵魂。', 30, '抖音,B站', 'draft', 'hash-tvc-001'
+WHERE NOT EXISTS (SELECT 1 FROM tvc_scripts WHERE project_id = 5 AND version_name = 'v1-深夜加班版');
+
+-- ============================================================
+-- S. 质量报告
+-- ============================================================
+INSERT INTO quality_reports (uuid, project_id, canvas_project_id, correctness_score, security_score, performance_score, cost_score, consistency_score, issues_json, summary, status)
+SELECT 'qr-001', 2, NULL, 85, 90, 78, 82, 88, '[{"type":"continuity","severity":"minor","desc":"第2集与第3集码头场景色调有轻微差异"}]', '整体质量良好，连续性方面有1个小问题建议修正', 'open'
+WHERE NOT EXISTS (SELECT 1 FROM quality_reports WHERE uuid = 'qr-001');
+
+INSERT INTO quality_reports (uuid, project_id, canvas_project_id, correctness_score, security_score, performance_score, cost_score, consistency_score, issues_json, summary, status)
+SELECT 'qr-002', 2, NULL, 92, 95, 85, 88, 94, '[]', '全部指标达到A级标准，建议通过', 'open'
+WHERE NOT EXISTS (SELECT 1 FROM quality_reports WHERE uuid = 'qr-002');
+
+-- ============================================================
+-- T. 标签字典
+-- ============================================================
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'genre', 'romance', '言情', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'genre' AND tag_value = 'romance');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'genre', 'suspense', '悬疑', 2, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'genre' AND tag_value = 'suspense');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'genre', 'scifi', '科幻', 3, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'genre' AND tag_value = 'scifi');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'genre', 'fantasy', '奇幻', 4, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'genre' AND tag_value = 'fantasy');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'genre', 'wuxia', '武侠', 5, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'genre' AND tag_value = 'wuxia');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'plot', 'rebirth', '重生', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'plot' AND tag_value = 'rebirth');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'plot', 'time_travel', '穿越', 2, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'plot' AND tag_value = 'time_travel');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'plot', 'revenge', '复仇', 3, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'plot' AND tag_value = 'revenge');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'plot', 'undercover', '卧底', 4, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'plot' AND tag_value = 'undercover');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'plot', 'adventure', '冒险', 5, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'plot' AND tag_value = 'adventure');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'tone', 'sweet', '甜宠', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'tone' AND tag_value = 'sweet');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'tone', 'thrilling', '紧张', 2, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'tone' AND tag_value = 'thrilling');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'tone', 'funny', '搞笑', 3, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'tone' AND tag_value = 'funny');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'tone', 'epic', '史诗', 4, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'tone' AND tag_value = 'epic');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'tone', 'healing', '治愈', 5, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'tone' AND tag_value = 'healing');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'setting', 'modern', '现代', 1, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'setting' AND tag_value = 'modern');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'setting', 'ancient', '古代', 2, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'setting' AND tag_value = 'ancient');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'setting', 'future', '未来', 3, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'setting' AND tag_value = 'future');
+
+INSERT INTO tag_dictionary (axis, tag_value, tag_label, sort_order, is_active)
+SELECT 'setting', 'republic', '民国', 4, 1
+WHERE NOT EXISTS (SELECT 1 FROM tag_dictionary WHERE axis = 'setting' AND tag_value = 'republic');
+
+-- ============================================================
+-- U. 内容项目资料 (Project Profiles)
+-- ============================================================
+INSERT INTO content_project_profiles (project_id, genre_tag, plot_tags, tone_tags, setting_tag, synopsis, outline, updated_by)
+SELECT 2, '悬疑', '["卧底","复仇","悬疑"]', '["紧张","反转","暗黑"]', '现代', '前刑警队长林深为追查妹妹失踪真相，卧底进入神秘组织"暗夜"。在正义与黑暗的边缘，他发现了一个惊天秘密——妹妹的失踪与一个更大的犯罪集团"深渊"有关。', '60集悬疑剧集大纲：第一卷(1-12集)潜入暗夜，第二卷(13-27集)深渊之影，第三卷(28-45集)真相大白，第四卷(46-60集)终极对决', 2
+WHERE NOT EXISTS (SELECT 1 FROM content_project_profiles WHERE project_id = 2);
+
+INSERT INTO content_project_profiles (project_id, genre_tag, plot_tags, tone_tags, setting_tag, synopsis, updated_by)
+SELECT 3, '奇幻', '["古装","探案","玄幻"]', '["奇幻","紧张","史诗"]', '古代', '盛唐长安，天才幻术师白鹤卷入皇室秘宝惊天阴谋。真幻交织之间，他发现最大的幻术，是人心。', 1
+WHERE NOT EXISTS (SELECT 1 FROM content_project_profiles WHERE project_id = 3);
+
+-- ============================================================
+-- V. 项目设定实体 (角色/场景/道具设定)
+-- ============================================================
+INSERT INTO project_setting_entities (project_id, setting_type, canonical_name, summary, details_json, status, source_type, current_version_no, created_by)
+SELECT 2, 'character', '林深', '32岁前刑警队长，冷峻执着，为救妹妹甘愿化身卧底', '{"age":32,"gender":"男","height":183,"occupation":"前刑警队长/卧底","appearance":"黑色短发微乱，眼神锐利但疲惫","clothing":"深色便装夹克、黑色长裤","signature_item":"妹妹的护身符"}', 'draft', 'manual', 1, 2
+WHERE NOT EXISTS (SELECT 1 FROM project_setting_entities WHERE project_id = 2 AND setting_type = 'character' AND canonical_name = '林深');
+
+INSERT INTO project_setting_entities (project_id, setting_type, canonical_name, summary, details_json, status, source_type, current_version_no, created_by)
+SELECT 2, 'character', '夜王', '暗夜组织领袖，半机械改造人，神秘冷酷', '{"age":42,"gender":"男","height":188,"occupation":"暗夜组织首领","appearance":"半张脸覆盖机械义体","clothing":"暗色定制西装/斗篷","signature_item":"机械面具"}', 'draft', 'manual', 1, 2
+WHERE NOT EXISTS (SELECT 1 FROM project_setting_entities WHERE project_id = 2 AND setting_type = 'character' AND canonical_name = '夜王');
+
+INSERT INTO project_setting_entities (project_id, setting_type, canonical_name, summary, details_json, status, source_type, current_version_no, created_by)
+SELECT 2, 'location', '废弃货运码头', '城市东郊废弃港口，集装箱迷宫，暗夜基地入口所在地', '{"era":"现代","type":"废弃工业区","size":"约2平方公里","features":["集装箱堆场","废弃仓库","地下入口"]}', 'draft', 'manual', 1, 2
+WHERE NOT EXISTS (SELECT 1 FROM project_setting_entities WHERE project_id = 2 AND setting_type = 'location' AND canonical_name = '废弃货运码头');
+
+INSERT INTO project_setting_entities (project_id, setting_type, canonical_name, summary, details_json, status, source_type, current_version_no, created_by)
+SELECT 2, 'location', '暗夜基地', '码头地下30米的秘密基地，冷战时期防空洞改造', '{"era":"现代","type":"地下基地","size":"约5000平方米","features":["指挥中心","训练场","武器库","监牢"]}', 'draft', 'manual', 1, 2
+WHERE NOT EXISTS (SELECT 1 FROM project_setting_entities WHERE project_id = 2 AND setting_type = 'location' AND canonical_name = '暗夜基地');
+
+INSERT INTO project_setting_entities (project_id, setting_type, canonical_name, summary, details_json, status, source_type, current_version_no, created_by)
+SELECT 2, 'prop', '妹妹的护身符', '林小雨留给哥哥的最后物品，银质月牙吊坠，内部藏有加密芯片', '{"material":"925银","shape":"月牙","size":"2cm","secret":"内置加密芯片"}', 'draft', 'manual', 1, 2
+WHERE NOT EXISTS (SELECT 1 FROM project_setting_entities WHERE project_id = 2 AND setting_type = 'prop' AND canonical_name = '妹妹的护身符');
+
+-- 项目设定版本
+INSERT INTO project_setting_versions (entity_id, version_no, snapshot_json, field_changes_json, operated_by)
+SELECT 1, 1, '{"age":32,"gender":"男","height":183,"occupation":"前刑警队长","appearance":"黑色短发微乱"}', '{"initial":"创建角色设定"}', 2
+WHERE NOT EXISTS (SELECT 1 FROM project_setting_versions WHERE entity_id = 1 AND version_no = 1);
+
+INSERT INTO project_setting_versions (entity_id, version_no, snapshot_json, field_changes_json, operated_by)
+SELECT 2, 1, '{"age":42,"gender":"男","height":188,"occupation":"暗夜组织首领","appearance":"半机械脸"}', '{"initial":"创建角色设定"}', 2
+WHERE NOT EXISTS (SELECT 1 FROM project_setting_versions WHERE entity_id = 2 AND version_no = 1);
+
+-- ============================================================
+-- W. 资产市场交互数据 (收藏/授权/发布申请)
+-- ============================================================
+-- 资产收藏
+INSERT INTO asset_favorites (user_id, workspace_id, listing_id)
+SELECT 1, 'personal_1', 1
+WHERE NOT EXISTS (SELECT 1 FROM asset_favorites WHERE user_id = 1 AND listing_id = 1);
+
+INSERT INTO asset_favorites (user_id, workspace_id, listing_id)
+SELECT 1, 'personal_1', 3
+WHERE NOT EXISTS (SELECT 1 FROM asset_favorites WHERE user_id = 1 AND listing_id = 3);
+
+INSERT INTO asset_favorites (user_id, workspace_id, listing_id)
+SELECT 1, 'personal_1', 5
+WHERE NOT EXISTS (SELECT 1 FROM asset_favorites WHERE user_id = 1 AND listing_id = 5);
+
+INSERT INTO asset_favorites (user_id, workspace_id, listing_id)
+SELECT 2, 'personal_2', 1
+WHERE NOT EXISTS (SELECT 1 FROM asset_favorites WHERE user_id = 2 AND listing_id = 1);
+
+INSERT INTO asset_favorites (user_id, workspace_id, listing_id)
+SELECT 2, 'personal_2', 4
+WHERE NOT EXISTS (SELECT 1 FROM asset_favorites WHERE user_id = 2 AND listing_id = 4);
+
+-- 资产授权 (用户1申领了资产1和5)
+INSERT INTO asset_entitlements (beneficiary_workspace_id, listing_id, source_version_id, grant_type, claimed_by)
+SELECT 'personal_1', 1, 1, 'FREE_CLAIM', 1
+WHERE NOT EXISTS (SELECT 1 FROM asset_entitlements WHERE beneficiary_workspace_id = 'personal_1' AND listing_id = 1);
+
+INSERT INTO asset_entitlements (beneficiary_workspace_id, listing_id, source_version_id, grant_type, claimed_by)
+SELECT 'personal_1', 5, 5, 'FREE_CLAIM', 1
+WHERE NOT EXISTS (SELECT 1 FROM asset_entitlements WHERE beneficiary_workspace_id = 'personal_1' AND listing_id = 5);
+
+-- 资产发布申请
+INSERT INTO asset_publish_requests (workspace_id, asset_id, version_id, requester_id, status, reason)
+SELECT 'personal_1', 11, 11, 1, 'PENDING', '申请将自制角色"林深"上架到公共市场，已确保不侵犯第三方权益'
+WHERE NOT EXISTS (SELECT 1 FROM asset_publish_requests WHERE workspace_id = 'personal_1' AND asset_id = 11);
+
+INSERT INTO asset_publish_requests (workspace_id, asset_id, version_id, requester_id, reviewer_id, status, reason, review_comment)
+SELECT 'personal_2', 12, 12, 2, 1, 'APPROVED', '申请上架"废弃码头"场景资产', '资产质量合格，同意上架'
+WHERE NOT EXISTS (SELECT 1 FROM asset_publish_requests WHERE workspace_id = 'personal_2' AND asset_id = 12);
+
+-- ============================================================
+-- X. 上传文件记录
+-- ============================================================
+INSERT INTO content_upload_files (uuid, user_id, original_name, file_type, file_size, parsed_text, parse_status)
+SELECT 'upload-001', 2, '暗夜追光者_原著小说_前3章.docx', 'docx', 245760, '第一章·消失的妹妹 林深站在废弃码头的集装箱前...（以下省略解析文本）', 'completed'
+WHERE NOT EXISTS (SELECT 1 FROM content_upload_files WHERE uuid = 'upload-001');
+
+INSERT INTO content_upload_files (uuid, user_id, original_name, file_type, file_size, parse_status)
+SELECT 'upload-002', 4, '都市爱情系列_完整手稿.pdf', 'pdf', 1048576, 'pending'
+WHERE NOT EXISTS (SELECT 1 FROM content_upload_files WHERE uuid = 'upload-002');
+
+-- ============================================================
+-- Y. 连续性快照
+-- ============================================================
+INSERT INTO continuity_snapshots (project_id, content_unit_id, snapshot_json, content_hash)
+SELECT 2, 2, '{"characters":{"林深":{"status":"active","location":"废弃码头","emotion":"紧张"},"夜王":{"status":"behind_scenes","location":"暗夜基地"}},"plot_points":{"妹妹线索":"已发现护身符"},"locations_visited":["废弃码头"]}', 'cont-hash-002'
+WHERE NOT EXISTS (SELECT 1 FROM continuity_snapshots WHERE project_id = 2 AND content_unit_id = 2);
+
+-- ============================================================
+-- Z. 设定提取批次 (演示AI提取功能)
+-- ============================================================
+INSERT INTO setting_extraction_batches (project_id, source_version_id, target_setting_types, idempotency_key, status, model_id, created_by)
+SELECT 2, 2, '["character","location","prop"]', 'extract-batch-001', 'completed', 'claude-sonnet-4-6', 2
+WHERE NOT EXISTS (SELECT 1 FROM setting_extraction_batches WHERE project_id = 2 AND idempotency_key = 'extract-batch-001');
