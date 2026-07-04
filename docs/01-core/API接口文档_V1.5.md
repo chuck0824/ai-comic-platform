@@ -9,6 +9,29 @@
 
 ---
 
+## 基于 superpowers 的更新记录（2026-07-02）
+
+本文档基于 `docs/superpowers/` 下的最新设计文档进行了增量更新，V1.5 → V1.6。主要变更：
+
+| 更新项 | 说明 | 依据 superpowers |
+|---|---|---|
+| 新增 API 域 | `/api/v1/creative-bible` — 创作圣经版本、生态系统规则、写作指南、上下文快照 | `script-creation-creative-bible-design.md` |
+| 新增 API 域 | `/api/v1/agent` — Agent 会话持久化、计划审批、SSE 事件流、步骤重试 | `agent-session-completion-design.md` |
+| 新增 API 域 | `/api/v1/trade` — 脚本交易市场、四种许可证、订单/支付、权益/退款 | `script-trading-market-completion-design.md` |
+| 扩展 API 域 | `/api/v1/asset` — 从 mock 升级为完整资产市场（工作区库、企业审批、项目应用） | `ai-asset-market-completion-design.md` |
+| 扩展 API 域 | `/api/v1/canvas` — 画布项目管理、源快照 diff、生产准入 | `platform-home-canvas-center-design.md` |
+| 新增 API 域 | `/api/v1/storyboards` — 专业分镜编辑器（13 维镜头、A/B/C 分层、XLSX 导入导出） | `storyboard-professional-editor-redesign.md` |
+| 扩展 API 域 | `/api/v1/content-projects` — 仓库生命周期操作（三轴状态过滤、提交审核/锁定/归档） | `script-creation-warehouse-flow-design.md` |
+| 扩展 API 域 | `/api/v1/content-projects/{id}/settings` — 五类设定 CRUD + AI 提取确认 | `work-editor-evolution-design.md` |
+| 认证更新 | 明确 3001 为账户中心唯一数据源，JWT 声明映射规则，`X-Workspace-Id` header | `unified-account-model-billing-design.md` |
+| 错误码补充 | 新增 45xxx（分镜）、46xxx（创作圣经）、47xxx（交易）、48xxx（资产市场）、49xxx（Agent） | 对应 superpowers specs |
+| PATCH 修正 | 2.5 节“暂不使用 PATCH”→“PATCH 用于部分更新”，与 V1.5 大量 PATCH 端点保持一致 | 文档内部一致性 |
+| 画布节点更新 | 反映浮动编辑器改造后的新交互模型 | `canvas-node-floating-editor-design.md` |
+
+> **注意**：本文档中标注 `[superpowers 更新]` 的段落为本次新增或修改内容。
+
+---
+
 ## 目录
 
 - [1. API概述](#1-api概述)
@@ -58,26 +81,30 @@
 | `http://localhost:3001` | new-api 管理端及模型网关 | 复用平台统一身份；仅平台管理员/运维角色可进入管理功能 |
 | `http://localhost:5173` | AICP Vite 调试入口 | 仅开发调试，调用 `8080` 业务 API |
 
-双端“账号共用”不等于“功能共用”。`8080` 与 `3001` 使用同一平台用户标识和登录身份，但分别执行创作业务与模型供应商管理。new-api 中的用户记录仅承载 `new_api_user_id`、分组、配额和令牌映射，不保存第二套平台密码。
+双端”账号共用”不等于”功能共用”。`8080` 与 `3001` 使用同一平台用户标识和登录身份，但分别执行创作业务与模型供应商管理。
 
-> 当前联调状态（2026-06-27）：端口与服务已分离；统一登录票据、角色映射和账号自动同步尚未完成，暂不得把 new-api 本地管理员登录视为正式共用账号方案。
+`[superpowers 更新]` **V1.6 架构决策**：`3001` 已确定为账户中心**唯一数据源（Single Source of Truth）**。用户、工作区、成员、角色、余额、API Key、模型目录、计费等所有账户主数据由 `3001` 管理。`8080` 不得维护这些数据的重复副本。`8080` 通过 BFF 适配层调用 `3001` 版本化 API 读取/操作账户数据。
+
+> 当前联调状态（2026-06-27）：端口与服务已分离；统一登录票据、角色映射和账号自动同步为 P0 遗留项。详见 `docs/superpowers/specs/2026-06-28-unified-account-model-billing-design.md`。
 
 ### 1.2 服务路由
 
 | 路由前缀 | 目标服务 | 认证 |
 |----------|---------|:---:|
-| `/api/v1/auth/*` | user-svc | 无 |
-| `/api/v1/user/*` | user-svc | JWT |
-| `/api/v1/enterprise/*` | user-svc | JWT + 企业角色 |
-| `/api/v1/script/gen/*` | script-gen-svc | JWT |
-| `/api/v1/script/repo/*` | script-repo-svc | JWT |
-| `/api/v1/trade/*` | trade-svc | JWT |
-| `/api/v1/asset/*` | asset-market-svc | JWT |
-| `/api/v1/canvas/*` | canvas-svc | JWT |
-| `/api/v1/storyboards/*` | canvas-svc / storyboard-svc | JWT |
+| `/api/v1/auth/*` | user-svc / 3001（账户中心） | 无 |
+| `/api/v1/user/*` | user-svc / 3001（账户中心） | JWT |
+| `/api/v1/enterprise/**` 🔄 | enterprise-svc（8080 BFF → 3001 代理） | JWT + `X-Workspace-Id` + WorkspaceContext 权限码 |
+| `/api/v1/content-projects/*` | contentproject-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/script/gen/*` | script-gen-svc（兼容旧路径） | JWT |
+| `/api/v1/script/repo/*` | script-repo-svc（兼容旧路径） | JWT |
+| `/api/v1/trade/*` `[superpowers 更新]` | trade-svc（8080 业务 + 3001 钱包） | JWT + `X-Workspace-Id` |
+| `/api/v1/asset/*` `[superpowers 更新]` | asset-svc（8080 资产市场 + WorkspaceContextFilter） | JWT + `X-Workspace-Id` |
+| `/api/v1/canvas/*` `[superpowers 更新]` | canvas-svc（画布编辑器 + 画布项目中心） | JWT + `X-Workspace-Id` |
+| `/api/v1/storyboards/*` `[superpowers 更新]` | storyboard-svc（统一专业分镜编辑器） | JWT + `X-Workspace-Id` |
+| `/api/v1/creative-bible/*` `[superpowers 更新]` | creative-bible-svc（创作圣经） | JWT + `X-Workspace-Id` |
 | `/api/v1/generation/*` | generation-svc | JWT |
-| `/api/v1/credits/*` | billing-svc | JWT |
-| `/api/v1/agent/*` | agent-svc | JWT |
+| `/api/v1/credits/*` | billing-svc（8080 信用 + 3001 预扣/结算） | JWT |
+| `/api/v1/agent/*` `[superpowers 更新]` | agent-svc（Agent 会话/计划/执行/SSE） | JWT + `X-Workspace-Id` |
 | `/api/v1/skills/*` | agent-svc | JWT |
 | `/api/v1/sop/*` | sop-svc | JWT |
 | `/api/v1/notify/*` | notify-svc | JWT |
@@ -836,7 +863,7 @@ GET /api/v1/canvas/projects/{projectId}/events?cursor={cursor}
 | `GET` | 查询资源 | ✅ |
 | `POST` | 创建资源 / 触发操作 | ❌ |
 | `PUT` | 完整更新资源 | ✅ |
-| `PATCH` | 部分更新资源（暂不使用） | ❌ |
+| `PATCH` | 部分更新资源（支持，用于只更新传入字段而不覆盖其他已有数据） | ✅ |
 | `DELETE` | 删除资源 | ✅ |
 
 ---
@@ -1255,9 +1282,65 @@ DELETE /api/v1/user/api-keys/:id        # 删除
 
 ## 5. 企业管理接口（enterprise）
 
-> 路由前缀：`/api/v1/enterprise` | 认证要求：JWT + 企业角色 | 限流：2000次/分钟
+> 🔄 **V1.6 重构**：路由前缀 `/api/v1/enterprise` | 认证要求：JWT + `X-Workspace-Id` + WorkspaceContext 权限码  
+> 企业端点已从 `user-svc` 迁移至 `enterprise-svc`（8080 BFF → 3001 代理）。旧版 5.1–5.4（注册/CRUD/成员/仪表盘）已下线，由以下新端点替代。  
+> 3001 是 Workspace、部门、成员、角色、余额的唯一事实源。完整设计见 `docs/superpowers/specs/2026-07-04-enterprise-workbench-completion-design.md` 第 10 节。
 
-### 5.1 企业注册与认证 `V1.1`
+### 5.1 企业上下文 `V1.6`
+
+```
+GET /api/v1/enterprise/context
+```
+返回当前 Workspace 身份、可见菜单和 `allowed_actions`。
+
+### 5.2 部门管理 `V1.6`
+
+```
+GET    /api/v1/enterprise/departments           ← BFF → 3001 GET  /api/aicp/workspaces/{id}/departments
+POST   /api/v1/enterprise/departments           ← BFF → 3001 POST /api/aicp/workspaces/{id}/departments
+PATCH  /api/v1/enterprise/departments/{deptId}  ← BFF → 3001 PATCH /api/aicp/workspaces/{id}/departments/{deptId}
+DELETE /api/v1/enterprise/departments/{deptId}  ← BFF → 3001 DELETE /api/aicp/workspaces/{id}/departments/{deptId}
+```
+
+### 5.3 成员管理 `V1.6`
+
+```
+GET   /api/v1/enterprise/members                ← BFF → 3001 GET  /api/aicp/workspaces/{id}/members
+POST  /api/v1/enterprise/invitations            ← BFF → 3001 POST /api/aicp/workspaces/{id}/invitations
+PATCH /api/v1/enterprise/members/{memberId}     ← BFF → 3001 PATCH /api/aicp/workspaces/{id}/members/{memberId}
+```
+
+### 5.4 角色管理 `V1.6`
+
+```
+GET   /api/v1/enterprise/roles                  ← BFF → 3001 GET  /api/aicp/workspaces/{id}/roles
+POST  /api/v1/enterprise/roles                  ← BFF → 3001 POST /api/aicp/workspaces/{id}/roles
+PATCH /api/v1/enterprise/roles/{roleId}         ← BFF → 3001 PATCH /api/aicp/workspaces/{id}/roles/{roleId}
+```
+
+### 5.5 统一审批 `V1.6`
+
+```
+GET  /api/v1/enterprise/approvals                                      ← 分页查询
+GET  /api/v1/enterprise/approvals/{type}/{id}                           ← 详情（回源业务域）
+POST /api/v1/enterprise/approvals/{type}/{id}/decisions                 ← 批准/驳回（幂等）
+```
+`{type}`：`PURCHASE` | `ASSET_PUBLISH` | `PROJECT_EXPORT`
+
+### 5.6 采购预算 `V1.6`
+
+```
+GET /api/v1/enterprise/budgets              ← 预算策略分页
+GET /api/v1/enterprise/budget-entries       ← 不可变流水
+```
+
+### 5.7 审计事件 `V1.6`
+
+```
+GET /api/v1/enterprise/audit-events         ← 跨域审计分页（需要 enterprise.audit.view）
+```
+
+### ~~5.1 企业注册与认证（已下线）~~ `V1.1`
 
 ```
 POST /api/v1/enterprise/register
@@ -3025,9 +3108,21 @@ GET  /api/v1/script/event-graph/:projectId/export   # 导出图谱(PNG/SVG)
 
 ---
 
-## 🆕 11. Agent与Skill接口（agent）`V1.3`
+## 🆕 11. Agent与Skill接口（agent）`V1.3` → `[superpowers 更新] V1.6`
 
-> 路由前缀：`/api/v1/agent` | 认证要求：JWT | 限流：100次/分钟
+> 路由前缀：`/api/v1/agent` | 认证要求：JWT + `X-Workspace-Id` | 限流：100次/分钟
+
+`[superpowers 更新]` Agent 会话已从 demo 级 in-memory 实现升级为持久化、项目绑定的生产级 AI 协作者系统。关键变更：
+
+- **持久化会话**：`agent_sessions` + `agent_messages` 表，浏览器刷新/服务重启不丢失
+- **结构化计划**：AI Router 输出 JSON Schema 约束的计划 → 审批 → 执行，非自由对话
+- **Tool Registry**：READ（自动执行）/ WRITE（需审批）/ BILLABLE（需审批+信用预授权）
+- **SSE 事件流**：`GET /sessions/{id}/events?after=`，`Last-Event-ID` 支持断线重连
+- **写作/画布集成**：`WritingAgentFacade`（Patch 预览→审批→应用）、`CanvasAgentFacade`（节点 CRUD + 生成任务）
+
+> **详细设计见**：`docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
+
+以下为 V1.3 原有接口（保留兼容），V1.6 新增端点参见上述 superpowers spec。
 
 ### 11.1 启动Agent协作
 
@@ -3664,6 +3759,135 @@ POST /api/v1/callback/alipay
 
 ---
 
+## 🔥 14-A. 创作圣经接口（creative-bible）`[superpowers 更新] V1.6`
+
+> 路由前缀：`/api/v1/content-projects/{projectId}/creative-bible` | 认证要求：JWT + `X-Workspace-Id`
+
+创作圣经是项目世界构建和创作规则的唯一权威数据源。所有 AI 生成必须引用特定圣经版本通过 `generation_context_snapshots` 注入上下文。
+
+### 14-A.1 圣经版本管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 获取当前激活的圣经版本 |
+| GET | `/health` | 圣经健康检查（规则覆盖度、待确认候选数） |
+| POST | `/versions` | 创建新版本草稿（可选 `sourceVersionId` 复制已有规则） |
+| POST | `/versions/{versionId}/confirm` | 确认版本（生成 `snapshotJson`，ContextAssembler 从快照读取） |
+| POST | `/versions/{versionId}/submit-review` | 提交审核 |
+| POST | `/versions/{versionId}/archive` | 归档版本 |
+
+### 14-A.2 生态系统规则
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/versions/{versionId}/ecosystem-rules` | 查询规则列表（按 `rule_type` 过滤） |
+| POST | `/versions/{versionId}/ecosystem-rules` | 批量创建/更新规则 |
+| PATCH | `/versions/{versionId}/ecosystem-rules/{ruleId}` | 更新单条规则 |
+
+`rule_type` 枚举：`era_world_type`、`world_rules`、`social_structure`、`institutions_taboos`、`factions`、`resources`、`abilities`、`locations`、`key_history`
+
+### 14-A.3 三层写作指南
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/versions/{versionId}/writing-guides` | 查询写作指南（按 `scope_type` 过滤：project/character/content_unit） |
+| POST | `/versions/{versionId}/writing-guides` | 创建/更新写作指南 |
+| POST | `/writing-guides/resolve` | 解析合并三层指南（预览最终生效配置） |
+
+> L1（项目基线）→ L2（角色声音）→ L3（单集覆盖）。`hard_bans`、`platform_rules`、`compliance_rules` 为 `NON_OVERRIDABLE`，下层覆盖尝试记录为冲突。
+
+### 14-A.4 AI 提取与上下文快照
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/extraction-batches` | 发起 AI 提取任务（规则/实体/关系/指南候选） |
+| POST | `/extraction-batches/{batchId}/apply` | 人工确认后事务写入 |
+| GET | `/context-snapshots/{snapshotId}` | 查看历史生成上下文快照（不可变） |
+| POST | `/impact-reports` | 生成上游变更影响报告 |
+
+> **详细设计见**：`docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`
+
+---
+
+## 🔥 14-B. 专业分镜接口（storyboards）`[superpowers 更新] V1.6`
+
+> 路由前缀：`/api/v1/content-projects/{projectId}/storyboards` | 认证要求：JWT + `X-Workspace-Id`
+
+统一专业分镜编辑器，取代旧 `storyboard_shots`（canvas 模块）和 `cp_storyboard_*`（content-project 模块）双轨。支持 13 维镜头编辑、A/B/C 层级版本、XLSX 双向导入导出。
+
+### 14-B.1 分镜与版本管理
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 查询项目的分镜列表 |
+| POST | `/` | 创建分镜（绑定 `content_project_id`） |
+| GET | `/{storyboardId}/versions` | 查询版本列表 |
+| POST | `/{storyboardId}/versions/{versionId}/submit-review` | 提交审核 |
+| POST | `/{storyboardId}/versions/{versionId}/lock` | 锁定版本（锁定后拒绝所有变更） |
+| POST | `/{storyboardId}/versions/{versionId}/fork` | 派生新版本 |
+| POST | `/{storyboardId}/versions/{versionId}/upgrade-b` | 升级至 B 档（导演确认） |
+| POST | `/{storyboardId}/versions/{versionId}/upgrade-c` | 升级至 C 档（生产就绪） |
+
+### 14-B.2 场景与镜头
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET/POST | `/{storyboardId}/versions/{versionId}/scenes` | 场景 CRUD |
+| GET/POST | `/{storyboardId}/versions/{versionId}/shots` | 镜头 CRUD（13 维编辑） |
+| POST | `/{storyboardId}/versions/{versionId}/shots/reorder` | 镜头重新排序 |
+| POST | `/{storyboardId}/versions/{versionId}/shots/split` | 拆分镜头 |
+| POST | `/{storyboardId}/versions/{versionId}/shots/merge` | 合并镜头 |
+
+### 14-B.3 XLSX 导入导出
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/{storyboardId}/versions/{versionId}/xlsx/import` | 预检 + 事务写入（失败回滚） |
+| GET | `/{storyboardId}/versions/{versionId}/xlsx/export` | 导出 7 工作表 XLSX（签名短效下载 URL） |
+
+### 14-B.4 画布快照
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/{storyboardId}/versions/{versionId}/canvas-snapshot` | 创建不可变画布快照（SHA-256 校验） |
+
+所有写操作携带 `revision` 字段（乐观锁），冲突返回 `409 STORYBOARD_REVISION_CONFLICT` + 字段级 diff。
+
+> **详细设计见**：`docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md`
+
+---
+
+## 🔥 14-C. 工作编辑器设定接口（settings）`[superpowers 更新] V1.6`
+
+> 路由前缀：`/api/v1/content-projects/{projectId}/settings` | 认证要求：JWT + `X-Workspace-Id`
+
+五类结构化设定（角色/背景/势力/地点/物品）的通用 CRUD + AI 提取人工确认流水线。
+
+### 14-C.1 设定 CRUD
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 查询设定列表（按 `setting_type`、`status` 过滤） |
+| POST | `/` | 创建设定 |
+| PATCH | `/{settingId}` | 更新设定（携带 `revision`） |
+| DELETE | `/{settingId}` | 归档设定（软删除） |
+| POST | `/{settingId}/copy` | 复制设定 |
+| POST | `/{settingId}/restore` | 恢复已归档设定 |
+| GET | `/{settingId}/versions` | 查看设定版本历史 |
+
+### 14-C.2 AI 提取
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/extraction-batches` | 发起 AI 提取（返回候选列表 + 匹配置信度） |
+| PUT | `/extraction-batches/{batchId}/decisions` | 提交逐字段决策（merge/keep/adopt） |
+| POST | `/extraction-batches/{batchId}/apply` | 事务写入确认的候选 |
+| POST | `/extraction-batches/{batchId}/retry` | 重试失败的提取 |
+
+> **详细设计见**：`docs/superpowers/specs/2026-06-30-work-editor-evolution-design.md`
+
+---
+
 ## 15. Open API接口（openapi）
 
 > 路由前缀：`/openapi/v1` | 认证要求：API Key + HMAC-SHA256签名 | 限流：按套餐
@@ -3996,6 +4220,91 @@ A B C D E
 | `47003` | 版本冲突 |
 | `47004` | AI失败次数超限 |
 
+### 18.8 内容项目错误码 (43xxx) `[superpowers 更新]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `43001` | 内容项目不存在（`PROJECT_NOT_FOUND`） |
+| `43002` | 无权访问该项目（`PROJECT_ACCESS_DENIED`） |
+| `43003` | 编辑冲突（`EDIT_CONFLICT`，409） |
+| `43004` | 工作流阶段不允许此操作 |
+| `43005` | 产出物已锁定（`ARTIFACT_LOCKED`） |
+| `43006` | 依赖版本过期（`DEPENDENCY_STALE`） |
+| `43007` | 生成预算超限（`GENERATION_BUDGET_EXCEEDED`） |
+| `43008` | 生产准入未通过（`PRODUCTION_PREFLIGHT_FAILED`） |
+| `43009` | 画布导入冲突（`CANVAS_IMPORT_CONFLICT`，409） |
+| `43010` | 幂等冲突（`IDEMPOTENCY_CONFLICT`，409） |
+
+### 18.9 分镜错误码 (45xxx) `[superpowers 更新]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `45001` | 分镜不存在（`STORYBOARD_NOT_FOUND`） |
+| `45002` | 分镜版本已锁定（`STORYBOARD_VERSION_LOCKED`） |
+| `45003` | 分镜版本冲突（`STORYBOARD_REVISION_CONFLICT`，409） |
+| `45004` | 源内容版本过期（`SOURCE_CONTENT_VERSION_STALE`） |
+| `45005` | 无效的层级转换（`INVALID_TIER_TRANSITION`） |
+| `45006` | 审查问题未解决（`REVIEW_ISSUES_UNRESOLVED`） |
+| `45007` | 生产门禁失败（`PRODUCTION_GATE_FAILED`） |
+| `45008` | XLSX 模板不支持（`XLSX_TEMPLATE_UNSUPPORTED`） |
+| `45009` | XLSX 校验失败（`XLSX_VALIDATION_FAILED`） |
+
+### 18.10 创作圣经错误码 (46xxx) `[superpowers 更新]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `46001` | 圣经版本不存在（`BIBLE_VERSION_NOT_FOUND`） |
+| `46002` | 圣经未确认（`BIBLE_NOT_CONFIRMED`） |
+| `46003` | 圣经不可变（`BIBLE_IMMUTABLE`，已确认版本拒绝修改） |
+| `46004` | 候选冲突（`CANDIDATE_CONFLICT`） |
+| `46005` | AI 提取失败（`EXTRACTION_FAILED`） |
+| `46006` | 配额超限（`QUOTA_EXCEEDED`，规则/关系/快照容量上限） |
+
+### 18.11 交易错误码 (47xxx) `[superpowers 更新]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `47001` | 挂牌不可用（`LISTING_NOT_AVAILABLE`） |
+| `47002` | 许可证选项不可用（`LICENSE_OPTION_NOT_AVAILABLE`） |
+| `47003` | 独家许可已预留（`EXCLUSIVE_LICENSE_RESERVED`） |
+| `47004` | 独家许可已售出（`EXCLUSIVE_LICENSE_SOLD`） |
+| `47005` | 订单已过期（`ORDER_EXPIRED`） |
+| `47006` | 订单状态冲突（`ORDER_STATE_CONFLICT`） |
+| `47007` | 需要企业采购审批（`PURCHASE_APPROVAL_REQUIRED`） |
+| `47008` | 需要企业工作区钱包（`WORKSPACE_WALLET_REQUIRED`） |
+| `47009` | 余额不足（`INSUFFICIENT_BALANCE`） |
+| `47010` | 钱包服务不可用（`WALLET_SERVICE_UNAVAILABLE`） |
+| `47011` | 支付结果未知（`PAYMENT_RESULT_UNKNOWN`） |
+| `47012` | 退款不允许（`REFUND_NOT_ALLOWED`） |
+
+### 18.12 资产市场错误码 (48xxx) `[superpowers 更新]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `48001` | 资产不存在（`ASSET_NOT_FOUND`） |
+| `48002` | 无权访问资产（跨工作区返回 404） |
+| `48003` | 挂牌不可用（`LISTING_UNAVAILABLE`） |
+| `48004` | 版本冲突（`VERSION_CONFLICT`） |
+| `48005` | 类型不兼容（`TYPE_INCOMPATIBLE`） |
+| `48006` | 发布冲突（`PUBLISH_CONFLICT`） |
+| `48007` | 项目应用不可撤消（Token 无效/过期） |
+
+### 18.13 Agent 错误码 (49xxx) `[superpowers 更新]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `49001` | Agent 会话不存在（`AGENT_SESSION_NOT_FOUND`） |
+| `49002` | 无权访问会话（`AGENT_SESSION_ACCESS_DENIED`） |
+| `49003` | 项目上下文无效（`AGENT_PROJECT_CONTEXT_INVALID`） |
+| `49004` | 计划 Schema 无效（`AGENT_PLAN_SCHEMA_INVALID`） |
+| `49005` | 计划版本冲突（`AGENT_PLAN_VERSION_CONFLICT`） |
+| `49006` | 需要审批（`AGENT_APPROVAL_REQUIRED`） |
+| `49007` | 审批已过期（`AGENT_APPROVAL_EXPIRED`） |
+| `49008` | 信用不足（`AGENT_INSUFFICIENT_CREDITS`） |
+| `49009` | Tool 不允许（`AGENT_TOOL_NOT_ALLOWED`） |
+| `49010` | Tool 执行失败（`AGENT_TOOL_EXECUTION_FAILED`） |
+| `49011` | 幂等冲突（`AGENT_IDEMPOTENCY_CONFLICT`） |
+
 ---
 
 ## 附录A：接口版本矩阵
@@ -4007,12 +4316,14 @@ A B C D E
 | **V1.2** | 76 | 176 | SSO(1) + API Key(3) + batch-generate(1) + outpaint(1) + L4 lock(2) + continuity(2) + failure(2) + capacity(1) + promotion(1) + export advanced(4) + 🆕 nodes CRUD(5) + connections(3) + workflows(3) + script pipeline(4) + slash commands(1) + director-desk(3) + multimodal(1) + 🆕 agent orchestrate(5) + memory CRUD(5) + skill files(5) + providers(5) + event-graph(4) |
 | **V1.3** | 40+ | 210+ | 🆕 独立Agent服务(7) + 画布增强API + 画布质量巡检 + node engine/downstream/duplicates/adopted-assets/delivery-manifest/asset-package/image node ops/video generation ops/audio asset ops |
 | **V1.5** | 范围调整 | 210+ | 取消视频剪辑、视频合成、多轨时间轴接口；统一为 adopted-assets、delivery-manifest、asset-package export 契约 |
+| **V1.6** `[superpowers 更新]` | +80+ | 290+ | 创作圣经 API(14-A)、专业分镜 API(14-B)、工作编辑器设定 API(14-C)、交易市场完整 API(47xxx)、资产市场完整 API(48xxx)、Agent 持久化会话/计划审批/SSE(49xxx)、画布项目中心、3001 账户中心集成 |
 
 > **总计**：V1.0 = 58 | V1.1 = +42 | V1.2 = +76 | V1.3 = +40+ = **210+个有效 API 端点**。已取消的视频剪辑、视频合成和多轨编辑接口不计入有效接口。
 
 ---
 
-> **文档状态**：v1.5 范围修订版
-> **最后修订**：2026-06-27
+> **文档状态**：v1.6 修订版（基于 superpowers 增量更新）
+> **最后修订**：2026-07-02
+> **更新依据**：`docs/superpowers/specs/` 下 11 份设计文档
 > **文档用途**：供前端开发、后端开发、测试工程师、第三方集成使用  
 > **后续步骤**：生成 OpenAPI 3.0 YAML 文件 → 导入 Swagger/Apifox → Mock Server → 联调

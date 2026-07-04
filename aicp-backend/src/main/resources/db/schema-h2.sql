@@ -1926,6 +1926,275 @@ CREATE TABLE IF NOT EXISTS script_listings (
 );
 
 -- ============================================================
+-- V6: Trade market tables
+-- ============================================================
+CREATE TABLE IF NOT EXISTS trade_orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL UNIQUE,
+    status VARCHAR(24) NOT NULL DEFAULT 'PENDING_PAYMENT',
+    buyer_user_id BIGINT NOT NULL,
+    buyer_workspace_id VARCHAR(64) NOT NULL,
+    buyer_workspace_type VARCHAR(16) NOT NULL DEFAULT 'PERSONAL',
+    seller_user_id BIGINT NOT NULL,
+    seller_workspace_id VARCHAR(64) NOT NULL,
+    total_amount_cents BIGINT NOT NULL DEFAULT 0,
+    platform_fee_cents BIGINT NOT NULL DEFAULT 0,
+    seller_income_cents BIGINT NOT NULL DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    wallet_transfer_no VARCHAR(64),
+    wallet_status VARCHAR(20),
+    create_idempotency_key VARCHAR(128) NOT NULL,
+    expires_at TIMESTAMP NULL,
+    paid_at TIMESTAMP NULL,
+    fulfilled_at TIMESTAMP NULL,
+    completed_at TIMESTAMP NULL,
+    refunded_at TIMESTAMP NULL,
+    row_version INT NOT NULL DEFAULT 0,
+    failure_reason VARCHAR(2000),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS trade_order_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL UNIQUE,
+    listing_id BIGINT NOT NULL,
+    script_id BIGINT NOT NULL,
+    script_version_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    price_cents BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    title_snapshot VARCHAR(200),
+    author_snapshot VARCHAR(100),
+    tags_snapshot VARCHAR(2000),
+    agreement_text TEXT,
+    agreement_version VARCHAR(20),
+    agreement_hash VARCHAR(64),
+    historical_normal_count INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS script_entitlements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL UNIQUE,
+    beneficiary_workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL,
+    script_version_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    effective_from TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    effective_until TIMESTAMP NULL,
+    max_accounts INT NULL,
+    allow_commercial TINYINT NOT NULL DEFAULT 0,
+    allow_adaptation TINYINT NOT NULL DEFAULT 0,
+    allow_sublicense TINYINT NOT NULL DEFAULT 0,
+    territory_restriction VARCHAR(200),
+    revoked_at TIMESTAMP NULL,
+    revoke_reason VARCHAR(2000),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS purchased_script_copies (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL UNIQUE,
+    workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL,
+    source_version_id BIGINT NOT NULL,
+    content_json TEXT,
+    title VARCHAR(200),
+    created_by_user_id BIGINT NOT NULL,
+    source_listing_id BIGINT,
+    source_author_name VARCHAR(100),
+    status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS purchase_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    requester_user_id BIGINT NOT NULL,
+    listing_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    amount_cents BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    reason VARCHAR(2000),
+    approver_user_id BIGINT NULL,
+    approval_comment VARCHAR(2000),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING_APPROVAL',
+    order_no VARCHAR(32) NULL,
+    budget_subject_type VARCHAR(16),
+    budget_subject_id VARCHAR(64),
+    budget_reservation_entry_id VARCHAR(64),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS refund_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL,
+    requester_user_id BIGINT NOT NULL,
+    reason_code VARCHAR(30),
+    reason_text VARCHAR(2000),
+    evidence_json TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'REQUESTED',
+    reviewer_user_id BIGINT NULL,
+    review_comment VARCHAR(2000),
+    reviewed_at TIMESTAMP NULL,
+    refund_amount_cents BIGINT,
+    wallet_reversal_no VARCHAR(64),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS trade_outbox_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    payload TEXT,
+    idempotency_key VARCHAR(128) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    retry_count INT NOT NULL DEFAULT 0,
+    max_retries INT NOT NULL DEFAULT 10,
+    next_retry_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_error VARCHAR(2000),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS trade_audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id BIGINT,
+    workspace_id VARCHAR(64),
+    action VARCHAR(50) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    before_summary VARCHAR(2000),
+    after_summary VARCHAR(2000),
+    correlation_id VARCHAR(64),
+    client_ip VARCHAR(45),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
+-- V7: Enterprise budget & approval projection
+-- ============================================================
+CREATE TABLE IF NOT EXISTS enterprise_purchase_budgets (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    subject_type VARCHAR(16) NOT NULL,
+    subject_id VARCHAR(64) NOT NULL,
+    period_month VARCHAR(7) NOT NULL,
+    amount_cents BIGINT NOT NULL DEFAULT 0,
+    single_limit_cents BIGINT NOT NULL DEFAULT 0,
+    reserved_cents BIGINT NOT NULL DEFAULT 0,
+    consumed_cents BIGINT NOT NULL DEFAULT 0,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_budget_scope UNIQUE (workspace_id, subject_type, subject_id, period_month)
+);
+
+CREATE TABLE IF NOT EXISTS enterprise_purchase_budget_entries (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    budget_id BIGINT NOT NULL,
+    workspace_id VARCHAR(64) NOT NULL,
+    entry_type VARCHAR(16) NOT NULL,
+    amount_cents BIGINT NOT NULL,
+    source_type VARCHAR(32) NOT NULL,
+    source_id VARCHAR(64) NOT NULL,
+    wallet_transfer_no VARCHAR(64) NULL,
+    idempotency_key VARCHAR(128) NOT NULL UNIQUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS enterprise_approval_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    department_id VARCHAR(64) DEFAULT '',
+    source_type VARCHAR(32) NOT NULL,
+    source_id VARCHAR(64) NOT NULL,
+    source_version INT NOT NULL DEFAULT 0,
+    requester_user_id BIGINT NOT NULL,
+    summary VARCHAR(500),
+    amount_cents BIGINT,
+    currency VARCHAR(3) DEFAULT 'CNY',
+    status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+    allowed_actions_json VARCHAR(2000),
+    submitted_at TIMESTAMP NULL,
+    decided_at TIMESTAMP NULL,
+    last_event_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_approval_source UNIQUE (source_type, source_id)
+);
+
+CREATE TABLE IF NOT EXISTS asset_outbox_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(64) NOT NULL UNIQUE,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    payload TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    attempts INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    processed_at TIMESTAMP NULL
+);
+
+-- ============================================================
+-- V8: Project export approval
+-- ============================================================
+CREATE TABLE IF NOT EXISTS project_export_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    department_id VARCHAR(64) DEFAULT '',
+    project_id BIGINT NOT NULL,
+    project_version_id BIGINT NOT NULL,
+    requester_user_id BIGINT NOT NULL,
+    export_scope_json TEXT,
+    export_format VARCHAR(16) DEFAULT 'PDF',
+    watermark_policy VARCHAR(32),
+    delivery_target VARCHAR(200),
+    compliance_evidence_ref VARCHAR(200),
+    content_snapshot_summary VARCHAR(2000),
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    approver_user_id BIGINT,
+    approver_comment VARCHAR(2000),
+    approved_at TIMESTAMP NULL,
+    export_task_id BIGINT NULL,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
+-- V9: Enterprise audit index
+-- ============================================================
+CREATE TABLE IF NOT EXISTS enterprise_audit_index (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    department_id VARCHAR(64) DEFAULT '',
+    actor_user_id BIGINT,
+    action VARCHAR(50) NOT NULL,
+    object_type VARCHAR(50) NOT NULL,
+    object_id VARCHAR(64) NOT NULL,
+    result VARCHAR(16) DEFAULT 'SUCCESS',
+    source_domain VARCHAR(32) NOT NULL,
+    source_record_id VARCHAR(64),
+    request_id VARCHAR(64),
+    redacted_summary VARCHAR(2000),
+    event_id VARCHAR(64) NOT NULL UNIQUE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================================
 -- B. 企业数据
 -- ============================================================
 INSERT INTO enterprises (owner_user_id, name, license_number, verify_status, member_limit)

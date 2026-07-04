@@ -81,14 +81,11 @@ public class EnterpriseApprovalController {
             return ApiResponse.success(result);
         } catch (IllegalArgumentException e) {
             return ApiResponse.error(400, "unknown approval type: " + type);
-        } catch (ApprovalCommandRouter.ApprovalNotFoundException e) {
+        } catch (ApprovalCommandRouter.VersionConflictException e) {
+            return ApiResponse.error(409, e.getMessage());
+        } catch (ApprovalCommandRouter.AlreadyDecidedException e) {
+            return ApiResponse.error(409, e.getMessage());
+        } catch (RuntimeException e) {
             return ApiResponse.error(404, e.getMessage());
-        } catch (ApprovalCommandRouter.ApprovalVersionConflictException e) {
-            return ApiResponse.error(409, e.getMessage());
-        } catch (ApprovalCommandRouter.ApprovalAlreadyDecidedException e) {
-            return ApiResponse.error(409, e.getMessage());
-        } catch (ApprovalCommandRouter.ApprovalPermissionDeniedException e) {
-            return ApiResponse.error(403, e.getMessage());
-        }
     }
 }

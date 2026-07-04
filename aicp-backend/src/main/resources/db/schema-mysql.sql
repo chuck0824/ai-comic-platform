@@ -1773,6 +1773,128 @@ CREATE TABLE IF NOT EXISTS generation_context_snapshots (
 CREATE INDEX idx_gcs_project ON generation_context_snapshots(project_id);
 
 -- ============================================================
+-- V7: Enterprise budget & approval projection
+-- ============================================================
+CREATE TABLE IF NOT EXISTS enterprise_purchase_budgets (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    subject_type VARCHAR(16) NOT NULL,
+    subject_id VARCHAR(64) NOT NULL,
+    period_month VARCHAR(7) NOT NULL,
+    amount_cents BIGINT NOT NULL DEFAULT 0,
+    single_limit_cents BIGINT NOT NULL DEFAULT 0,
+    reserved_cents BIGINT NOT NULL DEFAULT 0,
+    consumed_cents BIGINT NOT NULL DEFAULT 0,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_budget_scope UNIQUE (workspace_id, subject_type, subject_id, period_month)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='采购预算表';
+CREATE INDEX idx_budget_ws ON enterprise_purchase_budgets(workspace_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_purchase_budget_entries (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    budget_id BIGINT NOT NULL,
+    workspace_id VARCHAR(64) NOT NULL,
+    entry_type VARCHAR(16) NOT NULL,
+    amount_cents BIGINT NOT NULL,
+    source_type VARCHAR(32) NOT NULL,
+    source_id VARCHAR(64) NOT NULL,
+    wallet_transfer_no VARCHAR(64),
+    idempotency_key VARCHAR(128) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_budget_entry_idem UNIQUE (idempotency_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='采购预算流水表';
+CREATE INDEX idx_budget_entry ON enterprise_purchase_budget_entries(budget_id);
+
+CREATE TABLE IF NOT EXISTS enterprise_approval_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    department_id VARCHAR(64) DEFAULT '',
+    source_type VARCHAR(32) NOT NULL,
+    source_id VARCHAR(64) NOT NULL,
+    source_version INT NOT NULL DEFAULT 0,
+    requester_user_id BIGINT NOT NULL,
+    summary VARCHAR(500),
+    amount_cents BIGINT,
+    currency VARCHAR(3) DEFAULT 'CNY',
+    status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+    allowed_actions_json VARCHAR(2000),
+    submitted_at DATETIME,
+    decided_at DATETIME,
+    last_event_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_approval_src UNIQUE (source_type, source_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='统一审批投影表';
+CREATE INDEX idx_approval_ws ON enterprise_approval_items(workspace_id, status);
+
+CREATE TABLE IF NOT EXISTS asset_outbox_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    event_id VARCHAR(64) NOT NULL,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    payload TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    attempts INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    processed_at DATETIME,
+    CONSTRAINT uk_asset_oe_id UNIQUE (event_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产Outbox事件表';
+
+-- ============================================================
+-- V8: Project export approval
+-- ============================================================
+CREATE TABLE IF NOT EXISTS project_export_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    department_id VARCHAR(64) DEFAULT '',
+    project_id BIGINT NOT NULL,
+    project_version_id BIGINT NOT NULL,
+    requester_user_id BIGINT NOT NULL,
+    export_scope_json TEXT,
+    export_format VARCHAR(16) DEFAULT 'PDF',
+    watermark_policy VARCHAR(32),
+    delivery_target VARCHAR(200),
+    compliance_evidence_ref VARCHAR(200),
+    content_snapshot_summary VARCHAR(2000),
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    approver_user_id BIGINT,
+    approver_comment VARCHAR(2000),
+    approved_at DATETIME,
+    export_task_id BIGINT,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='项目导出审批表';
+CREATE INDEX idx_export_ws ON project_export_requests(workspace_id, status);
+
+-- ============================================================
+-- V9: Enterprise audit index
+-- ============================================================
+CREATE TABLE IF NOT EXISTS enterprise_audit_index (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    department_id VARCHAR(64) DEFAULT '',
+    actor_user_id BIGINT,
+    action VARCHAR(50) NOT NULL,
+    object_type VARCHAR(50) NOT NULL,
+    object_id VARCHAR(64) NOT NULL,
+    result VARCHAR(16) DEFAULT 'SUCCESS',
+    source_domain VARCHAR(32) NOT NULL,
+    source_record_id VARCHAR(64),
+    request_id VARCHAR(64),
+    redacted_summary VARCHAR(2000),
+    event_id VARCHAR(64) NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_audit_evt_id UNIQUE (event_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='企业审计索引表';
+CREATE INDEX idx_audit_ws ON enterprise_audit_index(workspace_id, created_at);
+CREATE INDEX idx_audit_actor ON enterprise_audit_index(actor_user_id, created_at);
+
+-- ============================================================
 -- Canvas 迁移: 回填 workspace_id
 -- ============================================================
 UPDATE canvas_projects SET workspace_id = CONCAT('ent:', enterprise_id) WHERE enterprise_id IS NOT NULL AND workspace_id IS NULL;

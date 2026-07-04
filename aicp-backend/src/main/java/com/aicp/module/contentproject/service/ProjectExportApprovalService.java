@@ -3,7 +3,7 @@ package com.aicp.module.contentproject.service;
 import com.aicp.common.workspace.WorkspaceContext;
 import com.aicp.module.contentproject.entity.ProjectExportRequest;
 import com.aicp.module.contentproject.mapper.ProjectExportRequestMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.aicp.module.enterprise.service.ApprovalProjector;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -17,6 +17,7 @@ import java.time.LocalDateTime;
 public class ProjectExportApprovalService {
 
     private final ProjectExportRequestMapper mapper;
+    private final ApprovalProjector projector;
 
     @Transactional
     public ProjectExportRequest submit(WorkspaceContext ctx, Long projectId,
@@ -35,6 +36,17 @@ public class ProjectExportApprovalService {
         req.setDeliveryTarget(deliveryTarget);
         req.setStatus("PENDING");
         mapper.insert(req);
+
+        // Project to unified approval inbox
+        try {
+            projector.project("PROJECT_EXPORT", "export-" + req.getId(), 0,
+                    ctx.workspaceId(), ctx.departmentId(), ctx.userId(),
+                    "项目导出: #" + req.getId(), 0L, "PENDING", "[]");
+        } catch (Exception e) {
+            log.warn("Failed to project export approval {}: {}", req.getId(), e.getMessage());
+        }
+
+        log.info("Export submitted: id={}, project={}", req.getId(), projectId);
         return req;
     }
 
@@ -49,6 +61,16 @@ public class ProjectExportApprovalService {
         req.setApproverComment(comment);
         req.setApprovedAt(LocalDateTime.now());
         mapper.updateById(req);
+
+        try {
+            projector.project("PROJECT_EXPORT", "export-" + req.getId(), 1,
+                    req.getWorkspaceId(), req.getDepartmentId(), req.getRequesterUserId(),
+                    "导出已批准 #" + req.getId(), 0L, "APPROVED",
+                    "[{\"action\":\"view_task\"}]");
+        } catch (Exception e) {
+            log.warn("Failed to project export approval update {}: {}", req.getId(), e.getMessage());
+        }
+
         return req;
     }
 
@@ -63,6 +85,15 @@ public class ProjectExportApprovalService {
         req.setApproverComment(reason);
         req.setApprovedAt(LocalDateTime.now());
         mapper.updateById(req);
+
+        try {
+            projector.project("PROJECT_EXPORT", "export-" + req.getId(), 1,
+                    req.getWorkspaceId(), req.getDepartmentId(), req.getRequesterUserId(),
+                    "导出已驳回 #" + req.getId(), 0L, "REJECTED", "[]");
+        } catch (Exception e) {
+            log.warn("Failed to project export rejection {}: {}", req.getId(), e.getMessage());
+        }
+
         return req;
     }
 
@@ -74,6 +105,15 @@ public class ProjectExportApprovalService {
         }
         req.setStatus("CANCELLED");
         mapper.updateById(req);
+
+        try {
+            projector.project("PROJECT_EXPORT", "export-" + req.getId(), 1,
+                    req.getWorkspaceId(), req.getDepartmentId(), req.getRequesterUserId(),
+                    "导出已取消 #" + req.getId(), 0L, "CANCELLED", "[]");
+        } catch (Exception e) {
+            log.warn("Failed to project export cancellation {}: {}", req.getId(), e.getMessage());
+        }
+
         return req;
     }
 
