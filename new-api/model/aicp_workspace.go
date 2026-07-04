@@ -40,12 +40,22 @@ func (AicpWorkspaceMember) TableName() string {
 	return "aicp_workspace_members"
 }
 
+// PermissionGrant represents a scoped permission grant for a membership.
+type PermissionGrant struct {
+	Permission string   `json:"permission"`
+	Scope      string   `json:"scope"`
+	ScopeIDs   []string `json:"scope_ids"`
+}
+
 // MembershipResult holds the combined workspace and member data for a membership lookup.
 type MembershipResult struct {
-	WorkspaceID   string   `json:"workspace_id"`
-	WorkspaceType string   `json:"workspace_type"`
-	UserID        int64    `json:"user_id"`
-	Permissions   []string `json:"permissions"`
+	WorkspaceID      string            `json:"workspace_id"`
+	WorkspaceType    string            `json:"workspace_type"`
+	UserID           int64             `json:"user_id"`
+	DepartmentID     string            `json:"department_id"`
+	Roles            []string          `json:"roles"`
+	Permissions      []string          `json:"permissions"`
+	PermissionGrants []PermissionGrant `json:"permission_grants"`
 }
 
 // HasPermission checks whether the membership includes a specific permission.
@@ -145,10 +155,95 @@ func FindActiveWorkspaceMembership(workspaceID string, userID int64) (*Membershi
 		}
 	}
 
+	// Load role names for this member
+	roles := loadMemberRoles(member.RoleID)
+
+	// Load scoped permission grants for this member's role
+	grants := loadRolePermissionGrants(member.RoleID)
+
 	return &MembershipResult{
-		WorkspaceID:   workspace.ID,
-		WorkspaceType: workspace.Type,
-		UserID:        member.UserID,
-		Permissions:   permissions,
+		WorkspaceID:      workspace.ID,
+		WorkspaceType:    workspace.Type,
+		UserID:           member.UserID,
+		DepartmentID:     member.DepartmentID,
+		Roles:            roles,
+		Permissions:      permissions,
+		PermissionGrants: grants,
 	}, nil
+}
+
+// loadMemberRoles returns role names for the given role ID.
+func loadMemberRoles(roleID string) []string {
+	if roleID == "" {
+		return []string{}
+	}
+	var role AicpWorkspaceRole
+	if err := DB.Where("id = ? AND status = ?", roleID, "active").First(&role).Error; err != nil {
+		return []string{}
+	}
+	return []string{role.Name}
+}
+
+// loadRolePermissionGrants returns scoped permission grants for the given role ID.
+func loadRolePermissionGrants(roleID string) []PermissionGrant {
+	if roleID == "" {
+		return []PermissionGrant{}
+	}
+	var grantRows []AicpRolePermissionGrant
+	if err := DB.Where("role_id = ?", roleID).Find(&grantRows).Error; err != nil {
+		return []PermissionGrant{}
+	}
+
+	grants := make([]PermissionGrant, 0, len(grantRows))
+	for _, g := range grantRows {
+		var scopeIDs []string
+		if g.ScopeIDs != "" {
+			if err := json.Unmarshal([]byte(g.ScopeIDs), &scopeIDs); err != nil {
+				scopeIDs = []string{}
+			}
+		}
+		grants = append(grants, PermissionGrant{
+			Permission: g.Permission,
+			Scope:      g.Scope,
+			ScopeIDs:   scopeIDs,
+		})
+	}
+	return grants
+}
+
+// ListActiveWorkspacesForUser returns all workspaces where the user has an active membership.
+func ListActiveWorkspacesForUser(userID int64) ([]MembershipResult, error) {
+	var members []AicpWorkspaceMember
+	if err := DB.Where("user_id = ? AND status = ?", userID, "active").Find(&members).Error; err != nil {
+		return nil, err
+	}
+
+	results := make([]MembershipResult, 0, len(members))
+	for _, m := range members {
+		var ws AicpWorkspace
+		if err := DB.Where("id = ?", m.WorkspaceID).First(&ws).Error; err != nil {
+			continue // skip if workspace was deleted
+		}
+
+		var permissions []string
+		if m.Permissions != "" {
+			if err := json.Unmarshal([]byte(m.Permissions), &permissions); err != nil {
+				permissions = []string{}
+			}
+		}
+
+		roles := loadMemberRoles(m.RoleID)
+		grants := loadRolePermissionGrants(m.RoleID)
+
+		results = append(results, MembershipResult{
+			WorkspaceID:      ws.ID,
+			WorkspaceType:    ws.Type,
+			UserID:           m.UserID,
+			DepartmentID:     m.DepartmentID,
+			Roles:            roles,
+			Permissions:      permissions,
+			PermissionGrants: grants,
+		})
+	}
+	return results, nil
 }

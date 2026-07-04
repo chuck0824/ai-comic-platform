@@ -16,16 +16,32 @@ import (
 )
 
 type workspaceMembershipResponse struct {
-	Success bool                   `json:"success"`
-	Message string                 `json:"message"`
+	Success bool                    `json:"success"`
+	Message string                  `json:"message"`
 	Data    *workspaceMembershipData `json:"data"`
 }
 
 type workspaceMembershipData struct {
-	WorkspaceID   string   `json:"workspace_id"`
-	WorkspaceType string   `json:"workspace_type"`
-	UserID        int64    `json:"user_id"`
-	Permissions   []string `json:"permissions"`
+	WorkspaceID      string                  `json:"workspace_id"`
+	WorkspaceType    string                  `json:"workspace_type"`
+	UserID           int64                   `json:"user_id"`
+	DepartmentID     string                  `json:"department_id"`
+	Roles            []string                `json:"roles"`
+	Permissions      []string                `json:"permissions"`
+	PermissionGrants []permissionGrantRecord `json:"permission_grants"`
+}
+
+type permissionGrantRecord struct {
+	Permission string   `json:"permission"`
+	Scope      string   `json:"scope"`
+	ScopeIDs   []string `json:"scope_ids"`
+}
+
+type workspaceListResponse struct {
+	Success bool `json:"success"`
+	Data    struct {
+		Items []workspaceMembershipData `json:"items"`
+	} `json:"data"`
 }
 
 func openWorkspaceTestDB(t *testing.T) *gorm.DB {
@@ -38,7 +54,11 @@ func openWorkspaceTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(sqlite.Open("file:workspace_test?mode=memory&cache=shared"), &gorm.Config{})
 	require.NoError(t, err)
 
-	err = db.AutoMigrate(&model.AicpWorkspace{}, &model.AicpWorkspaceMember{})
+	err = db.AutoMigrate(
+		&model.AicpWorkspace{}, &model.AicpWorkspaceMember{},
+		&model.AicpDepartment{}, &model.AicpWorkspaceRole{},
+		&model.AicpRolePermissionGrant{}, &model.AicpWorkspaceInvitation{},
+	)
 	require.NoError(t, err)
 
 	model.DB = db
@@ -58,28 +78,51 @@ func openWorkspaceTestDB(t *testing.T) *gorm.DB {
 
 func seedWorkspaceMember(t *testing.T, db *gorm.DB, workspaceID string, userID int64, permissions []string) {
 	t.Helper()
+	seedWorkspaceMemberWithOrg(t, db, workspaceID, userID, permissions, "", "")
+}
+
+func seedWorkspaceMemberWithOrg(t *testing.T, db *gorm.DB, workspaceID string, userID int64, permissions []string, departmentID, roleID string) {
+	t.Helper()
 	perms, err := json.Marshal(permissions)
 	require.NoError(t, err)
 
 	ws := &model.AicpWorkspace{
 		ID:          workspaceID,
 		Type:        "enterprise",
+		Name:        "Test Workspace " + workspaceID,
+		Status:      "active",
 		OwnerUserID: 7,
 	}
 	if workspaceID == "personal_7" {
 		ws.Type = "personal"
 		ws.OwnerUserID = userID
 	}
-	// Use FirstOrCreate to avoid constraint violations on repeated seeds
 	db.Where("id = ?", workspaceID).FirstOrCreate(ws)
 
 	member := &model.AicpWorkspaceMember{
-		WorkspaceID: workspaceID,
-		UserID:      userID,
-		Status:      "active",
-		Permissions: string(perms),
+		WorkspaceID:  workspaceID,
+		UserID:       userID,
+		DepartmentID: departmentID,
+		RoleID:       roleID,
+		Status:       "active",
+		Permissions:  string(perms),
 	}
 	db.Create(member)
+}
+
+func seedWorkspaceRole(t *testing.T, db *gorm.DB, roleID, workspaceID, name string, grants []model.AicpRolePermissionGrant) {
+	t.Helper()
+	role := &model.AicpWorkspaceRole{
+		ID:          roleID,
+		WorkspaceID: workspaceID,
+		Name:        name,
+		Status:      "active",
+	}
+	db.Where("id = ?", roleID).FirstOrCreate(role)
+	for _, g := range grants {
+		g.RoleID = roleID
+		db.Create(&g)
+	}
 }
 
 func setAicpUser(c *gin.Context, userID int64) {
@@ -229,4 +272,100 @@ func TestGetAicpWorkspaceMembershipPersonalWorkspace(t *testing.T) {
 	assert.True(t, resp.Success)
 	assert.Equal(t, "personal_7", resp.Data.WorkspaceID)
 	assert.Equal(t, "personal", resp.Data.WorkspaceType)
+}
+
+// Test: GET /api/aicp/workspaces returns all active memberships for the authenticated user
+func TestListAicpWorkspaces(t *testing.T) {
+	db := openWorkspaceTestDB(t)
+	seedWorkspaceMember(t, db, "ent_100", 9, []string{"asset.view"})
+	seedWorkspaceMember(t, db, "personal_9", 9, []string{"asset.view", "asset.use"})
+	// Another user's workspace should not appear
+	seedWorkspaceMember(t, db, "ent_200", 10, []string{"asset.manage"})
+
+	router := gin.New()
+	router.GET("/api/aicp/workspaces", func(c *gin.Context) {
+		setAicpUser(c, 9)
+		c.Next()
+	}, ListAicpWorkspaces)
+
+	response := performRequest(router, "GET", "/api/aicp/workspaces")
+
+	require.Equal(t, http.StatusOK, response.Code)
+
+	var resp workspaceListResponse
+	err := json.Unmarshal(response.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	assert.True(t, resp.Success)
+	assert.Len(t, resp.Data.Items, 2) // only ent_100 and personal_9
+
+	ids := make([]string, len(resp.Data.Items))
+	for i, item := range resp.Data.Items {
+		ids[i] = item.WorkspaceID
+	}
+	assert.Contains(t, ids, "ent_100")
+	assert.Contains(t, ids, "personal_9")
+	assert.NotContains(t, ids, "ent_200") // user 9 is not a member
+}
+
+// Test: list excludes inactive memberships
+func TestListAicpWorkspacesExcludesInactive(t *testing.T) {
+	db := openWorkspaceTestDB(t)
+	seedWorkspaceMember(t, db, "ent_100", 9, []string{"asset.view"})
+	// Create an inactive membership
+	seedWorkspaceMember(t, db, "ent_200", 9, []string{"asset.use"})
+	db.Model(&model.AicpWorkspaceMember{}).
+		Where("workspace_id = ? AND user_id = ?", "ent_200", 9).
+		Update("status", "inactive")
+
+	router := gin.New()
+	router.GET("/api/aicp/workspaces", func(c *gin.Context) {
+		setAicpUser(c, 9)
+		c.Next()
+	}, ListAicpWorkspaces)
+
+	response := performRequest(router, "GET", "/api/aicp/workspaces")
+
+	require.Equal(t, http.StatusOK, response.Code)
+
+	var resp workspaceListResponse
+	err := json.Unmarshal(response.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	assert.True(t, resp.Success)
+	assert.Len(t, resp.Data.Items, 1)
+	assert.Equal(t, "ent_100", resp.Data.Items[0].WorkspaceID)
+}
+
+// Test: membership returns department, roles, and scoped permission grants
+func TestGetAicpWorkspaceMembershipReturnsGrants(t *testing.T) {
+	db := openWorkspaceTestDB(t)
+	seedWorkspaceRole(t, db, "role_head", "ent_100", "部门负责人", []model.AicpRolePermissionGrant{
+		{Permission: "trade.purchase.approve", Scope: "DEPARTMENT", ScopeIDs: `["dept_content"]`},
+	})
+	seedWorkspaceMemberWithOrg(t, db, "ent_100", 9, []string{"enterprise.dashboard.view"}, "dept_content", "role_head")
+
+	router := gin.New()
+	router.GET("/api/aicp/workspaces/:id/membership", func(c *gin.Context) {
+		setAicpUser(c, 9)
+		c.Next()
+	}, GetAicpWorkspaceMembership)
+
+	response := performRequest(router, "GET", "/api/aicp/workspaces/ent_100/membership")
+
+	require.Equal(t, http.StatusOK, response.Code)
+
+	var resp workspaceMembershipResponse
+	err := json.Unmarshal(response.Body.Bytes(), &resp)
+	require.NoError(t, err)
+
+	assert.True(t, resp.Success)
+	assert.Equal(t, "dept_content", resp.Data.DepartmentID)
+	assert.Contains(t, resp.Data.Roles, "部门负责人")
+	assert.Contains(t, resp.Data.Permissions, "enterprise.dashboard.view")
+
+	require.Len(t, resp.Data.PermissionGrants, 1)
+	assert.Equal(t, "trade.purchase.approve", resp.Data.PermissionGrants[0].Permission)
+	assert.Equal(t, "DEPARTMENT", resp.Data.PermissionGrants[0].Scope)
+	assert.Contains(t, resp.Data.PermissionGrants[0].ScopeIDs, "dept_content")
 }

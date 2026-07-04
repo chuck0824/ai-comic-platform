@@ -419,7 +419,21 @@ func SetApiRouter(router *gin.Engine) {
 		aicpRoute := apiRouter.Group("/aicp")
 		aicpRoute.Use(middleware.AicpJwtAuth(), middleware.UserAuth())
 		{
+			aicpRoute.GET("/workspaces", controller.ListAicpWorkspaces)
 			aicpRoute.GET("/workspaces/:id/membership", controller.GetAicpWorkspaceMembership)
+		}
+
+		// AICP Internal Wallet API (service-to-service, HMAC authenticated)
+		aicpInternal := apiRouter.Group("/aicp")
+		aicpInternal.Use(middleware.AicpServiceAuth())
+		{
+			aicpInternal.GET("/wallets/:ownerType/:ownerId", controller.GetAicpWalletBalance)
+			aicpInternal.POST("/wallets/precheck", controller.AicpWalletPrecheck)
+			aicpInternal.POST("/wallet-transfers/purchase", controller.AicpWalletPurchase)
+			aicpInternal.GET("/wallet-transfers/by-business-order/:orderNo", controller.AicpWalletFindByBusinessOrder)
+			aicpInternal.POST("/wallet-transfers/:transferNo/release", controller.AicpWalletRelease)
+			aicpInternal.POST("/wallet-transfers/:transferNo/reverse", controller.AicpWalletReverse)
+			aicpInternal.GET("/wallet-ledger/:ownerType/:ownerId", controller.AicpWalletLedger)
 		}
 	}
 }
