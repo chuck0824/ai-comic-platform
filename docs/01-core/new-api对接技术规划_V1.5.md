@@ -1,9 +1,24 @@
-# new-api 对接技术规划 V1.5
+# new-api 对接技术规划 V1.6
 
 > 基于《后端产品功能设计_V1.5.md》与《AI漫剧与视频内容工业化生产工作台 PRD V1.5》  
 > 对接目标：[new-api](https://github.com/QuantumNous/new-api) — 新一代 AI 模型聚合管理与分发系统  
 > 文档性质：技术规划说明书（Tech Planning Spec）  
 > 适用对象：后端、架构、算法、项目管理
+
+---
+
+## 基于 superpowers 的更新记录（2026-07-02）
+
+| 更新项 | 说明 | 依据 superpowers |
+|---|---|---|
+| 统一账户模型 | 明确 3001 为账户中心唯一数据源（用户/工作区/余额/API Key/计费），8080 通过 BFF 适配层调用 | `unified-account-model-billing-design.md` |
+| 影子用户映射 | 描述 3001 用户↔8080 完整映射流程（自动注册、双向禁用同步） | `unified-account-model-billing-design.md` |
+| AI Router 扩展 | 增加创作圣经上下文注入路径、Agent 会话模型调用路径 | `script-creation-creative-bible-design.md`、`agent-session-completion-design.md` |
+| 交易支付链路 | 8080→3001 钱包预扣/结算/退款调用链，双服务财务架构（Outbox + 最终一致性） | `script-trading-market-completion-design.md` |
+| 部署拓扑 | 反映 3001 内部 API 端点、8080 新增模块（创作圣经/Agent/交易/资产市场） | 全部 |
+| 风险更新 | 视频生成通道扩展 → 已规划、统一身份同步 → 已决策（3001 为唯一源） | `unified-account-model-billing-design.md` |
+
+> **注意**：本文档中标注 `[superpowers 更新]` 的段落为本次新增或修改内容。
 
 ---
 
@@ -713,6 +728,27 @@ agent-svc 执行 tool_calls:
 └──────────────────────────────────────────────────────┘
 ```
 
+### 9.1.1 交易支付链路 `[superpowers 更新]`
+
+`[superpowers 更新]` V1.6 引入了脚本交易市场，需要 8080→3001 的钱包操作链路：
+
+```
+8080 trade-svc（业务层）
+  → POST /api/aicp/wallets/precheck     （余额预检查）
+  → POST /api/aicp/wallet-transfers/purchase （创建购买转账）
+  → 3001 内部：钱包转账 CREATED → PROCESSING → SUCCEEDED/FAILED
+  → 3001 内部：双记账本条目（不可变）
+  → 8080 查询：GET /wallet-transfers/by-business-order/{orderNo}
+  → 结算：POST /wallet-transfers/{transferNo}/release   （7天后解冻）
+  → 退款：POST /wallet-transfers/{transferNo}/reverse   （原路退回）
+```
+
+**关键约束**：
+- 8080 和 3001 不能共享数据库，通过签名内部 API + 幂等键通信
+- 每笔购买创建平衡的借贷记账条目，不可修改（修正通过新 reversal 条目）
+- 卖家收入 7 天冻结期后解冻
+- 最终一致性通过 Outbox 模式 + 对账保证
+
 ### 9.2 费用确认流程
 
 ```
@@ -727,23 +763,25 @@ AI Router.CostEstimator 预估费用
   └── 余额不足 → 阻止生成，引导充值
 ```
 
-### 9.3 统一账号与 new-api 影子用户映射
+### 9.3 统一账号体系（V1.6 架构更新）
+
+> **V1.6 架构决策**：`3001` 是用户、Workspace、部门、成员、角色权限、余额和 AI 用量的**唯一事实源**。旧的“影子用户”概念已废弃——`3001` 用户即为平台用户，不存在第二套用户表。
 
 ```
-平台统一身份（事实源）          new-api 影子记录（能力侧）
-──────────────────          ───────────────────
-platform_user_id     ←──→   new_api_user_id
-member_level         ───→   new-api user_group（配额模板）
-enterprise_id        ───→   new-api group / enterprise quota
-platform_role        ───→   new-api role（仅管理员可登录管理端）
+3001 账户中心（唯一事实源）        8080 业务域（消费方）
+────────────────────────         ──────────────────
+user_id                   ←──→   JWT subject (aicp_user_id)
+workspace (personal/ent)  ←──→   X-Workspace-Id + WorkspaceContext
+department / role / grant ←──→   WorkspaceContext (enriched membership)
+wallet balance            ←──→   采购预算对比展示（不存储余额副本）
 ```
 
-账号共用规则：
+架构规则（替代旧“影子用户”口径）：
 
-1. `user-svc` 是账号、密码、手机、邮箱、企业和平台角色的唯一事实源。
-2. new-api 不开放独立业务注册，不保存第二套平台密码；其用户表仅作为配额、令牌和账单归属的影子记录。
-3. `8080` 登录后，普通用户只进入漫剧生产功能；具备 `platform_admin` 或 `operator` 角色的账号可通过短时 SSO 票据进入 `3001`。
-4. 平台账号禁用、企业成员移除或角色变更时，必须同步吊销 new-api 会话和令牌。
+1. `3001` 是账号、密码、手机、邮箱、Workspace、部门、成员、角色权限、余额的唯一事实源。
+2. `8080` 不复制用户表、企业主数据表或余额表。所有组织写操作通过 BFF 代理到 `3001`。
+3. WorkspaceContext 每次受保护请求实时验证 Membership，不使用本地缓存鉴权。
+4. 旧 `can_*`、`ent_admin`、`dept_head` 权限已迁移至新权限码（`trade.purchase.approve`、`org.member.manage` 等），附带 WORKSPACE/DEPARTMENT/SELF 数据范围。
 
 充值与会员入口由 `8080` 提供，平台通过内部 API 查询和同步 new-api 底层余额：
 
@@ -796,7 +834,7 @@ GET new-api/api/user/balance?platform_user_id=our_user_12345
 | 数据库 | 与平台共享 MySQL（不同 database）| `new_api` database |
 | Redis | 可共享或独立 | 推荐独立 Redis 实例 |
 | 供应商 Key | 在 new-api 管理后台配置 | 不暴露给我们的平台 |
-| 用户体系 | 平台账号统一认证，new-api 保存影子用户 | 不允许形成第二套业务账号密码 |
+| 用户体系 | 3001 为唯一用户事实源（V1.6 起，废弃“影子用户”模式） | 8080 通过 JWT + WorkspaceContext 消费，不复制用户表 |
 | 管理端权限 | 仅 `platform_admin` / `operator` | 普通创作者不得访问管理界面 |
 | 内部调用 | 生产环境仅允许网关/AI Router 访问 API | 本地联调管理与 API 入口均为 `3001` |
 
@@ -812,7 +850,7 @@ GET new-api/api/user/balance?platform_user_id=our_user_12345
 |---|---|
 | 部署 new-api（Docker/K8s） | new-api 运行，配置 3-5 个 LLM 渠道 |
 | 搭建 AI Router 骨架 | TaskRouter + 基础 Adapter（LLM + 文生图） |
-| 实现统一身份与影子用户同步 | `platform_user_id ↔ new_api_user_id`、短时 SSO 票据、角色映射、禁用同步 |
+| 🔄 实现 Workspace 底座（V1.6 已完成） | `ListActiveWorkspacesForUser`、enriched `MembershipResult`、部门/成员/角色/邀请 CRUD、billing-summary 端点 |
 | script-gen-svc 对接 | 源头文本生成、改编脚本、钩子策略、分阶段审核走 AI Router；MVP 可规则引擎降级 |
 | 计费联调 | 确认 new-api 扣费 + 我们平台余额查询通 |
 
@@ -855,12 +893,13 @@ GET new-api/api/user/balance?platform_user_id=our_user_12345
 | 供应商 API 格式变更 | Adapter 报错 | 中 | new-api 社区活跃（38K stars），通常会及时更新。必要时 fork 自行维护 |
 | 成本失控 | 用户批量生成导致高额费用 | 中 | AI Router 层做费用预估 + 用户确认 + 日预算上限 + 企业审批流 |
 | 视频生成异步等待 | 用户体验差 | 低 | WebSocket/SSE 实时推送生成进度，不阻塞画布操作 |
-| new-api 与我们数据库冲突 | 数据混乱 | 低 | 分 database 部署，仅通过 API 通信 |
+| 8080↔3001 数据一致性 `[superpowers 更新]` | 交易订单与钱包状态不一致 | 中 | Outbox 模式 + 幂等键 + 定期对账；3001 账本不可变 |
+| 统一账号同步延迟 `[superpowers 更新]` | 用户禁用/权限变更不及时 | 低 | 决策：3001 为唯一数据源；8080 关键路径实时查询（不缓存授权信息） |
 
 ---
 
-> **文档状态**：V1.5 已修订；端口拆分已落地，统一账号与角色映射待实现
+> **文档状态**：V1.6 修订版（基于 superpowers 增量更新）
 > **编写日期**：2026-06-15  
-> **最后修订**：2026-06-27
-> **依赖文档**：《后端产品功能设计_V1.5.md》  
-> **后续步骤**：统一登录票据 → 影子用户同步 → 角色映射与双端禁用 → AI Router 联调 → new-api 视频渠道扩展
+> **最后修订**：2026-07-02
+> **依赖文档**：《后端产品功能设计_V1.5.md》、`docs/superpowers/specs/` 下统一账户模型/交易市场设计
+> **后续步骤**：AI Router 联调 → new-api 视频渠道扩展 → 交易支付链路 8080↔3001 联调
