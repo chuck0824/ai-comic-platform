@@ -276,6 +276,14 @@ func migrateDB() error {
 		&SystemTaskLock{},
 		&AicpWorkspace{},
 		&AicpWorkspaceMember{},
+		&AicpDepartment{},
+		&AicpWorkspaceRole{},
+		&AicpRolePermissionGrant{},
+		&AicpWorkspaceInvitation{},
+		&WalletAccount{},
+		&WalletTransfer{},
+		&WalletLedgerEntry{},
+		&WalletIdempotencyRecord{},
 	)
 	if err != nil {
 		return err
@@ -330,6 +338,14 @@ func migrateDBFast() error {
 		{&SystemTaskLock{}, "SystemTaskLock"},
 		{&AicpWorkspace{}, "AicpWorkspace"},
 		{&AicpWorkspaceMember{}, "AicpWorkspaceMember"},
+		{&AicpDepartment{}, "AicpDepartment"},
+		{&AicpWorkspaceRole{}, "AicpWorkspaceRole"},
+		{&AicpRolePermissionGrant{}, "AicpRolePermissionGrant"},
+		{&AicpWorkspaceInvitation{}, "AicpWorkspaceInvitation"},
+		{&WalletAccount{}, "WalletAccount"},
+		{&WalletTransfer{}, "WalletTransfer"},
+		{&WalletLedgerEntry{}, "WalletLedgerEntry"},
+		{&WalletIdempotencyRecord{}, "WalletIdempotencyRecord"},
 	}
 	// 动态计算migration数量，确保errChan缓冲区足够大
 	errChan := make(chan error, len(migrations))
