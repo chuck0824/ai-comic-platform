@@ -68,5 +68,10 @@ export const enterpriseApi = {
   },
   submitApprovalDecision(type, id, body) {
     return request.post(`${BASE}/approvals/${encodeURIComponent(type)}/${encodeURIComponent(id)}/decisions`, body)
+  },
+
+  // ─── Audit ──────────────────────────────────────────────────────────────
+  listAuditEvents(params = {}) {
+    return request.get(`${BASE}/audit-events`, { params })
   }
 }
