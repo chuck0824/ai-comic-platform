@@ -420,6 +420,7 @@ func SetApiRouter(router *gin.Engine) {
 		aicpRoute.Use(middleware.AicpJwtAuth(), middleware.UserAuth())
 		{
 			aicpRoute.GET("/workspaces", controller.ListAicpWorkspaces)
+			aicpRoute.GET("/workspaces/:id", controller.GetAicpWorkspace)
 			aicpRoute.GET("/workspaces/:id/membership", controller.GetAicpWorkspaceMembership)
 			aicpRoute.GET("/workspaces/:id/billing-summary", controller.GetAicpBillingSummary)
 			// Department management

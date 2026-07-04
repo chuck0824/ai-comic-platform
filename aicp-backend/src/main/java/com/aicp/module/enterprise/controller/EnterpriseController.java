@@ -40,6 +40,11 @@ public class EnterpriseController {
         return ApiResponse.success(facade.getContext(ctx(request), bearer(request)));
     }
 
+    @GetMapping("/workspaces")
+    public ApiResponse<?> listWorkspaces(HttpServletRequest request) {
+        return ApiResponse.success(facade.listWorkspaces(bearer(request)));
+    }
+
     // ─── Departments ────────────────────────────────────────────────────────
 
     @GetMapping("/departments")

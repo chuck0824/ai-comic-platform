@@ -142,6 +142,40 @@ func GetAicpWorkspaceMembership(c *gin.Context) {
 	})
 }
 
+// GetAicpWorkspace returns workspace profile information.
+// GET /api/aicp/workspaces/:id
+func GetAicpWorkspace(c *gin.Context) {
+	workspaceID := c.Param("id")
+	if workspaceID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"success": false, "message": "workspace id is required"})
+		return
+	}
+
+	userID, ok := extractUserID(c)
+	if !ok {
+		return
+	}
+
+	// Verify user is a member before returning workspace info
+	membership, err := model.FindActiveWorkspaceMembership(workspaceID, userID)
+	if err != nil || membership == nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "workspace not found"})
+		return
+	}
+
+	// Query workspace details
+	var ws model.AicpWorkspace
+	if err := model.DB.Where("id = ?", workspaceID).First(&ws).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "workspace not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    ws,
+	})
+}
+
 // ─── Department handlers ───────────────────────────────────────────────────────
 
 // ListAicpDepartments lists active departments in a workspace.

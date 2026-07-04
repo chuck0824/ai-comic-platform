@@ -19,14 +19,22 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   async function loadWorkspaces() {
     loading.value = true
     try {
-      const res = await enterpriseApi.getContext()
-      // The context endpoint returns the current workspace context.
-      // For a full list we rely on the 3001 workspaces endpoint via BFF.
-      // Here we store the workspace list from member's available workspaces.
-      if (res?.data) {
-        membership.value = res.data
-        activeId.value = res.data.workspaceId
-        activeType.value = res.data.workspaceType
+      // Load the full workspace list from 3001 via BFF
+      const listRes = await enterpriseApi.listWorkspaces()
+      if (listRes?.data) {
+        items.value = listRes.data.map(w => ({
+          id: w.workspaceId,
+          type: w.workspaceType,
+          roles: w.roles || [],
+          departmentId: w.departmentId || ''
+        }))
+      }
+      // Then load the current workspace context
+      const ctxRes = await enterpriseApi.getContext()
+      if (ctxRes?.data) {
+        membership.value = ctxRes.data
+        activeId.value = ctxRes.data.workspaceId
+        activeType.value = ctxRes.data.workspaceType
         localStorage.setItem('active_workspace_id', activeId.value)
         localStorage.setItem('active_workspace_type', activeType.value)
       }

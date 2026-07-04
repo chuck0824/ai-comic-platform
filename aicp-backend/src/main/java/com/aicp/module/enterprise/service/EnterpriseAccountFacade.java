@@ -1,5 +1,6 @@
 package com.aicp.module.enterprise.service;
 
+import com.aicp.common.workspace.AccountCenterPermissionClient;
 import com.aicp.common.workspace.WorkspaceContext;
 import com.aicp.module.enterprise.dto.EnterpriseViews.*;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -19,6 +20,19 @@ import java.util.*;
 public class EnterpriseAccountFacade {
 
     private final AccountCenterEnterpriseClient client;
+    private final AccountCenterPermissionClient permissionClient;
+
+    /**
+     * List all workspaces available to the current user (from 3001).
+     */
+    public List<AccountCenterPermissionClient.MembershipResponse> listWorkspaces(String bearerToken) {
+        try {
+            return permissionClient.listWorkspaces(bearerToken);
+        } catch (AccountCenterPermissionClient.UpstreamUnavailableException e) {
+            log.warn("Failed to list workspaces: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
 
     /**
      * Build the enterprise context: workspace identity, visible menus, allowed actions.

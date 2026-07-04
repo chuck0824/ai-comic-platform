@@ -62,16 +62,34 @@ public class ProjectExportApprovalService {
         req.setApprovedAt(LocalDateTime.now());
         mapper.updateById(req);
 
+        // Create export task (stub — task center integration TBD)
+        Long taskId = createExportTask(req);
+        if (taskId != null) {
+            req.setExportTaskId(taskId);
+            mapper.updateById(req);
+        }
+
         try {
             projector.project("PROJECT_EXPORT", "export-" + req.getId(), 1,
                     req.getWorkspaceId(), req.getDepartmentId(), req.getRequesterUserId(),
-                    "导出已批准 #" + req.getId(), 0L, "APPROVED",
-                    "[{\"action\":\"view_task\"}]");
+                    "导出已批准 #" + req.getId() + (taskId != null ? " → 任务#" + taskId : ""), 0L, "APPROVED",
+                    "[{\"action\":\"view_task\",\"task_id\":" + (taskId != null ? taskId : "null") + "}]");
         } catch (Exception e) {
             log.warn("Failed to project export approval update {}: {}", req.getId(), e.getMessage());
         }
 
         return req;
+    }
+
+    /**
+     * Create an async export task. Stub — replace with task center API call.
+     * Returns the task ID, or null if task creation is deferred.
+     */
+    private Long createExportTask(ProjectExportRequest req) {
+        log.info("Export task queued for project={}, version={}, format={}",
+                req.getProjectId(), req.getProjectVersionId(), req.getExportFormat());
+        // TODO: integrate with task center (GenerationTask or dedicated export job)
+        return null; // task center integration deferred
     }
 
     @Transactional

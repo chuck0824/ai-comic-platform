@@ -12,6 +12,9 @@ import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/enterprise")
 @RequiredArgsConstructor
@@ -27,6 +30,51 @@ public class EnterpriseBudgetController {
                 .eq(EnterprisePurchaseBudget::getWorkspaceId, ctx.workspaceId())
                 .orderByDesc(EnterprisePurchaseBudget::getPeriodMonth));
         return ApiResponse.success(budgets);
+    }
+
+    @PutMapping("/budgets")
+    public ApiResponse<?> setBudget(@RequestBody Map<String, Object> body, HttpServletRequest request) {
+        var ctx = WorkspaceContext.get(request);
+        ctx.require("enterprise.budget.manage");
+
+        String subjectType = (String) body.getOrDefault("subjectType", "WORKSPACE");
+        String subjectId = (String) body.getOrDefault("subjectId", ctx.workspaceId());
+        String periodMonth = (String) body.get("periodMonth");
+        Long amountCents = body.get("amountCents") != null
+                ? ((Number) body.get("amountCents")).longValue() : 0L;
+        Long singleLimitCents = body.get("singleLimitCents") != null
+                ? ((Number) body.get("singleLimitCents")).longValue() : 0L;
+
+        if (periodMonth == null) {
+            return ApiResponse.error(400, "periodMonth is required (YYYY-MM)");
+        }
+
+        var existing = budgetMapper.selectOne(new LambdaQueryWrapper<EnterprisePurchaseBudget>()
+                .eq(EnterprisePurchaseBudget::getWorkspaceId, ctx.workspaceId())
+                .eq(EnterprisePurchaseBudget::getSubjectType, subjectType)
+                .eq(EnterprisePurchaseBudget::getSubjectId, subjectId)
+                .eq(EnterprisePurchaseBudget::getPeriodMonth, periodMonth));
+
+        if (existing != null) {
+            existing.setAmountCents(amountCents);
+            existing.setSingleLimitCents(singleLimitCents);
+            existing.setUpdatedAt(LocalDateTime.now());
+            budgetMapper.updateById(existing);
+            return ApiResponse.success(existing);
+        }
+
+        var budget = new EnterprisePurchaseBudget();
+        budget.setWorkspaceId(ctx.workspaceId());
+        budget.setSubjectType(subjectType);
+        budget.setSubjectId(subjectId);
+        budget.setPeriodMonth(periodMonth);
+        budget.setAmountCents(amountCents);
+        budget.setSingleLimitCents(singleLimitCents);
+        budget.setReservedCents(0L);
+        budget.setConsumedCents(0L);
+        budget.setRowVersion(0);
+        budgetMapper.insert(budget);
+        return ApiResponse.success(budget);
     }
 
     @GetMapping("/budget-entries")

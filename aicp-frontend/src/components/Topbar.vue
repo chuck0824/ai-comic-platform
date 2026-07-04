@@ -73,15 +73,10 @@ const workspaceLabel = computed(() => {
 })
 
 const workspaceItems = computed(() => {
-  const items = [
-    { id: 'personal', label: '个人空间', type: 'personal' }
-  ]
-  if (workspace.membership?.workspaceId) {
-    items.push({
-      id: workspace.activeId,
-      label: workspace.activeId,
-      type: workspace.activeType
-    })
+  const items = [{ id: 'personal', label: '个人空间', type: 'personal' }]
+  // Use the full workspace list from store (loaded from 3001 via BFF)
+  for (const w of workspace.items) {
+    items.push({ id: w.id, label: w.id, type: w.type })
   }
   return items
 })

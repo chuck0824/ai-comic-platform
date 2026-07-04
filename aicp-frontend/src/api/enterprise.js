@@ -8,6 +8,11 @@ export const enterpriseApi = {
     return request.get(`${BASE}/context`)
   },
 
+  /** List all workspaces available to the current user. */
+  listWorkspaces() {
+    return request.get(`${BASE}/workspaces`)
+  },
+
   // ─── Departments ────────────────────────────────────────────────────────
   listDepartments() {
     return request.get(`${BASE}/departments`)

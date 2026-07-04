@@ -1773,6 +1773,149 @@ CREATE TABLE IF NOT EXISTS generation_context_snapshots (
 CREATE INDEX idx_gcs_project ON generation_context_snapshots(project_id);
 
 -- ============================================================
+-- V6: Trade market tables (script trading foundation)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS trade_orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL,
+    status VARCHAR(24) NOT NULL DEFAULT 'PENDING_PAYMENT',
+    buyer_user_id BIGINT NOT NULL,
+    buyer_workspace_id VARCHAR(64) NOT NULL,
+    buyer_workspace_type VARCHAR(16) NOT NULL DEFAULT 'PERSONAL',
+    seller_user_id BIGINT NOT NULL,
+    seller_workspace_id VARCHAR(64) NOT NULL,
+    total_amount_cents BIGINT NOT NULL DEFAULT 0,
+    platform_fee_cents BIGINT NOT NULL DEFAULT 0,
+    seller_income_cents BIGINT NOT NULL DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    wallet_transfer_no VARCHAR(64),
+    wallet_status VARCHAR(20),
+    create_idempotency_key VARCHAR(128) NOT NULL,
+    expires_at DATETIME,
+    paid_at DATETIME,
+    fulfilled_at DATETIME,
+    completed_at DATETIME,
+    refunded_at DATETIME,
+    row_version INT NOT NULL DEFAULT 0,
+    failure_reason VARCHAR(2000),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_trade_order_no UNIQUE (order_no)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交易订单表';
+CREATE INDEX idx_to_buyer ON trade_orders(buyer_user_id, buyer_workspace_id);
+
+CREATE TABLE IF NOT EXISTS trade_order_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    listing_id BIGINT NOT NULL,
+    script_id BIGINT NOT NULL,
+    script_version_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    price_cents BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    title_snapshot VARCHAR(200),
+    author_snapshot VARCHAR(100),
+    tags_snapshot VARCHAR(2000),
+    agreement_text TEXT,
+    agreement_version VARCHAR(20),
+    agreement_hash VARCHAR(64),
+    historical_normal_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_oi UNIQUE (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单项表';
+
+CREATE TABLE IF NOT EXISTS script_entitlements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL,
+    beneficiary_workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL,
+    script_version_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    effective_from DATETIME DEFAULT CURRENT_TIMESTAMP,
+    effective_until DATETIME,
+    max_accounts INT,
+    allow_commercial TINYINT NOT NULL DEFAULT 0,
+    allow_adaptation TINYINT NOT NULL DEFAULT 0,
+    allow_sublicense TINYINT NOT NULL DEFAULT 0,
+    territory_restriction VARCHAR(200),
+    revoked_at DATETIME,
+    revoke_reason VARCHAR(2000),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_ent UNIQUE (order_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='剧本授权表';
+
+CREATE TABLE IF NOT EXISTS purchased_script_copies (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL,
+    workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL,
+    source_version_id BIGINT NOT NULL,
+    content_json TEXT,
+    title VARCHAR(200),
+    created_by_user_id BIGINT NOT NULL,
+    source_listing_id BIGINT,
+    source_author_name VARCHAR(100),
+    status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT uk_copy UNIQUE (order_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='购买剧本副本表';
+
+CREATE TABLE IF NOT EXISTS refund_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL,
+    requester_user_id BIGINT NOT NULL,
+    reason_code VARCHAR(30),
+    reason_text VARCHAR(2000),
+    evidence_json TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'REQUESTED',
+    reviewer_user_id BIGINT,
+    review_comment VARCHAR(2000),
+    reviewed_at DATETIME,
+    refund_amount_cents BIGINT,
+    wallet_reversal_no VARCHAR(64),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='退款申请表';
+CREATE INDEX idx_rf_order ON refund_requests(order_no);
+
+CREATE TABLE IF NOT EXISTS trade_outbox_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    payload TEXT,
+    idempotency_key VARCHAR(128) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    retry_count INT NOT NULL DEFAULT 0,
+    max_retries INT NOT NULL DEFAULT 10,
+    next_retry_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_error VARCHAR(2000),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交易Outbox事件表';
+CREATE INDEX idx_toe_dispatch ON trade_outbox_events(status, next_retry_at);
+
+CREATE TABLE IF NOT EXISTS trade_audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id BIGINT,
+    workspace_id VARCHAR(64),
+    action VARCHAR(50) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    before_summary VARCHAR(2000),
+    after_summary VARCHAR(2000),
+    correlation_id VARCHAR(64),
+    client_ip VARCHAR(45),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='交易审计日志表';
+
+-- ============================================================
 -- V7: Enterprise budget & approval projection
 -- ============================================================
 CREATE TABLE IF NOT EXISTS enterprise_purchase_budgets (

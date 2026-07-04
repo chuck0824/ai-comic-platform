@@ -26,6 +26,7 @@ public class AssetPublicationService {
     private final AssetVersionMapper versionMapper;
     private final MarketListingMapper listingMapper;
     private final AssetPublishRequestMapper publishRequestMapper;
+    private final AssetOutboxService outboxService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /** Personal workspace: direct publish. Enterprise workspace: rejects — use requestEnterprisePublish. */
@@ -65,6 +66,16 @@ public class AssetPublicationService {
         pr.setReason(req.name());
         pr.setRowVersion(0);
         publishRequestMapper.insert(pr);
+
+        outboxService.emit("ASSET_PUBLISH", "publish-" + pr.getId(), "SUBMITTED",
+                Map.of("source_id", "publish-" + pr.getId(),
+                       "workspace_id", ctx.workspaceId(),
+                       "department_id", "",
+                       "requester_user_id", ctx.userId(),
+                       "summary", "资产发布申请 #" + pr.getId(),
+                       "amount_cents", 0,
+                       "status", "PENDING"));
+
         return toPublishRequestView(pr);
     }
 
@@ -84,6 +95,16 @@ public class AssetPublicationService {
         pr.setReviewComment(body.reason());
         pr.setRowVersion(pr.getRowVersion() + 1);
         publishRequestMapper.updateById(pr);
+
+        // Emit outbox for approval projection
+        outboxService.emit("ASSET_PUBLISH", "publish-" + pr.getId(), "APPROVED",
+                Map.of("source_id", "publish-" + pr.getId(),
+                       "workspace_id", pr.getWorkspaceId(),
+                       "department_id", "",
+                       "requester_user_id", pr.getRequesterId(),
+                       "summary", "资产发布已批准 #" + pr.getId(),
+                       "amount_cents", 0,
+                       "status", "APPROVED"));
 
         // Upsert the listing
         AssetRequests.PublishAssetRequest pubReq = new AssetRequests.PublishAssetRequest(
@@ -106,6 +127,16 @@ public class AssetPublicationService {
         pr.setReason(body.reason());
         pr.setRowVersion(pr.getRowVersion() + 1);
         publishRequestMapper.updateById(pr);
+
+        outboxService.emit("ASSET_PUBLISH", "publish-" + pr.getId(), "REJECTED",
+                Map.of("source_id", "publish-" + pr.getId(),
+                       "workspace_id", pr.getWorkspaceId(),
+                       "department_id", "",
+                       "requester_user_id", pr.getRequesterId(),
+                       "summary", "资产发布已驳回 #" + pr.getId(),
+                       "amount_cents", 0,
+                       "status", "REJECTED"));
+
         return toPublishRequestView(pr);
     }
 
