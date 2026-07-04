@@ -41,6 +41,7 @@ import java.util.List;
  *   <li>{@code /api/v1/trade/seller/**}</li>
  *   <li>{@code /api/v1/trade/purchase-requests/**}</li>
  *   <li>{@code /api/v1/trade/refund-requests/**}</li>
+ *   <li>{@code /api/v1/enterprise/**}</li>
  * </ul>
  *
  * Public market read endpoints ({@code GET /api/v1/asset/market/listings/**})
@@ -72,7 +73,8 @@ public class WorkspaceContextFilter extends OncePerRequestFilter {
             new PathPattern("/api/v1/trade/entitlements/**", true),
             new PathPattern("/api/v1/trade/seller/**", true),
             new PathPattern("/api/v1/trade/purchase-requests/**", true),
-            new PathPattern("/api/v1/trade/refund-requests/**", true)
+            new PathPattern("/api/v1/trade/refund-requests/**", true),
+            new PathPattern("/api/v1/enterprise/**", true)
     );
 
     @Override

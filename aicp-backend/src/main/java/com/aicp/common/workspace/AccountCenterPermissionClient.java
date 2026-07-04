@@ -10,9 +10,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 
 /**
  * HTTP client that calls the 3001 account-center for workspace membership
@@ -25,9 +23,6 @@ public class AccountCenterPermissionClient {
 
     @Value("${new-api.base-url:http://localhost:3001}")
     private String baseUrl;
-
-    @Value("${spring.profiles.active:dev}")
-    private String activeProfile;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
@@ -49,19 +44,6 @@ public class AccountCenterPermissionClient {
      * @throws UpstreamUnavailableException if 3001 is unreachable or returns 5xx
      */
     public MembershipResponse membership(String workspaceId, String bearerToken) throws UpstreamUnavailableException {
-        // Dev mode: return a trusted mock membership without calling 3001
-        if ("dev".equals(activeProfile)) {
-            log.debug("Dev mode: returning mock membership for workspace={}", workspaceId);
-            String workspaceType = workspaceId.startsWith("enterprise_") || workspaceId.startsWith("ent_") ? "enterprise" : "personal";
-            long userId = extractUserIdFromWorkspace(workspaceId);
-            List<String> permissions = List.of(
-                    "can_generate_script", "can_purchase_script",
-                    "can_generate_video", "can_export_no_watermark",
-                    "can_manage_assets"
-            );
-            return new MembershipResponse(workspaceId, workspaceType, userId, permissions);
-        }
-
         String url = baseUrl + "/api/aicp/workspaces/" + workspaceId + "/membership";
 
         HttpHeaders headers = new HttpHeaders();
@@ -91,6 +73,58 @@ public class AccountCenterPermissionClient {
         }
     }
 
+    /**
+     * Look up the authenticated user's workspace list.
+     *
+     * @param bearerToken the original Authorization header
+     * @return list of workspace membership summaries
+     * @throws UpstreamUnavailableException if 3001 is unreachable
+     */
+    public List<MembershipResponse> listWorkspaces(String bearerToken) throws UpstreamUnavailableException {
+        String url = baseUrl + "/api/aicp/workspaces";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.set(HttpHeaders.AUTHORIZATION, bearerToken);
+        headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+
+        try {
+            ResponseEntity<String> response = restTemplate.exchange(
+                    url, HttpMethod.GET, entity, String.class);
+
+            if (!response.hasBody()) {
+                return Collections.emptyList();
+            }
+
+            JsonNode root = objectMapper.readTree(response.getBody());
+            if (!root.path("success").asBoolean(false)) {
+                return Collections.emptyList();
+            }
+
+            JsonNode items = root.path("data").path("items");
+            if (!items.isArray()) {
+                return Collections.emptyList();
+            }
+
+            List<MembershipResponse> results = new ArrayList<>();
+            for (JsonNode item : items) {
+                MembershipResponse mr = parseMembershipItem(item);
+                if (mr != null) {
+                    results.add(mr);
+                }
+            }
+            return results;
+
+        } catch (RestClientException e) {
+            log.error("账户中心工作区列表不可用: {}", e.getMessage());
+            throw new UpstreamUnavailableException("账户中心暂不可用，请稍后重试", e);
+        } catch (Exception e) {
+            log.error("解析工作区列表失败: {}", e.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
     private MembershipResponse parseMembershipResponse(String body) {
         try {
             JsonNode root = objectMapper.readTree(body);
@@ -101,11 +135,21 @@ public class AccountCenterPermissionClient {
             if (data.isMissingNode()) {
                 return null;
             }
+            return parseMembershipItem(data);
+        } catch (Exception e) {
+            log.error("解析账户中心响应失败: {}", e.getMessage());
+            return null;
+        }
+    }
 
+    private MembershipResponse parseMembershipItem(JsonNode data) {
+        try {
             String workspaceId = data.path("workspace_id").asText();
             String workspaceType = data.path("workspace_type").asText();
             long userId = data.path("user_id").asLong();
+            String departmentId = data.path("department_id").asText("");
 
+            // Permissions
             List<String> permissions = new ArrayList<>();
             JsonNode permsNode = data.path("permissions");
             if (permsNode.isArray()) {
@@ -114,9 +158,37 @@ public class AccountCenterPermissionClient {
                 }
             }
 
-            return new MembershipResponse(workspaceId, workspaceType, userId, permissions);
+            // Roles
+            List<String> roles = new ArrayList<>();
+            JsonNode rolesNode = data.path("roles");
+            if (rolesNode.isArray()) {
+                for (JsonNode r : rolesNode) {
+                    roles.add(r.asText());
+                }
+            }
+
+            // Scoped permission grants
+            List<PermissionGrant> grants = new ArrayList<>();
+            JsonNode grantsNode = data.path("permission_grants");
+            if (grantsNode.isArray()) {
+                for (JsonNode g : grantsNode) {
+                    String permission = g.path("permission").asText();
+                    String scope = g.path("scope").asText("WORKSPACE");
+                    Set<String> scopeIds = new LinkedHashSet<>();
+                    JsonNode idsNode = g.path("scope_ids");
+                    if (idsNode.isArray()) {
+                        for (JsonNode id : idsNode) {
+                            scopeIds.add(id.asText());
+                        }
+                    }
+                    grants.add(new PermissionGrant(permission, scope, scopeIds));
+                }
+            }
+
+            return new MembershipResponse(workspaceId, workspaceType, userId,
+                    departmentId, permissions, roles, grants);
         } catch (Exception e) {
-            log.error("解析账户中心响应失败: {}", e.getMessage());
+            log.error("解析成员数据失败: {}", e.getMessage());
             return null;
         }
     }
@@ -128,7 +200,10 @@ public class AccountCenterPermissionClient {
             String workspaceId,
             String workspaceType,
             long userId,
-            List<String> permissions) {
+            String departmentId,
+            List<String> permissions,
+            List<String> roles,
+            List<PermissionGrant> permissionGrants) {
     }
 
     /**
@@ -139,21 +214,5 @@ public class AccountCenterPermissionClient {
         public UpstreamUnavailableException(String message, Throwable cause) {
             super(message, cause);
         }
-    }
-
-    /**
-     * Extract user ID from workspace ID format (e.g., "personal_1" → 1).
-     */
-    private long extractUserIdFromWorkspace(String workspaceId) {
-        if (workspaceId == null) return 1L;
-        int underscoreIdx = workspaceId.lastIndexOf('_');
-        if (underscoreIdx >= 0 && underscoreIdx < workspaceId.length() - 1) {
-            try {
-                return Long.parseLong(workspaceId.substring(underscoreIdx + 1));
-            } catch (NumberFormatException e) {
-                // fall through
-            }
-        }
-        return 1L; // default fallback
     }
 }

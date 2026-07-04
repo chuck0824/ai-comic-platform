@@ -6,9 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.util.Collections;
-import java.util.LinkedHashSet;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Resolves a trusted WorkspaceContext by combining the authenticated user
@@ -24,8 +22,8 @@ public class WorkspaceAccessService {
     /**
      * Resolve the workspace context for an authenticated user.
      *
-     * @param workspaceId the workspace ID from the X-Workspace-Id header
-     * @param bearerToken the original Authorization header
+     * @param workspaceId         the workspace ID from the X-Workspace-Id header
+     * @param bearerToken         the original Authorization header
      * @param authenticatedUserId the user ID from JWT (SecurityContextHolder)
      * @return the resolved WorkspaceContext
      * @throws BizException if membership cannot be confirmed or user mismatch
@@ -53,18 +51,25 @@ public class WorkspaceAccessService {
             throw new BizException(ErrorCode.ASSET_PERMISSION_DENIED);
         }
 
-        // Step 4: build the trusted context
+        // Step 4: build the trusted context with enriched fields
         Set<String> permissions = membership.permissions() != null
                 ? new LinkedHashSet<>(membership.permissions())
                 : Collections.emptySet();
 
-        log.debug("Workspace context resolved: workspace={}, type={}, user={}, permissions={}",
-                workspaceId, membership.workspaceType(), authenticatedUserId, permissions);
+        List<PermissionGrant> grants = membership.permissionGrants() != null
+                ? membership.permissionGrants()
+                : Collections.emptyList();
+
+        log.debug("Workspace context resolved: workspace={}, type={}, user={}, dept={}, roles={}, permissions={}",
+                workspaceId, membership.workspaceType(), authenticatedUserId,
+                membership.departmentId(), membership.roles(), permissions);
 
         return new WorkspaceContext(
                 membership.workspaceId(),
                 membership.workspaceType(),
                 authenticatedUserId,
-                permissions);
+                membership.departmentId() != null ? membership.departmentId() : "",
+                permissions,
+                grants);
     }
 }
