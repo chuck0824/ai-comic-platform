@@ -247,3 +247,175 @@ func ListActiveWorkspacesForUser(userID int64) ([]MembershipResult, error) {
 	}
 	return results, nil
 }
+
+// ─── Department queries ────────────────────────────────────────────────────────
+
+// ListDepartmentsForWorkspace returns all active departments in a workspace.
+func ListDepartmentsForWorkspace(workspaceID string) ([]AicpDepartment, error) {
+	var depts []AicpDepartment
+	err := DB.Where("workspace_id = ? AND status = ?", workspaceID, "active").
+		Order("sort_order ASC").Find(&depts).Error
+	return depts, err
+}
+
+// CreateDepartment creates a department. If a parentID is given, verifies the
+// parent belongs to the same workspace.
+func CreateDepartment(dept *AicpDepartment) error {
+	if dept.ParentID != "" {
+		var parent AicpDepartment
+		if err := DB.Where("id = ? AND workspace_id = ?", dept.ParentID, dept.WorkspaceID).First(&parent).Error; err != nil {
+			return errors.New("parent department not found or belongs to a different workspace")
+		}
+	}
+	return DB.Create(dept).Error
+}
+
+// UpdateDepartment updates name, parent, manager and sort order of a department.
+// Rejects moving under a parent from a different workspace.
+func UpdateDepartment(deptID, workspaceID string, updates map[string]interface{}) error {
+	if parentID, ok := updates["parent_id"].(string); ok && parentID != "" {
+		var parent AicpDepartment
+		if err := DB.Where("id = ? AND workspace_id = ?", parentID, workspaceID).First(&parent).Error; err != nil {
+			return errors.New("parent department not found or belongs to a different workspace")
+		}
+	}
+	return DB.Model(&AicpDepartment{}).
+		Where("id = ? AND workspace_id = ?", deptID, workspaceID).
+		Updates(updates).Error
+}
+
+// DeleteDepartment soft-deletes a department by marking it inactive.
+// Rejects deletion when the department still has active members.
+func DeleteDepartment(deptID, workspaceID string) error {
+	var count int64
+	if err := DB.Model(&AicpWorkspaceMember{}).
+		Where("department_id = ? AND status = ?", deptID, "active").Count(&count).Error; err != nil {
+		return err
+	}
+	if count > 0 {
+		return errors.New("department still has active members")
+	}
+	return DB.Model(&AicpDepartment{}).
+		Where("id = ? AND workspace_id = ?", deptID, workspaceID).
+		Update("status", "inactive").Error
+}
+
+// ─── Member queries ────────────────────────────────────────────────────────────
+
+// ListMembersForWorkspace returns paginated members in a workspace.
+func ListMembersForWorkspace(workspaceID string, offset, limit int) ([]AicpWorkspaceMember, int64, error) {
+	var total int64
+	if err := DB.Model(&AicpWorkspaceMember{}).
+		Where("workspace_id = ?", workspaceID).Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	var members []AicpWorkspaceMember
+	err := DB.Where("workspace_id = ?", workspaceID).
+		Offset(offset).Limit(limit).Find(&members).Error
+	return members, total, err
+}
+
+// UpdateMemberByID updates a member's department, role, and status.
+// The caller must enforce last-admin protection and member-limit checks.
+func UpdateMemberByID(memberID uint, updates map[string]interface{}) error {
+	return DB.Model(&AicpWorkspaceMember{}).Where("id = ?", memberID).Updates(updates).Error
+}
+
+// FindMemberByID looks up a single member by primary key.
+func FindMemberByID(memberID uint) (*AicpWorkspaceMember, error) {
+	var member AicpWorkspaceMember
+	if err := DB.First(&member, memberID).Error; err != nil {
+		return nil, err
+	}
+	return &member, nil
+}
+
+// CountActiveAdminsInWorkspace returns the count of active members with a given role ID.
+func CountActiveAdminsInWorkspace(workspaceID, roleID string) (int64, error) {
+	var count int64
+	err := DB.Model(&AicpWorkspaceMember{}).
+		Where("workspace_id = ? AND role_id = ? AND status = ?", workspaceID, roleID, "active").
+		Count(&count).Error
+	return count, err
+}
+
+// ─── Invitation queries ────────────────────────────────────────────────────────
+
+// CreateInvitation inserts a new invitation. Caller must check for duplicates first.
+func CreateInvitation(inv *AicpWorkspaceInvitation) error {
+	return DB.Create(inv).Error
+}
+
+// FindActiveInvitation looks up a pending invitation by workspace and target.
+func FindActiveInvitation(workspaceID, target string) (*AicpWorkspaceInvitation, error) {
+	var inv AicpWorkspaceInvitation
+	err := DB.Where("workspace_id = ? AND target = ? AND status = ?",
+		workspaceID, target, "pending").First(&inv).Error
+	if err != nil {
+		return nil, err
+	}
+	return &inv, nil
+}
+
+// RevokeInvitation marks an invitation as revoked.
+func RevokeInvitation(invitationID string) error {
+	return DB.Model(&AicpWorkspaceInvitation{}).
+		Where("id = ?", invitationID).
+		Update("status", "revoked").Error
+}
+
+// CountActiveMembersInWorkspace returns the current active member count.
+func CountActiveMembersInWorkspace(workspaceID string) (int64, error) {
+	var count int64
+	err := DB.Model(&AicpWorkspaceMember{}).
+		Where("workspace_id = ? AND status = ?", workspaceID, "active").
+		Count(&count).Error
+	return count, err
+}
+
+// ─── Role queries ──────────────────────────────────────────────────────────────
+
+// ListRolesForWorkspace returns all active roles in a workspace.
+func ListRolesForWorkspace(workspaceID string) ([]AicpWorkspaceRole, error) {
+	var roles []AicpWorkspaceRole
+	err := DB.Where("workspace_id = ? AND status = ?", workspaceID, "active").Find(&roles).Error
+	return roles, err
+}
+
+// CreateRole inserts a new role.
+func CreateRole(role *AicpWorkspaceRole) error {
+	return DB.Create(role).Error
+}
+
+// UpdateRolePermissionGrants replaces all permission grants for a role atomically.
+func UpdateRolePermissionGrants(roleID string, grants []AicpRolePermissionGrant) error {
+	return DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("role_id = ?", roleID).Delete(&AicpRolePermissionGrant{}).Error; err != nil {
+			return err
+		}
+		for i := range grants {
+			grants[i].RoleID = roleID
+			if err := tx.Create(&grants[i]).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// GetMemberPermissions returns the permission strings for a member, used to
+// check if the caller can grant a specific permission.
+func GetMemberPermissions(memberID uint) ([]string, error) {
+	var member AicpWorkspaceMember
+	if err := DB.First(&member, memberID).Error; err != nil {
+		return nil, err
+	}
+	if member.Permissions == "" {
+		return []string{}, nil
+	}
+	var perms []string
+	if err := json.Unmarshal([]byte(member.Permissions), &perms); err != nil {
+		return []string{}, nil
+	}
+	return perms, nil
+}

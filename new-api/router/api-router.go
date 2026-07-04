@@ -421,6 +421,20 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			aicpRoute.GET("/workspaces", controller.ListAicpWorkspaces)
 			aicpRoute.GET("/workspaces/:id/membership", controller.GetAicpWorkspaceMembership)
+			// Department management
+			aicpRoute.GET("/workspaces/:id/departments", controller.ListAicpDepartments)
+			aicpRoute.POST("/workspaces/:id/departments", controller.CreateAicpDepartment)
+			aicpRoute.PATCH("/workspaces/:id/departments/:departmentId", controller.UpdateAicpDepartment)
+			aicpRoute.DELETE("/workspaces/:id/departments/:departmentId", controller.DeleteAicpDepartment)
+			// Member management
+			aicpRoute.GET("/workspaces/:id/members", controller.ListAicpMembers)
+			aicpRoute.PATCH("/workspaces/:id/members/:memberId", controller.UpdateAicpMember)
+			// Invitations
+			aicpRoute.POST("/workspaces/:id/invitations", controller.CreateAicpInvitation)
+			// Role management
+			aicpRoute.GET("/workspaces/:id/roles", controller.ListAicpRoles)
+			aicpRoute.POST("/workspaces/:id/roles", controller.CreateAicpRole)
+			aicpRoute.PATCH("/workspaces/:id/roles/:roleId", controller.UpdateAicpRole)
 		}
 
 		// AICP Internal Wallet API (service-to-service, HMAC authenticated)
