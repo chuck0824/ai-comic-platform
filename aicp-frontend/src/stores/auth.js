@@ -20,15 +20,6 @@ function decodeJwtPayload(token) {
   }
 }
 
-/** Derive and persist workspace context from the access token. */
-function deriveAndStoreWorkspace(token) {
-  const payload = decodeJwtPayload(token)
-  if (payload && payload.uid != null) {
-    localStorage.setItem('active_workspace_id', `personal_${payload.uid}`)
-    localStorage.setItem('active_workspace_type', 'personal')
-  }
-}
-
 function clearWorkspace() {
   localStorage.removeItem('active_workspace_id')
   localStorage.removeItem('active_workspace_type')
@@ -42,6 +33,15 @@ export const useAuthStore = defineStore('auth', () => {
   const isLoggedIn = computed(() => !!token.value)
   const userDisplayName = computed(() => user.value?.nickname || '用户')
   const memberLevel = computed(() => user.value?.member_level || 'free')
+
+  /** Extract user ID from JWT payload for workspace fallback. */
+  function getUserId() {
+    const payload = decodeJwtPayload(token.value)
+    if (payload) {
+      return payload.uid ?? payload.userId ?? payload.user_id ?? payload.sub
+    }
+    return null
+  }
 
   async function login(credentials) {
     const res = await authApi.login(credentials)
@@ -68,7 +68,19 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('access_token', token.value)
     localStorage.setItem('refresh_token', refreshToken.value)
     localStorage.setItem('user', JSON.stringify(user.value))
-    deriveAndStoreWorkspace(token.value)
+    initWorkspaceAfterLogin()
+  }
+
+  /**
+   * Initialize workspace after login: set personal fallback, then let the
+   * workspace store resolve the actual membership on first page load.
+   */
+  function initWorkspaceAfterLogin() {
+    const uid = getUserId()
+    if (uid != null) {
+      localStorage.setItem('active_workspace_id', `personal_${uid}`)
+      localStorage.setItem('active_workspace_type', 'personal')
+    }
   }
 
   async function logout() {
@@ -89,13 +101,13 @@ export const useAuthStore = defineStore('auth', () => {
     router.push('/login')
   }
 
-  // Ensure workspace context is initialized from an existing token (page-refresh scenario).
+  // Page-refresh: ensure workspace context initialized from existing token.
   if (token.value && !localStorage.getItem('active_workspace_id')) {
-    deriveAndStoreWorkspace(token.value)
+    initWorkspaceAfterLogin()
   }
 
   return {
     token, refreshToken, user, isLoggedIn, userDisplayName, memberLevel,
-    login, loginBySms, register, logout, clearAuth
+    login, loginBySms, register, logout, clearAuth, getUserId, initWorkspaceAfterLogin
   }
 })

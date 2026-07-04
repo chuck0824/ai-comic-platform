@@ -154,9 +154,40 @@ const routes = [
       },
       {
         path: 'enterprise',
-        name: 'Enterprise',
-        component: () => import('@/views/Enterprise.vue'),
-        meta: { title: '企业工作台' }
+        component: () => import('@/views/enterprise/EnterpriseShell.vue'),
+        redirect: '/enterprise/overview',
+        children: [
+          {
+            path: 'overview',
+            name: 'EnterpriseOverview',
+            component: () => import('@/views/enterprise/EnterpriseOverview.vue'),
+            meta: { title: '企业概览' }
+          },
+          {
+            path: 'organization',
+            name: 'EnterpriseOrganization',
+            component: () => import('@/views/enterprise/EnterpriseOrganization.vue'),
+            meta: { title: '组织与成员' }
+          },
+          {
+            path: 'approvals',
+            name: 'EnterpriseApprovals',
+            component: () => import('@/views/enterprise/EnterpriseApprovals.vue'),
+            meta: { title: '统一审批' }
+          },
+          {
+            path: 'budgets',
+            name: 'EnterpriseBudgets',
+            component: () => import('@/views/enterprise/EnterpriseBudgets.vue'),
+            meta: { title: '预算与用量' }
+          },
+          {
+            path: 'audit',
+            name: 'EnterpriseAudit',
+            component: () => import('@/views/enterprise/EnterpriseAudit.vue'),
+            meta: { title: '审计记录' }
+          }
+        ]
       },
       {
         path: 'sop/:projectId',
