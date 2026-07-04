@@ -49,5 +49,24 @@ export const enterpriseApi = {
   // ─── Billing ────────────────────────────────────────────────────────────
   getBillingSummary() {
     return request.get(`${BASE}/billing-summary`)
+  },
+
+  // ─── Budgets ────────────────────────────────────────────────────────────
+  listBudgets() {
+    return request.get(`${BASE}/budgets`)
+  },
+  listBudgetEntries(params = {}) {
+    return request.get(`${BASE}/budget-entries`, { params })
+  },
+
+  // ─── Approvals ──────────────────────────────────────────────────────────
+  listApprovals(params = {}) {
+    return request.get(`${BASE}/approvals`, { params })
+  },
+  getApprovalDetail(type, id) {
+    return request.get(`${BASE}/approvals/${encodeURIComponent(type)}/${encodeURIComponent(id)}`)
+  },
+  submitApprovalDecision(type, id, body) {
+    return request.post(`${BASE}/approvals/${encodeURIComponent(type)}/${encodeURIComponent(id)}/decisions`, body)
   }
 }
