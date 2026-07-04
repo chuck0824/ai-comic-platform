@@ -421,6 +421,7 @@ func SetApiRouter(router *gin.Engine) {
 		{
 			aicpRoute.GET("/workspaces", controller.ListAicpWorkspaces)
 			aicpRoute.GET("/workspaces/:id/membership", controller.GetAicpWorkspaceMembership)
+			aicpRoute.GET("/workspaces/:id/billing-summary", controller.GetAicpBillingSummary)
 			// Department management
 			aicpRoute.GET("/workspaces/:id/departments", controller.ListAicpDepartments)
 			aicpRoute.POST("/workspaces/:id/departments", controller.CreateAicpDepartment)

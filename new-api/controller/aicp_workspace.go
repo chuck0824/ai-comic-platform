@@ -338,6 +338,23 @@ func CreateAicpInvitation(c *gin.Context) {
 	c.JSON(http.StatusCreated, gin.H{"success": true, "data": inv})
 }
 
+// ─── Billing handlers ──────────────────────────────────────────────────────────
+
+// GetAicpBillingSummary returns wallet balance for a workspace.
+// GET /api/aicp/workspaces/:id/billing-summary
+func GetAicpBillingSummary(c *gin.Context) {
+	workspaceID := c.Param("id")
+	if requireMembership(c, workspaceID, "enterprise.dashboard.view", "enterprise.budget.view") == nil {
+		return
+	}
+	summary, err := model.GetWorkspaceBillingSummary(workspaceID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"success": false, "message": "failed to get billing summary"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"success": true, "data": summary})
+}
+
 // ─── Role handlers ─────────────────────────────────────────────────────────────
 
 // ListAicpRoles lists active roles in a workspace.

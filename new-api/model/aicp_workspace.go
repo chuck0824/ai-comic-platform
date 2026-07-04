@@ -403,6 +403,37 @@ func UpdateRolePermissionGrants(roleID string, grants []AicpRolePermissionGrant)
 	})
 }
 
+// BillingSummary holds workspace wallet balance and AI usage overview.
+type BillingSummary struct {
+	WorkspaceID    string `json:"workspace_id"`
+	Currency       string `json:"currency"`
+	AvailableCents int64  `json:"available_cents"`
+	FrozenCents    int64  `json:"frozen_cents"`
+}
+
+// GetWorkspaceBillingSummary returns wallet balance for the workspace.
+func GetWorkspaceBillingSummary(workspaceID string) (*BillingSummary, error) {
+	var wallet WalletAccount
+	err := DB.Where("owner_type = ? AND owner_id = ?", "workspace", workspaceID).First(&wallet).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return &BillingSummary{
+				WorkspaceID:    workspaceID,
+				Currency:       "CNY",
+				AvailableCents: 0,
+				FrozenCents:    0,
+			}, nil
+		}
+		return nil, err
+	}
+	return &BillingSummary{
+		WorkspaceID:    workspaceID,
+		Currency:       wallet.Currency,
+		AvailableCents: wallet.AvailableCents,
+		FrozenCents:    wallet.FrozenCents,
+	}, nil
+}
+
 // GetMemberPermissions returns the permission strings for a member, used to
 // check if the caller can grant a specific permission.
 func GetMemberPermissions(memberID uint) ([]string, error) {
