@@ -4,9 +4,11 @@ import com.aicp.common.dto.ApiResponse;
 import com.aicp.common.dto.PageResult;
 import com.aicp.common.exception.ErrorCode;
 import com.aicp.common.util.SecurityUtil;
+import com.aicp.module.canvas.dto.CanvasMigrationViews;
 import com.aicp.module.canvas.dto.CanvasProjectRequests.*;
 import com.aicp.module.canvas.dto.CanvasProjectViews.*;
 import com.aicp.module.canvas.entity.*;
+import com.aicp.module.canvas.service.CanvasLegacyAuditService;
 import com.aicp.module.canvas.service.CanvasProjectManagementService;
 import com.aicp.module.canvas.service.CanvasService;
 import com.aicp.module.generation.entity.GenerationTask;
@@ -27,6 +29,7 @@ public class CanvasController {
 
     private final CanvasService canvasService;
     private final CanvasProjectManagementService managementService;
+    private final CanvasLegacyAuditService legacyAuditService;
     private final ObjectMapper objectMapper;
 
     // ===== Projects (Management) =====
@@ -657,5 +660,15 @@ public class CanvasController {
 
     private String shortUuid() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
+
+    // ===== Migration Audit (R0) =====
+
+    /**
+     * 只读盘点旧画布节点和连线。不修改任何数据。
+     */
+    @GetMapping("/projects/{id}/migration-report")
+    public ApiResponse<CanvasMigrationViews.MigrationAuditReport> getMigrationReport(@PathVariable String id) {
+        return ApiResponse.success(legacyAuditService.report(id));
     }
 }

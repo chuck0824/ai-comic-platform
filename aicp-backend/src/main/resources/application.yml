@@ -36,6 +36,16 @@ storyboard:
   export-signing-secret: ${STORYBOARD_EXPORT_SIGNING_SECRET:${jwt.secret}}
   download-expiry-seconds: 300
 
+# Canvas 生产内核 Feature Flag（默认全部关闭，按阶段灰度启用）
+aicp:
+  canvas:
+    features:
+      kernel-v2: false
+      typed-ports: false
+      director-v2: false
+      model-adapter-v2: false
+      quality-delivery-v2: false
+
 ---
 # ================================================================
 # DEV Profile：H2 内存数据库，零依赖即可启动后端
