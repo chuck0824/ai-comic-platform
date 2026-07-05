@@ -31,6 +31,7 @@ public enum ErrorCode {
     ENTERPRISE_NOT_VERIFIED(41009, "企业认证未通过"),
     MEMBER_LIMIT_EXCEEDED(41010, "成员数已达上限"),
     ENTERPRISE_BUDGET_INSUFFICIENT(41011, "企业预算不足"),
+    WORKSPACE_UPSTREAM_UNAVAILABLE(41012, "账户中心暂不可用，请稍后重试"),
 
     // 剧本生成 42xxx
     GEN_QUOTA_EXHAUSTED(42001, "生成配额已用完"),

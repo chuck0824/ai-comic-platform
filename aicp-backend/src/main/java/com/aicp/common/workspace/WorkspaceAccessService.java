@@ -35,7 +35,7 @@ public class WorkspaceAccessService {
             membership = client.membership(workspaceId, bearerToken);
         } catch (AccountCenterPermissionClient.UpstreamUnavailableException e) {
             log.warn("账户中心不可用: workspace={}, user={}", workspaceId, authenticatedUserId);
-            throw new BizException(ErrorCode.INTERNAL_ERROR.getCode(), "账户中心暂不可用，请稍后重试");
+            throw new BizException(ErrorCode.WORKSPACE_UPSTREAM_UNAVAILABLE);
         }
 
         // Step 2: workspace not found or user is not an active member → unified 404

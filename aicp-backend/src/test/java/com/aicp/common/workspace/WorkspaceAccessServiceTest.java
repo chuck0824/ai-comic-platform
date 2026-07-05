@@ -169,6 +169,19 @@ class WorkspaceAccessServiceTest {
     class UpstreamFailure {
 
         @Test
+        @DisplayName("3001 不可用 → 使用明确的 WORKSPACE_UPSTREAM_UNAVAILABLE 错误码")
+        void upstreamFailureUsesStableErrorCode() throws Exception {
+            when(client.membership(eq("personal_7"), anyString()))
+                    .thenThrow(new AccountCenterPermissionClient.UpstreamUnavailableException(
+                            "down", null));
+
+            assertThatThrownBy(() -> service.resolve("personal_7", "Bearer token", 7L))
+                    .isInstanceOf(BizException.class)
+                    .extracting("code")
+                    .isEqualTo(41012);
+        }
+
+        @Test
         @DisplayName("3001 不可用 → 抛出业务异常（不可用提示）")
         void rejectsWhenAccountCenterUnavailable() throws Exception {
             when(client.membership(eq("ent_100"), anyString()))
