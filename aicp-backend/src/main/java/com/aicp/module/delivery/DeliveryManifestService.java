@@ -38,7 +38,7 @@ public class DeliveryManifestService {
         List<ItemView> itemViews = items.stream()
                 .map(i -> new ItemView(i.shotUnitId, i.adoptionId, i.assetVersionId,
                         i.sortOrder, i.durationFps(), i.durationFrames(), i.fps(),
-                        LocalDateTime.now()))
+                        i.adoptedAt() != null ? i.adoptedAt() : LocalDateTime.now()))
                 .toList();
 
         String hash = sha256(itemViews.toString());
@@ -62,7 +62,8 @@ public class DeliveryManifestService {
     }
 
     public record ItemInput(Long shotUnitId, Long adoptionId, Long assetVersionId,
-                             int sortOrder, int durationFps, int durationFrames, int fps) {}
+                             int sortOrder, int durationFps, int durationFrames, int fps,
+                             LocalDateTime adoptedAt) {}
     public record ItemView(Long shotUnitId, Long adoptionId, Long assetVersionId,
                             int sortOrder, int durationFps, int durationFrames, int fps,
                             LocalDateTime adoptedAt) {}
