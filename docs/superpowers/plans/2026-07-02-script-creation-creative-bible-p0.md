@@ -198,6 +198,7 @@ CREATE TABLE generation_context_snapshots (
     project_id BIGINT NOT NULL,
     bible_version_id BIGINT NOT NULL,
     project_guide_id BIGINT NULL,
+    character_guide_ids_json JSON NULL,
     unit_guide_id BIGINT NULL,
     selected_versions_json JSON NOT NULL,
     resolved_guide_json JSON NOT NULL,
@@ -213,6 +214,15 @@ CREATE INDEX idx_gcs_project ON generation_context_snapshots(project_id);
 ```
 
 For H2, use `JSON` as already used by `schema-h2.sql`; do not replace it with CLOB.
+
+**H2/MySQL JSON compatibility note:**
+
+H2's `JSON` type is an alias for `CLOB` and does not support MySQL-specific JSON functions (`JSON_EXTRACT`, `JSON_CONTAINS`, `JSON_ARRAY_APPEND`, etc.). To keep behavior consistent across both databases:
+
+- **DAO 层禁止使用数据库特有的 JSON 函数**。All JSON manipulation (`details_json`, `guide_json`, `snapshot_json`, etc.) must happen in Java via `ObjectMapper`, never in SQL `WHERE` or `SELECT` clauses.
+- `ecosystem_rules.details_json` 的查询过滤通过 Java 端 `rule_type` + 分页实现，不在 SQL 中按 JSON 内部字段筛选。
+- If a future query must filter inside JSON (e.g., P1 impact reports), add a dedicated indexed column rather than using `JSON_EXTRACT` in a `WHERE` clause.
+- Add a CI-only integration test that inserts and reads back a row with non-ASCII JSON content (e.g., `{"名称":"测试规则","描述":"包含中文和emoji: 🎬"}`) and asserts the round-trip is byte-identical on both H2 and MySQL profiles.
 
 - [ ] **Step 4: Run schema verification**
 
@@ -318,6 +328,29 @@ Each mapper is intentionally empty:
 public interface CreativeBibleVersionMapper extends BaseMapper<CreativeBibleVersion> {}
 ```
 
+`GenerationContextSnapshot` entity must include the character guide list:
+
+```java
+@Data
+@TableName("generation_context_snapshots")
+public class GenerationContextSnapshot {
+    @TableId(type = IdType.AUTO)
+    private Long id;
+    private Long generationJobId;
+    private Long projectId;
+    private Long bibleVersionId;
+    private Long projectGuideId;
+    private String characterGuideIdsJson;
+    private Long unitGuideId;
+    private String selectedVersionsJson;
+    private String resolvedGuideJson;
+    private String payloadJson;
+    private String payloadHash;
+    @TableField(fill = FieldFill.INSERT)
+    private LocalDateTime createdAt;
+}
+```
+
 Define these request records in `CreativeBibleRequests`. The service normalizes project-scope `scopeId` to `0L`; character and content-unit scopes require a positive ID:
 
 ```java
@@ -370,7 +403,7 @@ git commit -m "feat: add creative bible persistence contracts"
 
 - [ ] **Step 1: Write failing service tests**
 
-Cover access, versioning, confirmation, and health:
+Cover access, versioning, confirmation, superseded transition, and health:
 
 ```java
 @ExtendWith(MockitoExtension.class)
@@ -398,6 +431,33 @@ class CreativeBibleServiceTest {
     }
 
     @Test
+    void createDraftFromSourceCopiesEcosystemRulesAndWritingGuides() {
+        // source bible v2 has 2 rules and 1 confirmed guide
+        CreativeBibleVersion source = version(2, "confirmed");
+        source.setId(2L);
+        when(bibleMapper.selectById(2L)).thenReturn(source);
+        when(bibleMapper.selectList(any())).thenReturn(List.of(source));
+        when(ecosystemMapper.selectList(argThat(q ->
+            q.toString().contains("bible_version_id=2"))))
+            .thenReturn(List.of(rule("world_rule", "能力有代价"), rule("key_history", "大洪水")));
+        when(guideMapper.selectList(argThat(q ->
+            q.toString().contains("bible_version_id=2"))))
+            .thenReturn(List.of(confirmedGuide("project", 0L, Map.of("pov", "third"))));
+        doAnswer(inv -> { ((CreativeBibleVersion) inv.getArgument(0)).setId(10L); return 1; })
+                .when(bibleMapper).insert(any());
+
+        var result = service.createDraft(7L, 3L, new CreateBibleDraftRequest("基于v2修改", 2L));
+
+        assertThat(result.versionNo()).isEqualTo(3);
+        // verify copied rules belong to new draft bible
+        verify(ecosystemMapper, times(2)).insert(argThat(r ->
+            r.getBibleVersionId().equals(10L) && "draft".equals(r.getStatus())));
+        // verify copied guide belongs to new draft bible
+        verify(guideMapper).insert(argThat(g ->
+            g.getBibleVersionId().equals(10L) && "draft".equals(g.getStatus())));
+    }
+
+    @Test
     void confirmRejectsDraftWithNoEcosystemOrConfirmedSettings() {
         when(bibleMapper.selectById(9L)).thenReturn(version(3, "draft"));
         when(ecosystemMapper.selectCount(any())).thenReturn(0L);
@@ -412,15 +472,20 @@ class CreativeBibleServiceTest {
     void confirmSupersedesOldVersionAndPublishesEvent() {
         CreativeBibleVersion draft = version(3, "draft");
         draft.setId(9L);
+        CreativeBibleVersion oldConfirmed = version(2, "confirmed");
+        oldConfirmed.setId(5L);
         when(bibleMapper.selectById(9L)).thenReturn(draft);
         when(ecosystemMapper.selectCount(any())).thenReturn(1L);
         when(settingMapper.selectCount(any())).thenReturn(0L);
-        when(bibleMapper.selectList(any())).thenReturn(List.of(version(2, "confirmed")));
+        when(bibleMapper.selectList(any())).thenReturn(List.of(oldConfirmed));
 
         var result = service.confirm(7L, 3L, 9L);
 
         assertThat(result.status()).isEqualTo("confirmed");
         verify(outboxService).append(eq("CREATIVE_BIBLE_CONFIRMED"), eq(3L), anyInt(), any());
+        // verify old confirmed version was superseded
+        verify(bibleMapper).updateById(argThat(v ->
+            "superseded".equals(v.getStatus()) && v.getId().equals(5L)));
     }
 }
 ```
@@ -448,8 +513,12 @@ public Page<EcosystemRuleView> listEcosystem(Long userId, Long projectId, Long b
 public EcosystemRuleView upsertEcosystem(Long userId, Long projectId, Long bibleVersionId,
                                          Long ruleId, UpsertEcosystemRuleRequest request)
 @Transactional public BibleSummaryView confirm(Long userId, Long projectId, Long bibleVersionId)
+@Transactional public BibleSummaryView submitReview(Long userId, Long projectId, Long bibleVersionId)
+@Transactional public void archive(Long userId, Long projectId, Long bibleVersionId)
 public Map<String, Object> health(Long userId, Long projectId)
 ```
+
+`submitReview` transitions `draft → reviewable` (allowed only from `draft`). `archive` requires `superseded` or `confirmed` status; if `confirmed`, must verify no active downstream dependencies (generation jobs referencing this bible version). P0 stubs the dependency check — P1 adds the full check against `storyboard_masters` and `canvas_import_snapshots`.
 
 Confirmation rules:
 
@@ -466,7 +535,160 @@ if (factCount == 0) {
 
 Before confirming, materialize `snapshotJson` from canonicalized ecosystem rules, exact `project_setting_versions` snapshots selected for every confirmed setting, and confirmed writing guides. For each setting, select `(entity_id, current_version_no)` and fail confirmation if the matching version row is missing. Save `snapshotJson` and its SHA-256 `snapshotHash` on the bible version in the same transaction, then set the previous confirmed version to `superseded`. New draft rows initialize `snapshotJson` to `{}`. `ContextAssembler` must read this immutable snapshot and must never re-query live settings for a confirmed bible. Append `CREATIVE_BIBLE_CONFIRMED` with `project_id`, `bible_version_id`, `version_no`, and `snapshot_hash`.
 
-When `createDraft` has `sourceVersionId`, copy the source bible's ecosystem rules and confirmed writing guides into draft rows, preserving source IDs in the copied JSON metadata. Do not copy the source status as confirmed; all copied rows start as draft. The source bible remains immutable.
+**`snapshotJson` construction (inside confirm, before saving the version):**
+
+```java
+Map<String, Object> snapshot = new LinkedHashMap<>();
+
+// 1. Canonicalize ecosystem rules (sorted by rule_type then id for determinism)
+List<EcosystemRule> rules = ecosystemMapper.selectList(
+    new LambdaQueryWrapper<EcosystemRule>()
+        .eq(EcosystemRule::getProjectId, projectId)
+        .eq(EcosystemRule::getBibleVersionId, bibleVersionId)
+        .eq(EcosystemRule::getStatus, "draft")
+        .orderByAsc(EcosystemRule::getRuleType, EcosystemRule::getId));
+snapshot.put("ecosystem_rules", rules.stream().map(r -> Map.of(
+    "id", r.getId(), "rule_type", r.getRuleType(),
+    "name", r.getName(), "summary", r.getSummary(),
+    "details", parseJson(r.getDetailsJson()),
+    "scope", parseJson(r.getScopeJson()),
+    "exceptions", parseJson(r.getExceptionsJson()),
+    "revision", r.getRevision()
+)).toList());
+
+// 2. Snapshot confirmed settings via their version rows
+List<ProjectSettingEntity> confirmedSettings = settingMapper.selectList(
+    new LambdaQueryWrapper<ProjectSettingEntity>()
+        .eq(ProjectSettingEntity::getProjectId, projectId)
+        .eq(ProjectSettingEntity::getStatus, "confirmed"));
+List<Map<String, Object>> settingSnapshots = new ArrayList<>();
+for (ProjectSettingEntity s : confirmedSettings) {
+    ProjectSettingVersion ver = settingVersionMapper.selectOne(
+        new LambdaQueryWrapper<ProjectSettingVersion>()
+            .eq(ProjectSettingVersion::getEntityId, s.getId())
+            .eq(ProjectSettingVersion::getVersionNo, s.getCurrentVersionNo()));
+    if (ver == null) {
+        throw new BizException(ErrorCode.DATA_NOT_FOUND,
+            "实体设定版本缺失: entity=" + s.getId() + " v" + s.getCurrentVersionNo());
+    }
+    settingSnapshots.add(Map.of(
+        "entity_id", s.getId(), "entity_type", s.getEntityType(),
+        "name", s.getName(), "version_no", ver.getVersionNo(),
+        "details", parseJson(ver.getDetailsJson())));
+}
+snapshot.put("confirmed_settings", settingSnapshots);
+
+// 3. Confirmed writing guides for this bible version
+List<ProjectWritingGuide> guides = guideMapper.selectList(
+    new LambdaQueryWrapper<ProjectWritingGuide>()
+        .eq(ProjectWritingGuide::getProjectId, projectId)
+        .eq(ProjectWritingGuide::getBibleVersionId, bibleVersionId)
+        .eq(ProjectWritingGuide::getStatus, "confirmed"));
+snapshot.put("writing_guides", guides.stream().map(g -> Map.of(
+    "id", g.getId(), "scope_type", g.getScopeType(),
+    "scope_id", g.getScopeId(), "version_no", g.getVersionNo(),
+    "guide", parseJson(g.getGuideJson())
+)).toList());
+
+String snapshotJson = objectMapper.writeValueAsString(snapshot);
+version.setSnapshotJson(snapshotJson);
+version.setSnapshotHash(DigestUtils.sha256Hex(snapshotJson));
+```
+
+The confirm test must assert `snapshotJson` is not `"{}"` and contains keys `ecosystem_rules`, `confirmed_settings`, and `writing_guides`. Add a dedicated test:
+
+```java
+@Test
+void confirmMaterializesFullSnapshotWithAllThreeSections() {
+    // setup: draft bible with 1 ecosystem rule, 1 confirmed setting with version, 1 confirmed guide
+    when(bibleMapper.selectById(9L)).thenReturn(draft);
+    when(ecosystemMapper.selectList(any())).thenReturn(List.of(rule));
+    when(settingMapper.selectList(any())).thenReturn(List.of(setting));
+    when(settingVersionMapper.selectOne(any())).thenReturn(settingVersion);
+    when(guideMapper.selectList(any())).thenReturn(List.of(guide));
+
+    service.confirm(7L, 3L, 9L);
+
+    ArgumentCaptor<CreativeBibleVersion> captor = ArgumentCaptor.forClass(CreativeBibleVersion.class);
+    verify(bibleMapper).updateById(captor.capture());
+    CreativeBibleVersion saved = captor.getValue();
+    assertThat(saved.getSnapshotJson()).contains("ecosystem_rules", "confirmed_settings", "writing_guides");
+    assertThat(saved.getSnapshotHash()).isNotBlank().hasSize(64);
+}
+```
+
+When `createDraft` has `sourceVersionId`, copy the source bible's ecosystem rules and confirmed writing guides into draft rows for the new bible version. Implementation:
+
+```java
+@Transactional
+public BibleSummaryView createDraft(Long userId, Long projectId, CreateBibleDraftRequest request) {
+    accessService.require(userId, projectId, Action.EDIT_CONTENT);
+
+    // calculate next version number
+    int maxVersion = bibleMapper.selectList(
+        new LambdaQueryWrapper<CreativeBibleVersion>()
+            .eq(CreativeBibleVersion::getProjectId, projectId))
+        .stream().mapToInt(CreativeBibleVersion::getVersionNo).max().orElse(0);
+    int nextVersion = maxVersion + 1;
+
+    CreativeBibleVersion draft = new CreativeBibleVersion();
+    draft.setProjectId(projectId);
+    draft.setVersionNo(nextVersion);
+    draft.setStatus("draft");
+    draft.setSummary(request.summary());
+    draft.setSnapshotJson("{}");
+    draft.setCreatedBy(userId);
+    bibleMapper.insert(draft);
+
+    // copy from source bible if specified
+    if (request.sourceVersionId() != null) {
+        CreativeBibleVersion source = bibleMapper.selectById(request.sourceVersionId());
+        if (source == null || !source.getProjectId().equals(projectId)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "源圣经版本不存在或不属于当前项目");
+        }
+        draft.setSourceVersionId(source.getId());
+        bibleMapper.updateById(draft);
+
+        // copy ecosystem rules: new rows with new bible_version_id, status='draft'
+        List<EcosystemRule> sourceRules = ecosystemMapper.selectList(
+            new LambdaQueryWrapper<EcosystemRule>()
+                .eq(EcosystemRule::getBibleVersionId, source.getId())
+                .eq(EcosystemRule::getStatus, "draft"));
+        for (EcosystemRule src : sourceRules) {
+            EcosystemRule copy = new EcosystemRule();
+            BeanUtils.copyProperties(src, copy, "id", "bibleVersionId", "status",
+                "createdBy", "createdAt", "updatedBy", "updatedAt");
+            copy.setBibleVersionId(draft.getId());
+            copy.setStatus("draft");
+            copy.setCreatedBy(userId);
+            copy.setUpdatedBy(null);
+            copy.setCreatedAt(LocalDateTime.now());
+            copy.setUpdatedAt(LocalDateTime.now());
+            ecosystemMapper.insert(copy);
+        }
+
+        // copy confirmed writing guides: new rows with new bible_version_id, status='draft'
+        List<ProjectWritingGuide> sourceGuides = guideMapper.selectList(
+            new LambdaQueryWrapper<ProjectWritingGuide>()
+                .eq(ProjectWritingGuide::getBibleVersionId, source.getId())
+                .eq(ProjectWritingGuide::getStatus, "confirmed"));
+        for (ProjectWritingGuide src : sourceGuides) {
+            ProjectWritingGuide copy = new ProjectWritingGuide();
+            BeanUtils.copyProperties(src, copy, "id", "bibleVersionId", "status", "versionNo",
+                "confirmedBy", "confirmedAt", "createdBy", "createdAt");
+            copy.setBibleVersionId(draft.getId());
+            copy.setStatus("draft");
+            copy.setCreatedBy(userId);
+            copy.setCreatedAt(LocalDateTime.now());
+            guideMapper.insert(copy);
+        }
+    }
+
+    return toSummary(draft);
+}
+```
+
+After a bible version is confirmed, all ecosystem rules and writing guides that were ingested into its `snapshotJson` must be marked `confirmed` in the same transaction—they are no longer editable within that bible version. New edits must go through a new draft bible. The source bible version remains immutable.
 
 Reject ecosystem or guide updates when the owning bible status is `confirmed`, `superseded`, or `archived`:
 
@@ -546,10 +768,32 @@ class WritingGuideResolverTest {
         assertThat(result.resolved().toString()).contains("辱骂");
         assertThat(result.conflicts()).contains("characters.9.hard_bans");
     }
+
+    @Test
+    void characterGuideCannotOverridePlatformRules() {
+        when(guideMapper.selectList(any())).thenReturn(List.of(
+                guide(1L, "project", 0L, "{\"platform_rules\":[\"禁止色情描写\"]}"),
+                guide(3L, "character", 9L, "{\"platform_rules\":[\"允许擦边\"]}")
+        ));
+        var result = resolver.resolve(4L, 3L, null, List.of(9L));
+        assertThat(result.resolved().toString()).contains("禁止色情描写");
+        assertThat(result.conflicts()).contains("characters.9.platform_rules");
+    }
+
+    @Test
+    void characterGuideCannotOverrideComplianceRules() {
+        when(guideMapper.selectList(any())).thenReturn(List.of(
+                guide(1L, "project", 0L, "{\"compliance_rules\":[\"禁止未成年人饮酒\"]}"),
+                guide(3L, "character", 9L, "{\"compliance_rules\":[]}")
+        ));
+        var result = resolver.resolve(4L, 3L, null, List.of(9L));
+        assertThat(result.resolved().toString()).contains("禁止未成年人饮酒");
+        assertThat(result.conflicts()).contains("characters.9.compliance_rules");
+    }
 }
 ```
 
-Expand the second test with project guide `hard_bans=["辱骂"]` and character guide `hard_bans=[]`; assert the resolved list remains `["辱骂"]` and conflicts contain `hard_bans`.
+All three NON_OVERRIDABLE keys (`hard_bans`, `platform_rules`, `compliance_rules`) must have dedicated tests. Expand each test with project-level values that character guides attempt to clear or override; assert the resolved result retains the project-level values and conflicts contain the field path.
 
 - [ ] **Step 2: Run and verify failure**
 
@@ -568,9 +812,22 @@ Use this stable precedence:
 private static final Set<String> NON_OVERRIDABLE = Set.of(
         "hard_bans", "platform_rules", "compliance_rules");
 
-// merge order: project -> each requested character -> content_unit
-// character values live under resolved.characters.<characterId>
-// unit values override project scalar fields only when explicitly present
+/**
+ * @param projectId     content project ID
+ * @param bibleVersionId  selected bible version
+ * @param unitId        current content unit ID (nullable for maintenance jobs)
+ * @param characterIds  ordered list of character entity IDs for L2 guides
+ */
+public ResolvedWritingGuideView resolve(
+        Long projectId, Long bibleVersionId, Long unitId, List<Long> characterIds) {
+    // merge order: project -> each requested character -> content_unit
+    // character values live under resolved.characters.<characterId>
+    // unit values override project scalar fields only when explicitly present
+    // sort characterIds before resolution for deterministic output and hash
+    List<Long> sorted = new ArrayList<>(characterIds);
+    Collections.sort(sorted);
+    // ...
+}
 ```
 
 Return `ResolvedWritingGuideView` with `resolved`, `sourceByField`, `conflicts`, `projectGuideId`, `characterGuideIds`, and `unitGuideId`. Sort character IDs before resolution so the output and hash are deterministic.
@@ -655,6 +912,7 @@ record ContextSnapshot(
         Map<String, Long> selectedVersions,
         Long bibleVersionId,
         Long projectGuideId,
+        List<Long> characterGuideIds,
         Long unitGuideId,
         String resolvedGuideJson,
         String payload,
@@ -673,6 +931,7 @@ persisted.setGenerationJobId(job.getId());
 persisted.setProjectId(projectId);
 persisted.setBibleVersionId(snapshot.bibleVersionId());
 persisted.setProjectGuideId(snapshot.projectGuideId());
+persisted.setCharacterGuideIdsJson(objectMapper.writeValueAsString(snapshot.characterGuideIds()));
 persisted.setUnitGuideId(snapshot.unitGuideId());
 persisted.setSelectedVersionsJson(objectMapper.writeValueAsString(snapshot.selectedVersions()));
 persisted.setResolvedGuideJson(snapshot.resolvedGuideJson());
@@ -691,6 +950,34 @@ mvn -Dtest=ContextAssemblerCreativeBibleTest,ContentProjectM1IntegrationTest tes
 ```
 
 Expected: PASS and a generation job has exactly one `generation_context_snapshots` row.
+
+**Attention — `ContentProjectM1IntegrationTest` modification required:**
+
+The existing M1 integration test creates generation jobs without a confirmed bible. After P0, `ContextAssembler` throws `BizException("创作圣经尚未确认")` when no confirmed bible exists. Modify the test setup to include:
+
+```java
+@BeforeEach
+void ensureConfirmedBible() {
+    // create and confirm a minimal bible so the existing generation tests pass
+    CreativeBibleVersion bible = new CreativeBibleVersion();
+    bible.setProjectId(testProjectId);
+    bible.setVersionNo(1);
+    bible.setStatus("confirmed");
+    bible.setSnapshotJson("{\"ecosystem_rules\":[],\"confirmed_settings\":[],\"writing_guides\":[]}");
+    bible.setSnapshotHash(DigestUtils.sha256Hex(bible.getSnapshotJson()));
+    bible.setCreatedBy(testUserId);
+    bibleMapper.insert(bible);
+    // add at least one ecosystem rule to satisfy the confirmation gate
+    EcosystemRule rule = new EcosystemRule();
+    rule.setProjectId(testProjectId);
+    rule.setBibleVersionId(bible.getId());
+    rule.setRuleType("world_rule");
+    rule.setName("测试规则");
+    rule.setStatus("confirmed");
+    rule.setCreatedBy(testUserId);
+    ecosystemRuleMapper.insert(rule);
+}
+```
 
 - [ ] **Step 5: Commit generation context integration**
 
@@ -727,7 +1014,24 @@ mockMvc.perform(post("/api/v1/content-projects/{id}/creative-bible/versions", pr
         .andExpect(jsonPath("$.data.status").value("draft"));
 ```
 
-Also assert a Viewer receives 403 on POST and invalid `scope_type` receives 400.
+Also assert a Viewer receives 403 on POST, invalid `scope_type` receives 400, and **`allow_unconfirmed_bible` is rejected from normal HTTP requests**:
+
+```java
+@Test
+void generationRejectsAllowUnconfirmedBibleFromHttp() throws Exception {
+    // attempt to bypass bible requirement via strategy field
+    mockMvc.perform(post("/api/v1/content-projects/{id}/generation-jobs", projectId)
+            .header("Authorization", ownerToken)
+            .contentType(MediaType.APPLICATION_JSON)
+            .content("{\"type\":\"synopsis\",\"target_id\":1,"
+                    + "\"strategy\":\"{\\\"allow_unconfirmed_bible\\\":true}\"}"))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.message").value(
+                containsString("allow_unconfirmed_bible 不可通过 API 设置")));
+}
+```
+
+This guard lives in `ContentGenerationJobController.createJob`: parse strategy JSON and reject if the key is present.
 
 - [ ] **Step 2: Run and verify failure**
 
@@ -747,6 +1051,8 @@ GET  /{id}/creative-bible
 GET  /{id}/creative-bible/health
 POST /{id}/creative-bible/versions
 POST /{id}/creative-bible/versions/{versionId}/confirm
+POST /{id}/creative-bible/versions/{versionId}/submit-review
+POST /{id}/creative-bible/versions/{versionId}/archive
 GET  /{id}/creative-bible/versions/{versionId}/ecosystem-rules
 POST /{id}/creative-bible/versions/{versionId}/ecosystem-rules
 PATCH /{id}/creative-bible/versions/{versionId}/ecosystem-rules/{ruleId}
@@ -754,6 +1060,8 @@ GET  /{id}/creative-bible/versions/{versionId}/writing-guides
 POST /{id}/creative-bible/versions/{versionId}/writing-guides
 POST /{id}/creative-bible/versions/{versionId}/writing-guides/resolve
 ```
+
+`submit-review` transitions `draft → reviewable`. `archive` transitions `superseded` or `confirmed` (with no downstream dependencies) → `archived`. P0 provides both endpoints; UI for `submit-review` is delivered in P1 as part of the candidate confirmation flow.
 
 Use `@Valid @RequestBody` and `SecurityUtil.requireCurrentUserId()`. The controller delegates; all project ownership and action checks remain in services.
 
@@ -854,6 +1162,14 @@ git commit -m "feat: connect work editor to creative bible"
 
 ### Task 8: Add frontend contracts and deterministic view-model helpers
 
+**State management approach:**
+
+Creative bible state is shared across multiple panels (overview, ecosystem, writing guides) inside the work-editor shell. Use a single composable as the state owner to avoid duplicate requests and inconsistent UI:
+
+- `useWorkEditor.js` already owns the editor aggregate response. Extend it with a `bibleHealth` ref and a `currentBible` ref, loaded once when the editor mounts and refreshed after confirm/draft/create actions.
+- `CreativeBibleOverview.vue`, `EcosystemPanel.vue`, and `WritingGuidePanel.vue` receive state via props from the parent `TagEditor.vue`, which reads from `useWorkEditor`. Do not create a separate Pinia store for P0 — the composable + props pattern is sufficient for three panels within the same route.
+- `ContextPanel.vue` and `ContentProjectWorkspace.vue` read bible health independently via `getCreativeBibleHealth` on mount and when the generation job changes, because they live outside the work-editor route.
+
 **Files:**
 - Modify: `aicp-frontend/src/api/contentProject.js`
 - Create: `aicp-frontend/src/views/work-editor/creativeBibleData.js`
@@ -873,14 +1189,31 @@ test('long form shows full ecosystem while short drama stays compact', () => {
   assert.deepEqual(sectionsForMode('short_drama'), ['overview', 'ecosystem', 'characters', 'relations', 'writing'])
 })
 
-test('unit guide overrides explicit field but cannot clear hard bans', () => {
-  const result = mergeWritingGuide(
-    { pace: 'fast', hard_bans: ['辱骂'] },
-    { pace: 'slow', hard_bans: [] }
-  )
+test('three-level merge: unit overrides explicit field, character values live under characters key, hard bans cannot be cleared', () => {
+  const projectGuide = { pace: 'fast', hard_bans: ['辱骂'], tone: '严肃' }
+  const characterGuides = [
+    { characterId: 9, guide: { catchphrases: ['老夫聊发少年狂'], tone: '豪迈' } },
+    { characterId: 12, guide: { forbidden_words: ['死'] } }
+  ]
+  const unitGuide = { pace: 'slow', special_form: '书信体', hard_bans: [] }
+
+  const result = mergeWritingGuide(projectGuide, characterGuides, unitGuide)
+
+  // L3 overrides L1 pace
   assert.equal(result.resolved.pace, 'slow')
+  // L2 character tone overrides L1 tone for that character
+  assert.equal(result.resolved.characters['9'].tone, '豪迈')
+  // L1 tone preserved for characters without L2 override
+  assert.equal(result.resolved.tone, '严肃')
+  // hard_bans cannot be overridden by L2 or L3
   assert.deepEqual(result.resolved.hard_bans, ['辱骂'])
-  assert.deepEqual(result.conflicts, ['hard_bans'])
+  // L3 special_form added
+  assert.equal(result.resolved.special_form, '书信体')
+  // conflicts recorded for non-overridable attempts
+  assert.deepEqual(result.conflicts, ['unit.hard_bans'])
+  // character guides recorded
+  assert.deepEqual(result.resolved.characters['9'].catchphrases, ['老夫聊发少年狂'])
+  assert.deepEqual(result.resolved.characters['12'].forbidden_words, ['死'])
 })
 
 test('missing health normalizes to a safe blocked state', () => {
@@ -917,7 +1250,19 @@ saveWritingGuide: (projectId, versionId, data) => request.post(`/content-project
 resolveWritingGuide: (projectId, versionId, data) => request.post(`/content-projects/${projectId}/creative-bible/versions/${versionId}/writing-guides/resolve`, data)
 ```
 
-Implement `mergeWritingGuide` with immutable object copies and the same `NON_OVERRIDABLE` keys as the backend. `normalizeEditorResponse` must preserve old responses by normalizing absent `bible_health` through `normalizeBibleHealth`.
+Implement `mergeWritingGuide(projectGuide, characterGuides, unitGuide)` with immutable object copies and the same `NON_OVERRIDABLE` keys as the backend (`hard_bans`, `platform_rules`, `compliance_rules`). Resolution order:
+
+```
+1. Start with projectGuide (L1) as base
+2. For each characterGuide (L2): merge into resolved.characters.<characterId>
+   — character fields only affect that character's entry, not project-level fields
+3. Merge unitGuide (L3) on top: only explicitly present fields override
+   — attempt to override NON_OVERRIDABLE keys → recorded as conflict, value from L1 kept
+```
+
+The `mergeWritingGuide` function is for client-side preview only. The authoritative resolution happens server-side via `WritingGuideResolver`. The frontend function must match the server's precedence exactly so the preview is accurate.
+
+`normalizeEditorResponse` must preserve old responses by normalizing absent `bible_health` through `normalizeBibleHealth`.
 
 - [ ] **Step 4: Run helper tests**
 
@@ -979,6 +1324,16 @@ Expected: FAIL because the sections are absent.
 - one primary action: create draft, continue editing, or confirm current draft;
 - a confirmation dialog before confirm.
 
+**Loading, empty, and error states (required for both components):**
+
+| State | `CreativeBibleOverview.vue` | `EcosystemPanel.vue` |
+|---|---|---|
+| Loading | Skeleton placeholder: version card + stats cards (3 rectangles) | Skeleton: type filter bar + 3 list item placeholders |
+| Empty (no bible) | 引导文案：“尚未创建创作圣经。创作圣经是项目的正式事实源，确认后 AI 生成将使用其中的设定。” + “创建首个版本”按钮 | 引导文案：“当前版本暂无生态规则。从类型筛选器中选择类型并添加第一条规则。” + “添加规则”按钮 |
+| Empty (no rules) | N/A | 每种 rule_type 筛选下若无结果，显示：“暂无该类型的生态规则” |
+| API error | `el-alert` type="error" 展示错误消息 + “重试”按钮；不展示假数据 | 同上；新建/编辑操作失败时保留表单输入不清空 |
+| Network offline | `el-alert` type="warning"：“网络连接已断开，编辑内容暂存在本地” | 同上 |
+
 `EcosystemPanel.vue` uses a type filter and master/detail layout. Use these P0 rule types and labels:
 
 ```js
@@ -992,6 +1347,27 @@ export const ECOSYSTEM_RULE_TYPES = [
 ```
 
 Reuse the current `TagEditor.vue` shell, permissions, loading state and leave protection. Add navigation under a new “创作圣经” group. Do not add a new top-level route.
+
+**Backend `rule_type` validation:** In `CreativeBibleService.upsertEcosystem`, validate `rule_type` against the allowed whitelist before insert/update:
+
+```java
+private static final Set<String> ALLOWED_RULE_TYPES = Set.of(
+    "era_world", "world_rule", "social_structure", "institution_taboo",
+    "faction_organization", "resource_system", "ability_system",
+    "location_system", "key_history",
+    // TVC mode
+    "brand", "product_service", "target_audience", "competitor",
+    "core_selling_point", "brand_taboo", "character_expression");
+
+private void validateRuleType(String ruleType) {
+    if (ruleType == null || !ALLOWED_RULE_TYPES.contains(ruleType)) {
+        throw new BizException(ErrorCode.PARAM_INVALID,
+            "非法的生态规则类型: " + ruleType);
+    }
+}
+```
+
+Similarly validate `scope_type` in writing guide operations: only `project`, `character`, `content_unit` are allowed. `scope_type=project` must have `scopeId=0` (enforced server-side; the DTO's `scopeId` default of `0L` covers the JSON case).
 
 - [ ] **Step 4: Run tests and build**
 
@@ -1055,7 +1431,20 @@ const CHARACTER_FIELDS = ['addressing', 'sentence_length', 'favorite_words', 'ca
 const UNIT_FIELDS = ['pov', 'pace', 'special_form', 'dialogue_constraints', 'must_include', 'must_avoid']
 ```
 
-The scope selector requires a character ID for character scope and content-unit ID for unit scope. “解析预览” calls `resolveWritingGuide` and displays final values, source per field and conflicts. Save creates a new guide version; it never patches a confirmed guide.
+The scope selector requires a character ID for character scope and content-unit ID for unit scope. **Character list data source:** P0 reads characters from the confirmed bible's `snapshotJson.confirmed_settings` (filtered to `entity_type='character'`), which is returned by `GET /creative-bible`. Since P0 does not provide a new character CRUD API, the existing `ProjectSettingService` endpoints remain the source for managing character entities. The writing guide panel only references existing characters; it does not create them.
+
+“解析预览” calls `resolveWritingGuide` and displays final values, source per field and conflicts. Save creates a new guide version; it never patches a confirmed guide.
+
+**Loading, empty, and error states:**
+
+| State | `WritingGuidePanel.vue` |
+|---|---|
+| Loading | Skeleton: scope tabs + 6 field placeholders |
+| Empty (no guides) | 引导文案：“尚未配置写作口径。项目级口径控制整体叙事风格，角色级口吻控制角色对白和表达，单集/单章覆盖用于局部调整。” + “创建项目级口径”按钮 |
+| Empty (resolution) | 解析预览区域显示：“选择口径版本后点击'解析预览'查看最终生效的口径” |
+| API error | `el-alert` type="error" + 重试；保存失败保留表单内容 |
+| Non-overridable warning | 角色/单元口径中 `hard_bans`、`platform_rules`、`compliance_rules` 字段旁显示黄色锁图标 + tooltip：“此字段由项目级口径锁定，不可覆盖” |
+| Conflict display | 解析预览中冲突字段红色高亮，标注来源和优先级 |
 
 - [ ] **Step 4: Run frontend tests and build**
 
@@ -1123,6 +1512,16 @@ Pass to `ContextPanel`:
 ```
 
 Display current bible version, resolved project/unit guide IDs, upstream content versions and context hash when the API returns them. Do not display raw prompt payloads.
+
+**Loading and error states for workspace integration:**
+
+| State | `ContentProjectWorkspace.vue` | `ContextPanel.vue` |
+|---|---|---|
+| Bible health loading | Generation button 显示 loading 状态，tooltip：“正在检查创作圣经状态…” | Bible/guide section 显示骨架占位 |
+| Bible not confirmed | Generation button disabled + tooltip：“创作圣经尚未确认” + “前往确认”链接 | 显示：“圣经状态：未确认”，不展示口径信息 |
+| Health API error | Generation button 保持可用（降级：不阻断），但显示 warning badge | 显示：“圣经状态获取失败” + retry 按钮 |
+| Context snapshot loading | N/A | 骨架占位：版本列表 + hash |
+| No context yet | N/A | 显示：“当前无生成记录” |
 
 - [ ] **Step 4: Run workspace tests and build**
 
@@ -1250,7 +1649,81 @@ git commit -m "test: verify creative bible P0 workflow"
 - [ ] Viewer writes return 403; revision conflicts return 409; invalid scope and rule types return 400.
 - [ ] AI, parsing, serialization, and persistence failures remain explicit failures with no sample-data fallback.
 - [ ] Backend regression, frontend tests, and production frontend build pass.
+- [ ] **Performance baseline:** Context assembly + snapshot persistence completes < 500ms P95 on a 100-chapter project with 20 ecosystem rules. Bible confirmation (with snapshot materialization) completes < 3s with 20 ecosystem rules + 50 confirmed settings. Verify with `ContextAssemblerCreativeBibleTest` (unit-level timing assertions) and a dedicated `CreativeBiblePerformanceTest` (SpringBootTest with `@Timeout`).
 
 ## 5. P1 planning gate
 
 Create the P1 executable plan only after the P0 acceptance checklist passes and the persisted snapshot schema is stable. P1 must consume `creative_bible_versions.id`, `content_versions.id`, and `generation_context_snapshots.id`; it must not add a second facts store or change the three-level guide precedence.
+
+## 6. Known P0 limitations
+
+These capabilities are intentionally deferred to P1 or later. Do not implement them in P0:
+
+| Limitation | Reason | Mitigation |
+|---|---|---|
+| 实体设定（角色/背景/势力/地点/物品）仍走旧 `ProjectSettingService`，圣经内不提供独立的实体 CRUD API | P0 聚焦生态规则和写作口径；实体设定已有完整的版本和 CRUD 链路 | 确认圣经时通过 `settingMapper` 读取已确认实体并写入快照；`ContextAssembler` 从快照读取而非查当前表 |
+| 无关系图谱、时间轴、连续性台账 | 属于 P1 范围 | P0 仅确保 `project_entity_relations` 和 `continuity_snapshots` 表已创建（DDL 在 P1 migration 中交付） |
+| 无影响分析和差异报告 | 属于 P1 范围 | P0 事件已包含版本 ID，P1 消费者可直接消费 |
+| 无画布导入快照 | 属于 P2 范围 | P0 API 中 `/canvas-import-snapshots` 端点不实现 |
+| 旧 `scripts` 数据不回填为正式圣经版本 | 回填仅创建草稿，需用户手动确认 | 旧项目只读可用，新生成强制要求确认圣经 |
+| 圣经不提供全文搜索 | P3 治理范围 | P0 按 `rule_type` 筛选 + 分页足够 |
+| 无批量确认候选 | P1 候选增强 | P0 逐字段确认 |
+| 回填触发方式 | 不自动触发；用户打开已有项目的创作工作台时，前端检测 `health.status === 'missing'` 后展示引导横幅“升级项目以使用创作圣经”，用户点击后调用 `POST /creative-bible/versions`（不带 `sourceVersionId`），后端自动从已有 `project_setting_entities` 和 `project_setting_versions` 回填首个草稿 | 旧项目用户主动升级，不静默迁移 |
+
+## 7. Rollback plan
+
+If a P0 deployment must be reversed:
+
+### Database
+- **不执行反向迁移**。四张新表 (`creative_bible_versions`, `ecosystem_rules`, `project_writing_guides`, `generation_context_snapshots`) 仅被新代码引用，旧代码不感知它们。保留表不动，不删除数据。
+- H2 开发库可直接 drop 四张表后重新运行旧版 schema。
+
+### Service layer — feature flag
+在 `application.yml` 中增加开关：
+
+```yaml
+aicp:
+  creative-bible:
+    enabled: true
+    require-for-generation: true
+```
+
+紧急回滚时设置 `require-for-generation: false`：
+- `ContextAssembler` 在 `require-for-generation=false` 时跳过圣经检查，不强制要求已确认圣经。
+- `CreativeBibleController` 在 `enabled=false` 时返回 503 + `{"message": "创作圣经功能暂不可用"}`。
+- 已创建的 `generation_context_snapshots` 行保留但不再被新生成消费。
+
+### Frontend
+- 前端通过 health API 的 `ready_for_generation` 字段控制阻断逻辑。
+- 后端 `CreativeBibleService.health()` 在 `require-for-generation=false` 时的行为：
+
+```java
+public Map<String, Object> health(Long userId, Long projectId) {
+    // ...existing checks...
+    boolean requireForGeneration = configService.getBoolean(
+        "aicp.creative-bible.require-for-generation", true);
+    boolean ready;
+    if (!requireForGeneration) {
+        // 紧急回滚模式：强制返回 ready，不阻断任何生成
+        ready = true;
+    } else {
+        ready = current != null && "confirmed".equals(current.getStatus());
+    }
+    return Map.of(
+        // ...other fields...
+        "ready_for_generation", ready,
+        "require_for_generation", requireForGeneration  // 前端可据此判断是否为降级模式
+    );
+}
+```
+
+- 前端在 `ready_for_generation=true` 时不阻断生成，但仍展示圣经状态供参考。
+- 导航中“创作圣经”入口可通过后端 `enabled` 字段隐藏：在 `CreativeBibleController` 中，`enabled=false` 时所有端点返回 503。
+
+### Verification
+回滚后执行：
+```bash
+cd aicp-backend && mvn test
+cd ../aicp-frontend && node --test tests/*.test.js && npm run build
+```
+确保旧功能（创作工作台、梗概/大纲/正文生成、审核、锁稿）不受影响。

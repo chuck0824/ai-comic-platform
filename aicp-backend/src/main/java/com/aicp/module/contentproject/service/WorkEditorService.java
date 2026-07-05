@@ -32,7 +32,9 @@ public class WorkEditorService {
     private final ProjectParameterVersionMapper parameterVersionMapper;
     private final TagDictionaryMapper tagDictionaryMapper;
     private final ProjectSettingEntityMapper settingEntityMapper;
+    private final SettingExtractionBatchMapper extractionBatchMapper;
     private final ProjectAccessService accessService;
+    private final CreativeBibleService creativeBibleService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     /**
@@ -209,6 +211,16 @@ public class WorkEditorService {
             settingCounts.put(type, count.intValue());
         }
 
+        // 待处理提取候选数
+        Long pendingExtraction = extractionBatchMapper.selectCount(
+                new LambdaQueryWrapper<SettingExtractionBatch>()
+                        .eq(SettingExtractionBatch::getProjectId, projectId)
+                        .in(SettingExtractionBatch::getStatus, "review_pending", "conflicted"));
+
+        // 创作圣经健康度
+        Map<String, Object> bibleHealth = creativeBibleService.health(
+                member != null ? member.getUserId() : 0L, projectId);
+
         ProfileView pv = profile != null ? toProfileView(profile) : null;
 
         return new EditorView(
@@ -219,7 +231,8 @@ public class WorkEditorService {
                 pv,
                 project.getRevision(),
                 settingCounts,
-                0, // pendingExtractionCount 后续从 extraction batches 汇总
+                pendingExtraction.intValue(),
+                bibleHealth,
                 project.getCreatedAt(),
                 project.getUpdatedAt()
         );

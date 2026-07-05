@@ -1,0 +1,77 @@
+<h2>8080 Canvas 视频工作台：整体完善方案</h2>
+<p class="subtitle">目标：把当前“通用节点演示画布”升级为“真实影视方法驱动的 AI 单镜头生产控制台”。</p>
+
+<div class="section">
+  <h3>一、实际现状审计</h3>
+  <div class="pros-cons">
+    <div class="pros"><h4>已有可保留基础</h4><ul><li>无限画布、节点拖拽、连线、缩放和浮动编辑器</li><li>文本、图片、视频、音频、脚本、导演台 6 类节点</li><li>分镜专业编辑器和 Workspace 资产入口</li><li>生成任务、预计积分、历史、工作流等产品入口</li><li>导演台独立编辑入口与基础场景/机位概念</li></ul></div>
+    <div class="cons"><h4>当前关键缺口</h4><ul><li>账户中心故障会阻断项目列表与画布加载</li><li>导演台是 DOM/CSS 模拟，不是真实 Three.js 3D</li><li>无镜头时长、对象轨、动作片段轨和相机轨</li><li>单一通用端口，无法表达角色/场景/动作/运镜语义</li><li>Seedance 仅支持通用 Prompt 和首帧字段</li><li>资产、历史、分享、通知及部分工具仍是占位提示</li><li>七轨“合成导出”与单镜头生成定位冲突</li></ul></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">目标生产闭环：一个 shot 一条可追溯链</div>
+  <div class="mockup-body" style="padding:18px;background:#08111f;color:#dbeafe;overflow:auto">
+    <div style="display:flex;gap:9px;align-items:center;min-width:1080px;text-align:center">
+      <div style="width:140px;padding:14px;border-radius:9px;background:#1e293b"><strong>分镜镜头</strong><br><small>时长 · 台词<br>动作意图</small></div><div>→</div>
+      <div style="width:140px;padding:14px;border-radius:9px;background:#164e63"><strong>资产绑定</strong><br><small>角色 · 场景<br>道具 · 音频</small></div><div>→</div>
+      <div style="width:170px;padding:16px;border:2px solid #60a5fa;border-radius:9px;background:#1e3a8a"><strong>导演台</strong><br><small>走位 · 表演<br>摄影 · 连续性</small></div><div>→</div>
+      <div style="width:150px;padding:14px;border-radius:9px;background:#7e22ce"><strong>模型适配器</strong><br><small>控制包 → Seedance<br>槽位与 Prompt</small></div><div>→</div>
+      <div style="width:150px;padding:14px;border-radius:9px;background:#065f46"><strong>候选生成</strong><br><small>任务 · 成本<br>输入快照</small></div><div>→</div>
+      <div style="width:150px;padding:14px;border-radius:9px;background:#9f1239"><strong>镜头质检</strong><br><small>偏差区间<br>定向返工</small></div><div>→</div>
+      <div style="width:135px;padding:14px;border-radius:9px;background:#3f6212"><strong>采用版本</strong><br><small>回写分镜<br>进入交付</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>二、Canvas 主工作台改造</h3>
+  <div class="cards">
+    <div class="card"><div class="card-body"><h3>1. 类型化端口</h3><p>端口区分 shot、character、scene、prop、image_ref、motion_ref、camera_ref、audio、director_package、video_candidate，禁止无意义连线。</p></div></div>
+    <div class="card"><div class="card-body"><h3>2. 镜头生产组</h3><p>每个分镜镜头在画布形成可折叠生产组，显示资产齐套、导演完成、生成、质检、采用五个 Gate。</p></div></div>
+    <div class="card"><div class="card-body"><h3>3. 节点版本与候选</h3><p>节点不覆盖旧结果；每次生成保存参数快照、输入资产版本、成本、模型版本、候选和采用状态。</p></div></div>
+    <div class="card"><div class="card-body"><h3>4. 统一任务反馈</h3><p>节点内显示排队/运行/失败/取消/完成；详情进入统一任务中心，支持幂等重试和费用结算。</p></div></div>
+    <div class="card"><div class="card-body"><h3>5. 真实资产联动</h3><p>拖入 Workspace 资产生成引用节点；替换资产版本时标出受影响的导演台、控制包和候选视频。</p></div></div>
+    <div class="card"><div class="card-body"><h3>6. 故障降级</h3><p>账户中心不可用时保留个人项目只读缓存与当前画布草稿；禁止用“空画布成功态”掩盖加载失败。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>三、导演台内部功能</h3>
+  <div class="mockup"><div class="mockup-body" style="padding:16px;background:#0f172a;color:#e2e8f0">
+    <div style="display:grid;grid-template-columns:180px 1fr 210px;grid-template-rows:300px 170px;gap:8px">
+      <div style="grid-row:1/3;padding:12px;background:#172033;border-radius:7px"><strong>场景与镜头树</strong><hr><small>角色<br>道具<br>场景<br>灯光<br>摄像机<br><br>显示 / 锁定 / 分组<br>资产版本</small></div>
+      <div style="padding:12px;background:linear-gradient(145deg,#1f2937,#0b1220);border-radius:7px;text-align:center"><strong>Three.js 实时 3D 视口</strong><br><br><small>Gizmo · 网格 · 安全框 · 双视角<br>走位 · 注视 · 景别 · 焦段 · 轴线</small></div>
+      <div style="grid-row:1/3;padding:12px;background:#172033;border-radius:7px"><strong>属性 / 摄影 / 约束</strong><hr><small>Transform<br>动作片段<br>相机与镜头<br>景深/焦点<br>连续性警告<br>参考包预览</small></div>
+      <div style="padding:12px;background:#111827;border-radius:7px"><strong>单镜头时间线</strong><br><small>对象变换轨｜动作片段轨｜相机轨｜对白/节拍轨<br>关键帧 · 缓动 · 吸附 · 循环 · 首尾状态</small></div>
+    </div>
+  </div></div>
+</div>
+
+<div class="section">
+  <h3>四、Seedance 2.0 生成节点改造</h3>
+  <ul><li>不再只有 Prompt、首帧、时长；新增“导演控制包”输入。</li><li>通过独立 Adapter 将模型无关语义映射为图片、视频、音频槽位和引用编号。</li><li>生成前展示素材职责、冲突检查、预计成本、时长与模型限制。</li><li>支持普通生成、首尾帧、全能参考、视频延展和局部定向重生成。</li><li>生成结果必须带 input_snapshot_id、model_version、seed、cost、candidate_id。</li><li>候选对比维度：角色一致性、构图、动作、运镜、物理合理性、音画节奏。</li></ul>
+</div>
+
+<div class="section">
+  <h3>五、应删除或重新定位的现有功能</h3>
+  <div class="pros-cons">
+    <div class="cons"><h4>从 Canvas 移除</h4><ul><li>“视频剪辑”“视频合成”泛化按钮</li><li>七轨剪辑/特效/叠加时间线</li><li>无真实任务的占位工具按钮</li><li>导演台内直接硬编码 Seedance 参数</li></ul></div>
+    <div class="pros"><h4>替换为</h4><ul><li>单镜头延展、高清、解析、质检等生产操作</li><li>只读镜头序列与采用版本清单</li><li>外部后期素材包导出</li><li>模型适配器和版本化控制包</li></ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>六、实施优先级</h3>
+  <div class="options" data-multiselect>
+    <div class="option" data-choice="m0"><div class="letter">M0</div><div class="content"><h3>稳定底座</h3><p>账户降级、类型化端口、版本快照、任务状态、清理虚假入口。</p></div></div>
+    <div class="option" data-choice="m1"><div class="letter">M1</div><div class="content"><h3>真实导演台</h3><p>Three.js 视口、单镜头时间线、动作片段、相机关键帧、自动保存。</p></div></div>
+    <div class="option" data-choice="m2"><div class="letter">M2</div><div class="content"><h3>Blender + Seedance</h3><p>快照协议、Blender Worker、参考包编译器、Seedance Adapter。</p></div></div>
+    <div class="option" data-choice="m3"><div class="letter">M3</div><div class="content"><h3>质量闭环</h3><p>候选对比、偏差检测、定向返工、采用版本、跨镜头连续性。</p></div></div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve-overall-plan" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可整体方案</h3><p>进入详细界面、数据模型与验收设计。</p></div></div>
+  <div class="option" data-choice="revise-overall-plan" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请指出希望保留、删除或提前实现的模块。</p></div></div>
+</div>

@@ -1,0 +1,41 @@
+<h2>Agent 配置中心：总体架构</h2>
+<p class="subtitle">配置与执行分离；每次运行都冻结最终配置快照，保证结果可追溯。</p>
+
+<div class="section">
+  <div class="label">配置继承链</div>
+  <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px">
+    <div class="option" style="flex:1;min-width:150px"><div class="content"><h3>系统模板</h3><p>锁定工具、安全规则、输出协议</p></div></div>
+    <strong>→</strong>
+    <div class="option" style="flex:1;min-width:150px"><div class="content"><h3>用户默认</h3><p>个人常用 Agent 变体</p></div></div>
+    <strong>→</strong>
+    <div class="option" style="flex:1;min-width:150px"><div class="content"><h3>项目覆盖</h3><p>由管理员/导演发布</p></div></div>
+    <strong>→</strong>
+    <div class="option" style="flex:1;min-width:150px"><div class="content"><h3>单次调整</h3><p>不留存或另存为新变体</p></div></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">一次真实任务如何获得 Agent 配置</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 80px 1.2fr 80px 1fr;gap:12px;align-items:center;text-align:center">
+      <div style="padding:18px;border:1px solid #334155;border-radius:10px"><strong>业务入口</strong><br><small>剧本修订 / 钩子重做<br>分镜生成 / 导演审核</small></div>
+      <div>→</div>
+      <div style="padding:18px;border:2px solid #6366f1;border-radius:10px"><strong>配置解析器</strong><br><small>按作用域合并版本<br>校验变量与锁定规则</small></div>
+      <div>→</div>
+      <div style="padding:18px;border:1px solid #334155;border-radius:10px"><strong>执行快照</strong><br><small>最终 Prompt + 参数<br>模型 + 来源版本</small></div>
+    </div>
+    <div style="text-align:center;margin:14px 0">↓</div>
+    <div style="display:grid;grid-template-columns:1fr 80px 1fr 80px 1fr;gap:12px;align-items:center;text-align:center">
+      <div style="padding:18px;border:1px solid #334155;border-radius:10px"><strong>AI Router</strong><br><small>调用模型并校验结构化输出</small></div>
+      <div>→</div>
+      <div style="padding:18px;border:1px solid #334155;border-radius:10px"><strong>预览 / 审批</strong><br><small>Diff、评分、成本和风险</small></div>
+      <div>→</div>
+      <div style="padding:18px;border:1px solid #334155;border-radius:10px"><strong>新业务版本</strong><br><small>不覆盖历史内容<br>记录所用 Agent 版本</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>核心收益</h4><ul><li>业务服务不再硬编码 Prompt</li><li>修改可试跑、发布和回滚</li><li>任何结果都能追溯到确切配置</li></ul></div>
+  <div class="cons"><h4>明确边界</h4><ul><li>用户不能修改工具权限</li><li>发布新版不会自动重跑历史内容</li><li>首期不能创建全新能力类型</li></ul></div>
+</div>

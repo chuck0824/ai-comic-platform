@@ -193,8 +193,8 @@ async function openDetail(kind, id) {
   drawerVisible.value = true
   detail.value.loading = true
   try {
-    const res = await assetHistoryApi.getDetail(kind.replace('asset-', '').replace('task-', ''), '')
-    detail.value.data = mapRecordCard(res.data)
+    const res = await assetHistoryApi.getDetail(kind.replace('asset-', '').replace('task-', ''), id)
+    detail.value.data = res.data
   } catch (e) { detail.value.error = e.message }
   finally { detail.value.loading = false }
 }

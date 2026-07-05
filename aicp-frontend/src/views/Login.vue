@@ -15,25 +15,37 @@
       </el-tabs>
 
       <template v-if="loginType === 'sms'">
-        <el-input v-model="phone" placeholder="请输入手机号" size="large" style="margin-bottom:12px" />
-        <el-input v-model="smsCode" placeholder="6位验证码" size="large" style="margin-bottom:12px">
-          <template #append>
-            <el-button size="small" :disabled="countdown > 0" @click="sendSms">
-              {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
-            </el-button>
-          </template>
-        </el-input>
-        <el-button type="primary" size="large" class="w-full mt-md" @click="handleSmsLogin" :loading="loading">
-          登 录
-        </el-button>
+        <el-form label-position="top" @submit.prevent="handleSmsLogin">
+          <el-form-item label="手机号">
+            <el-input v-model="phone" placeholder="请输入手机号" size="large" autocomplete="tel" />
+          </el-form-item>
+          <el-form-item label="验证码">
+            <el-input v-model="smsCode" placeholder="6位验证码" size="large" autocomplete="one-time-code">
+              <template #append>
+                <el-button size="small" :disabled="countdown > 0" @click="sendSms">
+                  {{ countdown > 0 ? `${countdown}s` : '获取验证码' }}
+                </el-button>
+              </template>
+            </el-input>
+          </el-form-item>
+          <el-button type="primary" size="large" class="w-full" native-type="submit" :loading="loading">
+            登 录
+          </el-button>
+        </el-form>
       </template>
 
       <template v-else>
-        <el-input v-model="account" placeholder="手机号 / 邮箱" size="large" style="margin-bottom:12px" />
-        <el-input v-model="password" type="password" placeholder="请输入密码" size="large" style="margin-bottom:12px" show-password />
-        <el-button type="primary" size="large" class="w-full mt-md" @click="handlePasswordLogin" :loading="loading">
-          登 录
-        </el-button>
+        <el-form label-position="top" @submit.prevent="handlePasswordLogin">
+          <el-form-item label="账号">
+            <el-input v-model="account" placeholder="手机号 / 邮箱" size="large" autocomplete="username" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="password" type="password" placeholder="请输入密码" size="large" show-password autocomplete="current-password" />
+          </el-form-item>
+          <el-button type="primary" size="large" class="w-full" native-type="submit" :loading="loading">
+            登 录
+          </el-button>
+        </el-form>
       </template>
 
       <div class="flex gap-sm items-center justify-center mt-md text-sm text-muted">

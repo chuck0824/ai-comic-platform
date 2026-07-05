@@ -1,5 +1,21 @@
 # Script Creation V7.2 API Contract
 
+> **更新（2026-07-04）**：后续 M2-M5 API 规划详见 `docs/superpowers/plans/`。
+> 
+> **已关联 API 域**：
+> - 创作圣经（`/api/v1/creative-bible`）→ `docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`
+> - Agent 会话（`/api/v1/agent/sessions`）→ `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
+> - 交易市场（`/api/v1/trade`）→ `docs/superpowers/specs/2026-07-02-script-trading-market-completion-design.md`
+> - 专业分镜（`/api/v1/storyboards`）→ `docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md`
+> 
+> **2026-07-04 新增 API 域** `[superpowers 更新 V1.7]`：
+> - 统一任务事件中心（`/api/v1/task-center`、`/api/v1/ops/task-center`）→ `2026-07-04-unified-task-event-center-design.md`
+> - 资产工作台（`/api/v1/assets/workbench`、`/api/v1/assets/history`）→ `2026-07-04-asset-generation-history-workbench-design.md`
+> - Agent 配置中心（`/api/v1/agent/blueprints`、`/api/v1/agent/definitions`、`/api/v1/agent/versions`）→ `2026-07-04-user-configurable-agent-center-design.md`
+> - 企业工作台扩展（`/api/v1/enterprise/**` BFF→3001）→ `2026-07-04-enterprise-workbench-completion-design.md`
+> - 独立空白画布（`POST /api/v1/canvas/projects` 放行 nullable）→ `2026-07-04-standalone-blank-canvas-design.md`
+> - 生产 SOP 完成（`/api/v1/sop/**` 扩展）→ `2026-07-04-production-sop-completion-design.md`
+
 ## Implemented Endpoints
 
 ### Content Projects

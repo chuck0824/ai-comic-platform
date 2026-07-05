@@ -106,6 +106,9 @@ public class CanvasProjectManagementService {
 
     @Transactional
     public CanvasProjectDetail create(Long userId, CreateCanvasProjectRequest request) {
+        // Validate all-or-nothing upstream binding
+        validateBinding(request);
+
         // Idempotency check
         CanvasProject existing = projectMapper.selectOne(
                 new LambdaQueryWrapper<CanvasProject>()
@@ -116,8 +119,10 @@ public class CanvasProjectManagementService {
             return toDetail(existing);
         }
 
-        // Check admission for official canvases
-        if ("official".equals(request.purpose())) {
+        boolean isBound = request.contentProjectId() != null;
+
+        // Check admission for bound official canvases
+        if (isBound && "official".equals(request.purpose())) {
             ProductionAdmissionResult admission = checkAdmission(
                     request.contentProjectId(), request.productionUnitId(), request.purpose());
             if (!admission.passed()) {
@@ -128,7 +133,7 @@ public class CanvasProjectManagementService {
         }
 
         // Build immutable production snapshot from server-side records
-        String snapshotJson = buildProductionSnapshot(request);
+        String snapshotJson = buildProductionSnapshot(request, isBound);
 
         CanvasProject project = new CanvasProject();
         project.setUuid("canvas_" + UUID.randomUUID().toString().replace("-", "").substring(0, 7));
@@ -148,9 +153,36 @@ public class CanvasProjectManagementService {
         project.setRevision(0);
         project.setIsDeleted(0);
 
+        // Persist workspace scope
+        WorkspaceContext context = getWorkspaceContext();
+        project.setWorkspaceId(context != null && StringUtils.hasText(context.workspaceId())
+                ? context.workspaceId()
+                : "personal_" + userId);
+
         projectMapper.insert(project);
-        log.info("Created canvas project uuid={} name={}", project.getUuid(), project.getName());
+        log.info("Created canvas project uuid={} name={} standalone={}", project.getUuid(), project.getName(), !isBound);
         return toDetail(project);
+    }
+
+    /**
+     * Validate all-or-nothing upstream binding.
+     * If any upstream field is present, all five must be present.
+     */
+    private void validateBinding(CreateCanvasProjectRequest request) {
+        boolean any = request.contentProjectId() != null
+                || StringUtils.hasText(request.productionUnitType())
+                || request.productionUnitId() != null
+                || request.sourceContentVersionId() != null
+                || request.sourceStoryboardVersionId() != null;
+        boolean complete = request.contentProjectId() != null
+                && StringUtils.hasText(request.productionUnitType())
+                && request.productionUnitId() != null
+                && request.sourceContentVersionId() != null
+                && request.sourceStoryboardVersionId() != null;
+        if (any && !complete) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "关联内容项目时必须同时提供生产单元和来源版本");
+        }
     }
 
     public ProductionAdmissionResult checkAdmission(
@@ -169,23 +201,43 @@ public class CanvasProjectManagementService {
         return new ProductionAdmissionResult(missing.isEmpty(), missing);
     }
 
-    private String buildProductionSnapshot(CreateCanvasProjectRequest request) {
+    private String buildProductionSnapshot(CreateCanvasProjectRequest request, boolean isBound) {
         try {
             Map<String, Object> snapshot = new LinkedHashMap<>();
-            snapshot.put("contentVersionId", request.sourceContentVersionId());
-            snapshot.put("contentVersionHash", "");
-            snapshot.put("contentTitle", "");
-            snapshot.put("contentSummary", "");
-            snapshot.put("storyboardVersionId", request.sourceStoryboardVersionId());
-            snapshot.put("storyboardRevision", 1);
-            snapshot.put("shotCount", 0);
-            snapshot.put("storyboardLocked", true);
-            snapshot.put("platformRuleVersion", "v1");
-            snapshot.put("pluginPackageVersion", "v1");
-            snapshot.put("aspectRatio", "9:16");
-            snapshot.put("resolution", "1080x1920");
-            snapshot.put("fps", 25);
+            if (isBound) {
+                snapshot.put("contentVersionId", request.sourceContentVersionId());
+                snapshot.put("contentVersionHash", "");
+                snapshot.put("contentTitle", "");
+                snapshot.put("contentSummary", "");
+                snapshot.put("storyboardVersionId", request.sourceStoryboardVersionId());
+                snapshot.put("storyboardRevision", 1);
+                snapshot.put("shotCount", 0);
+                snapshot.put("storyboardLocked", true);
+                snapshot.put("platformRuleVersion", "v1");
+                snapshot.put("pluginPackageVersion", "v1");
+                snapshot.put("aspectRatio", "9:16");
+                snapshot.put("resolution", "1080x1920");
+                snapshot.put("fps", 25);
+            } else {
+                // Standalone blank canvas: no upstream content
+                snapshot.put("contentVersionId", null);
+                snapshot.put("contentVersionHash", "");
+                snapshot.put("contentTitle", "");
+                snapshot.put("contentSummary", "");
+                snapshot.put("storyboardVersionId", null);
+                snapshot.put("storyboardRevision", 0);
+                snapshot.put("shotCount", 0);
+                snapshot.put("storyboardLocked", false);
+                snapshot.put("platformRuleVersion", "v1");
+                snapshot.put("pluginPackageVersion", "v1");
+                snapshot.put("aspectRatio", "9:16");
+                snapshot.put("resolution", "1080x1920");
+                snapshot.put("fps", 25);
+            }
             snapshot.put("createdAt", LocalDateTime.now().toString());
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            metadata.put("standalone", !isBound);
+            snapshot.put("metadata", metadata);
             return objectMapper.writeValueAsString(snapshot);
         } catch (Exception e) {
             throw new BizException(ErrorCode.INTERNAL_ERROR, "Failed to build production snapshot");
@@ -211,6 +263,7 @@ public class CanvasProjectManagementService {
         copy.setSourceStoryboardVersionId(source.getSourceStoryboardVersionId());
         copy.setProductionSnapshot(source.getProductionSnapshot());
         copy.setPurpose(source.getPurpose());
+        copy.setWorkspaceId(source.getWorkspaceId());
         copy.setIdempotencyKey("canvas-copy:" + UUID.randomUUID());
         copy.setStatus("draft");
         copy.setCanvasVersion(1);
@@ -386,11 +439,16 @@ public class CanvasProjectManagementService {
                 p.getCreatedAt(), p.getUpdatedAt(), p.getArchivedAt());
     }
 
+    @SuppressWarnings("unchecked")
     private ProductionSnapshot parseSnapshot(String json) {
         if (!StringUtils.hasText(json)) return null;
         try {
             Map<String, Object> map = objectMapper.readValue(json,
                     new TypeReference<Map<String, Object>>() {});
+            Map<String, Object> meta = (Map<String, Object>) map.get("metadata");
+            if (meta == null) {
+                meta = Map.of();
+            }
             return new ProductionSnapshot(
                     toLong(map.get("contentVersionId")),
                     (String) map.get("contentVersionHash"),
@@ -405,7 +463,7 @@ public class CanvasProjectManagementService {
                     (String) map.get("aspectRatio"),
                     (String) map.get("resolution"),
                     map.get("fps") instanceof Number n ? n.intValue() : 24,
-                    map);
+                    meta);
         } catch (Exception e) {
             log.warn("Failed to parse production snapshot for canvas", e);
             return null;

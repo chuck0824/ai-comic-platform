@@ -1,0 +1,95 @@
+<h2>Agent 配置中心：技术落地设计</h2>
+<p class="subtitle">独立建模，不继续扩张现有 prompt_templates；现有 Skill 与 Agent 会话保持边界，通过执行快照关联。</p>
+
+<div class="section">
+  <div class="label">一、核心数据关系</div>
+  <div class="mockup" style="margin-top:12px"><div class="mockup-body">
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;text-align:center">
+      <span style="padding:12px;border:1px solid #334155;border-radius:8px"><strong>agent_blueprints</strong><br><small>四类系统基础框架</small></span><strong>1 → N</strong>
+      <span style="padding:12px;border:2px solid #6366f1;border-radius:8px"><strong>user_agents</strong><br><small>用户新增的独立 Agent</small></span><strong>1 → N</strong>
+      <span style="padding:12px;border:1px solid #334155;border-radius:8px"><strong>agent_versions</strong><br><small>草稿 / 已发布 / 已归档</small></span>
+    </div>
+    <div style="text-align:center;margin:14px">↓</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap;text-align:center">
+      <span style="padding:12px;border:1px solid #334155;border-radius:8px"><strong>agent_bindings</strong><br><small>用户默认 / 项目默认</small></span><strong>+</strong>
+      <span style="padding:12px;border:1px solid #334155;border-radius:8px"><strong>agent_test_runs</strong><br><small>试跑输入、结果、成本、评分</small></span><strong>+</strong>
+      <span style="padding:12px;border:1px solid #334155;border-radius:8px"><strong>agent_execution_snapshots</strong><br><small>正式任务的不可变最终配置</small></span>
+    </div>
+  </div></div>
+</div>
+
+<div class="section">
+  <div class="label">二、关键字段</div>
+  <div class="options" style="margin-top:12px">
+    <div class="option"><div class="letter">A</div><div class="content"><h3>Blueprint</h3><p>role_type、parameter_schema、locked_system_prompt、output_schema、allowed_tools、context_policy、blueprint_version。</p></div></div>
+    <div class="option"><div class="letter">B</div><div class="content"><h3>User Agent</h3><p>owner、blueprint_id、name、description、icon、applicable_genres、platforms、visibility、lifecycle_status。</p></div></div>
+    <div class="option"><div class="letter">C</div><div class="content"><h3>Version</h3><p>version_no、parameters_json、editable_prompt、examples_json、model_policy、status、change_summary、content_hash。</p></div></div>
+    <div class="option"><div class="letter">D</div><div class="content"><h3>Snapshot</h3><p>resolved_prompt、resolved_parameters、blueprint/version IDs、project context hash、model、task、token/cost、created_by。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">三、API 分组</div>
+  <div class="split" style="margin-top:12px">
+    <div class="mockup"><div class="mockup-header">配置与版本</div><div class="mockup-body"><code>
+GET  /api/v1/agent/blueprints<br>
+POST /api/v1/agent/definitions<br>
+GET  /api/v1/agent/definitions<br>
+GET/PATCH /api/v1/agent/definitions/{id}<br>
+POST /api/v1/agent/definitions/{id}/drafts<br>
+PUT  /api/v1/agent/versions/{versionId}<br>
+POST /api/v1/agent/versions/{versionId}/validate<br>
+POST /api/v1/agent/versions/{versionId}/publish<br>
+POST /api/v1/agent/versions/{versionId}/activate
+    </code></div></div>
+    <div class="mockup"><div class="mockup-header">试跑、绑定与追溯</div><div class="mockup-body"><code>
+POST /api/v1/agent/versions/{versionId}/test-runs<br>
+GET  /api/v1/agent/test-runs/{id}<br>
+PUT  /api/v1/agent/user-bindings/{role}<br>
+PUT  /api/v1/projects/{projectId}/agent-bindings/{role}<br>
+GET  /api/v1/projects/{projectId}/agent-bindings<br>
+GET  /api/v1/agent/execution-snapshots/{id}<br>
+POST /api/v1/agent/resolve-preview
+    </code></div></div>
+  </div>
+  <p>剧本、钩子、分镜和导演原业务 API 增加可选的 agent_id、agent_version_id、temporary_overrides；未传时由服务端按项目和用户作用域解析，不能由前端拼最终 Prompt。</p>
+</div>
+
+<div class="section">
+  <div class="label">四、发布与并发规则</div>
+  <ul>
+    <li>草稿必须通过变量、参数 Schema、Prompt 长度和输出样例校验，并至少有一次成功试跑，才能发布。</li>
+    <li>已发布版本不可原地修改；编辑会创建新草稿。激活历史版本即完成回滚。</li>
+    <li>发布和项目绑定使用 row_version 乐观锁，防止两位管理员互相覆盖。</li>
+    <li>删除只允许未被引用的草稿；已发布版本只能归档，历史执行快照永久保留其必要信息。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <div class="label">五、异常处理</div>
+  <div class="pros-cons" style="margin-top:12px">
+    <div class="pros"><h4>允许自动处理</h4><ul><li>没有用户/项目绑定时使用系统默认版本</li><li>模型输出格式错误时按锁定 Schema 修复一次</li><li>网络类可重试错误使用原执行快照重试</li></ul></div>
+    <div class="cons"><h4>必须停止并提示</h4><ul><li>用户配置存在非法变量或越权指令</li><li>项目权限、内容 revision 或绑定版本冲突</li><li>结构化输出修复后仍不合格</li><li>发布版本已归档或模型策略不可用</li></ul></div>
+  </div>
+  <p>不能在用户已明确绑定的配置失效时静默切换其他 Agent，否则结果不可解释。此类情况应失败并要求重新选择。</p>
+</div>
+
+<div class="section">
+  <div class="label">六、旧功能迁移</div>
+  <ol>
+    <li>盘点剧本、钩子、审核、分镜服务中的硬编码 Prompt，生成四类系统 Blueprint。</li>
+    <li>将现有 prompt_templates 中属于四类角色的用户内容迁成 user_agent + v1 草稿；图片、视频类模板保持原状。</li>
+    <li>业务服务先接统一 Resolver，并保留系统 Blueprint 作为无绑定时的兼容默认。</li>
+    <li>四条业务链路全部验证后，下线旧 PromptManager 的角色配置入口；不删除历史数据。</li>
+  </ol>
+</div>
+
+<div class="section">
+  <div class="label">七、测试与验收</div>
+  <div class="options" style="margin-top:12px">
+    <div class="option"><div class="letter">1</div><div class="content"><h3>单元测试</h3><p>继承优先级、Prompt 编译、锁定字段、变量校验、版本状态机、权限策略。</p></div></div>
+    <div class="option"><div class="letter">2</div><div class="content"><h3>集成测试</h3><p>新增→试跑→发布→绑定→执行→回滚；并发发布、项目越权、revision 冲突。</p></div></div>
+    <div class="option"><div class="letter">3</div><div class="content"><h3>业务契约测试</h3><p>四类 Agent 输出均符合锁定 Schema；切换版本后业务链路确实使用新快照。</p></div></div>
+    <div class="option"><div class="letter">4</div><div class="content"><h3>端到端测试</h3><p>配置中心、创建向导、剧本修订 Diff、钩子重做、项目绑定、历史追溯。</p></div></div>
+  </div>
+</div>

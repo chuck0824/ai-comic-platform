@@ -216,7 +216,7 @@ Expected: compilation failure because `PermissionGrant` and scoped context field
 
 - [ ] **Step 3: Implement scoped context**
 
-Create `PermissionGrant` as a record in `WorkspaceContext.java`, add `departmentId` and `grants`, and implement `canAccess(permission, targetDepartmentId, targetUserId)` for `WORKSPACE`, `DEPARTMENT`, and `SELF`. Parse the enriched 3001 response. Remove the permissive dev membership fallback; tests and dev seed data must use explicit memberships. Add `/api/v1/enterprise/**` to `WorkspaceContextFilter` and replace the broad `ent_admin/dept_head` matcher with authenticated access plus service-level permission checks.
+Create `PermissionGrant` as a record in `WorkspaceContext.java`, add `departmentId` and `grants`, and implement `canAccess(permission, targetDepartmentId, targetUserId)` for `WORKSPACE`, `DEPARTMENT`, and `SELF`. Parse the enriched 3001 response. Remove the permissive dev membership fallback（参见设计文档第 12 节：开发环境不得使用宽松 Membership Mock）；tests and dev seed data must use explicit memberships. Add `/api/v1/enterprise/**` to `WorkspaceContextFilter` and replace the broad `ent_admin/dept_head` matcher with authenticated access plus service-level permission checks.
 
 - [ ] **Step 4: Run workspace and security tests**
 

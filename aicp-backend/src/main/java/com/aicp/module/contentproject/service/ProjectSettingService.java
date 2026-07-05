@@ -26,6 +26,7 @@ public class ProjectSettingService {
     private final ProjectSettingEntityMapper entityMapper;
     private final ProjectSettingVersionMapper versionMapper;
     private final ProjectAccessService accessService;
+    private final CreativeBibleService creativeBibleService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     static final Set<String> VALID_TYPES = Set.of("character", "background", "faction", "location", "item");
@@ -120,6 +121,11 @@ public class ProjectSettingService {
         entityMapper.updateById(entity);
 
         createSettingVersion(entity, "manual", userId, null);
+
+        // 确认状态变更后触发圣经草稿重建
+        if ("confirmed".equals(entity.getStatus())) {
+            creativeBibleService.ensureDraftForChange(userId, projectId, "setting_updated");
+        }
 
         return toMap(entity);
     }

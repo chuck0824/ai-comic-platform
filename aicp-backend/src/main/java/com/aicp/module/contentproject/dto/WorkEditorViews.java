@@ -23,6 +23,7 @@ public final class WorkEditorViews {
             Integer revision,
             Map<String, Integer> settingCounts,   // type -> count
             Integer pendingExtractionCount,
+            Map<String, Object> bibleHealth,      // 创作圣经健康度
             LocalDateTime createdAt,
             LocalDateTime updatedAt
     ) {}

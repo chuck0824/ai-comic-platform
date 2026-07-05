@@ -122,6 +122,26 @@
 
 每项生态事实支持名称、摘要、结构化详情、状态、来源、证据、当前版本、引用和归档。正式确认后才进入上下文。
 
+#### 6.1.1 TVC 模式生态映射
+
+TVC（广告/商业短片）项目不涉及虚构世界构建，其生态板块映射到商业表达要素。系统在项目创建时根据模式自动切换可用板块和标签：
+
+| TVC 商业要素 | 映射到的生态板块 | 核心字段 | 说明 |
+|---|---|---|---|
+| 品牌 | 势力与组织 | 品牌定位、品牌人格、视觉识别约束、品牌声音 | 作为“组织”类型的特化 |
+| 产品/服务 | 资源体系 + 物品 | 功能、差异化、使用场景、限制 | 作为“资源”和“物品”类型的合并 |
+| 目标受众 | 社会结构 | 人群画像、需求、痛点、触媒习惯 | 简化的人口/行为描述 |
+| 竞品 | 制度与禁忌 + 世界规则 | 竞品定位、差异化空间、参照禁区 | 同时生成内容风险提示 |
+| 核心卖点 | 世界规则 | 必须传达的信息、支持点、RTB | 不可被 L2/L3 口径覆盖 |
+| 品牌禁区 | 制度与禁忌 | 禁用话题、禁用画面、禁用音乐风格 | 等同于平台硬规则，不可覆盖 |
+| 角色表达口径 | 实体设定 + 写作口径 L2 | 代言人/角色口吻、人设边界、对受众的表达方式 | 映射到角色级口吻模型 |
+
+TVC 模式下：
+- “时代与世界类型”、“关键历史”、“能力体系”板块隐藏；
+- “地点体系”替换为“场景/场合”（如家庭、办公室、户外、卖场）；
+- 关系网简化为“品牌–产品–受众”三角关系，不展示完整图谱编辑器；
+- 所有生态规则的 `rule_type` 使用与长篇相同的枚举值，但 UI 标签替换为 TVC 术语。
+
 ### 6.2 实体设定
 
 实体类型继续使用角色、背景、势力、地点和物品五类，并统一扩展以下能力：
@@ -136,6 +156,8 @@
 - 已被版本引用的实体禁止物理删除。
 
 ### 6.3 动态关系网
+
+> **技术备注**：关系图谱的前端可视化技术选型（AntV G6 / Cytoscape.js / ECharts）在 P1 启动前通过 2 天技术 Spike 完成。详见 Section 27.3。P0 仅交付数据模型和 API，不引入图谱渲染库。
 
 #### 6.3.1 节点
 
@@ -197,6 +219,47 @@
 3. 平台硬规则、合规禁区和项目明确禁区不可被 L2/L3 覆盖。
 4. 同级冲突按最新采用版本处理；跨级冲突展示来源和优先级。
 5. AI 生成前可预览本次解析后的最终口径，生成任务保存该解析快照。
+
+**不可覆盖字段（`NON_OVERRIDABLE`）：** `hard_bans`（项目明确禁区）、`platform_rules`（平台硬规则）、`compliance_rules`（合规禁区）。这些字段只能由 L1 项目级口径设定，L2 角色级和 L3 单元级的同名键值被忽略并产生冲突记录。此清单由后端 `WritingGuideResolver` 统一定义，前端通过 resolve API 的 `conflicts` 字段获取而非硬编码。
+
+**L1 项目级口径字段定义：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `pov` | string | 叙事视角：`first`/`third`/`omniscient` |
+| `tense` | string | 时态：`past`/`present` |
+| `pace` | string | 节奏：`fast`/`moderate`/`slow` |
+| `language_density` | string | 语言密度：`sparse`/`moderate`/`dense` |
+| `tone` | string | 情绪基调 |
+| `dialogue_ratio` | number | 对话占比 (0.0–1.0) |
+| `hard_bans` | string[] | 项目明确禁区，不可被下级覆盖 |
+| `platform_rules` | string[] | 平台硬规则，不可被下级覆盖 |
+| `compliance_rules` | string[] | 合规禁区，不可被下级覆盖 |
+| `terminology` | object | 术语表，`{"术语":"释义"}` |
+
+**L2 角色级口吻字段定义：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `addressing` | string | 称谓方式 |
+| `sentence_length` | string | 句长偏好：`short`/`medium`/`long` |
+| `favorite_words` | string[] | 常用词 |
+| `catchphrases` | string[] | 口头禅 |
+| `knowledge_boundary` | string[] | 知识边界（角色不知道的事） |
+| `hidden_information` | string[] | 角色对他人隐瞒的信息 |
+| `forbidden_words` | string[] | 禁用词 |
+| `tone_variation` | object | 对不同对象的语气差异 |
+
+**L3 单集/单章覆盖字段定义：**
+
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| `pov` | string | 本单元视角覆盖 |
+| `pace` | string | 本单元节奏覆盖 |
+| `special_form` | string | 特殊文体（如书信、日记） |
+| `dialogue_constraints` | string[] | 对话限制 |
+| `must_include` | string[] | 必须出现的表达/元素 |
+| `must_avoid` | string[] | 不得出现的表达/元素 |
 
 ### 6.5 连续性台账
 
@@ -446,10 +509,10 @@ draft → reviewable → confirmed → superseded
 ```
 
 - `draft`：允许编辑，不进入正式上下文；
-- `reviewable`：候选整理完成，等待确认；
+- `reviewable`：候选整理完成，等待确认。通过“提交审核”操作从 `draft` 转换（P0 提供 API，UI 在 P1 候选确认流程中交付）；
 - `confirmed`：正式版本，可进入生成上下文；
 - `superseded`：已被新确认版本替代，仍可追溯；
-- `archived`：项目主动归档，不作为当前事实。
+- `archived`：项目主动归档，不作为当前事实。P0 提供 `POST /{id}/creative-bible/versions/{versionId}/archive` 端点，已确认版本归档前需确认无下游依赖。
 
 ### 15.2 AI 候选批次
 
@@ -483,25 +546,33 @@ open → acknowledged → resolved
 
 建议字段：`id`、`project_id`、`bible_version_id`、`rule_type`、`name`、`summary`、`details_json`、`scope_json`、`exceptions_json`、`status`、`source_type`、`evidence_json`、`revision`。
 
-### 16.3 `project_entity_relations`
+### 16.3 `project_entity_relations` <span style="color:orange">**(P1)**</span>
 
 建议字段：`id`、`project_id`、`from_entity_id`、`to_entity_id`、`relation_type`、`direction`、`strength`、`visibility`、`status`、`start_unit_id`、`end_unit_id`、`current_version_no`、`revision`、归档和审计字段。
 
-### 16.4 `project_relation_events`
+> P0 不创建此表。P1 通过独立 migration 交付，详见 P1 执行计划。
+
+### 16.4 `project_relation_events` <span style="color:orange">**(P1)**</span>
 
 建议字段：`id`、`relation_id`、`event_type`、`content_unit_id`、`content_version_id`、`relative_time`、`before_json`、`after_json`、`evidence_json`、`status`、`created_by`、`created_at`。
 
+> P0 不创建此表。P1 通过独立 migration 交付。
+
 ### 16.5 `project_writing_guides`
 
-建议字段：`id`、`project_id`、`scope_type`、`scope_id`、`version_no`、`status`、`guide_json`、`parent_guide_id`、`source_type`、`confirmed_by`、`created_at`。`scope_type` 取 `project`、`character`、`content_unit`。
+建议字段：`id`、`project_id`、`bible_version_id`、`scope_type`、`scope_id`、`version_no`、`status`、`guide_json`、`parent_guide_id`、`source_type`、`confirmed_by`、`confirmed_at`、`created_by`、`created_at`。`scope_type` 取 `project`、`character`、`content_unit`。
+
+唯一约束：`(project_id, bible_version_id, scope_type, scope_id, version_no)`。口径版本归属于特定圣经版本，同一圣经版本内同作用域可有多版修订。
 
 ### 16.6 `writing_guide_resolutions`
 
 保存某次生成解析后的最终口径，字段包含 `generation_job_id`、项目/角色/单元口径版本、`resolved_json`、冲突和覆盖来源。
 
-### 16.7 `continuity_snapshots`
+### 16.7 `continuity_snapshots` <span style="color:orange">**(P1)**</span>
 
 建议字段：`id`、`project_id`、`content_unit_id`、`content_version_id`、`bible_version_id`、`snapshot_json`、`snapshot_hash`、`derived_from_snapshot_id`、`created_at`。
+
+> P0 不创建此表。P1 通过独立 migration 交付，届时 `snapshot_json` 包含人物位置、健康、关系变化、道具归属、伏笔状态和关键事件。
 
 ### 16.8 `generation_context_snapshots`
 
@@ -515,10 +586,12 @@ open → acknowledged → resolved
 
 1. 正式版本使用项目内单调递增版本号和唯一约束。
 2. 跨项目外键必须在服务层和数据库约束层同时校验。
-3. `details_json`、`guide_json` 和快照 JSON 必须由版本化 JSON Schema 校验。
+3. `details_json`、`guide_json` 和快照 JSON 必须由版本化 JSON Schema 校验。P0 阶段在服务层通过 Java POJO + `@Valid` 校验关键字段（`rule_type`、`scope_type`、`status`），完整 JSON Schema 版本化在 P3 治理阶段通过 Schema Registry 交付。
 4. 关系的起止单元必须属于同一项目且顺序合法。
 5. 所有正式确认和导入操作使用幂等键。
 6. 被引用的实体、关系和版本禁止物理删除。
+7. `ecosystem_rules.rule_type` 由服务层白名单校验，合法值为 `era_world`、`world_rule`、`social_structure`、`institution_taboo`、`faction_organization`、`resource_system`、`ability_system`、`location_system`、`key_history`，TVC 模式下增加 `brand`、`product_service`、`target_audience`、`competitor`、`core_selling_point`、`brand_taboo`、`character_expression`。
+8. `project_writing_guides.scope_type` 由服务层白名单校验，合法值为 `project`、`character`、`content_unit`。`scope_type=project` 时 `scope_id` 必须为 `0`；`character` 和 `content_unit` 时 `scope_id` 必须为正整数且对应实体存在。
 
 ## 17. API 边界
 
@@ -528,8 +601,12 @@ open → acknowledged → resolved
 GET  /api/v1/content-projects/{projectId}/creative-bible
 POST /api/v1/content-projects/{projectId}/creative-bible/versions
 POST /api/v1/content-projects/{projectId}/creative-bible/versions/{versionId}/confirm
+POST /api/v1/content-projects/{projectId}/creative-bible/versions/{versionId}/submit-review
+POST /api/v1/content-projects/{projectId}/creative-bible/versions/{versionId}/archive
 GET  /api/v1/content-projects/{projectId}/creative-bible/health
 ```
+
+`submit-review` 将版本从 `draft` 转为 `reviewable`。`archive` 将 `superseded` 或 `confirmed`（无下游依赖）版本归档；P0 提供端点，UI 在 P1 交付。
 
 ### 17.2 生态与实体
 
@@ -553,10 +630,10 @@ GET  /api/v1/content-projects/{projectId}/relation-timeline
 ### 17.4 写作口径与连续性
 
 ```text
-GET/POST/PATCH /api/v1/content-projects/{projectId}/writing-guides
-POST           /api/v1/content-projects/{projectId}/writing-guides/resolve
-GET            /api/v1/content-projects/{projectId}/continuity-snapshots
-POST           /api/v1/content-projects/{projectId}/continuity-checks
+GET/POST/PATCH /api/v1/content-projects/{projectId}/creative-bible/versions/{versionId}/writing-guides
+POST           /api/v1/content-projects/{projectId}/creative-bible/versions/{versionId}/writing-guides/resolve
+GET            /api/v1/content-projects/{projectId}/continuity-snapshots           (P1)
+POST           /api/v1/content-projects/{projectId}/continuity-checks             (P1)
 ```
 
 ### 17.5 候选、上下文和影响
@@ -583,17 +660,22 @@ GET  /api/v1/content-projects/{projectId}/canvas-import-snapshots/{snapshotId}/d
 
 关键事件包括：
 
-- `CREATIVE_BIBLE_CONFIRMED`；
-- `PROJECT_FACT_CHANGED`；
-- `RELATION_EVENT_APPLIED`；
-- `WRITING_GUIDE_CONFIRMED`；
-- `CONTEXT_SNAPSHOT_CREATED`；
-- `CONTENT_VERSION_ADOPTED`；
-- `CONTENT_VERSION_LOCKED`；
-- `IMPACT_REPORT_CREATED`；
-- `STORYBOARD_MASTER_LOCKED`；
-- `CANVAS_IMPORT_SNAPSHOT_CREATED`；
-- `CANVAS_PRODUCTION_STATUS_CHANGED`。
+**P0 事件：**
+- `CREATIVE_BIBLE_CONFIRMED` — 圣经版本确认；
+- `PROJECT_FACT_CHANGED` — 生态规则或实体设定变更；
+- `WRITING_GUIDE_CONFIRMED` — 写作口径确认；
+- `CONTEXT_SNAPSHOT_CREATED` — 生成上下文快照创建；
+- `CONTENT_VERSION_ADOPTED` — 内容版本被采用。
+
+**P1 事件：**
+- `RELATION_EVENT_APPLIED` — 关系事件生效；
+- `CONTENT_VERSION_LOCKED` — 内容版本锁稿；
+- `IMPACT_REPORT_CREATED` — 影响报告生成。
+
+**P2 事件：**
+- `STORYBOARD_MASTER_LOCKED` — 分镜 Master 锁定；
+- `CANVAS_IMPORT_SNAPSHOT_CREATED` — 画布导入快照创建；
+- `CANVAS_PRODUCTION_STATUS_CHANGED` — 画布生产状态变更。
 
 事件通过事务 Outbox 发布，消费者使用事件 ID 和业务幂等键去重。仓库、项目详情和画布状态采用最终一致投影；关键写操作完成后 API 返回权威源状态，不依赖投影即时更新。
 
@@ -613,7 +695,39 @@ GET  /api/v1/content-projects/{projectId}/canvas-import-snapshots/{snapshotId}/d
 
 任何失败都不得用固定示例内容、空成功响应或错误状态回退伪装成功。
 
+### 19.1 错误码清单
+
+| 错误码 | 含义 | 触发场景 |
+|---|---|---|
+| `PARAM_INVALID` | 请求参数不合法 | 必填字段缺失、枚举值非法、JSON 格式错误 |
+| `DATA_NOT_FOUND` | 目标数据不存在 | 圣经版本、生态规则、口径、实体设定版本缺失 |
+| `PERMISSION_DENIED` | 无操作权限 | Viewer 尝试写入、非 Owner 尝试管理成员 |
+| `VERSION_CONFLICT` | 修订号冲突 (HTTP 409) | 并发保存导致乐观锁失败 |
+| `BIBLE_NOT_CONFIRMED` | 圣经未确认 | 生成任务要求已确认圣经但当前项目无确认版本 |
+| `BIBLE_IMMUTABLE` | 圣经不可修改 | 对 `confirmed`/`superseded`/`archived` 版本执行写操作 |
+| `CANDIDATE_CONFLICT` | 候选应用冲突 | 目标实体已被其他操作修改 |
+| `EXTRACTION_FAILED` | AI 提取/解析失败 | 结构化解析失败，原始输出已保存 |
+| `QUOTA_EXCEEDED` | 额度不足 | 生成前阻断，不创建运行任务 |
+| `SYSTEM_ERROR` | 系统内部错误 | 序列化失败、数据库异常、事件发布失败 |
+
+所有错误响应包含 `code`、`message`、`details`（可选，定位具体字段或冲突来源）和 `request_id`（用于审计追溯）。
+
 ## 20. 性能与规模
+
+### 20.1 性能 SLI（Service Level Indicators）
+
+| 操作 | 目标延迟 (P95) | 适用项目规模 | 测量方式 |
+|---|---|---|---|
+| 创作工作台首屏加载 | < 2s | 100 章项目 | 浏览器 Performance API，不含正文内容加载 |
+| 圣经概览页加载 | < 800ms | 任意 | API `/creative-bible` + `/creative-bible/health` 并行请求 |
+| 生态规则列表（含筛选） | < 500ms | 50 条规则 | 分页 20 条/页，索引 `(project_id, bible_version_id)` |
+| 写作口径解析预览 | < 300ms | 3 级口径（项目 + 3 角色 + 单元） | 纯 Java 内存计算，不查库 |
+| 上下文组装（含快照持久化） | < 500ms | 100 章项目 | 圣经快照已在内存中，裁剪为 Token 预算 |
+| 关系图谱增量加载 | < 1s | 100 节点 / 200 边 | 按集章范围过滤，增量传输 |
+| 影响分析（异步） | < 30s | 100 章项目 | 后台任务，通过事件通知结果 |
+| 圣经确认（含快照生成） | < 3s | 20 条生态规则 + 50 个实体设定 | 单事务内完成 |
+
+### 20.2 规模策略
 
 1. 关系图按可见节点、实体类型、集章范围增量加载，首屏不加载完整长篇图谱。
 2. 长篇内容单元、关系事件、连续性快照和版本历史必须分页。
@@ -621,6 +735,18 @@ GET  /api/v1/content-projects/{projectId}/canvas-import-snapshots/{snapshotId}/d
 4. 影响分析和全量连续性检查使用异步任务，当前单元局部检查允许同步返回。
 5. 大项目设置节点、边、单次提取字符数和并发任务上限，超限时提供拆分策略。
 6. 100 章项目应能在不加载全量正文的情况下打开工作台、关系网和连续性列表。
+
+### 20.3 容量上限
+
+| 资源 | P0 上限 | P3 目标上限 | 超限行为 |
+|---|---|---|---|
+| 单项目生态规则数 | 200 | 1,000 | 拒绝新建，提示归档旧规则 |
+| 单圣经版本关系数 | N/A (P1 交付) | 5,000 | 分页 + 按集章过滤 |
+| 单次上下文快照大小 | 1 MB | 5 MB | 裁剪策略自动降级，记录省略项 |
+| 并发 AI 生成任务/项目 | 3 | 10 | 排队，展示队列位置 |
+| 单项目圣经版本数 | 100 | 500 | 自动归档 90 天前的 `superseded` 版本 |
+| 单项目关系事件数 | N/A (P1 交付) | 50,000 | 分页 + 按集章归档 |
+| 连续性快照数 | N/A (P1 交付) | 10,000/项目 | 自动归档 180 天前的旧快照 |
 
 ## 21. 数据迁移与兼容
 
@@ -746,3 +872,91 @@ GET  /api/v1/content-projects/{projectId}/canvas-import-snapshots/{snapshotId}/d
 8. 权限、审计、费用、状态、异常、配置版本、迁移和性能均有自动化测试或可重复验收步骤。
 9. 刷新、重进、失败重试、并发保存和旧项目迁移不丢草稿、不重复创建正式版本、不伪成功。
 10. 每个业务域具备职责、实体、状态、输入、输出、权限、版本、异常、事件、API、页面入口、测试和验收口径，缺少任一项不得标记为完成。
+
+## 26. UI 线框图参考
+
+以下线框图在详细设计评审前完成，存储于 `docs/superpowers/wireframes/` 目录：
+
+| 编号 | 页面/组件 | 文件名 | 关键交互 | 状态 |
+|---|---|---|---|---|
+| W1 | 创作圣经总览 | `creative-bible-overview.png` | 版本状态卡片、确认事实统计、待处理变更数、关键操作入口 | 待绘制 |
+| W2 | 总体生态编辑器 | `ecosystem-panel.png` | 类型筛选侧栏、master/detail 布局、规则表单、确认/取消 | 待绘制 |
+| W3 | 三级写作口径面板 | `writing-guide-panel.png` | 项目/角色/单元 Tab、字段表单、解析预览、冲突标注 | 待绘制 |
+| W4 | 关系图谱编辑器 | `relation-graph.png` | 节点拖拽、关系连线、实体筛选器、集章时间轴滑块 | P1 绘制 |
+| W5 | 连续性台账 | `continuity-snapshot.png` | 集章时间线、人物/道具/伏笔状态卡片、连续性警告 | P1 绘制 |
+| W6 | 上下文预览面板 | `context-panel.png` | 圣经版本、口径版本、上游版本、裁剪摘要、hash | 待绘制 |
+| W7 | 候选确认流程 | `candidate-confirmation.png` | 来源选择、批量确认、逐字段 diff、影响预览 | P1 绘制 |
+| W8 | 影响报告 | `impact-report.png` | 受影响集章列表、冲突详情、建议动作、忽略/处理 | P1 绘制 |
+
+每个线框图须标注：
+- 页面/组件的进入和退出路径；
+- 主要操作的触发方式和反馈；
+- 空状态、加载状态、错误状态的展示；
+- 响应式断点行为（如适用）。
+
+## 27. 后续能力规划
+
+以下能力不在 P0–P3 范围内，但设计时已预留扩展点。在对应的分期执行计划中补充详细规格。
+
+### 27.1 圣经内搜索
+
+**目标分期**：P3
+
+- 支持按名称、类型、标签、状态、创建时间对生态规则、实体设定、关系和写作口径做全文检索。
+- 搜索结果按实体类型分组，高亮匹配片段。
+- 预留扩展点：`ecosystem_rules` 和 `project_setting_entities` 的 `name`、`summary` 和 JSON 内容建立全文索引（MySQL `FULLTEXT` 或 Elasticsearch）。
+
+### 27.2 批量操作
+
+**目标分期**：P1（候选确认）/ P3（其他）
+
+- 候选确认：支持“全部采用”、“全部忽略”、“按置信度筛选后批量采用”。
+- 生态规则：支持批量归档、批量修改状态。
+- 导出：支持批量导出选定集章的圣经快照为 Markdown/PDF。
+- 预留扩展点：候选表的 `status` 和 `confidence` 字段已支持批量更新。
+
+### 27.3 关系图谱可视化技术选型
+
+**目标分期**：P1 执行前完成技术验证
+
+- **候选方案**：ECharts（力导向图）、AntV G6、Cytoscape.js、D3-force。
+- **选型标准**：100 节点 + 200 边流畅渲染（60fps 拖拽）、缩放和平移、节点/边自定义样式、支持 Vue 3 集成、包体积 < 200KB gzipped、中文文档和社区支持。
+- **推荐**：AntV G6（图可视化专用库，内置力导向和层级布局，支持自定义节点和边，Vue 3 集成成熟）或 Cytoscape.js（学术级，布局算法丰富）。
+- P0 不引入图谱库。P1 启动时完成 2 天技术 Spike，产出可运行的 `RelationGraph.vue` 原型和选型结论。
+
+### 27.4 圣经导出与分享
+
+**目标分期**：P3
+
+- 导出格式：Markdown（Git 友好，可版本化）、PDF（正式审阅）、JSON（机器可读，供外部工具消费）。
+- 导出内容：用户可选择导出范围（全部 / 当前版本 / 指定集章快照）。
+- 分享：生成只读分享链接 + 过期时间 + 密码保护（可选）。分享页不依赖平台登录态。
+- 预留扩展点：`creative_bible_versions.snapshot_json` 已包含完整事实快照，导出即序列化。
+
+### 27.5 通知机制
+
+**目标分期**：P3
+
+- 触发场景：候选待确认、影响报告待处理、圣经版本被替代、连续性冲突检出、画布生产完成。
+- 通知渠道：站内信（`notification` 表）、邮件（可选，企业配置）、WebSocket 实时推送（前端 `useNotification` composable）。
+- 通知聚合：同一项目的同类通知在 5 分钟内合并为一条。
+- 预留扩展点：事件 Outbox 已包含所有关键事件的 `project_id` 和 `user_id`，通知消费者可直接消费。
+
+### 27.6 无障碍与暗色模式
+
+**目标分期**：P3
+
+- 暗色模式：基于 CSS 变量实现，与系统偏好同步。所有生态规则表单、图谱画布、口径编辑器支持暗色主题。
+- 键盘导航：Tab 切换焦点、Enter 确认、Escape 关闭弹窗、Space 勾选。图谱编辑器支持键盘平移（方向键）和缩放（+/-）。
+- 屏幕阅读器：表单标签关联 `aria-labelledby`、状态变化使用 `aria-live` 区域、图谱节点提供 `aria-label`。
+- 色彩对比度：正文文本 ≥ 4.5:1、大文本 ≥ 3:1（WCAG AA）。
+
+### 27.7 图谱可视化交互规格（P1 前置）
+
+**目标分期**：P1 执行时详细设计
+
+- 布局模式：力导向（默认，展示全局关系）、层级（展示势力隶属）、环形（展示角色围绕主角的关系）。
+- 节点样式：按实体类型区分形状和颜色（人物=圆形、势力=菱形、地点=方形、物品=三角形）。节点大小反映关系数量。
+- 边样式：按关系类型区分颜色和线型（亲属=实线、敌对=虚线、秘密=点线）。关系强度映射为线宽。
+- 交互：悬停高亮关联节点和边、单击选中并展开详情侧栏、双击进入实体编辑、右键菜单（编辑关系/查看历史/跳转集章）。
+- 性能降级：超过 200 节点自动切换为按集章增量加载 + 视口裁剪，超过 500 节点提示用户使用筛选器缩小范围。

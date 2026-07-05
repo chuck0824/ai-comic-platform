@@ -35,6 +35,7 @@ public class LegacyProjectProjectionService {
     private final ProjectParameterVersionMapper parameterVersionMapper;
     private final ContentUnitMapper unitMapper;
     private final ContentVersionMapper versionMapper;
+    private final CreativeBibleService creativeBibleService;
     private final ObjectMapper objectMapper;
 
     /**
@@ -262,8 +263,122 @@ public class LegacyProjectProjectionService {
         }
 
         log.info("character_profiles 迁移完成: migrated={} skipped={}", migrated, skipped);
+
+        // 为有迁移数据的项目创建创作圣经草稿
+        if (migrated > 0) {
+            Set<Long> affectedProjects = new HashSet<>();
+            for (CharacterProfile cp : profiles) {
+                affectedProjects.add(cp.getProjectId());
+            }
+            for (Long projectId : affectedProjects) {
+                try {
+                    creativeBibleService.ensureDraftForChange(0L, projectId, "legacy_settings_backfill");
+                    log.info("为项目 {} 创建圣经回填草稿", projectId);
+                } catch (Exception e) {
+                    log.warn("项目 {} 圣经草稿创建失败（可能已存在）: {}", projectId, e.getMessage());
+                }
+            }
+        }
+
         return Map.of("migrated", migrated, "skipped", skipped);
     }
 
     public record BackfillResult(int projects, int units, int versions, int skipped) {}
+
+    // ===== Legacy Script Resolution =====
+
+    /**
+     * Idempotent: returns an existing ContentProject for the legacy script, or creates one.
+     * Rejects scripts owned by other users.
+     */
+    @Transactional
+    public ContentProject resolveOrCreate(Long ownerId, Long scriptId) {
+        ContentProject existing = projectMapper.selectOne(
+                new LambdaQueryWrapper<ContentProject>()
+                        .eq(ContentProject::getLegacyScriptId, scriptId));
+        if (existing != null) {
+            // Verify ownership via membership
+            Long memberCount = memberMapper.selectCount(
+                    new LambdaQueryWrapper<ProjectMember>()
+                            .eq(ProjectMember::getProjectId, existing.getId())
+                            .eq(ProjectMember::getUserId, ownerId));
+            if (memberCount == 0) {
+                throw new BizException(ErrorCode.PROJECT_ACCESS_DENIED);
+            }
+            return existing;
+        }
+
+        Script script = scriptMapper.selectById(scriptId);
+        if (script == null || !ownerId.equals(script.getOwnerUserId())) {
+            throw new BizException(ErrorCode.PROJECT_NOT_FOUND);
+        }
+        return migrateOne(ownerId, script);
+    }
+
+    /**
+     * Migrate a single legacy script to a ContentProject.
+     * Extracted from backfill() for reuse by resolveOrCreate().
+     */
+    private ContentProject migrateOne(Long ownerId, Script script) {
+        String sourceMode = script.getSource() != null && script.getSource().contains("upload")
+                ? "uploaded" : "ai_manual";
+
+        ContentProject project = new ContentProject();
+        project.setUuid("CP_" + UUID.randomUUID().toString().replace("-", ""));
+        project.setTenantType("personal");
+        project.setTenantId(ownerId);
+        project.setOwnerUserId(ownerId);
+        project.setName(script.getTitle() != null ? script.getTitle() : "未命名项目");
+        project.setCreationMode("short_drama");
+        project.setSourceMode(sourceMode);
+        project.setStoryboardIntentStatus("not_decided");
+        project.setContentStatus(normalizeStatus(script.getStatus()));
+        project.setProductionStatus("not_started");
+        project.setMarketStatus("private");
+        project.setLifecycleStatus("active");
+        project.setLastStageKey("uploaded".equals(sourceMode) ? "import_review" : "story_seed");
+        project.setLegacyScriptId(script.getId());
+        project.setRevision(0);
+        project.setIsDeleted(0);
+        projectMapper.insert(project);
+
+        // owner membership
+        ProjectMember owner = new ProjectMember();
+        owner.setProjectId(project.getId());
+        owner.setUserId(ownerId);
+        owner.setRole("owner");
+        memberMapper.insert(owner);
+
+        // parameter v1
+        Map<String, Object> params = new LinkedHashMap<>();
+        params.put("start_content", script.getSynopsis() != null ? script.getSynopsis() : "");
+        params.put("content_goal", "追更");
+        String payloadJson = toJson(params);
+        String hash = sha256(payloadJson);
+
+        ProjectParameterVersion pv = new ProjectParameterVersion();
+        pv.setProjectId(project.getId());
+        pv.setVersionNo(1);
+        pv.setPayloadJson(payloadJson);
+        pv.setContentHash(hash);
+        pv.setCreatedBy(ownerId);
+        parameterVersionMapper.insert(pv);
+        project.setCurrentParameterVersionId(pv.getId());
+        projectMapper.updateById(project);
+
+        return project;
+    }
+
+    /**
+     * Normalize legacy status values to valid content_status values.
+     */
+    private String normalizeStatus(String legacyStatus) {
+        if (legacyStatus == null) return "draft";
+        return switch (legacyStatus) {
+            case "pending_review" -> "reviewing";
+            case "locked" -> "locked";
+            case "approved" -> "approved";
+            default -> "draft";
+        };
+    }
 }

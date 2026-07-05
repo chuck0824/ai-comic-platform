@@ -1,0 +1,50 @@
+<h2>设计确认 2/4（修订）：新增、改变与删除的能力</h2>
+<p class="subtitle">以下差异基于当前代码核查，不是抽象功能清单。</p>
+
+<div class="section">
+  <h3>新增能力</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+    <div style="padding:10px;background:#ecfdf5;border-left:4px solid #10b981"><b>项目化资产目录</b><br><small>我的/团队 → 剧本项目 → 角色、场景、道具、分镜、配音、音乐；无项目内容进入未归档区。</small></div>
+    <div style="padding:10px;background:#ecfdf5;border-left:4px solid #10b981"><b>统一任务状态</b><br><small>在资产工作台展示排队、生成中、成功、失败、取消；支持进度、取消和链式重试。</small></div>
+    <div style="padding:10px;background:#ecfdf5;border-left:4px solid #10b981"><b>服务端检索与批量管理</b><br><small>分页、搜索、项目/类型/状态/模型/创建人/时间筛选，批量归档、移动、打标签、删除和恢复。</small></div>
+    <div style="padding:10px;background:#ecfdf5;border-left:4px solid #10b981"><b>完整资产操作</b><br><small>媒体预览、下载、重命名、收藏、标签、复制参数、再次生成、发送画布。</small></div>
+    <div style="padding:10px;background:#ecfdf5;border-left:4px solid #10b981"><b>发布市场衔接</b><br><small>个人资产直接进入发布流程；团队资产复用现有发布申请与审批链路。</small></div>
+    <div style="padding:10px;background:#ecfdf5;border-left:4px solid #10b981"><b>回收站与审计</b><br><small>软删除保留 30 天、恢复、到期清理；关键移动、删除、发布操作记录操作者。</small></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>改变现有能力</h3>
+  <div style="overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="background:#eef2ff"><th style="padding:8px;text-align:left">能力</th><th style="padding:8px;text-align:left">当前实现</th><th style="padding:8px;text-align:left">调整后</th></tr>
+      <tr><td style="padding:8px;border-bottom:1px solid #ddd">历史查询</td><td style="padding:8px;border-bottom:1px solid #ddd">一次性返回全部资产，浏览器内过滤</td><td style="padding:8px;border-bottom:1px solid #ddd">服务端分页、复合筛选、稳定排序与统计计数</td></tr>
+      <tr><td style="padding:8px;border-bottom:1px solid #ddd">收藏</td><td style="padding:8px;border-bottom:1px solid #ddd">只改前端内存，刷新即丢失</td><td style="padding:8px;border-bottom:1px solid #ddd">持久化接口，按用户 + Workspace 隔离</td></tr>
+      <tr><td style="padding:8px;border-bottom:1px solid #ddd">发送画布</td><td style="padding:8px;border-bottom:1px solid #ddd">后端仅返回成功文案</td><td style="padding:8px;border-bottom:1px solid #ddd">选择目标画布，校验权限，真实创建节点，返回 node_id 和跳转地址</td></tr>
+      <tr><td style="padding:8px;border-bottom:1px solid #ddd">资产预览</td><td style="padding:8px;border-bottom:1px solid #ddd">仅用缩略图模拟，音视频无播放器</td><td style="padding:8px;border-bottom:1px solid #ddd">图片、视频、音频分类型预览，缺失文件显示可诊断错误</td></tr>
+      <tr><td style="padding:8px;border-bottom:1px solid #ddd">资产归属</td><td style="padding:8px;border-bottom:1px solid #ddd">只按 owner_user_id；异步失败时回退到用户 1</td><td style="padding:8px;border-bottom:1px solid #ddd">记录 Workspace、项目、创建者；异步任务显式携带上下文，禁止默认用户兜底</td></tr>
+      <tr><td style="padding:8px;border-bottom:1px solid #ddd">成功入库</td><td style="padding:8px;border-bottom:1px solid #ddd">可能创建没有 file_url 的空资产</td><td style="padding:8px;border-bottom:1px solid #ddd">校验输出文件后再入库；任务、资产、节点回写采用事务/补偿保证一致</td></tr>
+      <tr><td style="padding:8px">删除</td><td style="padding:8px">当前无删除能力</td><td style="padding:8px">软删除 30 天；恢复和定时清理；引用关系只提示、不破坏画布节点</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h3>删除或合并的旧能力</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+    <div style="padding:10px;background:#fff1f2;border-left:4px solid #f43f5e"><b>合并独立“任务监控”入口</b><br><small>取消侧栏独立入口，旧路由重定向至资产工作台的“进行中/失败”筛选，避免两套历史口径。</small></div>
+    <div style="padding:10px;background:#fff1f2;border-left:4px solid #f43f5e"><b>删除前端临时收藏</b><br><small>移除 asset.favorite 的纯本地切换，所有收藏以服务端结果为准。</small></div>
+    <div style="padding:10px;background:#fff1f2;border-left:4px solid #f43f5e"><b>删除虚假发送成功</b><br><small>移除只返回 message 的占位接口；没有成功创建节点就不能提示“已发送”。</small></div>
+    <div style="padding:10px;background:#fff1f2;border-left:4px solid #f43f5e"><b>清理重复与失配契约</b><br><small>不再让资产任务读取 script gen_tasks；统一 generation_tasks，并修正 H2/MySQL 与实体字段不一致。</small></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>保留但暂不扩展</h3>
+  <p>保留现有资产市场审批体系、画布节点体系和 generation_tasks 主模型；本期不建设复杂版本树、版权合同、内容指纹去重和跨项目依赖图。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认差异范围</h3><p>继续进入数据模型与接口设计。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>仍需调整</h3><p>请指出具体新增、删除或改变项。</p></div></div>
+</div>

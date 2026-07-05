@@ -22,16 +22,30 @@
         </button>
       </div>
     </div>
+    <div class="settings-nav">
+      <h3 class="nav-title">创作圣经</h3>
+      <div class="nav-list">
+        <button v-for="item in bibleItems" :key="item.key" type="button"
+          class="nav-item" :class="{ active: activeSection === item.key }"
+          @click="$emit('select', item.key)">
+          <el-icon><component :is="item.icon" /></el-icon>
+          <span>{{ item.label }}</span>
+          <el-badge v-if="item.key === 'bible-overview' && biblePendingCount"
+            :value="biblePendingCount" class="nav-count" />
+        </button>
+      </div>
+    </div>
   </aside>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { Collection, Edit, Document, User, Picture, OfficeBuilding, Location, Box } from '@element-plus/icons-vue'
+import { Collection, Edit, Document, User, Picture, OfficeBuilding, Location, Box, Reading, Notebook, EditPen } from '@element-plus/icons-vue'
 
 const props = defineProps({
   activeSection: { type: String, default: 'tags' },
-  settingCounts: { type: Object, default: () => ({}) }
+  settingCounts: { type: Object, default: () => ({}) },
+  biblePendingCount: { type: Number, default: 0 }
 })
 
 defineEmits(['select'])
@@ -49,6 +63,12 @@ const settingItems = computed(() => [
   { key: 'location', label: '地点', icon: Location, count: props.settingCounts?.location ?? 0 },
   { key: 'item', label: '物品', icon: Box, count: props.settingCounts?.item ?? 0 }
 ])
+
+const bibleItems = [
+  { key: 'bible-overview', label: '圣经总览', icon: Reading },
+  { key: 'ecosystem', label: '总体生态', icon: Notebook },
+  { key: 'writing-guide', label: '写作口径', icon: EditPen }
+]
 </script>
 
 <style scoped>

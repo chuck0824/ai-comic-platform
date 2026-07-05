@@ -1,0 +1,52 @@
+<h2>资产生成历史：页面结构选择</h2>
+<p class="subtitle">三种方案都支持：任务状态、资产管理、个人/团队视图、市场发布、回收站。请选择更符合日常生产习惯的主界面。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#0f172a;color:#cbd5e1;min-height:260px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>资产中心</b><span>搜索　筛选　批量操作</span></div>
+      <div style="display:flex;gap:6px;margin-bottom:10px"><span style="background:#4f46e5;padding:4px 8px;border-radius:4px">全部 128</span><span style="background:#334155;padding:4px 8px;border-radius:4px">生成中 3</span><span style="background:#334155;padding:4px 8px;border-radius:4px">失败 2</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:66px;background:#334155;border-radius:4px"></div><small>角色设定图</small></div>
+        <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:66px;background:#334155;border-radius:4px"></div><small>场景概念图</small></div>
+        <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:66px;background:#7c2d12;border-radius:4px;display:grid;place-items:center">生成失败</div><small>镜头视频</small></div>
+        <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:66px;background:#334155;border-radius:4px"></div><small>角色配音</small></div>
+        <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:66px;background:#312e81;border-radius:4px;display:grid;place-items:center">生成 62%</div><small>成片片段</small></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A. 统一瀑布流</h3><p>任务与资产混排，操作直达；适合快速浏览，但复杂筛选时信息密度较高。</p></div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#0f172a;color:#cbd5e1;min-height:260px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>资产生成历史</b><span>我的资产｜团队资产</span></div>
+      <div style="display:grid;grid-template-columns:125px 1fr;gap:10px">
+        <div style="background:#111827;padding:8px;border-radius:6px;line-height:2.1"><b>全部记录</b><br>进行中　3<br>已完成　123<br>失败　2<br>收藏<br>已发布<br>回收站</div>
+        <div>
+          <div style="background:#1e293b;padding:6px;border-radius:5px;margin-bottom:8px">搜索　类型　项目　模型　时间　状态</div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px">
+            <div style="background:#1e293b;padding:6px;border-radius:6px"><div style="height:55px;background:#334155"></div><small>角色设定图</small></div>
+            <div style="background:#1e293b;padding:6px;border-radius:6px"><div style="height:55px;background:#312e81;display:grid;place-items:center">62%</div><small>生成中</small></div>
+            <div style="background:#1e293b;padding:6px;border-radius:6px"><div style="height:55px;background:#334155"></div><small>场景概念图</small></div>
+            <div style="background:#1e293b;padding:6px;border-radius:6px"><div style="height:55px;background:#7c2d12;display:grid;place-items:center">重试</div><small>失败任务</small></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body"><h3>B. 资产工作台（推荐）</h3><p>左侧状态/集合导航，右侧筛选与网格；信息架构清晰，能承载后续批量与发布流程。</p></div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#0f172a;color:#cbd5e1;min-height:260px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:10px"><b>资产生成历史</b><span>搜索　新建生成</span></div>
+      <div style="display:flex;gap:6px;margin-bottom:10px"><span style="background:#4f46e5;padding:5px 12px;border-radius:5px">资产库</span><span style="background:#334155;padding:5px 12px;border-radius:5px">生成队列</span><span style="background:#334155;padding:5px 12px;border-radius:5px">发布记录</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+        <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:78px;background:#334155"></div><small>角色设定图</small></div>
+        <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:78px;background:#334155"></div><small>场景概念图</small></div>
+        <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:78px;background:#334155"></div><small>镜头视频</small></div>
+      </div>
+      <div style="margin-top:10px;background:#111827;padding:7px;border-radius:6px"><small>各流程分区明确，但跨资产、任务、发布状态时需要切换页签。</small></div>
+    </div>
+    <div class="card-body"><h3>C. 分域页签</h3><p>资产、任务、发布各自独立；职责最清楚，但会削弱“生成到复用”的连续操作体验。</p></div>
+  </div>
+</div>

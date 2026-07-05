@@ -14,7 +14,7 @@
       <el-icon><EditPen /></el-icon> 剧本创作
     </router-link>
     <router-link to="/canvas-projects" class="sidebar-item" :class="{ active: isActive('/canvas-projects') }" @click="onNavClick">
-      <el-icon><Brush /></el-icon> 画布工作台
+      <el-icon><Brush /></el-icon> 画布视频工作台
     </router-link>
 
     <div class="sidebar-section">内容与交易</div>
@@ -25,23 +25,26 @@
       <el-icon><ShoppingBag /></el-icon> 剧本交易市场
     </router-link>
     <router-link to="/asset-market" class="sidebar-item" :class="{ active: isActive('/asset-market') }" @click="onNavClick">
-      <el-icon><MagicStick /></el-icon> AI 资产市场
+      <el-icon><MagicStick /></el-icon> AI资产市场
     </router-link>
 
     <div class="sidebar-section">智能生产</div>
-    <router-link to="/agent" class="sidebar-item" :class="{ active: isActive('/agent') }" @click="onNavClick">
+    <router-link to="/agent" class="sidebar-item" :class="{ active: isActive('/agent') && !isActive('/agent-config') }" @click="onNavClick">
       <el-icon><ChatDotRound /></el-icon> Agent 会话
     </router-link>
+    <router-link to="/agent-config" class="sidebar-item" :class="{ active: isActive('/agent-config') }" @click="onNavClick">
+      <el-icon><Setting /></el-icon> Agent 配置中心
+    </router-link>
     <router-link to="/asset-history" class="sidebar-item" :class="{ active: isActive('/asset-history') }" @click="onNavClick">
-      <el-icon><FolderOpened /></el-icon> 资产生成历史
+      <el-icon><FolderOpened /></el-icon> 资产生成工作台
     </router-link>
 
     <div class="sidebar-section">企业</div>
     <router-link to="/enterprise" class="sidebar-item" :class="{ active: isActive('/enterprise') }" @click="onNavClick">
-      <el-icon><OfficeBuilding /></el-icon> 企业工作台
+      <el-icon><OfficeBuilding /></el-icon> 企业中心
     </router-link>
-    <router-link to="/sop/1" class="sidebar-item" :class="{ active: isActive('/sop') }" @click="onNavClick">
-      <el-icon><CircleCheck /></el-icon> 生产SOP
+    <router-link to="/sop" class="sidebar-item" :class="{ active: isActive('/sop') }" @click="onNavClick">
+      <el-icon><CircleCheck /></el-icon> 工业化生产SOP
     </router-link>
 
     <div style="flex:1"></div>

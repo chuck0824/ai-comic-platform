@@ -1,108 +1,205 @@
 package com.aicp.module.sop.controller;
 
 import com.aicp.common.dto.ApiResponse;
+import com.aicp.common.dto.PageResult;
+import com.aicp.common.exception.BizException;
+import com.aicp.common.exception.ErrorCode;
+import com.aicp.common.util.SecurityUtil;
+import com.aicp.module.sop.domain.SopEnums;
+import com.aicp.module.sop.dto.SopRequests.*;
+import com.aicp.module.sop.dto.SopViews.*;
+import com.aicp.module.sop.entity.*;
+import com.aicp.module.sop.service.*;
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
-import java.util.*;
+
+import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/sop")
+@RequiredArgsConstructor
 public class SopController {
 
-    @PostMapping("/check/production-readiness")
-    public ApiResponse<Map<String, Object>> checkReadiness(@RequestBody Map<String, Object> body) {
-        List<Map<String, Object>> checks = new ArrayList<>();
-        String[] names = {"剧情事实无偏移", "场景目标明确", "Beat完整", "人物关系变化明确",
-                "关键对白已锁定", "资产ID完整", "高风险镜头已标记", "AI提示词不过长",
-                "D/E级镜头已拆分", "抽卡表/视频表已区分", "Voice ID明确", "配音字幕表就绪", "上一章状态已继承"};
-        String[] results = {"pass", "pass", "pass", "pass", "pass", "warning", "pass", "fail",
-                "pass", "warning", "pass", "pass", "pass"};
+    private final SopService sopService;
+    private final SopWorkOrderService workOrderService;
+    private final SopGateService gateService;
 
-        int passed = 0, failed = 0;
-        for (int i = 0; i < names.length; i++) {
-            Map<String, Object> check = new LinkedHashMap<>();
-            check.put("id", i + 1);
-            check.put("name", names[i]);
-            check.put("result", results[i]);
-            if (results[i].equals("pass")) passed++;
-            else if (results[i].equals("fail")) failed++;
-            checks.add(check);
+    @Value("${sop.enabled:true}")
+    private boolean sopEnabled;
+
+    private void checkEnabled() {
+        if (!sopEnabled) {
+            throw new BizException(ErrorCode.SOP_MODULE_DISABLED);
         }
-
-        String overall = failed >= 3 ? "red" : (failed > 0 ? "yellow" : "green");
-        return ApiResponse.success(Map.of(
-                "overall", overall, "passed", passed, "failed", failed,
-                "checks", checks,
-                "recommendation", failed > 0 ? (failed + "项未通过，建议修复后进入生产") : "可以进入生产"));
     }
 
-    @GetMapping("/projects/{id}/audit-list")
-    public ApiResponse<List<Map<String, Object>>> getAuditList(@PathVariable String id) {
-        return ApiResponse.success(List.of(
-                Map.of("id", 1, "shot_id", "EP01_SC03_SH008", "check_item", "场景连续性",
-                        "issue_type", "空间跳变", "severity", "P0", "quality_grade", "C",
-                        "description", "SH008角色在室内门口，SH009无转场出现在街道",
-                        "status", "open"),
-                Map.of("id", 2, "shot_id", "EP01_SC05_SH003", "check_item", "AI提示词长度",
-                        "issue_type", "Prompt过长", "severity", "P1", "quality_grade", "B",
-                        "description", "Prompt超500字符", "status", "fixing"),
-                Map.of("id", 3, "shot_id", "EP01_SC01_SH005", "check_item", "道具一致性",
-                        "issue_type", "颜色不一致", "severity", "P2", "quality_grade", "A",
-                        "description", "道具颜色不一致", "status", "fixed")
-        ));
+    // ===== Project list =====
+
+    @GetMapping("/projects")
+    public ApiResponse<PageResult<SopCheckRun>> listProjects(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        checkEnabled();
+        // For Phase 1, list recent checks across projects
+        // In production, this would join with project_members
+        return ApiResponse.success(null); // stub — requires project member join
     }
 
-    @PostMapping("/projects/{id}/audit")
-    public ApiResponse<Map<String, Object>> submitAudit(@PathVariable String id, @RequestBody Map<String, Object> body) {
-        return ApiResponse.success(Map.of("audit_id", System.currentTimeMillis(), "status", "open"));
+    // ===== Summary =====
+
+    @GetMapping("/projects/{projectId}/summary")
+    public ApiResponse<SopSummaryView> getSummary(@PathVariable Long projectId) {
+        checkEnabled();
+        Long userId = SecurityUtil.requireCurrentUserId();
+        SopCheckRun latest = sopService.listChecks(projectId, 1, 1).getItems().stream().findFirst().orElse(null);
+        if (latest == null) {
+            return ApiResponse.success(new SopSummaryView(projectId, null, 0, 0, 0, 0, 0, null, null, false));
+        }
+        List<SopCheckResult> results = sopService.getResults(latest.getId());
+        SopSummaryView view = new SopSummaryView(
+                projectId,
+                latest.getOverallStatus(),
+                latest.getPassedCount(),
+                latest.getWarningCount(),
+                latest.getBlockedCount(),
+                latest.getNotReadyCount(),
+                latest.getErrorCount(),
+                latest.getId(),
+                latest.getCompletedAt(),
+                SopEnums.RunStatus.STALE.value().equals(latest.getStatus())
+        );
+        return ApiResponse.success(view);
     }
 
-    @PutMapping("/projects/{id}/audit/{auditId}")
-    public ApiResponse<Void> updateAudit(@PathVariable String id, @PathVariable Long auditId,
-                                          @RequestBody Map<String, Object> body) {
-        return ApiResponse.success();
+    // ===== Checks =====
+
+    @PostMapping("/projects/{projectId}/checks")
+    public ApiResponse<RunCheckResponse> runCheck(@PathVariable Long projectId,
+                                                   @Valid @RequestBody RunCheckRequest request) {
+        checkEnabled();
+        SopEnums.TriggerType triggerType = SopEnums.TriggerType.valueOf(request.triggerType().toUpperCase());
+        SopCheckRun run = sopService.runCheck(projectId, request.contentUnitId(), request.canvasProjectId(), triggerType);
+        return ApiResponse.success(new RunCheckResponse(run.getId(), run.getOverallStatus(),
+                run.getBlockedCount(), run.getWarningCount()));
     }
 
-    @GetMapping("/versions/{projectId}")
-    public ApiResponse<List<Map<String, Object>>> getVersionHistory(@PathVariable String projectId) {
-        return ApiResponse.success(List.of(
-                Map.of("version", "V0.1", "status", "草稿", "created_at", "2026-06-01"),
-                Map.of("version", "V0.5", "status", "编导确认", "created_at", "2026-06-05"),
-                Map.of("version", "V0.8", "status", "导演确认", "created_at", "2026-06-08")
-        ));
+    @GetMapping("/projects/{projectId}/checks")
+    public ApiResponse<PageResult<SopCheckRun>> listChecks(@PathVariable Long projectId,
+                                                            @RequestParam(defaultValue = "1") int page,
+                                                            @RequestParam(defaultValue = "20") int size) {
+        checkEnabled();
+        return ApiResponse.success(sopService.listChecks(projectId, page, size));
     }
 
-    @PostMapping("/versions/{projectId}/promote")
-    public ApiResponse<Void> promoteVersion(@PathVariable String projectId, @RequestBody Map<String, String> body) {
-        return ApiResponse.success();
+    @GetMapping("/projects/{projectId}/checks/{runId}")
+    public ApiResponse<CheckReportView> getCheckReport(@PathVariable Long projectId,
+                                                        @PathVariable Long runId) {
+        checkEnabled();
+        SopCheckRun run = sopService.getRun(projectId, runId);
+        List<SopCheckResult> results = sopService.getResults(runId);
+        List<CheckResultView> resultViews = results.stream().map(r -> new CheckResultView(
+                r.getId(), r.getRuleCode(), r.getResult(), r.getSeverity(),
+                r.getCritical() == 1, r.getTargetType(), r.getTargetId(),
+                r.getIssueFingerprint(), r.getEvidenceJson(), r.getSuggestion(), r.getFixPolicy()
+        )).toList();
+        CheckReportView report = new CheckReportView(
+                run.getId(), run.getProjectId(), run.getOverallStatus(), run.getStatus(),
+                run.getRuleSetVersion(), run.getPassedCount(), run.getWarningCount(),
+                run.getBlockedCount(), run.getNotReadyCount(), run.getErrorCount(),
+                resultViews, run.getCreatedAt(), run.getCompletedAt()
+        );
+        return ApiResponse.success(report);
     }
 
-    @PostMapping("/assets/{type}/{id}/lock")
-    public ApiResponse<Void> lockAsset(@PathVariable String type, @PathVariable String id) {
-        return ApiResponse.success();
+    // ===== Work orders =====
+
+    @GetMapping("/projects/{projectId}/work-orders")
+    public ApiResponse<PageResult<SopWorkOrder>> listWorkOrders(@PathVariable Long projectId,
+                                                                  @RequestParam(defaultValue = "1") int page,
+                                                                  @RequestParam(defaultValue = "20") int size,
+                                                                  @RequestParam(required = false) String status) {
+        checkEnabled();
+        return ApiResponse.success(sopService.listWorkOrders(projectId, page, size, status));
     }
 
-    @PostMapping("/assets/{type}/{id}/unlock")
-    public ApiResponse<Void> unlockAsset(@PathVariable String type, @PathVariable String id) {
-        return ApiResponse.success();
+    @PostMapping("/projects/{projectId}/work-orders")
+    public ApiResponse<WorkOrderView> createWorkOrder(@PathVariable Long projectId,
+                                                       @Valid @RequestBody CreateWorkOrderRequest request) {
+        checkEnabled();
+        SopWorkOrder order = workOrderService.create(projectId, request.resultId(),
+                request.responsibleRole(), request.assigneeId());
+        return ApiResponse.success(toView(order));
     }
 
-    @PostMapping("/failure/record")
-    public ApiResponse<Map<String, Object>> recordFailure(@RequestBody Map<String, Object> body) {
-        return ApiResponse.success(Map.of("failure_id", System.currentTimeMillis()));
+    @PatchMapping("/projects/{projectId}/work-orders/{id}")
+    public ApiResponse<WorkOrderView> transitionWorkOrder(@PathVariable Long projectId,
+                                                           @PathVariable Long id,
+                                                           @Valid @RequestBody TransitionWorkOrderRequest request) {
+        checkEnabled();
+        SopEnums.WorkOrderStatus target = SopEnums.WorkOrderStatus.valueOf(request.toStatus().toUpperCase());
+        SopWorkOrder order = workOrderService.transition(projectId, id, target, request.note());
+        return ApiResponse.success(toView(order));
     }
 
-    @GetMapping("/failure/strategy")
-    public ApiResponse<Map<String, Object>> getFailureStrategy(@RequestParam String shotId) {
-        return ApiResponse.success(Map.of(
-                "shot_id", shotId, "failure_count", 3,
-                "recommended_action", "检查资产与参考图",
-                "suggestions", List.of("强化 Face_ID 的参考图", "减少动作复杂度：当前单镜包含3个动作")));
+    @PostMapping("/projects/{projectId}/work-orders/{id}/review")
+    public ApiResponse<WorkOrderView> reviewWorkOrder(@PathVariable Long projectId,
+                                                       @PathVariable Long id,
+                                                       @Valid @RequestBody ReviewWorkOrderRequest request) {
+        checkEnabled();
+        SopWorkOrder order = workOrderService.review(projectId, id, request.approved(), request.note());
+        return ApiResponse.success(toView(order));
     }
 
-    @GetMapping("/projects/{id}/capacity")
-    public ApiResponse<Map<String, Object>> getCapacity(@PathVariable String id) {
-        return ApiResponse.success(Map.of(
-                "estimated_hours", 12.5, "complexity", "B",
-                "shot_count", 18, "risk_shots", 3));
+    // ===== Gate =====
+
+    @PostMapping("/projects/{projectId}/gates/{gateType}/evaluate")
+    public ApiResponse<GateDecisionView> evaluateGate(@PathVariable Long projectId,
+                                                       @PathVariable String gateType,
+                                                       @Valid @RequestBody EvaluateGateRequest request) {
+        checkEnabled();
+        SopEnums.GateType type = SopEnums.GateType.valueOf(gateType.toUpperCase());
+        SopGateDecision decision = gateService.evaluate(projectId, request.contentUnitId(),
+                request.canvasProjectId(), type,
+                request.idempotencyKey() != null ? request.idempotencyKey() : UUID.randomUUID().toString());
+        GateDecisionView view = new GateDecisionView(
+                decision.getId(), decision.getProjectId(), decision.getRunId(),
+                decision.getGateType(), decision.getAllowed() == 1, decision.getBlockerCount(),
+                decision.getIdempotencyKey(), decision.getCreatedAt()
+        );
+        return ApiResponse.success(view);
+    }
+
+    // ===== Fixes (Phase 1 stub) =====
+
+    @PostMapping("/projects/{projectId}/fixes/{resultId}")
+    public ApiResponse<String> executeFix(@PathVariable Long projectId,
+                                          @PathVariable Long resultId,
+                                          @Valid @RequestBody ExecuteFixRequest request) {
+        checkEnabled();
+        // Phase 1: stub — returns accepted
+        return ApiResponse.success("fix_accepted");
+    }
+
+    // ===== Compatibility =====
+
+    @PostMapping("/check/production-readiness")
+    public ApiResponse<RunCheckResponse> compatibilityReadiness(
+            @Valid @RequestBody CompatibilityReadinessRequest request) {
+        checkEnabled();
+        SopCheckRun run = sopService.runCheck(request.projectId(), request.contentUnitId(), null,
+                SopEnums.TriggerType.MANUAL);
+        return ApiResponse.success(new RunCheckResponse(run.getId(), run.getOverallStatus(),
+                run.getBlockedCount(), run.getWarningCount()));
+    }
+
+    // ===== Utility =====
+
+    private WorkOrderView toView(SopWorkOrder o) {
+        return new WorkOrderView(o.getId(), o.getProjectId(), o.getRunId(), o.getResultId(),
+                o.getRuleCode(), o.getIssueFingerprint(), o.getStatus(), o.getSeverity(),
+                o.getResponsibleRole(), o.getAssigneeId(), o.getResolutionNote(), o.getDeadline(), o.getCreatedAt());
     }
 }

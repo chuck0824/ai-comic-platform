@@ -103,7 +103,7 @@
 2. 选择购买主体为个人 Workspace，并选择授权类型。
 3. 8080 从上架快照计算金额并创建订单；客户端金额仅用于一致性提示。
 4. 普通/免费授权直接进入待支付；独家/买断同时建立 30 分钟库存保留。
-5. 免费订单执行零金额钱包凭证后直接交付；非免费订单调用 3001 钱包。
+5. 免费订单由 8080 在本地事务中生成零金额钱包凭证后直接进入交付；非免费订单调用 3001 钱包扣款。
 6. 余额不足时进入 8080 充值入口，由 3001 返回可用渠道并完成充值。
 7. 充值成功返回原订单，用户明确点击“确认支付”。
 8. 3001 原子完成买家扣款、平台收入、卖家冻结收入。
@@ -178,23 +178,37 @@
 ```text
 DRAFT → UNDER_REVIEW → LISTED → UNLISTED
              └──────→ REJECTED → DRAFT
-LISTED → EXCLUSIVE_RESERVED → LISTED（保留过期/支付失败）
+LISTED → EXCLUSIVE_RESERVED → LISTED（保留过期 30 min / 支付失败）
 LISTED/EXCLUSIVE_RESERVED → EXCLUSIVE_SOLD
 ```
 
 `EXCLUSIVE_SOLD` 同时覆盖独家和买断最终成交，具体类型由授权凭证记录。
+
+- 独家/买断订单创建时进入 `EXCLUSIVE_RESERVED`，30 分钟未支付自动回到 `LISTED`。
+- `UNLISTED` 只阻止新订单，不影响既有订单、授权和已购副本。
 
 ### 8.2 订单状态
 
 ```text
 PENDING_APPROVAL → PENDING_PAYMENT → PAYING → PAID_PENDING_DELIVERY → FULFILLED
         │                 │             │                │
-        └→ REJECTED       ├→ CANCELLED  ├→ PAYMENT_FAILED├→ COMPENSATING
-                          └→ EXPIRED     └→ PAYMENT_UNKNOWN└→ REFUNDED
+        └→ REJECTED       ├→ CANCELLED  ├→ PAYMENT_FAILED├→ COMPENSATING → REFUNDED
+                          └→ EXPIRED     └→ PAYMENT_UNKNOWN              └→ FULFILLED（交付恢复成功）
+                                               │
+                                               ├→ PAID_PENDING_DELIVERY（查单确认已扣款）
+                                               └→ PENDING_PAYMENT（查单确认未扣款，可重试）
 
 FULFILLED → REFUND_REQUESTED → REFUND_PROCESSING → REFUNDED
                             └────────────→ REFUND_REJECTED → FULFILLED
+
+免费订单路径：PENDING_PAYMENT → PAID_PENDING_DELIVERY → FULFILLED
+（零金额钱包凭证，跳过 PAYING 和钱包扣款环节）
 ```
+
+- 未知状态（`PAYMENT_UNKNOWN`）禁止再次使用新幂等键扣款；必须使用原业务订单号查单。
+- `PENDING_PAYMENT` 订单 30 分钟未支付自动进入 `EXPIRED`。
+- `COMPENSATING` 达到最大重试次数或等待时间后，自动对原转账发起冲正并进入 `REFUNDED`。
+- `PAYMENT_FAILED` 可返回 `PENDING_PAYMENT` 允许用户充值后重试。
 
 ### 8.3 钱包转账状态
 
@@ -391,7 +405,7 @@ SUCCEEDED → PARTIALLY_REVERSED / REVERSED
 
 ### 12.4 免费订单
 
-免费领取仍创建订单、订单项和授权。3001 可以记录金额为零的业务凭证，但不得生成非平衡资金分录。免费订单同样使用唯一约束避免重复领取。
+免费领取仍创建订单、订单项和授权，由 8080 在本地事务中生成零金额钱包凭证后直接进入交付。3001 必须记录金额为零的业务凭证以保证账本完整，但不得生成非平衡资金分录。免费订单同样使用唯一约束避免重复领取。
 
 ## 13. 充值入口
 

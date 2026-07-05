@@ -3153,3 +3153,194 @@ WHERE NOT EXISTS (SELECT 1 FROM continuity_snapshots WHERE project_id = 2 AND co
 INSERT INTO setting_extraction_batches (project_id, source_version_id, target_setting_types, idempotency_key, status, model_id, created_by)
 SELECT 2, 2, '["character","location","prop"]', 'extract-batch-001', 'completed', 'claude-sonnet-4-6', 2
 WHERE NOT EXISTS (SELECT 1 FROM setting_extraction_batches WHERE project_id = 2 AND idempotency_key = 'extract-batch-001');
+
+-- ============================================================
+-- AA. Agent 配置中心 (M1)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS agent_blueprints (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(50) NOT NULL UNIQUE,
+    role_type VARCHAR(20) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    description VARCHAR(1000),
+    parameter_schema_json TEXT NOT NULL,
+    default_parameters_json TEXT NOT NULL,
+    locked_system_prompt TEXT NOT NULL,
+    editable_prompt_template TEXT NOT NULL,
+    input_schema_json TEXT NOT NULL,
+    output_schema_json TEXT NOT NULL,
+    allowed_tools_json TEXT NOT NULL,
+    context_policy_json TEXT NOT NULL,
+    model_policy_json TEXT NOT NULL,
+    blueprint_version INT NOT NULL DEFAULT 1,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_bp_role_version ON agent_blueprints(role_type, blueprint_version);
+
+CREATE TABLE IF NOT EXISTS user_agent_definitions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(50) NOT NULL UNIQUE,
+    blueprint_id BIGINT NOT NULL,
+    owner_user_id BIGINT NOT NULL,
+    current_published_version_id BIGINT,
+    name VARCHAR(120) NOT NULL,
+    description VARCHAR(1000),
+    icon VARCHAR(500),
+    applicable_genres_json VARCHAR(4000),
+    platforms_json VARCHAR(4000),
+    visibility VARCHAR(20) NOT NULL DEFAULT 'PRIVATE',
+    lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_def_owner_name ON user_agent_definitions(owner_user_id, name);
+CREATE INDEX IF NOT EXISTS idx_def_blueprint ON user_agent_definitions(blueprint_id);
+CREATE INDEX IF NOT EXISTS idx_def_owner ON user_agent_definitions(owner_user_id);
+
+CREATE TABLE IF NOT EXISTS agent_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(50) NOT NULL UNIQUE,
+    user_agent_id BIGINT NOT NULL,
+    blueprint_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    parameters_json TEXT,
+    editable_prompt TEXT,
+    examples_json TEXT,
+    model_policy_json TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    change_summary VARCHAR(500),
+    content_hash VARCHAR(64),
+    created_by BIGINT,
+    published_by BIGINT,
+    published_at TIMESTAMP,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_ver_agent_no ON agent_versions(user_agent_id, version_no);
+CREATE INDEX IF NOT EXISTS idx_ver_user_agent ON agent_versions(user_agent_id);
+CREATE INDEX IF NOT EXISTS idx_ver_status ON agent_versions(status);
+
+CREATE TABLE IF NOT EXISTS agent_bindings (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(50) NOT NULL UNIQUE,
+    scope_type VARCHAR(20) NOT NULL,
+    scope_id VARCHAR(50) NOT NULL,
+    role_type VARCHAR(20) NOT NULL,
+    user_agent_id BIGINT NOT NULL,
+    agent_version_id BIGINT NOT NULL,
+    created_by BIGINT,
+    updated_by BIGINT,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_bind_scope_role ON agent_bindings(scope_type, scope_id, role_type);
+CREATE INDEX IF NOT EXISTS idx_bind_version ON agent_bindings(agent_version_id);
+
+CREATE TABLE IF NOT EXISTS agent_test_runs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(50) NOT NULL UNIQUE,
+    agent_version_id BIGINT NOT NULL,
+    input_snapshot_json TEXT,
+    context_snapshot_json TEXT,
+    output_json TEXT,
+    output_schema_valid TINYINT,
+    model_id VARCHAR(100),
+    prompt_tokens INT,
+    completion_tokens INT,
+    credit_cost DOUBLE,
+    duration_ms INT,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    error_code VARCHAR(50),
+    error_message VARCHAR(2000),
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_tr_version ON agent_test_runs(agent_version_id);
+CREATE INDEX IF NOT EXISTS idx_tr_status ON agent_test_runs(status);
+
+CREATE TABLE IF NOT EXISTS agent_execution_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(50) NOT NULL UNIQUE,
+    blueprint_id BIGINT NOT NULL,
+    blueprint_version INT NOT NULL,
+    user_agent_id BIGINT,
+    agent_version_id BIGINT,
+    binding_source VARCHAR(20) NOT NULL,
+    resolved_parameters_json TEXT,
+    temporary_overrides_json TEXT,
+    resolved_prompt TEXT,
+    prompt_hash VARCHAR(64),
+    output_schema_version VARCHAR(50),
+    project_id BIGINT,
+    context_hash VARCHAR(64),
+    context_refs_json TEXT,
+    business_task_type VARCHAR(50),
+    business_task_id VARCHAR(100),
+    model_id VARCHAR(100),
+    created_by BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_snap_version ON agent_execution_snapshots(agent_version_id);
+CREATE INDEX IF NOT EXISTS idx_snap_project ON agent_execution_snapshots(project_id);
+
+-- Blueprint 种子数据 (H2: WHERE NOT EXISTS)
+INSERT INTO agent_blueprints (uuid, role_type, name, description, parameter_schema_json, default_parameters_json, locked_system_prompt, editable_prompt_template, input_schema_json, output_schema_json, allowed_tools_json, context_policy_json, model_policy_json, blueprint_version, status)
+SELECT 'bp-hook-v1', 'HOOK', '钩子 Agent', '钩子生成、分析和审核',
+ '{"type":"object","additionalProperties":false,"properties":{"opening_seconds":{"type":"integer","minimum":1,"maximum":10,"default":3},"hook_density":{"type":"string","enum":["low","medium","high","extreme"],"enumLabels":["低","中","高","极高"],"default":"medium"},"reversal_strength":{"type":"number","minimum":0,"maximum":1,"default":0.5},"closing_hook_strength":{"type":"string","enum":["weak","moderate","strong"],"enumLabels":["弱","中","强"],"default":"moderate"},"minimum_score":{"type":"integer","minimum":0,"maximum":100,"default":60}}}',
+ '{"opening_seconds":3,"hook_density":"medium","reversal_strength":0.5,"closing_hook_strength":"moderate","minimum_score":60}',
+ '平台锁定：仅生成钩子结构。你必须严格遵循以下工具权限、安全规则和输出协议。不得输出与钩子无关的内容。',
+ '{{user_method}}',
+ '{"type":"object","properties":{"script_excerpt":{"type":"string"}}}',
+ '{"type":"object","properties":{"score":{"type":"integer"},"hooks":{"type":"array"},"analysis":{"type":"string"}}}',
+ '[]',
+ '{"max_context_length":16000}',
+ '{"default_model":"deepseek-v3","max_tokens":4096,"temperature":{"default":0.7}}',
+ 1, 'ACTIVE'
+WHERE NOT EXISTS (SELECT 1 FROM agent_blueprints WHERE uuid = 'bp-hook-v1');
+
+INSERT INTO agent_blueprints (uuid, role_type, name, description, parameter_schema_json, default_parameters_json, locked_system_prompt, editable_prompt_template, input_schema_json, output_schema_json, allowed_tools_json, context_policy_json, model_policy_json, blueprint_version, status)
+SELECT 'bp-screenwriter-v1', 'SCREENWRITER', '编剧 Agent', '大纲、分集、正文生成和编剧修订',
+ '{"type":"object","additionalProperties":false,"properties":{"revision_mode":{"type":"string","enum":["conservative","balanced","rewrite"],"default":"balanced"},"target_duration_seconds":{"type":"integer","minimum":30,"maximum":600,"default":180},"dialogue_density":{"type":"string","enum":["sparse","normal","dense"],"default":"normal"},"conflict_pace":{"type":"string","enum":["slow","moderate","fast","intense"],"default":"moderate"},"character_consistency":{"type":"string","enum":["loose","normal","strict"],"default":"normal"}}}',
+ '{"revision_mode":"balanced","target_duration_seconds":180,"dialogue_density":"normal","conflict_pace":"moderate","character_consistency":"normal"}',
+ '平台锁定：仅执行编剧任务。你必须严格遵循创作圣经和项目约束。所有输出必须符合剧本格式规范。',
+ '{{user_method}}',
+ '{"type":"object","properties":{"task_type":{"type":"string","enum":["outline","episode","body","revise"]},"context":{"type":"string"}}}',
+ '{"type":"object","properties":{"content":{"type":"string"},"revision_summary":{"type":"string"}}}',
+ '[]',
+ '{"max_context_length":32000}',
+ '{"default_model":"deepseek-v3","max_tokens":8192,"temperature":{"default":0.7}}',
+ 1, 'ACTIVE'
+WHERE NOT EXISTS (SELECT 1 FROM agent_blueprints WHERE uuid = 'bp-screenwriter-v1');
+
+INSERT INTO agent_blueprints (uuid, role_type, name, description, parameter_schema_json, default_parameters_json, locked_system_prompt, editable_prompt_template, input_schema_json, output_schema_json, allowed_tools_json, context_policy_json, model_policy_json, blueprint_version, status)
+SELECT 'bp-storyboard-v1', 'STORYBOARD', '分镜 Agent', 'A/B/C 档分镜生成和镜头策略',
+ '{"type":"object","additionalProperties":false,"properties":{"tier":{"type":"string","enum":["A","B","C"],"default":"B"},"average_shot_seconds":{"type":"number","minimum":1,"maximum":30,"default":4},"shot_density":{"type":"string","enum":["sparse","normal","dense"],"default":"normal"},"camera_complexity":{"type":"string","enum":["simple","moderate","complex"],"default":"moderate"},"continuity_level":{"type":"string","enum":["basic","standard","strict"],"default":"standard"},"production_cost_mode":{"type":"string","enum":["low","balanced","quality_first"],"default":"balanced"}}}',
+ '{"tier":"B","average_shot_seconds":4,"shot_density":"normal","camera_complexity":"moderate","continuity_level":"standard","production_cost_mode":"balanced"}',
+ '平台锁定：输出专业分镜结构。你必须输出符合行业标准的分镜脚本格式，包含镜头号、景别、运镜、动作、对白、时长。',
+ '{{user_method}}',
+ '{"type":"object","properties":{"script_text":{"type":"string"},"bible_context":{"type":"string"},"tier_override":{"type":"string","enum":["A","B","C"]}}}',
+ '{"type":"object","properties":{"shots":{"type":"array"},"summary":{"type":"string"},"estimated_duration_seconds":{"type":"number"}}}',
+ '[]',
+ '{"max_context_length":16000}',
+ '{"default_model":"deepseek-v3","max_tokens":8192,"temperature":{"default":0.6}}',
+ 1, 'ACTIVE'
+WHERE NOT EXISTS (SELECT 1 FROM agent_blueprints WHERE uuid = 'bp-storyboard-v1');
+
+INSERT INTO agent_blueprints (uuid, role_type, name, description, parameter_schema_json, default_parameters_json, locked_system_prompt, editable_prompt_template, input_schema_json, output_schema_json, allowed_tools_json, context_policy_json, model_policy_json, blueprint_version, status)
+SELECT 'bp-director-v1', 'DIRECTOR', '导演 Agent', '节奏、画面、可拍性和导演审核',
+ '{"type":"object","additionalProperties":false,"properties":{"visual_style":{"type":"string","enum":["realistic","stylized","cinematic","minimalist"],"default":"cinematic"},"pacing_mode":{"type":"string","enum":["slow_burn","balanced","fast_paced","rhythmic"],"default":"balanced"},"feasibility_level":{"type":"string","enum":["strict","pragmatic","creative"],"default":"pragmatic"},"budget_mode":{"type":"string","enum":["micro","low","medium","unlimited"],"default":"medium"},"approval_threshold":{"type":"integer","minimum":50,"maximum":100,"default":70},"output_mode":{"type":"string","enum":["review_only","suggestions","patch","full_revision"],"default":"suggestions"}}}',
+ '{"visual_style":"cinematic","pacing_mode":"balanced","feasibility_level":"pragmatic","budget_mode":"medium","approval_threshold":70,"output_mode":"suggestions"}',
+ '平台锁定：输出导演审核结构。你必须输出评分、问题列表、严重度分级、建议和可执行修订项。不得跳过可拍性检查。',
+ '{{user_method}}',
+ '{"type":"object","properties":{"script_or_storyboard":{"type":"string"},"bible_context":{"type":"string"},"budget_constraints":{"type":"object"}}}',
+ '{"type":"object","properties":{"overall_score":{"type":"integer"},"issues":{"type":"array"},"suggestions":{"type":"array"},"feasibility_report":{"type":"string"}}}',
+ '[]',
+ '{"max_context_length":32000}',
+ '{"default_model":"deepseek-v3","max_tokens":8192,"temperature":{"default":0.4}}',
+ 1, 'ACTIVE'
+WHERE NOT EXISTS (SELECT 1 FROM agent_blueprints WHERE uuid = 'bp-director-v1');

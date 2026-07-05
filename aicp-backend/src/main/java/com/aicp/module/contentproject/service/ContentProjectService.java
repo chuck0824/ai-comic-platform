@@ -365,5 +365,159 @@ public class ContentProjectService {
         }
     }
 
+    // ===== Warehouse Queries =====
+
+    public WarehouseProjectListResult list(Long userId, ProjectQuery query) {
+        List<ProjectMember> memberships = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getUserId, userId));
+
+        if (memberships.isEmpty()) {
+            return new WarehouseProjectListResult(List.of(), query.page(), query.pageSize(), 0);
+        }
+
+        List<Long> projectIds = memberships.stream()
+                .map(ProjectMember::getProjectId).distinct().toList();
+
+        LambdaQueryWrapper<ContentProject> q = new LambdaQueryWrapper<>();
+        q.in(ContentProject::getId, projectIds);
+        q.eq(ContentProject::getIsDeleted, 0);
+
+        // keyword filter
+        if (query.keyword() != null && !query.keyword().isBlank()) {
+            q.like(ContentProject::getName, query.keyword());
+        }
+        // creation mode
+        if (query.creationMode() != null && !query.creationMode().isBlank()) {
+            q.eq(ContentProject::getCreationMode, query.creationMode());
+        }
+        // source mode
+        if (query.sourceMode() != null && !query.sourceMode().isBlank()) {
+            q.eq(ContentProject::getSourceMode, query.sourceMode());
+        }
+        // content status
+        if (query.contentStatus() != null && !query.contentStatus().isBlank()) {
+            q.eq(ContentProject::getContentStatus, query.contentStatus());
+        }
+        // production status (internal detailed field)
+        if (query.productionStatus() != null && !query.productionStatus().isBlank()) {
+            q.eq(ContentProject::getProductionStatus, query.productionStatus());
+        }
+        // commercial status maps from internal market_status field
+        if (query.commercialStatus() != null && !query.commercialStatus().isBlank()) {
+            switch (query.commercialStatus()) {
+                case "listed" -> q.in(ContentProject::getMarketStatus, "listed", "sold");
+                case "not_listed" -> q.eq(ContentProject::getMarketStatus, "private");
+                case "listing_review" -> q.eq(ContentProject::getMarketStatus, "pending_review");
+                case "delisted" -> q.eq(ContentProject::getMarketStatus, "delisted");
+            }
+        }
+        // lifecycle status
+        if (query.lifecycleStatus() != null && !query.lifecycleStatus().isBlank()) {
+            q.eq(ContentProject::getLifecycleStatus, query.lifecycleStatus());
+        } else {
+            // Default: exclude archived
+            q.eq(ContentProject::getLifecycleStatus, "active");
+        }
+        // time range
+        if (query.updatedFrom() != null && !query.updatedFrom().isBlank()) {
+            q.ge(ContentProject::getUpdatedAt, LocalDateTime.parse(query.updatedFrom()));
+        }
+        if (query.updatedTo() != null && !query.updatedTo().isBlank()) {
+            q.le(ContentProject::getUpdatedAt, LocalDateTime.parse(query.updatedTo()));
+        }
+
+        // sort
+        String sort = query.sort() != null ? query.sort() : "updated_desc";
+        boolean asc = sort.endsWith("_asc");
+        String field = sort.replace("_asc", "").replace("_desc", "");
+        switch (field) {
+            case "name" -> { if (asc) q.orderByAsc(ContentProject::getName); else q.orderByDesc(ContentProject::getName); }
+            case "created" -> { if (asc) q.orderByAsc(ContentProject::getCreatedAt); else q.orderByDesc(ContentProject::getCreatedAt); }
+            default -> { if (asc) q.orderByAsc(ContentProject::getUpdatedAt); else q.orderByDesc(ContentProject::getUpdatedAt); }
+        }
+
+        int pageSize = Math.max(1, Math.min(query.pageSize(), 100));
+        Page<ContentProject> result = projectMapper.selectPage(new Page<>(query.page(), pageSize), q);
+        List<WarehouseProjectView> items = result.getRecords().stream()
+                .map(p -> toWarehouseView(p, null))
+                .toList();
+
+        return new WarehouseProjectListResult(items, query.page(), pageSize, result.getTotal());
+    }
+
+    public List<WarehouseProjectView> recent(Long userId, int limit) {
+        List<ProjectMember> memberships = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getUserId, userId));
+        if (memberships.isEmpty()) return List.of();
+
+        List<Long> projectIds = memberships.stream()
+                .map(ProjectMember::getProjectId).distinct().toList();
+
+        LambdaQueryWrapper<ContentProject> q = new LambdaQueryWrapper<>();
+        q.in(ContentProject::getId, projectIds);
+        q.eq(ContentProject::getIsDeleted, 0);
+        q.eq(ContentProject::getLifecycleStatus, "active");
+        q.orderByDesc(ContentProject::getUpdatedAt);
+        q.last("LIMIT " + Math.min(limit, 20));
+
+        return projectMapper.selectList(q).stream()
+                .map(p -> toWarehouseView(p, null))
+                .toList();
+    }
+
+    public List<ProjectTodoView> todos(Long userId) {
+        List<ProjectMember> memberships = memberMapper.selectList(
+                new LambdaQueryWrapper<ProjectMember>()
+                        .eq(ProjectMember::getUserId, userId));
+        if (memberships.isEmpty()) return List.of();
+
+        List<Long> projectIds = memberships.stream()
+                .map(ProjectMember::getProjectId).distinct().toList();
+
+        LambdaQueryWrapper<ContentProject> q = new LambdaQueryWrapper<>();
+        q.in(ContentProject::getId, projectIds);
+        q.eq(ContentProject::getIsDeleted, 0);
+        q.eq(ContentProject::getLifecycleStatus, "active");
+        q.and(w -> w.eq(ContentProject::getContentStatus, "reviewing")
+                .or().eq(ContentProject::getContentStatus, "needs_revision"));
+        q.orderByDesc(ContentProject::getUpdatedAt);
+
+        return projectMapper.selectList(q).stream()
+                .map(p -> {
+                    String type = "reviewing".equals(p.getContentStatus()) ? "pending_review" : "needs_revision";
+                    String label = "reviewing".equals(p.getContentStatus()) ? "待审核" : "审核驳回待修改";
+                    String route = "/warehouse/" + p.getId() + "?tab=review";
+                    return new ProjectTodoView(p.getId(), p.getName(), type, label, route, p.getUpdatedAt());
+                })
+                .toList();
+    }
+
+    public ProjectHubView hub(Long userId, Long projectId) {
+        ProjectDetail detail = get(userId, projectId);
+        WarehouseProjectView summary = toWarehouseView(
+                projectMapper.selectById(projectId),
+                null  // productionGate will be wired in later
+        );
+        // versions and relationCounts are placeholders until respective services provide them
+        return new ProjectHubView(detail, summary, List.of(), Map.of());
+    }
+
+    // ===== Warehouse Helpers =====
+
+    private WarehouseProjectView toWarehouseView(ContentProject p,
+            java.util.function.Function<Long, String> productionGate) {
+        ProjectStatusProjection.StatusView sv = ProjectStatusProjection.from(p, productionGate);
+        return new WarehouseProjectView(
+                p.getId(), p.getUuid(), p.getName(),
+                p.getCreationMode(), p.getSourceMode(),
+                sv.contentStatus(), sv.productionStatus(), sv.commercialStatus(),
+                sv.lifecycleStatus(), p.getLastStageKey(),
+                p.getAdoptedVersionId(), sv.primaryAction(), sv.blockedReason(),
+                false, // migrationIssue — set by legacy service
+                p.getRevision(), p.getUpdatedAt());
+    }
+
     public record ProjectListResult(List<ProjectSummary> items, int page, int pageSize, long total) {}
 }

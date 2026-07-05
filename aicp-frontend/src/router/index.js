@@ -64,7 +64,7 @@ const routes = [
         path: 'canvas-projects',
         name: 'CanvasProjectCenter',
         component: () => import('@/views/canvas-project/CanvasProjectCenter.vue'),
-        meta: { title: '画布项目中心' }
+        meta: { title: '画布视频工作台' }
       },
       {
         path: 'canvas',
@@ -150,7 +150,7 @@ const routes = [
         path: 'asset-market',
         name: 'AssetMarket',
         component: () => import('@/views/AssetMarket.vue'),
-        meta: { title: 'AI资产市场' }
+        meta: { title: 'AI资产与风格模型市场' }
       },
       {
         path: 'enterprise',
@@ -161,7 +161,7 @@ const routes = [
             path: 'overview',
             name: 'EnterpriseOverview',
             component: () => import('@/views/enterprise/EnterpriseOverview.vue'),
-            meta: { title: '企业概览' }
+            meta: { title: '企业中心' }
           },
           {
             path: 'organization',
@@ -193,7 +193,19 @@ const routes = [
         path: 'sop/:projectId',
         name: 'Sop',
         component: () => import('@/views/Sop.vue'),
-        meta: { title: '生产SOP' }
+        meta: { title: '工业化生产SOP' }
+      },
+      {
+        path: 'sop',
+        name: 'SopProjectList',
+        component: () => import('@/views/sop/SopProjectList.vue'),
+        meta: { title: '工业化生产SOP' }
+      },
+      {
+        path: 'content-projects/:projectId/sop',
+        name: 'SopWorkspace',
+        component: () => import('@/views/sop/SopWorkspace.vue'),
+        meta: { title: 'SOP工作台' }
       },
       {
         path: 'profile',
@@ -209,10 +221,16 @@ const routes = [
         meta: { title: 'Agent 会话' }
       },
       {
+        path: 'agent-config',
+        name: 'AgentConfig',
+        component: () => import('@/views/agent-config/AgentConfigCenter.vue'),
+        meta: { title: 'Agent 配置中心' }
+      },
+      {
         path: 'asset-history',
         name: 'AssetHistory',
         component: () => import('@/views/generation/AssetHistory.vue'),
-        meta: { title: '资产生成历史' }
+        meta: { title: '资产生成工作台' }
       },
       {
         path: 'task-monitor',

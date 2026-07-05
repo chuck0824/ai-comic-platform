@@ -1,0 +1,59 @@
+<h2>第五部分：实施分期、迁移与验收</h2>
+<p class="subtitle">每个阶段都可独立上线，并同时具备用户闭环和基础治理能力。</p>
+
+<div class="section">
+  <h3>R1：统一底座与可操作闭环</h3>
+  <div class="placeholder">
+    统一事件规范 → task_cases / events / attempts → 生成与交易适配器 → 用户双页签 → 取消/重试/支付/退款申请 → 基础 SLA 与异常队列
+  </div>
+  <ul>
+    <li>修复现有页面读取 <code>gen_tasks</code>、操作却写 <code>generation_tasks</code> 的双口径问题。</li>
+    <li>补齐生成的积分冻结、实际结算、失败释放/退款及资产入库补偿。</li>
+    <li>接入交易订单、支付、交付、退款和卖家结算时间线。</li>
+    <li>上线支付成功未交付、生成成功未入库、扣费无终态等首批异常规则。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>R2：运营治理与自动对账</h3>
+  <div class="placeholder">
+    运营态势 → 认领/转派 → 自动查单 → 补偿命令 → 工单 → 财务审批 → 三方对账
+  </div>
+  <ul>
+    <li>生成、交易、3001 钱包三方对账；按严重度自动重试、升级和通知。</li>
+    <li>危险财务命令双人审批、金额阈值、完整审计和回滚/冲正规则。</li>
+    <li>SLA 模板按任务类型、模型、支付渠道和业务阶段配置。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>R3：规模化与智能治理</h3>
+  <div class="placeholder">
+    告警降噪 → 规则编排 → 容量预测 → 成本异常 → 自动恢复率 → 运营报表
+  </div>
+  <ul>
+    <li>相同根因聚合告警、维护窗口静默、供应商故障自动归因。</li>
+    <li>支持百万级事件归档、投影重建、冷热分层及审计保留策略。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>迁移策略</h3>
+  <ul>
+    <li>先以只读影子投影消费现有数据并核对，不直接切换用户页面。</li>
+    <li>回填最近 90 天活跃任务和未终结订单；更早历史按需加载，不阻塞上线。</li>
+    <li>双读比对通过后切换 <code>/task-monitor</code> 到新 <code>/task-center</code>；资产工作台仅保留资产记录和任务跳转。</li>
+    <li>稳定期后停止 <code>gen_tasks</code> 作为监控数据源，但保留迁移映射和回滚开关。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>必须通过的测试与指标</h3>
+  <ul>
+    <li><strong>状态机：</strong>正常、取消、超时、失败重试、退款、支付成功未交付、结算回执丢失。</li>
+    <li><strong>可靠性：</strong>重复事件、乱序事件、延迟事件、服务重启、Outbox 重放不得重复扣费或交付。</li>
+    <li><strong>权限：</strong>Workspace 越权、运营越权、脱敏、审批绕过全部拒绝。</li>
+    <li><strong>性能：</strong>列表接口 P95 ≤ 300ms；事件到页面可见 P95 ≤ 5s；SSE 断线可续传。</li>
+    <li><strong>业务：</strong>100% 命令可审计；财务差异可定位到原交易；已知异常自动发现率 ≥ 99%；补偿幂等率 100%。</li>
+  </ul>
+</div>

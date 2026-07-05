@@ -45,6 +45,7 @@
 3. 不实现多人实时共编。
 4. 不允许新旧两套业务页面长期并行维护。
 5. 不允许上游更新自动覆盖既有分镜、画布或交易版本。
+6. 本轮不实现版本差异对比界面，仅通过 `blocked_reason` 提示存在可同步版本。
 
 ## 4. 信息架构
 
@@ -57,7 +58,7 @@
 │  ├─ AI 专业创作
 │  ├─ 上传已有文稿
 │  └─ TVC 创作
-├─ 最近创作（最多 3～5 个）
+├─ 最近创作（最多 5 个）
 └─ 待办提醒
    ├─ 待继续
    ├─ 待审核
@@ -76,7 +77,8 @@
 ├─ 已锁稿
 ├─ 生产中
 ├─ 已完成
-└─ 已归档
+├─ 已归档
+└─ 回收站
 ```
 
 仓库支持关键词、类型、来源、内容状态、生产状态、商业状态和更新时间筛选，并提供卡片/列表视图、排序、分页、批量归档与恢复。
@@ -113,7 +115,7 @@
 2. “保存”只保存当前草稿，不改变项目归属。
 3. 创作完成后进入项目详情，而不是仓库列表。
 4. 仓库卡片点击统一进入详情；显式按钮用于继续创作。
-5. 最近创作只展示 3～5 个项目，并按最后编辑时间排序。
+5. 最近创作只展示 5 个项目，并按最后编辑时间排序。
 6. 新建、上传和 AI 生成失败时，不得产生伪成功项目或用示例内容替代真实结果。
 
 ## 6. 状态模型
@@ -126,13 +128,23 @@
 | 生产状态 | `not_started` → `storyboarding` → `canvas_producing` → `completed` | 表达分镜和画布生产进度 |
 | 商业状态 | `not_listed` → `listing_review` → `listed` → `delisted` | 表达市场上架进度 |
 
+> **内部 `market_status` 到公开 `commercial_status` 映射：**
+>
+> | 内部存储值 | 公开显示值 | 说明 |
+> |---|---|---|
+> | `private` | `not_listed` | 未提交上架 |
+> | `pending_review` | `listing_review` | 上架审核中 |
+> | `listed` | `listed` | 已上架 |
+> | `sold` | `listed` | 已售出仍显示为已上架（商业状态不因单笔交易回退） |
+> | `delisted` | `delisted` | 已下架 |
+
 项目生命周期独立设置为：
 
 ```text
-active → archived → deleted
+active → archived
 ```
 
-`deleted` 表示进入回收站后的软删除状态，不代表物理删除。
+`lifecycle_status` 仅取 `active` 和 `archived` 两个值。进入回收站后的软删除通过 `isDeleted` 标记实现（MyBatis-Plus 软删除机制），不占用 `lifecycle_status` 列。仓库通过独立的“回收站”视图展示 `isDeleted = 1` 的项目。
 
 ### 6.2 状态规则
 
@@ -167,7 +179,7 @@ active → archived → deleted
 
 下方展示：
 
-- 最近编辑的 3～5 个项目；
+- 最近编辑的 5 个项目；
 - 待处理审核意见；
 - 未完成或失败后可重试的生成任务。
 
@@ -194,7 +206,7 @@ active → archived → deleted
 2. “继续创作”进入项目最后一个可编辑阶段。
 3. “更多”包含重命名、复制、导出和归档。
 4. 不在卡片上平铺分镜、画布、上架等下游操作。
-5. 批量操作首期只包含归档与恢复，避免高风险批量删除。
+5. 批量操作首期只包含归档与恢复，避免高风险批量删除。批量端点：`POST /api/v1/content-projects/batch-archive`、`POST /api/v1/content-projects/batch-restore`。
 
 ### 7.3 剧本详情
 
@@ -222,7 +234,7 @@ active → archived → deleted
 
 兼容规则：
 
-1. `/script-gen-legacy` 不再展示独立旧版页面，解析旧对象后重定向到统一工作台。
+1. `/script-gen-legacy` 不再展示独立旧版页面，通过 `/api/v1/content-projects/legacy-scripts/{scriptId}/resolve` 解析后重定向到 `/script-gen/:projectId/workspace`。
 2. `/tag-editor/:scriptId` 通过兼容解析服务映射到内容项目后，重定向到 `/script-gen/:projectId/edit/tags`。
 3. 旧书签和历史链接必须保留可达性，但不得继续产生第二套页面和业务规则。
 
@@ -244,10 +256,12 @@ active → archived → deleted
 后端职责拆分：
 
 1. `ContentProjectService`：项目元数据、生命周期、列表与详情摘要。
-2. `ProjectWorkflowService`：内容状态迁移、准入校验与推荐动作。
+2. `ProjectLifecycleService`：内容状态迁移、准入校验与推荐动作。
 3. `ContentVersionService`：草稿、送审、采用、锁稿和版本派生。
-4. `LegacyWorkResolver`：旧 `scriptId` 与内容项目的幂等映射。
-5. 分镜、画布和交易服务继续管理各自状态，只向项目详情提供关联摘要。
+4. `LegacyProjectProjectionService`：旧 `scriptId` 与内容项目的幂等映射。
+5. `ProjectAccessService`：权限校验，供生命周期和生产服务调用。
+6. `ProjectProductionGate`：锁稿版本准入校验，供分镜和画布控制器调用。
+7. 分镜、画布和交易服务继续管理各自状态，只向项目详情提供关联摘要。
 
 前端不得分别拉取旧 `scripts` 和新 `content_projects` 后自行合并。列表统一由内容项目接口返回。
 
@@ -272,7 +286,7 @@ GET /api/v1/content-projects/todos
 - `production_status`；
 - `commercial_status`；
 - `lifecycle_status`；
-- `updated_from`、`updated_to`；
+- `updated_from`、`updated_to`（本期可选）；
 - `sort`、`page`、`page_size`。
 
 列表项必须包含三轴状态、当前采用版本、最后阶段、下一推荐动作和迁移异常标记，避免前端进行状态推断。

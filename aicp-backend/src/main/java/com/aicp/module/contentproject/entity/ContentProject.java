@@ -30,6 +30,8 @@ public class ContentProject {
     private Long legacyScriptId;
     private Long convertedFromProjectId;
     private Long copiedFromProjectId;
+    private String lifecycleStatus;
+    private Long adoptedVersionId;
     private Integer revision;
 
     @TableLogic

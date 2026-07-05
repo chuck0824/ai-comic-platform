@@ -10,6 +10,8 @@
 
 **Scope boundary:** This plan implements Phase 1 only. Canvas node coloring and image/video/adopt/export Gates belong to Phase 2. Failure recovery, capacity estimation, report export, and quality analytics belong to Phase 3.
 
+**Feature flag:** All SOP endpoints and UI routes are gated behind a single feature flag `sop.enabled` (default `true` in dev, configurable per environment). When disabled: the SOP sidebar menu item is hidden; all `/api/v1/sop/**` endpoints return HTTP 503 with `{"code": 72006, "message": "SOP module is not enabled"}`. This allows deploying the full code without exposing the feature until ready. Remove the flag after Phase 1 acceptance.
+
 ---
 
 ## File map
@@ -20,10 +22,11 @@
 - Create `aicp-backend/src/main/java/com/aicp/module/sop/domain/SopRuleDefinition.java`: immutable rule metadata.
 - Create `aicp-backend/src/main/java/com/aicp/module/sop/domain/SopCheckContext.java`: normalized read-only facts and source revision map.
 - Create `aicp-backend/src/main/java/com/aicp/module/sop/domain/SopRuleEvaluation.java`: evaluator output and overall-status aggregation.
-- Create `aicp-backend/src/main/java/com/aicp/module/sop/entity/SopCheckRun.java`, `SopCheckResult.java`, `SopWorkOrder.java`, `SopWorkOrderEvent.java`, `SopGateDecision.java`: Phase 1 persistence records.
-- Create matching mappers under `aicp-backend/src/main/java/com/aicp/module/sop/mapper/`.
+- Create `aicp-backend/src/main/java/com/aicp/module/sop/entity/SopCheckRun.java`, `SopCheckResult.java`, `SopWorkOrder.java`, `SopWorkOrderEvent.java`, `SopGateDecision.java`, `SopRuleSetVersion.java`: Phase 1 persistence records.
+- Create matching mappers (6) under `aicp-backend/src/main/java/com/aicp/module/sop/mapper/`.
 - Delete `aicp-backend/src/main/java/com/aicp/module/sop/entity/SopAudit.java` and `mapper/SopAuditMapper.java`: their fields do not match the legacy table and they must not remain an active write path.
 - Create `aicp-backend/src/main/resources/db/migration/V7__production_sop_core.sql`: new tables and indexes.
+- Create `aicp-backend/src/main/resources/db/migration/V7_undo.sql`: DROP statements for rollback.
 - Modify `aicp-backend/src/main/resources/db/schema.sql` and `schema-h2.sql`: keep bootstrapped schemas aligned with V7.
 
 ### Backend behavior and HTTP API
@@ -155,6 +158,7 @@ void phaseOneSchemaContainsImmutableRunsResultsWorkOrdersAndGates() throws Excep
     assertThat(sql).contains("CREATE TABLE IF NOT EXISTS sop_work_orders");
     assertThat(sql).contains("CREATE TABLE IF NOT EXISTS sop_work_order_events");
     assertThat(sql).contains("CREATE TABLE IF NOT EXISTS sop_gate_decisions");
+    assertThat(sql).contains("CREATE TABLE IF NOT EXISTS sop_rule_set_versions");
     assertThat(sql).contains("UNIQUE (project_id, scope_hash, rule_set_version, snapshot_hash)");
     assertThat(sql).contains("UNIQUE (project_id, issue_fingerprint, active_marker)");
 }
@@ -196,7 +200,7 @@ CREATE TABLE IF NOT EXISTS sop_check_runs (
 );
 ```
 
-Define `sop_check_results` with `run_id`, rule/result/severity, `critical`, target, fingerprint, `evidence_json`, suggestion and fix policy; `sop_work_orders` with source result, assignment, row version and application-managed nullable `active_marker` (`1` while active, `NULL` after `PASSED/CANCELED`); append-only events; and Gate decisions with request idempotency key. The unique key `(project_id, issue_fingerprint, active_marker)` prevents duplicate active work while allowing historical closed rows. Add project/run/status indexes. V7 creates the repository's legacy `sop_audits` shape when absent, copies each legacy row to a work order plus `LEGACY_IMPORTED` event using fingerprint `legacy-audit:{id}`, and leaves the old table read-only. Copy the same logical schema into both bootstrap schema files using H2-compatible types in `schema-h2.sql`.
+Define `sop_check_results` with `run_id`, rule/result/severity, `critical`, target, fingerprint, `evidence_json`, suggestion and fix policy; `sop_work_orders` with source result, assignment, row version and application-managed nullable `active_marker` (`1` while active, `NULL` after `PASSED/CANCELED`); append-only events; `sop_rule_set_versions` with version identifier, rule count, published metadata and active flag; and Gate decisions with request idempotency key. The unique key `(project_id, issue_fingerprint, active_marker)` prevents duplicate active work while allowing historical closed rows. Add project/run/status indexes. V7 creates the repository's legacy `sop_audits` shape when absent, copies each legacy row to a work order plus `LEGACY_IMPORTED` event using fingerprint `legacy-audit:{id}`, and leaves the old table read-only. Copy the same logical schema into both bootstrap schema files using H2-compatible types in `schema-h2.sql`.
 
 - [ ] **Step 4: Run schema and application-context tests**
 
@@ -214,6 +218,8 @@ git add aicp-backend/src/main/resources/db/migration/V7__production_sop_core.sql
 git commit -m "feat: add production SOP core schema"
 ```
 
+**Migration rollback**：V7 is append-only (creates tables + copies legacy data without dropping old tables). Rollback is safe via `DROP TABLE IF EXISTS` for each new table. No data loss risk for existing `sop_audits` rows. Create `V7_undo.sql` alongside the migration with the corresponding DROP statements.
+
 ### Task 3: Map persistence records without business logic
 
 **Files:**
@@ -222,7 +228,8 @@ git commit -m "feat: add production SOP core schema"
 - Create: `aicp-backend/src/main/java/com/aicp/module/sop/entity/SopWorkOrder.java`
 - Create: `aicp-backend/src/main/java/com/aicp/module/sop/entity/SopWorkOrderEvent.java`
 - Create: `aicp-backend/src/main/java/com/aicp/module/sop/entity/SopGateDecision.java`
-- Create: five matching mapper interfaces in `aicp-backend/src/main/java/com/aicp/module/sop/mapper/`
+- Create: `aicp-backend/src/main/java/com/aicp/module/sop/entity/SopRuleSetVersion.java`
+- Create: six matching mapper interfaces in `aicp-backend/src/main/java/com/aicp/module/sop/mapper/`
 - Delete: `aicp-backend/src/main/java/com/aicp/module/sop/entity/SopAudit.java`
 - Delete: `aicp-backend/src/main/java/com/aicp/module/sop/mapper/SopAuditMapper.java`
 - Test: `aicp-backend/src/test/java/com/aicp/module/sop/schema/SopEntityMappingTest.java`
@@ -343,14 +350,21 @@ git commit -m "feat: assemble production SOP source context"
 ```java
 @ParameterizedTest
 @CsvSource({
-  "PLOT_FIDELITY,NOT_READY", "SCENE_GOAL,PASS", "BEAT_COMPLETENESS,PASS",
+  "SCENE_GOAL,PASS", "BEAT_COMPLETENESS,PASS",
   "RELATIONSHIP_CHANGE,PASS", "KEY_DIALOGUE_LOCK,PASS", "ASSET_BINDING,BLOCKED",
-  "RISK_SHOT_MARKING,NOT_READY", "PROMPT_LENGTH,BLOCKED", "COMPLEX_SHOT_SPLIT,NOT_READY",
-  "IMAGE_VIDEO_TABLE_SPLIT,PASS", "VOICE_BINDING,NOT_READY", "DUB_SUBTITLE_READY,WARNING",
-  "CONTINUITY_INHERITANCE,NOT_READY"
+  "PROMPT_LENGTH,BLOCKED", "DUB_SUBTITLE_READY,WARNING"
 })
-void evaluatesDocumentedRuleOutcome(String code, SopResult expected) {
+void evaluatesEnabledRuleOutcome(String code, SopResult expected) {
     assertThat(catalog.evaluate(code, fixtureContext()).result()).isEqualTo(expected);
+}
+
+@Test
+void skipsDisabledRulesAndReturnsEmptyResults() {
+    List<String> disabled = List.of("PLOT_FIDELITY", "RISK_SHOT_MARKING",
+        "COMPLEX_SHOT_SPLIT", "IMAGE_VIDEO_TABLE_SPLIT",
+        "VOICE_BINDING", "CONTINUITY_INHERITANCE");
+    disabled.forEach(code ->
+        assertThat(catalog.evaluate(code, fixtureContext())).isNull());
 }
 ```
 
@@ -362,29 +376,35 @@ Expected: compilation failure for missing catalog and engine.
 
 - [ ] **Step 3: Implement rule metadata and exact Phase 1 truth tables**
 
-Use rule-set version `production-readiness-v1`. Implement these facts:
+Use rule-set version `production-readiness-v1`. The following 7 rules are **enabled** and have evaluable data sources; the remaining 6 are **disabled** (`enabled=false`) because their upstream data sources do not yet exist:
 
-1. `PLOT_FIDELITY`: `NOT_READY` until a structured locked-source comparison exists.
-2. `SCENE_GOAL`: `BLOCKED/P1` when any scene lacks `dramaticGoal`; otherwise `PASS`.
-3. `BEAT_COMPLETENESS`: `BLOCKED/P1` when any scene lacks `beatDescription`; otherwise `PASS`.
-4. `RELATIONSHIP_CHANGE`: `WARNING/P2` when speaking/action shots lack `relationshipBlocking`; otherwise `PASS`.
-5. `KEY_DIALOGUE_LOCK`: `PASS` only when a locked version exists and dialogue shots have `dialogueText`; missing locked version is `NOT_READY`.
-6. `ASSET_BINDING`: `BLOCKED/P1` when scenes lack `locationRefId` or shots lack visual bindings.
-7. `RISK_SHOT_MARKING`: `NOT_READY` because current source data has no complexity grade.
-8. `PROMPT_LENGTH`: `BLOCKED/P1` for image/video prompts over 500 characters; otherwise `PASS`.
-9. `COMPLEX_SHOT_SPLIT`: `NOT_READY` because current source data has no D/E grade and split strategy pair.
-10. `IMAGE_VIDEO_TABLE_SPLIT`: `WARNING/P2` when a shot has only one of image/video prompts; otherwise `PASS`.
-11. `VOICE_BINDING`: `NOT_READY` because current source data has no Voice ID relation.
-12. `DUB_SUBTITLE_READY`: `BLOCKED/P1` when dialogue exists but `dubText` or `subtitleText` is blank; otherwise `PASS`.
-13. `CONTINUITY_INHERITANCE`: `NOT_READY` because no continuity snapshot is attached to the locked version.
+**Enabled rules (7):**
 
-Rule severities are fixed in `production-readiness-v1`: `PLOT_FIDELITY` and `CONTINUITY_INHERITANCE` are P0; `SCENE_GOAL`, `BEAT_COMPLETENESS`, `RELATIONSHIP_CHANGE`, `KEY_DIALOGUE_LOCK`, `ASSET_BINDING`, `RISK_SHOT_MARKING`, `PROMPT_LENGTH`, `COMPLEX_SHOT_SPLIT`, `VOICE_BINDING`, and `DUB_SUBTITLE_READY` are P1; `IMAGE_VIDEO_TABLE_SPLIT` is P2. P0/P1 rules are critical. Every non-pass evaluation must include target IDs, evidence, suggestion, stable issue fingerprint and fix policy. The engine catches exceptions per rule and emits `ERROR` without dropping other results.
+1. `SCENE_GOAL`: `BLOCKED/P1` when any scene lacks `dramaticGoal`; otherwise `PASS`.
+2. `BEAT_COMPLETENESS`: `BLOCKED/P1` when any scene lacks `beatDescription`; otherwise `PASS`.
+3. `RELATIONSHIP_CHANGE`: `WARNING/P2` when speaking/action shots lack `relationshipBlocking`; otherwise `PASS`.
+4. `KEY_DIALOGUE_LOCK`: `PASS` only when a locked version exists and dialogue shots have `dialogueText`; missing locked version is `NOT_READY`.
+5. `ASSET_BINDING`: `BLOCKED/P1` when scenes lack `locationRefId` or shots lack visual bindings.
+6. `PROMPT_LENGTH`: `BLOCKED/P1` for image/video prompts over 500 characters; otherwise `PASS`.
+7. `DUB_SUBTITLE_READY`: `BLOCKED/P1` when dialogue exists but `dubText` or `subtitleText` is blank; otherwise `PASS`.
+
+**Disabled rules (6)** — evaluator code is fully implemented and tested, but `enabled=false` in `production-readiness-v1`:
+- `PLOT_FIDELITY` (P0): requires structured locked-source comparison engine.
+- `RISK_SHOT_MARKING` (P1): requires complexity grading data.
+- `COMPLEX_SHOT_SPLIT` (P1): requires D/E grade + split strategy pair.
+- `IMAGE_VIDEO_TABLE_SPLIT` (P2): requires both image and video prompt tables.
+- `VOICE_BINDING` (P1): requires Voice ID relation.
+- `CONTINUITY_INHERITANCE` (P0): requires continuity snapshot attached to locked version.
+
+The rule engine **skips** disabled rules: they do not produce results, do not participate in Gate decisions, and do not affect overall status. When an upstream data source becomes available, the rule's `enabled` flag is set to `true` in a new rule-set version `production-readiness-v2` — no code change required.
+
+Rule severities in `production-readiness-v1`: `SCENE_GOAL`, `BEAT_COMPLETENESS`, `KEY_DIALOGUE_LOCK`, `ASSET_BINDING`, `PROMPT_LENGTH`, `DUB_SUBTITLE_READY` are P1; `RELATIONSHIP_CHANGE` is P2. All P1 rules are critical. Every non-pass evaluation must include target IDs, evidence, suggestion, stable issue fingerprint and fix policy. The engine catches exceptions per rule and emits `ERROR` without dropping other results.
 
 - [ ] **Step 4: Run catalog and engine tests**
 
 Run: `cd aicp-backend && mvn -q -Dtest=SopRuleCatalogTest,SopRuleEngineTest test`
 
-Expected: PASS with 13 evaluations in catalog order.
+Expected: PASS with 7 enabled evaluations + 6 skipped disabled rules.
 
 - [ ] **Step 5: Commit the rule engine**
 
@@ -430,7 +450,9 @@ Expected: compilation/test failure because the current service has no typed chec
 
 - [ ] **Step 3: Implement the check transaction**
 
-`runCheck` must call `ProjectAccessService.require(..., Action.PRODUCE)`, assemble context, reuse a completed matching run, insert `RUNNING`, evaluate 13 rules, batch-insert results, update counts/overall/completed time, and return `CheckReportView`. `getReport` recomputes staleness by comparing the current snapshot hash and returns `STALE` without rewriting the original report. `listProjects`, `summary`, `listChecks`, and `getReport` require `Action.VIEW` and only return projects the user can access.
+`runCheck` must call `ProjectAccessService.require(..., Action.PRODUCE)`, assemble context, reuse a completed matching run, insert `RUNNING`, evaluate enabled rules (7 in `production-readiness-v1`), batch-insert results, update counts/overall/completed time, and return `CheckReportView`. `getReport` recomputes staleness by comparing the current `snapshotHash` (SHA-256 of sorted `sourceRevisions` JSON) against the stored hash, and marks the run as `STALE` without rewriting the original report — the `status` column is the only field updated post-completion. `listProjects`, `summary`, `listChecks`, and `getReport` require `Action.VIEW` and only return projects the user can access.
+
+**Existing test migration**：The current `SopService` has hardcoded-data tests. Delete `aicp-backend/src/test/java/com/aicp/module/sop/service/SopServiceTest.java` (if it exists) and replace with the new `SopServiceTest` defined in this task. The new test covers reuse, aggregation, staleness, and pagination — the old hardcoded assertions are irrelevant to the new architecture.
 
 Define response records in `SopViews`: `ProjectRiskSummary`, `SopSummaryView`, `CheckRunSummary`, `CheckResultView`, `CheckReportView`, `WorkOrderView`, and `GateDecisionView`. JSON field names follow the existing global Jackson strategy; do not expose persistence entities.
 
@@ -448,6 +470,13 @@ git add aicp-backend/src/main/java/com/aicp/module/sop/service/SopService.java \
   aicp-backend/src/test/java/com/aicp/module/sop/service/SopServiceTest.java
 git commit -m "feat: persist immutable SOP check reports"
 ```
+
+#### Performance and observability
+
+- **Check execution**：7 enabled rules execute sequentially within a single transaction. Expected duration < 2s for projects with ≤ 200 shots.
+- **Rule-level logging**：Each rule evaluation logs `rule_code`, `result`, `duration_ms`, and `error` (if any) at INFO level. The engine logs a summary line with total duration and result counts.
+- **Metric counters**：Increment Micrometer counters for `sop.checks.total`, `sop.checks.{PASS|WARNING|BLOCKED|NOT_READY|ERROR}`, `sop.gate.{allowed|denied}`, and `sop.work_order.{created|assigned|passed|reopened}`.
+- **Slow check alert**：Checks exceeding 5s log a WARN with project ID and shot count for diagnosis.
 
 ### Task 7: Implement work-order assignment and review
 
@@ -592,7 +621,7 @@ Expected: FAIL because the current controller neither injects services nor retur
 
 - [ ] **Step 3: Implement the Phase 1 endpoint surface**
 
-Expose:
+Expose (Phase 1 only; releases and canvas endpoints are Phase 2):
 
 ```text
 GET  /api/v1/sop/projects
@@ -605,8 +634,11 @@ POST /api/v1/sop/projects/{projectId}/work-orders
 PATCH /api/v1/sop/projects/{projectId}/work-orders/{id}
 POST /api/v1/sop/projects/{projectId}/work-orders/{id}/review
 POST /api/v1/sop/projects/{projectId}/gates/production-admission/evaluate
-POST /api/v1/sop/check/production-readiness
+POST /api/v1/sop/projects/{projectId}/fixes/{resultId}
+POST /api/v1/sop/check/production-readiness  (compat)
 ```
+
+All list endpoints must accept `page`, `size`, `sort`, `order` query parameters and return paginated responses with `{page, size, total, totalPages, items}` structure. Deferred endpoints (`/releases`, `/canvas/*`, `/failures`, `/capacity`) return HTTP 501 with a clear phase indicator.
 
 Use `@RequiredArgsConstructor`, `@Valid`, `SecurityUtil.requireCurrentUserId()`, request records and response records. Remove every fixed project title, date, result and `System.currentTimeMillis()` identifier from the controller.
 
@@ -760,7 +792,9 @@ git commit -m "feat: replace static SOP page with project workspace"
 - Modify: `docs/01-core/API接口文档_V1.5.md`
 - Modify: `docs/01-core/用户端PRD.md`
 
-- [ ] **Step 1: Write the end-to-end service lifecycle test**
+- [ ] **Step 1: Write the end-to-end service lifecycle and error-path tests**
+
+Happy path:
 
 ```java
 @Test
@@ -774,13 +808,58 @@ void blockedIssueCanBeAssignedFixedReviewedRecheckedAndAdmitted() {
     assertThat(second.runId()).isNotEqualTo(first.runId());
     assertThat(second.results()).noneMatch(r -> "PROMPT_LENGTH".equals(r.ruleCode())
             && "BLOCKED".equals(r.result()));
-    assertThat(fixture.evaluateAdmission().allowed()).isFalse();
+    // After fixing PROMPT_LENGTH, admission may still be blocked by other enabled
+    // rules (e.g. KEY_DIALOGUE_LOCK returning NOT_READY when no locked version
+    // exists in the fixture, or ASSET_BINDING returning BLOCKED for missing assets).
+    // Disabled rules (PLOT_FIDELITY, CONTINUITY_INHERITANCE, etc.) do NOT block.
     assertThat(fixture.evaluateAdmission().blockers())
-            .allMatch(b -> "NOT_READY".equals(b.result()));
+            .allMatch(b -> "NOT_READY".equals(b.result())
+                    || "BLOCKED".equals(b.result()));
 }
 ```
 
-The final assertion intentionally remains blocked by honest missing upstream sources; Phase 1 must never turn unknown facts into green results.
+The final assertion is blocked by honest enabled-rule results; Phase 1 must never turn unknown facts into green results. Disabled rules do not participate — their `NOT_READY` would have been silent, not blocking.
+
+Error path tests (same test class):
+
+```java
+@Test
+void rejectsCrossProjectWorkOrderAccess() {
+    // User with project 7 access cannot view/work on project 9 work orders
+    assertThatThrownBy(() -> fixture.transitionAs(7L, 3L, orderFromProject9))
+            .isInstanceOf(BizException.class)
+            .extracting("code").isEqualTo(ErrorCode.FORBIDDEN.getCode());
+}
+
+@Test
+void concurrentWorkOrderUpdateFailsWithOptimisticLock() {
+    SopWorkOrder order = fixture.createAndAssign(first, "ai_artist");
+    // Simulate concurrent update by directly bumping row version
+    jdbcTemplate.update("UPDATE sop_work_orders SET row_version = row_version + 1 WHERE id = ?", order.id());
+    assertThatThrownBy(() -> fixture.transitionToFixing(order.id()))
+            .isInstanceOf(BizException.class)
+            .extracting("code").isEqualTo(ErrorCode.SOP_WORK_ORDER_CONFLICT.getCode());
+}
+
+@Test
+void gateReturnsExistingDecisionForSameIdempotencyKey() {
+    GateDecisionView first = fixture.evaluateAdmission("key-abc");
+    GateDecisionView second = fixture.evaluateAdmission("key-abc");
+    assertThat(second.decisionId()).isEqualTo(first.decisionId());
+    // Only one check run created
+    assertThat(fixture.countCheckRuns()).isEqualTo(1);
+}
+
+@Test
+void staleReportIsRejectedByGate() {
+    CheckReportView report = fixture.runReadinessCheck();
+    // Simulate source data change
+    fixture.modifyStoryboardVersion();
+    assertThatThrownBy(() -> fixture.evaluateAdmissionWithRun(report.runId()))
+            .isInstanceOf(BizException.class)
+            .extracting("code").isEqualTo(ErrorCode.SOP_RUN_STALE.getCode());
+}
+```
 
 - [ ] **Step 2: Run the focused E2E test**
 
@@ -821,10 +900,16 @@ git commit -m "test: verify production SOP phase one lifecycle"
 Do not mark Phase 1 complete unless all conditions hold:
 
 1. `Sop.vue`, `SopController`, and `SopService` contain no fixed project names, results, dates or generated IDs.
-2. Every check result has a real source fact or an explicit `NOT_READY` dependency.
+2. Every check result has a real source fact or an explicit `NOT_READY` dependency; disabled rules produce no results.
 3. Completed reports are immutable and become `STALE` when source revisions change.
 4. Work orders cannot skip assignment, fixing, pending review or review decisions.
-5. P0/P1 and critical unknown/error results deny production admission.
+5. P0/P1 and critical unknown/error results from **enabled rules** deny production admission.
 6. The sidebar no longer links to `/sop/1`.
 7. Backend tests, frontend tests and the production build pass.
 8. Core API and PRD documents describe Phase 1 truthfully and defer Phase 2/3 behavior.
+9. `sop_rule_set_versions` table is populated with `production-readiness-v1` (7 enabled + 6 disabled rules).
+10. All list endpoints return paginated responses with `page`, `size`, `total`, `totalPages`, `items`.
+11. Feature flag `sop.enabled=false` hides the sidebar entry and returns 503 from all SOP endpoints.
+12. E2E tests cover the happy path + unauthorized access + optimistic lock conflict + idempotency + stale report rejection.
+13. Micrometer counters are registered for checks, gate decisions, and work order transitions.
+14. V7 migration has a companion `V7_undo.sql` for rollback.

@@ -1,0 +1,50 @@
+<h2>设计 2/4：持久化模型与执行状态机</h2>
+<p class="subtitle">会话是长期容器；每条用户指令可产生一个版本化计划；计划经审批后才进入执行。</p>
+
+<div class="mockup">
+  <div class="mockup-header">核心数据关系</div>
+  <div class="mockup-body" style="padding:20px;background:#0b1020;color:#e5e7eb">
+    <div style="display:flex;gap:10px;align-items:stretch;justify-content:center;flex-wrap:wrap;font-size:12px">
+      <div style="border:1px solid #6366f1;border-radius:9px;padding:13px;min-width:145px"><b>agent_sessions</b><br><span style="color:#9ca3af">workspace / project<br>owner / status<br>last_message_at</span></div>
+      <div style="align-self:center">1 → N</div>
+      <div style="border:1px solid #38bdf8;border-radius:9px;padding:13px;min-width:145px"><b>agent_messages</b><br><span style="color:#9ca3af">role / content_type<br>content_json<br>token / cost</span></div>
+      <div style="align-self:center">1 → N</div>
+      <div style="border:1px solid #10b981;border-radius:9px;padding:13px;min-width:145px"><b>agent_plans</b><br><span style="color:#9ca3af">version / risk<br>estimate / status<br>approval_snapshot</span></div>
+      <div style="align-self:center">1 → N</div>
+      <div style="border:1px solid #f59e0b;border-radius:9px;padding:13px;min-width:145px"><b>agent_plan_steps</b><br><span style="color:#9ca3af">tool / mode / inputs<br>idempotency_key<br>status / result_ref</span></div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:center;margin-top:16px;font-size:12px">
+      <div style="border:1px solid #ec4899;border-radius:9px;padding:13px;min-width:180px"><b>agent_executions</b><br><span style="color:#9ca3af">每次尝试、耗时、成本、错误、关联 generation_task</span></div>
+      <div style="border:1px solid #64748b;border-radius:9px;padding:13px;min-width:180px"><b>agent_events</b><br><span style="color:#9ca3af">递增 seq，供 SSE 断线续传与审计时间线</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">计划生命周期</div>
+  <div class="mockup-body" style="padding:22px;background:#111827;color:#e5e7eb;font-size:12px">
+    <div style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap">
+      <span style="padding:9px 12px;border-radius:16px;background:#334155">DRAFT</span><span>→</span>
+      <span style="padding:9px 12px;border-radius:16px;background:#7c3aed">AWAITING_APPROVAL</span><span>→</span>
+      <span style="padding:9px 12px;border-radius:16px;background:#0369a1">QUEUED</span><span>→</span>
+      <span style="padding:9px 12px;border-radius:16px;background:#b45309">RUNNING</span><span>→</span>
+      <span style="padding:9px 12px;border-radius:16px;background:#047857">SUCCEEDED</span>
+    </div>
+    <div style="display:flex;justify-content:center;gap:12px;margin-top:18px;flex-wrap:wrap;color:#cbd5e1">
+      <span style="padding:7px 10px;border:1px solid #64748b;border-radius:14px">PAUSED：人工暂停/高风险</span>
+      <span style="padding:7px 10px;border:1px solid #ef4444;border-radius:14px">PARTIAL_FAILED：部分完成，可重试</span>
+      <span style="padding:7px 10px;border:1px solid #ef4444;border-radius:14px">FAILED：不可继续</span>
+      <span style="padding:7px 10px;border:1px solid #64748b;border-radius:14px">CANCELED：用户取消</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>必须成立的约束</h3>
+  <ul>
+    <li>审批绑定 <b>plan_version + inputs_hash + estimated_cost</b>；计划变化后原审批自动失效。</li>
+    <li>每个写操作步骤都有幂等键，重试不能重复创建节点、任务或扣费。</li>
+    <li>SSE 使用事件序号续传；页面重连先补历史事件，再接实时事件。</li>
+    <li>消息保存用户可见内容、工具摘要和引用；敏感 Prompt、密钥、隐藏推理不进入前端。</li>
+  </ul>
+</div>

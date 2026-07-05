@@ -1,0 +1,58 @@
+<h2>剧本创作模块：边界与完整流向（修订版）</h2>
+<p class="subtitle">现有平台模块不重排；新增创作圣经作为剧本模块内部中枢，并用版本契约连接下游</p>
+
+<div class="mockup">
+  <div class="mockup-header">边界一：输入与事实确认</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 64px 1.35fr 64px 1fr;gap:10px;align-items:center">
+      <div style="padding:14px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc"><strong>输入区</strong><p>人工录入 / 上传文稿<br>旧项目资料 / AI 提取</p></div>
+      <div style="text-align:center">→</div>
+      <div style="padding:14px;border:1px dashed #f59e0b;border-radius:10px;background:#fffbeb"><strong>候选区（非事实）</strong><p>生态候选、实体候选、关系候选、口径建议<br>证据、置信度、冲突项</p></div>
+      <div style="text-align:center">用户确认<br>→</div>
+      <div style="padding:14px;border:2px solid #6366f1;border-radius:10px;background:#f5f3ff"><strong>正式事实库</strong><p>创作圣经版本<br>仅已确认内容生效</p></div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center;font-size:24px;color:#64748b;padding:8px">↓ 组装不可变上下文快照</div>
+
+<div class="mockup">
+  <div class="mockup-header">边界二：剧本创作与版本影响</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1.1fr 70px 1.1fr 70px 1.1fr;gap:10px;align-items:center">
+      <div style="padding:14px;border:1px solid #60a5fa;border-radius:10px;background:#eff6ff"><strong>创作阶段</strong><p>梗概 → 大纲 → 单集/单章正文</p><small>每次生成绑定圣经版本与上游内容版本</small></div>
+      <div style="text-align:center">→</div>
+      <div style="padding:14px;border:1px solid #fb7185;border-radius:10px;background:#fff1f2"><strong>审核与影响分析</strong><p>事实冲突、人物越界、关系跳变、口径偏离</p><small>上游变更只标记受影响内容，不自动覆盖</small></div>
+      <div style="text-align:center">确认<br>→</div>
+      <div style="padding:14px;border:1px solid #22c55e;border-radius:10px;background:#f0fdf4"><strong>锁稿内容版本</strong><p>正文版本 + 圣经快照 + 连续性快照</p><small>成为分镜输入契约</small></div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center;font-size:24px;color:#64748b;padding:8px">↓ 用户选择“制作分镜”</div>
+
+<div class="mockup">
+  <div class="mockup-header">边界三：分镜与独立画布模块</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 80px 1fr 80px 1fr;gap:10px;align-items:center">
+      <div style="padding:14px;border:1px solid #a78bfa;border-radius:10px;background:#faf5ff"><strong>分镜 Master</strong><p>独立版本化、可编辑、可锁定<br>引用明确的锁稿内容版本</p></div>
+      <div style="text-align:center">生产准入<br>→</div>
+      <div style="padding:14px;border:2px solid #f59e0b;border-radius:10px;background:#fffbeb"><strong>画布导入快照</strong><p>内容、分镜、圣经、关系时间点、资产规则</p><small>跨模块唯一耦合契约</small></div>
+      <div style="text-align:center">→</div>
+      <div style="padding:14px;border:1px solid #64748b;border-radius:10px;background:#f8fafc"><strong>独立画布模块</strong><p>节点生产、生成资产、质检、采用与导出</p></div>
+    </div>
+    <div style="margin-top:14px;padding:12px;border-left:4px solid #ef4444;background:#fef2f2">
+      <strong>反向流向限制：</strong>剧本或圣经更新后，只生成差异报告；画布不被自动改写。用户确认后创建新的画布导入快照，旧快照和既有生产结果永久保留。
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>平台原有页面的归属</h3>
+  <p><strong>创作首页</strong>负责启动与续作；<strong>创作工作台</strong>消费创作圣经；<strong>作品编辑中心</strong>维护资料与正式事实；<strong>项目详情</strong>展示版本、审核和下游流转；<strong>仓库</strong>继续负责全生命周期管理。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="architecture-v2-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>边界与流向正确</h3><p>继续展开创作台页面与功能结构</p></div></div>
+  <div class="option" data-choice="architecture-v2-revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>仍需调整</h3><p>请说明缺失的模块、方向或控制点</p></div></div>
+</div>

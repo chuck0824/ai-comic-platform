@@ -1,0 +1,56 @@
+<h2>Agent 配置中心：页面与操作设计</h2>
+<p class="subtitle">采用“列表管理 + 详情编辑 + 新增向导”，普通参数和高级 Prompt 分层展示。</p>
+
+<div class="mockup">
+  <div class="mockup-header">Agent 配置中心</div>
+  <div class="mockup-body" style="padding:0">
+    <div style="display:grid;grid-template-columns:190px 280px 1fr;min-height:520px">
+      <aside style="padding:16px;border-right:1px solid #334155">
+        <button class="mock-button" style="width:100%;margin-bottom:16px">＋ 新增 Agent</button>
+        <div class="label">基础角色</div>
+        <p style="padding:9px;border-radius:6px;background:#312e81">全部 Agent</p>
+        <p style="padding:9px">钩子 Agent</p><p style="padding:9px">编剧 Agent</p><p style="padding:9px">分镜 Agent</p><p style="padding:9px">导演 Agent</p>
+        <div class="label" style="margin-top:20px">状态</div>
+        <p style="padding:9px">草稿 / 已发布 / 已归档</p>
+      </aside>
+      <section style="padding:16px;border-right:1px solid #334155">
+        <input class="mock-input" style="width:100%;box-sizing:border-box" placeholder="搜索我的 Agent">
+        <div style="padding:14px;margin-top:12px;border:2px solid #6366f1;border-radius:10px"><strong>女频复仇强钩子</strong><br><small>钩子 · v3 已发布</small><p>项目使用 2 · 最近更新 今天</p></div>
+        <div style="padding:14px;margin-top:10px;border:1px solid #334155;border-radius:10px"><strong>悬疑信息差钩子</strong><br><small>钩子 · v1 草稿</small></div>
+        <div style="padding:14px;margin-top:10px;border:1px solid #334155;border-radius:10px"><strong>竖屏快节奏导演</strong><br><small>导演 · v2 已发布</small></div>
+      </section>
+      <main style="padding:18px">
+        <div style="display:flex;justify-content:space-between;align-items:start"><div><h3 style="margin:0">女频复仇强钩子</h3><p class="subtitle">继承：系统钩子框架 · 当前发布 v3</p></div><div><button class="mock-button">试跑对比</button> <button class="mock-button">发布新版</button></div></div>
+        <div style="display:flex;gap:6px;margin:14px 0"><span style="padding:7px 12px;background:#312e81;border-radius:6px">基础设置</span><span style="padding:7px 12px">方法参数</span><span style="padding:7px 12px">高级 Prompt</span><span style="padding:7px 12px">版本记录</span><span style="padding:7px 12px">使用项目</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <label>开场抓人时间<input class="mock-input" style="width:100%;box-sizing:border-box" value="3 秒"></label>
+          <label>反转强度<input class="mock-input" style="width:100%;box-sizing:border-box" value="强"></label>
+          <label>章尾悬念强度<input class="mock-input" style="width:100%;box-sizing:border-box" value="90"></label>
+          <label>最低通过分<input class="mock-input" style="width:100%;box-sizing:border-box" value="82"></label>
+        </div>
+        <div style="margin-top:18px;padding:14px;border:1px solid #334155;border-radius:10px"><strong>适用范围</strong><p>女频 · 复仇 · 甜虐 · 抖音竖屏短剧</p></div>
+        <div style="margin-top:14px;padding:14px;border:1px solid #334155;border-radius:10px"><strong>锁定内容</strong><p>工具权限、输出 JSON Schema、安全规则由系统框架管理，用户只能查看。</p></div>
+      </main>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">新增 Agent 向导</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;text-align:center">
+    <div style="padding:14px;border:2px solid #6366f1;border-radius:10px"><strong>1 选择框架</strong><br><small>钩子 / 编剧 / 分镜 / 导演</small></div>
+    <div style="padding:14px;border:1px solid #334155;border-radius:10px"><strong>2 定义 Agent</strong><br><small>名称、用途、题材、平台</small></div>
+    <div style="padding:14px;border:1px solid #334155;border-radius:10px"><strong>3 配置方法</strong><br><small>参数、Prompt、示例</small></div>
+    <div style="padding:14px;border:1px solid #334155;border-radius:10px"><strong>4 试跑发布</strong><br><small>对比、版本说明、默认范围</small></div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="mockup"><div class="mockup-header">普通模式</div><div class="mockup-body"><p>只显示业务参数、滑杆、单选项和示例，适合大多数创作者。系统根据参数生成用户可编辑层 Prompt。</p></div></div>
+  <div class="mockup"><div class="mockup-header">高级模式</div><div class="mockup-body"><p>可编辑角色方法、判断标准、风格指令、变量和 Few-shot 示例；锁定层只读，并提供变量与输出校验。</p></div></div>
+</div>
+
+<div class="section">
+  <div class="label">业务页面中的轻量入口</div>
+  <p>剧本、钩子、分镜和导演页面不复制完整编辑器，只显示“当前 Agent + 版本 + 切换 + 单次调整”。点击管理后回到配置中心，防止不同模块出现多套配置界面。</p>
+</div>

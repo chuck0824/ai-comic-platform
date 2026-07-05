@@ -1,0 +1,69 @@
+<h2>第二章：数据、API 与兼容迁移</h2>
+<p class="subtitle">原则：复用现有生成、任务、资产、计费基础；新链路单写，旧链路只读兼容</p>
+
+<div class="mockup">
+  <div class="mockup-header">目标领域模型</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div class="placeholder"><strong>Canvas</strong><br>canvas_projects<br>canvas_shot_units<br>canvas_nodes<br>canvas_edges</div>
+    <div class="placeholder"><strong>Director</strong><br>director_scenes<br>director_drafts<br>director_revisions<br>revision_assets</div>
+    <div class="placeholder"><strong>Generation</strong><br>request_snapshots<br>generation_tasks<br>task_attempts<br>generation_candidates</div>
+    <div class="placeholder"><strong>Delivery</strong><br>shot_adoptions<br>delivery_manifests<br>manifest_items<br>quality_reports</div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">复用并增强</div>
+    <div class="mockup-body"><ul>
+      <li><code>canvas_projects / nodes / edges</code>：补工作单元、schema 版本和端口契约字段。</li>
+      <li><code>generation_tasks</code>：继续作为任务事实源，补快照、Attempt、Workspace、幂等和结算引用。</li>
+      <li>统一任务事件中心：承接状态、重试、取消、费用和异常，不在 Canvas 重建任务中心。</li>
+      <li>资产服务：继续拥有媒体和版本，Canvas 只保存版本引用。</li>
+      <li>现有 <code>AiRouter/new-api</code> 负责供应商调用；Canvas 侧只增加能力编译与适配。</li>
+    </ul></div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">必须新增</div>
+    <div class="mockup-body"><ul>
+      <li><code>canvas_shot_units</code>：临时镜头与正式 shot revision 的统一容器。</li>
+      <li><code>director_scenes/drafts/revisions</code>：可变草稿与不可变冻结包彻底分离。</li>
+      <li><code>generation_request_snapshots</code>：实际模型、适配器版本、输入版本和费用预估。</li>
+      <li><code>generation_candidates</code>：替代弱语义的 Variant，保留旧 Variant 投影。</li>
+      <li><code>shot_adoptions</code>：正式采用唯一事实源。</li>
+      <li><code>delivery_manifests</code>：只做镜头素材清单与 ZIP，不做成片。</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>API 收敛</h3>
+  <ul>
+    <li><code>POST /canvas/nodes/{nodeId}/model-requests/preview</code>：能力校验、推荐模型、输入摘要和费用预览。</li>
+    <li><code>POST /canvas/nodes/{nodeId}/model-requests</code>：确认后冻结请求快照并创建任务。</li>
+    <li><code>/canvas/projects/{projectId}/shot-units/{unitId}/director-scene</code>：导演草稿和版本流。</li>
+    <li><code>POST .../director-revisions/{revisionId}/preview-renders</code>：创建 Blender 任务。</li>
+    <li><code>POST /shot-units/{unitId}/adoptions</code>：唯一正式采用入口；删除重复的节点级正式采用。</li>
+    <li><code>POST /canvas/projects/{projectId}/delivery-manifests</code>：固化交付清单和素材包。</li>
+    <li>所有写接口使用 <code>Idempotency-Key</code>；草稿写入使用 <code>If-Match</code>。</li>
+  </ul>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">旧画布无损迁移</div>
+  <div class="mockup-body" style="display:flex;gap:8px;align-items:stretch">
+    <div class="placeholder" style="flex:1">1. 盘点<br>节点/连线/导演 JSON<br>生成迁移报告</div><span>→</span>
+    <div class="placeholder" style="flex:1">2. 影子投影<br>新 View Model<br>不改旧数据</div><span>→</span>
+    <div class="placeholder" style="flex:1">3. 单画布升级<br>备份快照<br>事务写入新模型</div><span>→</span>
+    <div class="placeholder" style="flex:1">4. 灰度切换<br>新链路单写<br>旧 API 只读</div>
+  </div>
+  <p style="margin-top:12px">无法识别的 <code>reference</code> 节点或无类型连线标记为“待确认”，由迁移向导处理，绝不静默转换或删除。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="confirm-section-2" onclick="toggleSelect(this)">
+    <div class="letter">✓</div><div class="content"><h3>确认第二章</h3><p>继续前端工作台、导演台、模型调用与错误处理。</p></div>
+  </div>
+  <div class="option" data-choice="revise-section-2" onclick="toggleSelect(this)">
+    <div class="letter">↺</div><div class="content"><h3>需要修改</h3><p>返回终端说明要调整的数据或迁移规则。</p></div>
+  </div>
+</div>

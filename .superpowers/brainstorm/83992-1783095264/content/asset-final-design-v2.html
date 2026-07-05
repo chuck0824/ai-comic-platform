@@ -1,0 +1,99 @@
+<h2>资产工作台最终方案 V2：组件、异常、测试、指标与阶段</h2>
+<p class="subtitle">本页补充工程拆分和验收门槛。所有阶段均以“可回滚、可核对、不产生跨 Workspace 数据泄漏”为前提。</p>
+
+<div class="section">
+  <h3>一、前端组件与职责</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#eef2ff"><th style="padding:5px;text-align:left">组件/模块</th><th style="padding:5px;text-align:left">职责</th><th style="padding:5px;text-align:left">输入/输出边界</th></tr>
+    <tr><td style="padding:5px"><code>AssetHistory.vue</code></td><td style="padding:5px">页面壳、路由同步、区域编排</td><td style="padding:5px">不直接调用多条业务 API；只组合 composable 与子组件</td></tr>
+    <tr><td style="padding:5px"><code>useAssetWorkbench</code></td><td style="padding:5px">查询状态、分页、竞态保护、URL 双向同步、选中状态</td><td style="padding:5px">暴露 readonly state 与 load/refresh/select；Workspace 切换时 reset</td></tr>
+    <tr><td style="padding:5px"><code>AssetProjectTree</code></td><td style="padding:5px">我的/团队项目、未归档、收藏、已发布、回收站及计数</td><td style="padding:5px">props: projects/selected/loading；emit: select/retry</td></tr>
+    <tr><td style="padding:5px"><code>AssetCategoryTabs</code></td><td style="padding:5px">角色、场景、道具、分镜、配音、音乐、其他</td><td style="padding:5px">只处理 category，不混用 media_type</td></tr>
+    <tr><td style="padding:5px"><code>AssetFilterBar</code></td><td style="padding:5px">关键词、状态、媒体、模型、创建人、时间、标签和排序</td><td style="padding:5px">300ms 防抖；emit 单一 filter-change 对象</td></tr>
+    <tr><td style="padding:5px"><code>AssetRecordGrid/List</code></td><td style="padding:5px">骨架、空态、错误态、分页、虚拟滚动预留</td><td style="padding:5px">不持有业务状态；只渲染 RecordSummary</td></tr>
+    <tr><td style="padding:5px"><code>AssetRecordCard</code></td><td style="padding:5px">task/asset 三类状态卡片、快捷操作</td><td style="padding:5px">操作按 allowed_actions 渲染；禁止前端硬编码角色</td></tr>
+    <tr><td style="padding:5px"><code>AssetMediaPreview</code></td><td style="padding:5px">图片缩放、视频播放、音频波形、文件缺失态</td><td style="padding:5px">只接收短时签名 URL；销毁时停止媒体并释放对象</td></tr>
+    <tr><td style="padding:5px"><code>AssetDetailDrawer</code></td><td style="padding:5px">概览、生成参数、来源引用、活动记录</td><td style="padding:5px">record_kind + uuid；打开写入 URL record_id</td></tr>
+    <tr><td style="padding:5px"><code>AssetBatchBar</code></td><td style="padding:5px">移动、分类、标签、删除、恢复、下载</td><td style="padding:5px">最多 100 项；展示部分成功明细</td></tr>
+    <tr><td style="padding:5px"><code>CanvasTargetDialog</code></td><td style="padding:5px">目标项目、画布、放置方式和幂等键</td><td style="padding:5px">成功返回 node_uuid 与打开画布动作</td></tr>
+    <tr><td style="padding:5px"><code>AssetPublishDialog</code></td><td style="padding:5px">个人直发、团队审批申请</td><td style="padding:5px">复用市场字典和 publish request 状态</td></tr>
+    <tr><td style="padding:5px"><code>AssetTrashPanel</code></td><td style="padding:5px">删除时间、到期时间、引用数、恢复</td><td style="padding:5px">不提供绕过 30 天策略的普通永久删除</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>二、后端组件与事务边界</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;font-size:11px">
+    <div style="padding:8px;background:#f8fafc"><b>AssetHistoryController</b><br>查询 DTO 校验和 WorkspaceContext；返回 PageResult/DetailView，不暴露 Entity Map。</div>
+    <div style="padding:8px;background:#f8fafc"><b>AssetCommandController</b><br>编辑、收藏、移动、批量、删除/恢复；读取 If-Match 和 Idempotency-Key。</div>
+    <div style="padding:8px;background:#f8fafc"><b>AssetHistoryQueryService</b><br>统一任务与资产投影、facets、allowed_actions；查询只读，不夹带修复写入。</div>
+    <div style="padding:8px;background:#f8fafc"><b>AssetLifecycleService</b><br>ACTIVE/ARCHIVED/TRASHED 状态机、30 天清理、恢复原项目或未归档。</div>
+    <div style="padding:8px;background:#f8fafc"><b>CanvasPlacementService</b><br>目标权限、媒体到节点类型映射、幂等放置、引用记录；单次命令一个事务。</div>
+    <div style="padding:8px;background:#f8fafc"><b>AssetPublicationAdapter</b><br>把生成资产映射到现有 workspace_assets/asset_versions 与市场审批模型，不复制发布逻辑。</div>
+    <div style="padding:8px;background:#f8fafc"><b>GenerationSettlementService</b><br>校验输出、创建资产/版本、节点回写、任务终态；outbox 驱动跨存储补偿。</div>
+    <div style="padding:8px;background:#f8fafc"><b>AssetMigrationJob</b><br>分批回填、checkpoint、可重复执行、核对报告；不在启动 SQL 中做大表一次性迁移。</div>
+    <div style="padding:8px;background:#f8fafc"><b>AssetPurgeScheduler</b><br>按 purge_at 小批清理；先删对象存储，再删主记录；失败延后且报警。</div>
+    <div style="padding:8px;background:#f8fafc"><b>AssetMetrics</b><br>接口、任务入库、补偿、迁移、权限拒绝、幂等重放和回收站指标。</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>三、异常分级、重试与补偿</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#eef2ff"><th style="padding:5px;text-align:left">级别</th><th style="padding:5px;text-align:left">典型异常</th><th style="padding:5px;text-align:left">处理策略</th><th style="padding:5px;text-align:left">告警</th></tr>
+    <tr><td style="padding:5px"><b>E1 用户可修正</b></td><td style="padding:5px">参数、分类、目标画布、模型下线</td><td style="padding:5px">400/422；字段级提示；不自动重试、不改变数据</td><td style="padding:5px">只计数，不告警</td></tr>
+    <tr><td style="padding:5px"><b>E2 业务冲突</b></td><td style="padding:5px">版本、幂等、发布状态、资产已删除</td><td style="padding:5px">409；返回当前状态/版本；刷新后人工决定</td><td style="padding:5px">冲突率异常升高告警</td></tr>
+    <tr><td style="padding:5px"><b>E3 权限/隔离</b></td><td style="padding:5px">跨 Workspace、项目权限变化、下载越权</td><td style="padding:5px">跨 Workspace 返回 404；当前 Workspace 无命令权限返回 403；写安全审计</td><td style="padding:5px">同用户短时大量拒绝触发安全告警</td></tr>
+    <tr><td style="padding:5px"><b>E4 暂时性依赖</b></td><td style="padding:5px">数据库死锁、对象存储超时、签名服务 503</td><td style="padding:5px">只对幂等操作重试；指数退避 + 抖动；页面保留旧数据</td><td style="padding:5px">错误率/SLO 告警</td></tr>
+    <tr><td style="padding:5px"><b>E5 数据一致性</b></td><td style="padding:5px">任务成功无资产、文件存在但版本缺失、节点回写失败</td><td style="padding:5px">禁止标 succeeded；outbox 1m/5m/30m/2h 重试，仍失败进人工补偿队列</td><td style="padding:5px">立即 P1 告警</td></tr>
+    <tr><td style="padding:5px"><b>E6 迁移异常</b></td><td style="padding:5px">Workspace 无法映射、重复 UUID、文件引用失效</td><td style="padding:5px">单项隔离、继续批次、生成异常清单；不静默归错项目</td><td style="padding:5px">批次失败率超阈值暂停迁移</td></tr>
+  </table>
+  <p><b>重试约束：</b>模型生成失败默认只允许用户手动重试，避免重复计费；数据库死锁最多自动 3 次；签名下载最多即时重试 1 次；补偿任务每次使用同一业务幂等键。<b>死信处理：</b>记录 workspace_id、task_uuid、asset_uuid、阶段、最后错误、重试次数和建议动作。</p>
+</div>
+
+<div class="section">
+  <h3>四、测试用例矩阵</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#eef2ff"><th style="padding:5px;text-align:left">层级</th><th style="padding:5px;text-align:left">必须覆盖</th><th style="padding:5px;text-align:left">阻断条件</th></tr>
+    <tr><td style="padding:5px"><b>Unit</b></td><td style="padding:5px">分类映射、状态机、allowed_actions、重试链、30 天期限、请求哈希、DTO snake_case</td><td style="padding:5px">核心状态转换或权限策略任一失败</td></tr>
+    <tr><td style="padding:5px"><b>Repository</b></td><td style="padding:5px">项目/Workspace 隔离、复合筛选、facets、稳定分页、索引命中、乐观锁</td><td style="padding:5px">出现跨项目混入、重复/漏页或全表扫描</td></tr>
+    <tr><td style="padding:5px"><b>API Integration</b></td><td style="padding:5px">全部路径、字段边界、400/403/404/409/422/428、ETag、幂等重放、部分成功</td><td style="padding:5px">契约与 OpenAPI/DTO 不一致</td></tr>
+    <tr><td style="padding:5px"><b>Generation</b></td><td style="padding:5px">pending→running→succeeded/failed/canceled、输出校验、资产入库、节点回写、补偿</td><td style="padding:5px">任何 succeeded 任务没有可用版本</td></tr>
+    <tr><td style="padding:5px"><b>Frontend</b></td><td style="padding:5px">URL 恢复、请求竞态、三类卡片、媒体预览、权限动作、批量失败、Workspace 切换</td><td style="padding:5px">刷新丢筛选/收藏或显示无权限动作</td></tr>
+    <tr><td style="padding:5px"><b>E2E</b></td><td style="padding:5px">项目分类、失败重试、画布幂等、个人发布、团队审批、删除恢复、旧路由重定向</td><td style="padding:5px">任一主生产链路不可闭环</td></tr>
+    <tr><td style="padding:5px"><b>Migration</b></td><td style="padding:5px">重复执行、断点续跑、platform→workspace 数量/归属/文件/收藏核对、回滚读开关</td><td style="padding:5px">核对差异未解释或无法回滚</td></tr>
+    <tr><td style="padding:5px"><b>Security</b></td><td style="padding:5px">ID 枚举、跨 Workspace、越权下载、批量混入、伪造 workspace header、签名 URL 过期</td><td style="padding:5px">出现任何数据泄漏</td></tr>
+    <tr><td style="padding:5px"><b>Performance</b></td><td style="padding:5px">50k/500k 数据量列表、facets、详情、批量 100 项、迁移并发与清理任务</td><td style="padding:5px">超过指标或影响生成主链路</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>五、产品与工程指标</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;font-size:11px">
+    <div style="padding:8px;background:#ecfdf5"><b>正确性</b><br>成功任务无资产 = 0<br>跨 Workspace 泄漏 = 0<br>项目分类错误 = 0<br>幂等重复节点 = 0<br>迁移已解释差异率 = 100%</div>
+    <div style="padding:8px;background:#ecfdf5"><b>可靠性</b><br>资产登记成功率 ≥ 99.95%<br>补偿 15 分钟内完成率 ≥ 99%<br>补偿死信 ≤ 0.01%<br>回收清理误删 = 0</div>
+    <div style="padding:8px;background:#ecfdf5"><b>性能</b><br>列表 p95 ≤ 500ms、p99 ≤ 1s<br>详情 p95 ≤ 300ms<br>普通写命令 p95 ≤ 800ms<br>首屏骨架 ≤ 300ms、可操作列表 ≤ 1.5s（不含媒体）</div>
+    <div style="padding:8px;background:#ecfdf5"><b>可用性与体验</b><br>查询 API 月可用性 ≥ 99.9%<br>页面请求错误率 &lt; 0.5%<br>收藏刷新保持率 = 100%<br>失败记录可诊断率 = 100%</div>
+  </div>
+  <p><b>监控标签：</b>request_id、workspace_id、user_id、project_uuid、task_uuid、asset_uuid、operation、status、error_code、provider、model_id。<b>告警：</b>成功无资产立即 P1；跨 Workspace 安全拒绝激增 P1；补偿积压、迁移差异、接口 SLO 连续 5 分钟超阈值 P2。</p>
+</div>
+
+<div class="section">
+  <h3>六、实施阶段与质量门禁</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#eef2ff"><th style="padding:5px;text-align:left">阶段</th><th style="padding:5px;text-align:left">交付内容</th><th style="padding:5px;text-align:left">退出门槛</th><th style="padding:5px;text-align:left">回滚点</th></tr>
+    <tr><td style="padding:5px"><b>M0 基线审计</b></td><td style="padding:5px">表/接口/Workspace ID/数据量/空资产报告；冻结新旧口径</td><td style="padding:5px">差异清单签字确认，样本可复现</td><td style="padding:5px">无数据写入</td></tr>
+    <tr><td style="padding:5px"><b>M1 Schema 与权限</b></td><td style="padding:5px">加法迁移、索引、Workspace 统一、DTO/ErrorCode</td><td style="padding:5px">H2/MySQL 迁移测试通过，旧功能无回归</td><td style="padding:5px">关闭新字段使用开关</td></tr>
+    <tr><td style="padding:5px"><b>M2 Canonical 双写</b></td><td style="padding:5px">GenerationSettlement、workspace asset/version 写入、补偿、影子核对</td><td style="padding:5px">连续 7 天成功无资产=0，双写差异=0</td><td style="padding:5px">停新写，保留旧 platform 写入</td></tr>
+    <tr><td style="padding:5px"><b>M3 查询与命令 API</b></td><td style="padding:5px">项目、records、详情、编辑、收藏、任务、画布接口</td><td style="padding:5px">契约/安全/性能测试通过</td><td style="padding:5px">API feature flag 切旧读</td></tr>
+    <tr><td style="padding:5px"><b>M4 工作台上线</b></td><td style="padding:5px">项目分类、任务卡、详情、筛选、收藏、重试、画布；合并 TaskMonitor</td><td style="padding:5px">E2E 主链路通过，小流量无 P1/P2</td><td style="padding:5px">路由切回旧 AssetHistory</td></tr>
+    <tr><td style="padding:5px"><b>M5 管理闭环</b></td><td style="padding:5px">批量、未归档、下载、回收站、活动日志、市场发布</td><td style="padding:5px">删除恢复/审批/批量验收通过</td><td style="padding:5px">逐能力开关关闭</td></tr>
+    <tr><td style="padding:5px"><b>M6 切读与退役</b></td><td style="padding:5px">全量迁移核对、停止旧写、弃用头、移除旧入口和表</td><td style="padding:5px">旧调用 14 天为 0，兼容期 ≥ 60 天，备份可恢复</td><td style="padding:5px">删表前可切回；删表后从备份恢复</td></tr>
+  </table>
+  <p>阶段不可并行跳跃：M2 依赖 M1；M4 依赖 M3；M6 必须等待 M2–M5 指标稳定。每个阶段独立特性开关，禁止用一次大版本同时切数据模型、API 和 UI。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认 V2 完整设计</h3><p>将全部确认内容写入正式规格文档并自检。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>仍需调整</h3><p>请指出具体组件、异常等级、测试门禁、指标阈值或阶段依赖。</p></div></div>
+</div>

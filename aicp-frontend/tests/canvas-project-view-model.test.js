@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   canvasRoute, buildQueryParams, validateCanvasDraft,
-  buildIdempotencyKey, canvasActions, workspaceTab, buildBreadcrumb,
+  buildIdempotencyKey, buildAdmissionParams, canvasActions, workspaceTab, buildBreadcrumb,
   STATUS_LABELS, PURPOSE_LABELS, SEVERITY_COLORS
 } from '../src/views/canvas-project/canvasProjectViewModel.js'
 
@@ -27,16 +27,30 @@ test('query params omit default page size', () => {
   assert.equal(params.page_size, undefined)
 })
 
-test('canvas creation requires every ownership field', () => {
-  const missing = validateCanvasDraft({})
+test('standalone canvas creation only requires name and purpose', () => {
+  assert.deepEqual(validateCanvasDraft({ name: '', purpose: 'experiment' }), ['name'])
+  assert.deepEqual(validateCanvasDraft({ name: '空白画布', purpose: 'experiment' }), [])
+})
+
+test('partial upstream binding reports the missing binding fields', () => {
+  const missing = validateCanvasDraft({
+    name: '绑定画布', purpose: 'official', contentProjectId: 1
+  })
   assert.deepEqual(missing, [
-    'name', 'contentProjectId', 'productionUnitType',
-    'productionUnitId', 'sourceContentVersionId',
-    'sourceStoryboardVersionId', 'purpose'
+    'productionUnitType', 'productionUnitId',
+    'sourceContentVersionId', 'sourceStoryboardVersionId'
   ])
 })
 
-test('valid draft returns no missing fields', () => {
+test('admission params use the backend query contract', () => {
+  assert.deepEqual(buildAdmissionParams({
+    contentProjectId: 7, productionUnitId: 9, purpose: 'official'
+  }), {
+    contentProjectId: 7, productionUnitId: 9, purpose: 'official'
+  })
+})
+
+test('valid fully-bound draft returns no missing fields', () => {
   const draft = {
     name: 'Test', contentProjectId: 1, productionUnitType: 'episode',
     productionUnitId: 1, sourceContentVersionId: 1,

@@ -1,0 +1,46 @@
+<h2>设计确认 2/4：功能边界与状态流</h2>
+<p class="subtitle">历史模块统一承载生成记录与可复用资产，但不替代画布编辑器，也不在本期建设复杂版本树。</p>
+
+<div class="section">
+  <h3>1. 生成记录状态</h3>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="padding:8px 12px;background:#fef3c7;border-radius:6px">排队中<br><small>可取消</small></span><b>→</b>
+    <span style="padding:8px 12px;background:#dbeafe;border-radius:6px">生成中<br><small>展示进度</small></span><b>→</b>
+    <span style="padding:8px 12px;background:#dcfce7;border-radius:6px">成功<br><small>原子化资产入库</small></span>
+    <span style="margin:0 4px">或</span>
+    <span style="padding:8px 12px;background:#fee2e2;border-radius:6px">失败<br><small>原因 + 重试</small></span>
+    <span style="margin:0 4px">/</span>
+    <span style="padding:8px 12px;background:#e5e7eb;border-radius:6px">已取消<br><small>不生成资产</small></span>
+  </div>
+  <p>重试创建新任务并保留原任务链路；成功任务必须返回真实文件地址、缩略图和资产 ID，失败记录不得产生“空壳资产”。</p>
+</div>
+
+<div class="section">
+  <h3>2. 单个与批量资产操作</h3>
+  <div class="cards">
+    <div class="card"><div class="card-body"><h3>整理</h3><p>重命名、标签、收藏、移动到其他项目、从未归档区批量归档。</p></div></div>
+    <div class="card"><div class="card-body"><h3>生产复用</h3><p>预览、下载、复制 Prompt/参数、再次生成、发送到指定项目画布并创建对应类型节点。</p></div></div>
+    <div class="card"><div class="card-body"><h3>流转</h3><p>个人资产直接申请发布；团队资产创建发布审批。成功后显示市场状态和入口。</p></div></div>
+    <div class="card"><div class="card-body"><h3>回收站</h3><p>软删除保留 30 天，可恢复；存在画布引用时明确提示，但不破坏已存在节点。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>3. 发送到画布的真实闭环</h3>
+  <div style="display:grid;grid-template-columns:1fr 35px 1fr 35px 1fr;align-items:center;text-align:center;gap:6px">
+    <div style="padding:12px;background:#eef2ff;border-radius:7px"><b>选择目标</b><br><small>项目 + 画布 + 放置方式</small></div><b>→</b>
+    <div style="padding:12px;background:#eef2ff;border-radius:7px"><b>服务端校验</b><br><small>权限、资产状态、类型</small></div><b>→</b>
+    <div style="padding:12px;background:#dcfce7;border-radius:7px"><b>创建节点</b><br><small>返回 node_id 与跳转地址</small></div>
+  </div>
+  <p>接口不再只返回“已发送”文案；重复请求使用幂等键，避免双击产生重复节点。</p>
+</div>
+
+<div class="section">
+  <h3>明确不纳入本期</h3>
+  <p>资产多级版本树、版权合同、自动内容审核、重复文件指纹去重、跨项目依赖图。这些保留扩展位，不阻塞当前生产闭环。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认功能边界</h3><p>继续确认后端数据与接口设计。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请在对话中说明需新增、删除或改变的能力。</p></div></div>
+</div>

@@ -48,16 +48,33 @@ export function buildQueryParams({ page, pageSize, status, mode, keyword, conten
   return params
 }
 
+const UPSTREAM_FIELDS = [
+  'contentProjectId', 'productionUnitType', 'productionUnitId',
+  'sourceContentVersionId', 'sourceStoryboardVersionId'
+]
+
 /**
  * Validate canvas creation draft. Returns array of missing field keys.
+ * Standalone canvas: only name + purpose required.
+ * Bound canvas: all-or-nothing — any upstream field triggers full validation.
  */
-export function validateCanvasDraft(draft) {
-  const required = [
-    'name', 'contentProjectId', 'productionUnitType',
-    'productionUnitId', 'sourceContentVersionId',
-    'sourceStoryboardVersionId', 'purpose'
-  ]
-  return required.filter(f => !draft[f])
+export function validateCanvasDraft(draft = {}) {
+  const missing = []
+  if (!draft.name?.trim()) missing.push('name')
+  if (!draft.purpose) missing.push('purpose')
+
+  const hasBinding = UPSTREAM_FIELDS.some(field => Boolean(draft[field]))
+  if (hasBinding) {
+    missing.push(...UPSTREAM_FIELDS.filter(field => !draft[field]))
+  }
+  return missing
+}
+
+/**
+ * Serialize admission-check parameters using the backend camelCase contract.
+ */
+export function buildAdmissionParams({ contentProjectId, productionUnitId, purpose }) {
+  return { contentProjectId, productionUnitId, purpose }
 }
 
 /**

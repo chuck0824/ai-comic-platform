@@ -1,0 +1,74 @@
+<h2>第一部分：系统架构与职责边界</h2>
+<p class="subtitle">核心原则：浏览器负责“快”，Blender 负责“准”，镜头描述协议负责两端一致。</p>
+
+<div class="mockup">
+  <div class="mockup-header">单镜头制作数据流</div>
+  <div class="mockup-body" style="padding:20px;background:#08111f;color:#dbeafe">
+    <div style="display:grid;grid-template-columns:1fr 52px 1.2fr 52px 1fr;gap:8px;align-items:center;text-align:center">
+      <div style="padding:18px 12px;border:1px solid #334155;border-radius:10px;background:#0f172a">
+        <strong style="color:#93c5fd">分镜系统</strong><br><small>shot_id · 时长 · fps<br>角色/场景/台词/动作意图</small>
+      </div>
+      <div style="font-size:24px">→</div>
+      <div style="padding:18px 12px;border:2px solid #2563eb;border-radius:10px;background:#172554">
+        <strong style="color:#bfdbfe">Web 3D 导演台</strong><br><small>Vue + Three.js<br>场景装配 · 关键帧 · 实时播放<br>撤销重做 · 自动保存</small>
+      </div>
+      <div style="font-size:24px">→</div>
+      <div style="padding:18px 12px;border:1px solid #7c3aed;border-radius:10px;background:#2e1065">
+        <strong style="color:#ddd6fe">镜头快照</strong><br><small>不可变版本<br>资产版本 + 时间线 + 相机参数</small>
+      </div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;padding-right:15%;font-size:24px;margin:8px 0">↓</div>
+
+    <div style="display:grid;grid-template-columns:1fr 52px 1fr 52px 1fr;gap:8px;align-items:center;text-align:center">
+      <div style="padding:18px 12px;border:1px solid #059669;border-radius:10px;background:#052e2b">
+        <strong style="color:#a7f3d0">AI 生成节点</strong><br><small>预演 MP4 · 首尾帧<br>轨迹/镜头参数 JSON</small>
+      </div>
+      <div style="font-size:24px">←</div>
+      <div style="padding:18px 12px;border:1px solid #475569;border-radius:10px;background:#111827">
+        <strong style="color:#e5e7eb">渲染结果</strong><br><small>低模预演视频<br>缩略图 · manifest · 日志</small>
+      </div>
+      <div style="font-size:24px">←</div>
+      <div style="padding:18px 12px;border:2px solid #7c3aed;border-radius:10px;background:#2e1065">
+        <strong style="color:#ddd6fe">Blender Worker</strong><br><small>Python 无界面模式<br>装配 glTF · 动作混合 · 相机动画<br>Eevee 渲染 · FFmpeg 编码</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="split" style="margin-top:22px">
+  <div class="pros">
+    <h4>Web 端负责</h4>
+    <ul>
+      <li>60fps 交互与时间线回放</li>
+      <li>对象/角色变换关键帧</li>
+      <li>姿势片段排布与过渡预览</li>
+      <li>相机位置、注视、FOV/焦距关键帧</li>
+      <li>自动保存、撤销重做、版本草稿</li>
+    </ul>
+  </div>
+  <div class="pros">
+    <h4>Blender 端负责</h4>
+    <ul>
+      <li>按快照重建确定性场景</li>
+      <li>动作片段混合和曲线烘焙</li>
+      <li>镜头动画与安全框校验</li>
+      <li>Eevee 低模预演渲染</li>
+      <li>输出 MP4、首尾帧和镜头清单</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>关键约束</h3>
+  <p>浏览器与 Blender 不直接双向同步工程文件；二者都读取版本化的 <code>Shot Scene Schema</code>。每次“生成预演”固化不可变快照，确保重试产生一致结果，并避免编辑中的草稿污染渲染任务。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve-architecture" onclick="toggleSelect(this)">
+    <div class="letter">✓</div><div class="content"><h3>认可此架构</h3><p>继续确认导演台界面与时间线设计。</p></div>
+  </div>
+  <div class="option" data-choice="revise-architecture" onclick="toggleSelect(this)">
+    <div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请在终端说明需要改变的职责或流程。</p></div>
+  </div>
+</div>

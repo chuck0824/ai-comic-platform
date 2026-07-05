@@ -87,5 +87,6 @@ public class EnterpriseApprovalController {
             return ApiResponse.error(409, e.getMessage());
         } catch (RuntimeException e) {
             return ApiResponse.error(404, e.getMessage());
+        }
     }
 }

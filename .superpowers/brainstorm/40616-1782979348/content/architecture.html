@@ -1,0 +1,67 @@
+<h2>剧本创作模块：创作圣经中枢</h2>
+<p class="subtitle">确认模块边界、事实流向，以及与独立画布模块的耦合方式</p>
+
+<div class="mockup">
+  <div class="mockup-header">总体架构</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 1.25fr 1fr;gap:18px;align-items:stretch">
+      <div style="border:1px solid #d8dee9;border-radius:12px;padding:16px;background:#f8fafc">
+        <div class="label">创作输入</div>
+        <h3>素材与构思</h3>
+        <p>故事种子 / 上传文稿</p>
+        <p>人物与剧情桥段</p>
+        <p>平台、受众与模式</p>
+      </div>
+      <div style="border:2px solid #6366f1;border-radius:14px;padding:18px;background:#f5f3ff">
+        <div class="label">唯一事实源</div>
+        <h3>创作圣经</h3>
+        <p>🌍 总体生态：规则、势力、地点、资源、制度、历史</p>
+        <p>🕸 动态关系网：实体关系、强度、状态、集章时间轴</p>
+        <p>✍️ 写作口径：项目基线 → 角色口吻 → 单元覆盖</p>
+        <p>🔒 用户确认后形成事实版本与上下文快照</p>
+      </div>
+      <div style="border:1px solid #d8dee9;border-radius:12px;padding:16px;background:#f8fafc">
+        <div class="label">创作消费端</div>
+        <h3>分阶段创作</h3>
+        <p>梗概 → 大纲 → 正文</p>
+        <p>一致性检查与三智能体审核</p>
+        <p>锁稿版本与差异追踪</p>
+      </div>
+    </div>
+
+    <div style="text-align:center;font-size:26px;color:#64748b;padding:10px">↓</div>
+
+    <div style="display:grid;grid-template-columns:1.4fr .8fr 1.4fr;gap:14px;align-items:center">
+      <div style="border:1px solid #22c55e;border-radius:12px;padding:14px;background:#f0fdf4">
+        <strong>剧本模块输出</strong>
+        <p style="margin-bottom:0">锁定内容版本 + 创作圣经快照 + 关系时间点 + 写作口径版本</p>
+      </div>
+      <div style="text-align:center;color:#475569;font-weight:600">差异提示<br>用户确认</div>
+      <div style="border:1px solid #f59e0b;border-radius:12px;padding:14px;background:#fffbeb">
+        <strong>独立画布模块</strong>
+        <p style="margin-bottom:0">只读取不可变快照；剧本更新不自动覆盖既有画布</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>本节关键规则</h3>
+  <ul>
+    <li>创作圣经是项目级唯一事实源，不是三个互不关联的工具页。</li>
+    <li>AI 只能提出候选；用户确认后才进入正式事实和生成上下文。</li>
+    <li>每次生成都记录实际使用的圣经版本，保证可复现、可追溯。</li>
+    <li>画布保持独立，通过锁定快照和人工确认的差异同步实现耦合。</li>
+  </ul>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="architecture-approved" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>认可此架构</h3><p>继续展开创作台页面与功能结构</p></div>
+  </div>
+  <div class="option" data-choice="architecture-revise" onclick="toggleSelect(this)">
+    <div class="letter">↺</div>
+    <div class="content"><h3>需要调整</h3><p>在对话中说明需要改变的边界或流向</p></div>
+  </div>
+</div>

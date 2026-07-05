@@ -1,83 +1,205 @@
 package com.aicp.module.sop.service;
 
-import com.aicp.module.sop.entity.SopAudit;
-import com.aicp.module.sop.mapper.SopAuditMapper;
-import com.aicp.module.canvas.entity.StoryboardShot;
-import com.aicp.module.canvas.mapper.StoryboardShotMapper;
+import com.aicp.common.dto.PageResult;
+import com.aicp.common.exception.BizException;
+import com.aicp.common.exception.ErrorCode;
+import com.aicp.common.util.SecurityUtil;
+import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
+import com.aicp.module.contentproject.service.ProjectAccessService;
+import com.aicp.module.sop.domain.SopCheckContext;
+import com.aicp.module.sop.domain.SopEnums;
+import com.aicp.module.sop.domain.SopRuleDefinition;
+import com.aicp.module.sop.domain.SopRuleEvaluation;
+import com.aicp.module.sop.entity.*;
+import com.aicp.module.sop.mapper.*;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
-import java.util.*;
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class SopService {
 
-    private final SopAuditMapper auditMapper;
-    private final StoryboardShotMapper shotMapper;
+    private final SopCheckRunMapper checkRunMapper;
+    private final SopCheckResultMapper checkResultMapper;
+    private final SopWorkOrderMapper workOrderMapper;
+    private final SopContextAssembler contextAssembler;
+    private final SopRuleEngine ruleEngine;
+    private final SopRuleCatalog ruleCatalog;
+    private final ProjectAccessService accessService;
+    private final ObjectMapper objectMapper;
 
-    public Map<String, Object> checkProductionReadiness(String projectId) {
-        List<Map<String, Object>> checks = new ArrayList<>();
-        String[][] items = {
-            {"剧情事实无偏移", "pass"}, {"场景目标明确", "pass"}, {"Beat完整", "pass"},
-            {"人物关系变化明确", "pass"}, {"关键对白已锁定", "pass"}, {"资产ID完整", "warning"},
-            {"高风险镜头已标记", "pass"}, {"AI提示词不过长", "fail"}, {"D/E级镜头已拆分", "pass"},
-            {"抽卡表/视频表已区分", "warning"}, {"Voice ID明确", "pass"},
-            {"配音字幕表就绪", "pass"}, {"上一章状态已继承", "pass"}
-        };
+    // ===== Check operations =====
 
-        int passed = 0, failed = 0;
-        for (int i = 0; i < items.length; i++) {
-            Map<String, Object> check = new LinkedHashMap<>();
-            check.put("id", i + 1); check.put("name", items[i][0]); check.put("result", items[i][1]);
-            if ("pass".equals(items[i][1])) passed++;
-            else if ("fail".equals(items[i][1])) failed++;
-            checks.add(check);
+    @Transactional
+    public SopCheckRun runCheck(Long projectId, Long contentUnitId, Long canvasProjectId,
+                                 SopEnums.TriggerType triggerType) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        accessService.require(projectId, userId, Action.PRODUCE);
+
+        SopCheckContext context = contextAssembler.assemble(projectId, contentUnitId, canvasProjectId);
+        String ruleSetVersion = ruleCatalog.getActiveRuleSetVersion();
+
+        // Idempotency: reuse existing completed run
+        SopCheckRun existing = checkRunMapper.selectOne(new LambdaQueryWrapper<SopCheckRun>()
+                .eq(SopCheckRun::getProjectId, projectId)
+                .eq(SopCheckRun::getScopeHash, context.scopeHash())
+                .eq(SopCheckRun::getRuleSetVersion, ruleSetVersion)
+                .eq(SopCheckRun::getSnapshotHash, context.snapshotHash())
+                .eq(SopCheckRun::getStatus, SopEnums.RunStatus.COMPLETED.value()));
+        if (existing != null) {
+            log.info("Reusing existing check run {} for project {}", existing.getId(), projectId);
+            return existing;
         }
-        String overall = failed >= 3 ? "red" : (failed > 0 ? "yellow" : "green");
-        return Map.of("overall", overall, "passed", passed, "failed", failed, "checks", checks,
-                "recommendation", failed > 0 ? failed + "项未通过，建议修复后进入生产" : "可以进入生产");
-    }
 
-    public List<SopAudit> getAuditList(String projectId) {
-        return auditMapper.selectList(
-                new LambdaQueryWrapper<SopAudit>().eq(SopAudit::getProjectId, projectId));
-    }
+        // Create run
+        SopCheckRun run = new SopCheckRun();
+        run.setProjectId(projectId);
+        run.setContentUnitId(contentUnitId);
+        run.setCanvasProjectId(canvasProjectId);
+        run.setTriggerType(triggerType.value());
+        run.setRuleSetVersion(ruleSetVersion);
+        run.setScopeHash(context.scopeHash());
+        run.setSnapshotHash(context.snapshotHash());
+        run.setSourceRevisionsJson(toJson(context.sourceRevisions()));
+        run.setStatus(SopEnums.RunStatus.RUNNING.value());
+        run.setCreatedBy(userId);
+        checkRunMapper.insert(run);
 
-    public SopAudit submitAudit(String projectId, Map<String, Object> body) {
-        SopAudit audit = new SopAudit();
-        audit.setProjectId(projectId);
-        audit.setCheckItem((String) body.get("check_item"));
-        audit.setSeverity((String) body.getOrDefault("severity", "P2"));
-        audit.setDescription((String) body.get("description"));
-        audit.setStatus("open");
-        auditMapper.insert(audit);
-        return audit;
-    }
+        // Evaluate rules
+        List<SopRuleDefinition> activeRules = ruleCatalog.getActiveRules();
+        List<SopRuleEvaluation> evaluations = ruleEngine.evaluateAll(context, activeRules);
 
-    public void updateAudit(Long auditId, Map<String, Object> body) {
-        SopAudit audit = auditMapper.selectById(auditId);
-        if (audit != null) {
-            if (body.containsKey("status")) audit.setStatus((String) body.get("status"));
-            if (body.containsKey("fix_suggestion")) audit.setFixSuggestion((String) body.get("fix_suggestion"));
-            auditMapper.updateById(audit);
+        // Persist results
+        List<SopCheckResult> results = new ArrayList<>();
+        for (SopRuleEvaluation eval : evaluations) {
+            SopCheckResult result = new SopCheckResult();
+            result.setRunId(run.getId());
+            result.setRuleCode(eval.ruleCode());
+            result.setResult(eval.result().value());
+            result.setSeverity(eval.severity().value());
+            result.setCritical(eval.critical() ? 1 : 0);
+            result.setTargetType(eval.targetType());
+            result.setTargetId(eval.targetId());
+            result.setIssueFingerprint(eval.issueFingerprint());
+            result.setEvidenceJson(toJson(eval.evidence()));
+            result.setSuggestion(eval.suggestion());
+            result.setFixPolicy(eval.fixPolicy().value());
+            results.add(result);
         }
+        if (!results.isEmpty()) {
+            for (SopCheckResult result : results) {
+                checkResultMapper.insert(result);
+            }
+        }
+
+        // Aggregate counts
+        int passed = 0, warnings = 0, blocked = 0, notReady = 0, errors = 0;
+        for (SopRuleEvaluation eval : evaluations) {
+            switch (eval.result()) {
+                case PASS -> passed++;
+                case WARNING -> warnings++;
+                case BLOCKED -> blocked++;
+                case NOT_READY -> notReady++;
+                case ERROR -> errors++;
+            }
+        }
+
+        // Compute overall status
+        if (blocked > 0 || errors > 0) {
+            run.setOverallStatus(SopEnums.OverallStatus.RED.value());
+        } else if (warnings > 0 || notReady > 0) {
+            run.setOverallStatus(SopEnums.OverallStatus.YELLOW.value());
+        } else {
+            run.setOverallStatus(SopEnums.OverallStatus.GREEN.value());
+        }
+
+        run.setPassedCount(passed);
+        run.setWarningCount(warnings);
+        run.setBlockedCount(blocked);
+        run.setNotReadyCount(notReady);
+        run.setErrorCount(errors);
+        run.setStatus(SopEnums.RunStatus.COMPLETED.value());
+        run.setCompletedAt(LocalDateTime.now());
+        checkRunMapper.updateById(run);
+
+        log.info("Check run {} completed: overall={}, P={} W={} B={} N={} E={}",
+                run.getId(), run.getOverallStatus(), passed, warnings, blocked, notReady, errors);
+        return run;
     }
 
-    public List<Map<String, Object>> getVersionHistory(String projectId) {
-        return List.of(
-                Map.of("version", "V0.1", "status", "草稿", "created_at", "2026-06-01"),
-                Map.of("version", "V0.5", "status", "编导确认", "created_at", "2026-06-05"));
+    // ===== Report queries =====
+
+    public SopCheckRun getRun(Long projectId, Long runId) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        accessService.require(projectId, userId, Action.VIEW);
+
+        SopCheckRun run = checkRunMapper.selectById(runId);
+        if (run == null || !run.getProjectId().equals(projectId)) {
+            throw new BizException(ErrorCode.SOP_RUN_NOT_FOUND);
+        }
+
+        // Check staleness
+        SopCheckContext current = contextAssembler.assemble(projectId, run.getContentUnitId(), run.getCanvasProjectId());
+        if (!current.snapshotHash().equals(run.getSnapshotHash())) {
+            run.setStatus(SopEnums.RunStatus.STALE.value());
+            checkRunMapper.updateById(run);
+        }
+
+        return run;
     }
 
-    public Map<String, Object> getFailureStrategy(String shotId) {
-        return Map.of("shot_id", shotId, "failure_count", 3,
-                "recommended_action", "检查资产与参考图",
-                "suggestions", List.of("强化Face_ID参考图", "减少动作复杂度"));
+    public List<SopCheckResult> getResults(Long runId) {
+        return checkResultMapper.selectList(new LambdaQueryWrapper<SopCheckResult>()
+                .eq(SopCheckResult::getRunId, runId));
     }
 
-    public Map<String, Object> getCapacity(String projectId) {
-        return Map.of("estimated_hours", 12.5, "complexity", "B", "shot_count", 18, "risk_shots", 3);
+    public PageResult<SopCheckRun> listChecks(Long projectId, int page, int size) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        accessService.require(projectId, userId, Action.VIEW);
+
+        Page<SopCheckRun> pageResult = checkRunMapper.selectPage(
+                new Page<>(page, size),
+                new LambdaQueryWrapper<SopCheckRun>()
+                        .eq(SopCheckRun::getProjectId, projectId)
+                        .orderByDesc(SopCheckRun::getCreatedAt));
+        return PageResult.of(pageResult.getRecords(), page, size, pageResult.getTotal());
+    }
+
+    // ===== Work order queries =====
+
+    public PageResult<SopWorkOrder> listWorkOrders(Long projectId, int page, int size, String statusFilter) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        accessService.require(projectId, userId, Action.VIEW);
+
+        LambdaQueryWrapper<SopWorkOrder> query = new LambdaQueryWrapper<SopWorkOrder>()
+                .eq(SopWorkOrder::getProjectId, projectId)
+                .orderByDesc(SopWorkOrder::getCreatedAt);
+        if (statusFilter != null && !statusFilter.isBlank()) {
+            query.eq(SopWorkOrder::getStatus, statusFilter);
+        }
+        Page<SopWorkOrder> pageResult = workOrderMapper.selectPage(new Page<>(page, size), query);
+        return PageResult.of(pageResult.getRecords(), page, size, pageResult.getTotal());
+    }
+
+    // ===== Utility =====
+
+    private String toJson(Object obj) {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize object to JSON", e);
+            return "{}";
+        }
     }
 }

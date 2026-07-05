@@ -33,8 +33,12 @@ public class ScriptRepoController {
             @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) String status,
             @RequestParam(required = false) String genre,
-            @RequestParam(required = false) String keyword) {
-        var result = scriptService.getScripts(page, pageSize, status, genre, keyword);
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String plot,
+            @RequestParam(required = false) String tone,
+            @RequestParam(required = false) String setting,
+            @RequestParam(required = false, defaultValue = "updatedAt") String sort) {
+        var result = scriptService.getScripts(page, pageSize, status, genre, keyword, plot, tone, setting, sort);
         return ApiResponse.success(PageResult.of(result.getRecords(), page, pageSize, result.getTotal()));
     }
 

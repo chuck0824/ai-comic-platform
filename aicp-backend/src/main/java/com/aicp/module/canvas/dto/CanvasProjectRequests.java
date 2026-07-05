@@ -12,11 +12,11 @@ public interface CanvasProjectRequests {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record CreateCanvasProjectRequest(
             @NotBlank @Size(max = 200) String name,
-            @NotNull Long contentProjectId,
-            @NotBlank @Size(max = 32) String productionUnitType,
-            @NotNull Long productionUnitId,
-            @NotNull Long sourceContentVersionId,
-            @NotNull Long sourceStoryboardVersionId,
+            Long contentProjectId,
+            @Size(max = 32) String productionUnitType,
+            Long productionUnitId,
+            Long sourceContentVersionId,
+            Long sourceStoryboardVersionId,
             @Pattern(regexp = "official|alternative|experiment") String purpose,
             @NotNull Long ownerId,
             @NotBlank @Size(max = 200) String idempotencyKey) {}

@@ -17,6 +17,7 @@
       <WorkInfoNav
         :active-section="activeSection"
         :setting-counts="editorData?.settingCounts ?? {}"
+        :bible-pending-count="bibleHealth?.pending_change_count ?? 0"
         @select="selectSection"
       />
 
@@ -76,6 +77,33 @@
             :read-only="isReadOnly"
           />
 
+          <!-- Creative Bible overview -->
+          <CreativeBibleOverview
+            v-else-if="activeSection === 'bible-overview'"
+            :project-id="editorData?.projectId"
+            :bible="bibleInfo"
+            :health="bibleHealth"
+            :loading="bibleLoading"
+            @refresh="loadBibleHealth"
+            @created="loadBibleHealth"
+            @confirmed="loadBibleHealth"
+          />
+
+          <!-- Ecosystem panel -->
+          <EcosystemPanel
+            v-else-if="activeSection === 'ecosystem'"
+            :project-id="editorData?.projectId"
+            :bible-version-id="bibleHealth?.current_version_id"
+            :editable="!isReadOnly"
+          />
+
+          <!-- Writing guide panel -->
+          <WritingGuidePanel
+            v-else-if="activeSection === 'writing-guide'"
+            :project-id="editorData?.projectId"
+            :bible-version-id="bibleHealth?.current_version_id"
+          />
+
           <!-- Reading pane -->
           <div v-else class="placeholder">
             <el-empty description="选择左侧导航开始编辑" />
@@ -105,6 +133,11 @@ import TagPanel from './work-editor/TagPanel.vue'
 import TextProfilePanel from './work-editor/TextProfilePanel.vue'
 import SettingPanel from './work-editor/SettingPanel.vue'
 import ExtractionReviewDrawer from './work-editor/ExtractionReviewDrawer.vue'
+import CreativeBibleOverview from './work-editor/CreativeBibleOverview.vue'
+import EcosystemPanel from './work-editor/EcosystemPanel.vue'
+import WritingGuidePanel from './work-editor/WritingGuidePanel.vue'
+import { contentProjectApi } from '@/api/contentProject'
+import { normalizeBibleHealth } from './work-editor/creativeBibleData.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -133,6 +166,26 @@ const isSettingSection = computed(() => SETTING_SECTIONS.includes(activeSection.
 const showExtractionDrawer = ref(false)
 const extractionBatchId = ref(null)
 
+// Bible state
+const bibleInfo = ref(null)
+const bibleHealth = ref(null)
+const bibleLoading = ref(false)
+
+async function loadBibleHealth() {
+  if (!editorData.value?.projectId) return
+  bibleLoading.value = true
+  try {
+    const [bibleRes, healthRes] = await Promise.all([
+      contentProjectApi.getCreativeBible(editorData.value.projectId).catch(() => ({ data: null })),
+      contentProjectApi.getCreativeBibleHealth(editorData.value.projectId).catch(() => ({ data: null }))
+    ])
+    bibleInfo.value = bibleRes?.data ?? bibleRes
+    bibleHealth.value = normalizeBibleHealth(healthRes?.data ?? healthRes)
+  } finally {
+    bibleLoading.value = false
+  }
+}
+
 // ---- Init ----
 
 onMounted(init)
@@ -155,6 +208,9 @@ async function init() {
       loadError.value = '缺少作品 ID'
       return
     }
+
+    // Load creative bible health
+    loadBibleHealth()
 
     // Sync local state from loaded data
     if (editorData.value?.profile) {

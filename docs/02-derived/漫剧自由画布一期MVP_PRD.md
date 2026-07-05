@@ -1,5 +1,12 @@
 # 漫剧自由画布一期 MVP PRD
 
+> **[superpowers 更新 V1.7]（2026-07-04）**：
+> - **浮动编辑器改造**：画布交互模型已升级——右侧属性面板和底部生成栏已由浮动编辑器替代。本文档中涉及"右侧属性面板"、"底部生成栏"、"属性抽屉"的交互描述标注为 `[已废弃-superpowers V1.6]`。新交互模型详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
+> - **Agent 会话统一**：各节点独立 Agent 面板（如"文本节点 Agent"、"分镜 Agent panel"）已由统一 AgentSessionService facade 替代。Agent 交互通过 `/api/v1/agent/sessions` 统一入口。详见 `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
+> - **分镜系统统一**：旧双轨分镜（`storyboard_shots` + `cp_storyboard_*`）已由统一专业分镜编辑器替代（13 维镜头字段 + A/B/C 层级版本 + XLSX 导入导出）。详见 `docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md`
+> - **API 前缀统一**：所有 API 端点统一使用 `/api/v1/` 前缀。文档中旧 `/api/` 前缀的引用以新前缀为准。
+> - **Workspace 隔离**：所有私有资源需 `X-Workspace-Id` header。详见 `docs/superpowers/specs/2026-06-28-unified-account-model-billing-design.md`
+
 ## 1. 文档信息
 
 | 项目 | 内容 |
@@ -8,6 +15,14 @@
 | 阶段 | 一期 MVP |
 | 文档类型 | PRD |
 | 目标版本 | V1.0 |
+| 最后修订 | 2026-07-02（基于 superpowers 更新） |
+
+> **[superpowers 更新] V1.0→V1.6 关键变更**：
+> - 脚本节点：旧 `scripts` 表 → `content_projects` 引用；三种创作模式入口
+> - 画布项目：增加内容项目归属字段（`content_project_id`、`production_unit_type`、`source_content_version_id` 等）
+> - 画布交互：右侧面板/底部生成栏 → 已由浮动编辑器改造取代（详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`）
+> - API 前缀：`/api/` → `/api/v1/`
+> - 画布 Agent：文本节点 Agent → 统一 Agent 会话 facade（详见 `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`）
 | 核心目标 | 搭建可用的自由画布创作闭环，完成剧本到分镜图、单镜头视频和素材包交付的最小生产链路 |
 
 ## 2. 一期定位
@@ -29,7 +44,7 @@
 7. 支持基于分镜图生成视频片段。
 8. 支持逐镜头选择采用版本并导出项目素材包。
 9. 支持历史记录、自动保存、生成任务状态反馈。
-10. 支持文本节点点击后进入节点级 Agent 交互，通过自然语言修改当前文本内容，并从平台 AI API 获取可用文本模型。
+10. 支持文本节点点击后进入节点级 Agent 交互，通过自然语言修改当前文本内容，并从平台 AI API 获取可用文本模型。 `[已废弃-superpowers V1.6：已由统一 AgentSessionService facade 替代]`
 
 ## 4. 目标用户
 
@@ -179,7 +194,7 @@ stateDiagram-v2
 | 形态 | 触发方式 | 展示与行为 |
 | --- | --- | --- |
 | 空态尝试动作 | 新建文本节点后默认展示 | 节点卡片中展示“自己编写内容”“文生视频”“图片反推提示词”“文字生音乐”四个入口 |
-| 节点级 Agent | 点击文本节点或点击空态中的文本输入区域 | 在画布底部/节点附近弹出大输入框，支持自然语言描述要写入或修改的内容，模型下拉展示平台 AI API 返回的文本模型 |
+| 节点级 Agent `[已废弃-superpowers V1.6：已由统一 AgentSessionService facade 替代]` | 点击文本节点或点击空态中的文本输入区域 | 在画布底部/节点附近弹出大输入框，支持自然语言描述要写入或修改的内容，模型下拉展示平台 AI API 返回的文本模型 |
 
 文本节点四个尝试动作：
 
@@ -190,7 +205,7 @@ stateDiagram-v2
 | 图片反推提示词 | 点击后创建“预设 - 图片反推提示词”组，组内包含图片节点和文本节点，并自动建立图片到文本的连线 | 是 | 否，只有执行反推任务时才扣费 |
 | 文字生音乐 | 点击后创建“预设 - 文字生音乐”组，组内包含文本节点和音频节点，并自动建立文本到音频的连线 | 是 | 否，只有执行音频生成时才扣费 |
 
-节点级 Agent 本期只作用于文本节点，入口仅来自画布中的文本节点点击。
+节点级 Agent 本期只作用于文本节点，入口仅来自画布中的文本节点点击。 `[已废弃-superpowers V1.6：已由统一 AgentSessionService facade 替代]`
 
 节点级 Agent 交互要求：
 
@@ -209,7 +224,7 @@ stateDiagram-v2
 | 收起 | 点击收起按钮关闭 Agent 输入框，不清空节点原内容 |
 | 本地可操作模式 | 后端不可用时允许本地预览文本修改逻辑，模型展示“本地文本代理”，不产生真实扣费 |
 
-文本节点 Agent 计费要求：
+文本节点 Agent 计费要求： `[已废弃-superpowers V1.6：已由统一 AgentSessionService facade 替代]`
 
 | 场景 | 计费规则 |
 | --- | --- |
@@ -698,7 +713,7 @@ stateDiagram-v2
 | 复制 | 复制当前节点内容 |
 | 全屏 | 打开大文本编辑弹层 |
 
-#### 12.5.2 文本节点 Agent 业务流
+#### 12.5.2 文本节点 Agent 业务流 `[已废弃-superpowers V1.6：已由统一 AgentSessionService facade 替代]`
 
 ```text
 用户点击文本节点
@@ -714,7 +729,7 @@ stateDiagram-v2
 → 前端关闭结果态并刷新节点展示
 ```
 
-#### 12.5.3 文本节点 Agent 字段与接口
+#### 12.5.3 文本节点 Agent 字段与接口 `[已废弃-superpowers V1.6：已由统一 AgentSessionService facade 替代]`
 
 | 字段 | 类型 | 来源 | 说明 |
 | --- | --- | --- | --- |
@@ -957,27 +972,29 @@ stateDiagram-v2
 
 ### 12.14 后端接口建议
 
+> `[已更新：统一使用 /api/v1/ 前缀]` 以下旧 `/api/` 前缀接口已统一迁移至 `/api/v1/` 前缀。
+
 | 模块 | 接口 | 说明 |
 | --- | --- | --- |
-| 项目 | `POST /api/projects` | 创建项目 |
-| 项目 | `GET /api/projects` | 查询项目列表 |
-| 项目 | `GET /api/projects/{id}` | 获取项目详情 |
-| 项目 | `PUT /api/projects/{id}` | 更新项目名称、配置 |
-| 项目 | `DELETE /api/projects/{id}` | 删除项目 |
-| 画布 | `GET /api/projects/{id}/canvas` | 获取画布快照 |
-| 画布 | `PUT /api/projects/{id}/canvas` | 保存画布快照 |
-| 节点 | `POST /api/projects/{id}/nodes` | 创建节点 |
-| 节点 | `PUT /api/nodes/{id}` | 更新节点 |
-| 节点 | `DELETE /api/nodes/{id}` | 删除节点 |
-| 连线 | `POST /api/projects/{id}/edges` | 创建连线 |
-| 连线 | `DELETE /api/edges/{id}` | 删除连线 |
-| 资产 | `POST /api/assets` | 创建资产 |
-| 资产 | `GET /api/assets` | 查询资产 |
-| 历史 | `GET /api/generation-records` | 查询生成历史 |
-| 任务 | `POST /api/generation-tasks` | 创建生成任务 |
-| 任务 | `GET /api/generation-tasks/{id}` | 查询任务状态 |
-| 任务 | `POST /api/generation-tasks/{id}/retry` | 重试任务 |
-| 文件 | `POST /api/files/upload` | 上传文件 |
+| 项目 | `POST /api/projects` `[已更新：统一使用 /api/v1/ 前缀]` | 创建项目 |
+| 项目 | `GET /api/projects` `[已更新：统一使用 /api/v1/ 前缀]` | 查询项目列表 |
+| 项目 | `GET /api/projects/{id}` `[已更新：统一使用 /api/v1/ 前缀]` | 获取项目详情 |
+| 项目 | `PUT /api/projects/{id}` `[已更新：统一使用 /api/v1/ 前缀]` | 更新项目名称、配置 |
+| 项目 | `DELETE /api/projects/{id}` `[已更新：统一使用 /api/v1/ 前缀]` | 删除项目 |
+| 画布 | `GET /api/projects/{id}/canvas` `[已更新：统一使用 /api/v1/ 前缀]` | 获取画布快照 |
+| 画布 | `PUT /api/projects/{id}/canvas` `[已更新：统一使用 /api/v1/ 前缀]` | 保存画布快照 |
+| 节点 | `POST /api/projects/{id}/nodes` `[已更新：统一使用 /api/v1/ 前缀]` | 创建节点 |
+| 节点 | `PUT /api/nodes/{id}` `[已更新：统一使用 /api/v1/ 前缀]` | 更新节点 |
+| 节点 | `DELETE /api/nodes/{id}` `[已更新：统一使用 /api/v1/ 前缀]` | 删除节点 |
+| 连线 | `POST /api/projects/{id}/edges` `[已更新：统一使用 /api/v1/ 前缀]` | 创建连线 |
+| 连线 | `DELETE /api/edges/{id}` `[已更新：统一使用 /api/v1/ 前缀]` | 删除连线 |
+| 资产 | `POST /api/assets` `[已更新：统一使用 /api/v1/ 前缀]` | 创建资产 |
+| 资产 | `GET /api/assets` `[已更新：统一使用 /api/v1/ 前缀]` | 查询资产 |
+| 历史 | `GET /api/generation-records` `[已更新：统一使用 /api/v1/ 前缀]` | 查询生成历史 |
+| 任务 | `POST /api/generation-tasks` `[已更新：统一使用 /api/v1/ 前缀]` | 创建生成任务 |
+| 任务 | `GET /api/generation-tasks/{id}` `[已更新：统一使用 /api/v1/ 前缀]` | 查询任务状态 |
+| 任务 | `POST /api/generation-tasks/{id}/retry` `[已更新：统一使用 /api/v1/ 前缀]` | 重试任务 |
+| 文件 | `POST /api/files/upload` `[已更新：统一使用 /api/v1/ 前缀]` | 上传文件 |
 | AI 模型 | `GET /api/v1/ai/models?node_type=text&agent_type=text_agent` | 获取文本节点 Agent 模型下拉数据 |
 | 文本节点 Agent | `POST /api/v1/canvas/projects/{projectId}/text-node-agent/plan` | 生成文本修改方案，返回 Token 预估和结果对比 |
 | 文本节点 Agent | `POST /api/v1/canvas/projects/{projectId}/text-node-agent/apply` | 应用修改结果到当前文本节点 |
@@ -988,7 +1005,7 @@ stateDiagram-v2
 | --- | --- | --- | --- |
 | 创建项目 | 用户已登录 | 输入项目名称并确认 | 创建成功并进入空白画布 |
 | 新建文本节点 | 已进入画布 | 双击画布选择文本节点 | 指定位置出现文本节点 |
-| 文本节点 Agent 打开 | 已有文本节点 | 点击文本节点 | 出现与节点关联的 Agent 输入框和模型下拉 |
+| 文本节点 Agent 打开 `[已废弃-superpowers V1.6：已由统一 AgentSessionService facade 替代]` | 已有文本节点 | 点击文本节点 | 出现与节点关联的 Agent 输入框和模型下拉 |
 | 文本模型下拉 | 后端正常 | 打开文本节点 Agent | 下拉数据来自 `/api/v1/ai/models?node_type=text&agent_type=text_agent`，展示模型名、描述、预计耗时 |
 | 文本 Agent 修改 | 文本节点有内容 | 输入修改指令并发送 | 展示原内容/修改后对比和预计 Token/积分 |
 | 应用文本 Agent 结果 | 已生成修改方案 | 点击“应用到文本节点” | 当前文本节点内容被更新，刷新后内容不丢失 |

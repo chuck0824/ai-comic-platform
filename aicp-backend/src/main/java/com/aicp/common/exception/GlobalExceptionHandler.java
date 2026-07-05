@@ -73,6 +73,21 @@ public class GlobalExceptionHandler {
                 default -> HttpStatus.CONFLICT; // 45003–45008, 45011 → 409
             };
         }
+        // 47xxx → SOP service errors (legacy)
+        if (code >= 47000 && code < 48000) {
+            return HttpStatus.UNPROCESSABLE_ENTITY;
+        }
+        // 72xxx → SOP production check errors
+        if (code >= 72000 && code < 73000) {
+            return switch (code) {
+                case 72001 -> HttpStatus.NOT_FOUND;
+                case 72002 -> HttpStatus.GONE;
+                case 72003 -> HttpStatus.UNPROCESSABLE_ENTITY;
+                case 72005 -> HttpStatus.UNPROCESSABLE_ENTITY;
+                case 72006 -> HttpStatus.SERVICE_UNAVAILABLE;
+                default -> HttpStatus.CONFLICT; // 72004 → 409
+            };
+        }
         // 46xxx → canvas / generation-task errors
         if (code >= 46000 && code < 47000) {
             return switch (code) {
@@ -92,6 +107,17 @@ public class GlobalExceptionHandler {
                 case 48015 -> HttpStatus.SERVICE_UNAVAILABLE;     // DOWNLOAD_SIGN_FAILED → 503
                 case 48016 -> HttpStatus.CONFLICT;                // SETTLEMENT_FAILED → 409
                 case 48017 -> HttpStatus.INTERNAL_SERVER_ERROR;   // COMPENSATION_EXHAUSTED → 500
+                default -> HttpStatus.BAD_REQUEST;
+            };
+        }
+        // 49xxx → agent configuration errors
+        if (code >= 49000 && code < 50000) {
+            return switch (code) {
+                case 49020, 49021, 49022 -> HttpStatus.NOT_FOUND;
+                case 49023 -> HttpStatus.FORBIDDEN;
+                case 49024 -> HttpStatus.BAD_REQUEST;
+                case 49025, 49026 -> HttpStatus.CONFLICT;
+                case 49027 -> HttpStatus.UNPROCESSABLE_ENTITY;
                 default -> HttpStatus.BAD_REQUEST;
             };
         }

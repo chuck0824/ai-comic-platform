@@ -2,6 +2,37 @@ import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
 
+/** UTF-8-safe JWT payload decoder (mirrors @/stores/auth.js). */
+function decodeJwtPayload(token) {
+  try {
+    const base64Url = token.split('.')[1]
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const json = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    )
+    return JSON.parse(json)
+  } catch {
+    return null
+  }
+}
+
+/** Persist personal workspace context from a JWT access token. */
+function deriveAndStoreWorkspace(token) {
+  const payload = decodeJwtPayload(token)
+  if (payload) {
+    const uid = payload.uid ?? payload.userId ?? payload.user_id ?? payload.sub
+    if (uid != null) {
+      localStorage.setItem('active_workspace_id', `personal_${uid}`)
+      localStorage.setItem('active_workspace_type', 'personal')
+      return true
+    }
+  }
+  return false
+}
+
 const request = axios.create({
   baseURL: '/api/v1',
   timeout: 30000
@@ -20,15 +51,21 @@ request.interceptors.request.use(
     // created before this logic was deployed).
     if (!workspaceId && token) {
       try {
-        const base64Url = token.split('.')[1]
-        const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-        const payload = JSON.parse(atob(base64))
-        if (payload && payload.uid != null) {
-          workspaceId = `personal_${payload.uid}`
-          localStorage.setItem('active_workspace_id', workspaceId)
-          localStorage.setItem('active_workspace_type', 'personal')
+        const payload = decodeJwtPayload(token)
+        if (payload) {
+          // Support both 'uid' (JWT claim name) and 'userId' as fallback
+          const uid = payload.uid ?? payload.userId ?? payload.user_id ?? payload.sub
+          if (uid != null) {
+            workspaceId = `personal_${uid}`
+            localStorage.setItem('active_workspace_id', workspaceId)
+            localStorage.setItem('active_workspace_type', 'personal')
+          } else {
+            console.warn('[request] 无法从 JWT 中提取用户ID，payload keys:', Object.keys(payload))
+          }
         }
-      } catch { /* ignore malformed token */ }
+      } catch (e) {
+        console.warn('[request] JWT 解码失败，无法推导 workspace ID:', e)
+      }
     }
     if (workspaceId) {
       config.headers['X-Workspace-Id'] = workspaceId
@@ -76,6 +113,10 @@ async function tryRefreshToken() {
       // 如果后端同时返回了新的 refresh_token
       if (res.data.data.refresh_token) {
         localStorage.setItem('refresh_token', res.data.data.refresh_token)
+      }
+      // 确保 workspace 上下文在新 token 下仍然有效
+      if (!localStorage.getItem('active_workspace_id')) {
+        deriveAndStoreWorkspace(newToken)
       }
       return newToken
     }

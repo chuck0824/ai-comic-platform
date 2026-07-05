@@ -5,8 +5,12 @@ import com.aicp.common.exception.ErrorCode;
 import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
 import com.aicp.module.contentproject.entity.ContentGenerationJob;
+import com.aicp.module.contentproject.entity.GenerationContextSnapshot;
 import com.aicp.module.contentproject.mapper.ContentGenerationJobMapper;
+import com.aicp.module.contentproject.mapper.GenerationContextSnapshotMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,8 +25,10 @@ import java.util.UUID;
 public class ContentGenerationJobService {
 
     private final ContentGenerationJobMapper jobMapper;
+    private final GenerationContextSnapshotMapper contextSnapshotMapper;
     private final ContextAssembler contextAssembler;
     private final ContentGenerationExecutor executor;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public GenerationJobView createJob(Long userId, Long projectId, GenerationJobRequest request,
@@ -57,6 +63,27 @@ public class ContentGenerationJobService {
         job.setIdempotencyKey(idempotencyKey);
         job.setCreatedBy(userId);
         jobMapper.insert(job);
+
+        // Persist generation context snapshot
+        try {
+            GenerationContextSnapshot persisted = new GenerationContextSnapshot();
+            persisted.setGenerationJobId(job.getId());
+            persisted.setProjectId(projectId);
+            persisted.setBibleVersionId(snapshot.bibleVersionId());
+            persisted.setProjectGuideId(snapshot.projectGuideId());
+            persisted.setCharacterGuideIdsJson(
+                    snapshot.characterGuideIds() != null
+                            ? objectMapper.writeValueAsString(snapshot.characterGuideIds())
+                            : null);
+            persisted.setUnitGuideId(snapshot.unitGuideId());
+            persisted.setSelectedVersionsJson(objectMapper.writeValueAsString(snapshot.selectedVersions()));
+            persisted.setResolvedGuideJson(snapshot.resolvedGuideJson());
+            persisted.setPayloadJson(snapshot.payload());
+            persisted.setPayloadHash(snapshot.contentHash());
+            contextSnapshotMapper.insert(persisted);
+        } catch (JsonProcessingException e) {
+            throw new BizException(ErrorCode.INTERNAL_ERROR, "生成上下文快照保存失败");
+        }
 
         // M1: trigger async AI execution
         executor.execute(job.getId());

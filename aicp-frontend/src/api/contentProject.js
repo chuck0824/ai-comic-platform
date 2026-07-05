@@ -75,7 +75,33 @@ export const contentProjectApi = {
   getExtraction: (projectId, batchId) => request.get(`/content-projects/${projectId}/setting-extractions/${batchId}`),
   saveDecisions: (projectId, batchId, data) => request.put(`/content-projects/${projectId}/setting-extractions/${batchId}/decisions`, data),
   applyExtraction: (projectId, batchId) => request.post(`/content-projects/${projectId}/setting-extractions/${batchId}/apply`),
-  retryExtraction: (projectId, batchId) => request.post(`/content-projects/${projectId}/setting-extractions/${batchId}/retry`)
+  retryExtraction: (projectId, batchId) => request.post(`/content-projects/${projectId}/setting-extractions/${batchId}/retry`),
+  // Warehouse queries
+  recent: (limit = 5) => request.get('/content-projects/recent', { params: { limit } }),
+  todos: () => request.get('/content-projects/todos'),
+  summary: (id) => request.get(`/content-projects/${id}/summary`),
+  resolveLegacy: (scriptId) => request.get(`/content-projects/legacy-scripts/${scriptId}/resolve`),
+  // Lifecycle actions
+  submitReview: (id, data) => request.post(`/content-projects/${id}/submit-review`, data),
+  approve: (id, data) => request.post(`/content-projects/${id}/approve`, data),
+  requestRevision: (id, data) => request.post(`/content-projects/${id}/request-revision`, data),
+  lock: (id, data) => request.post(`/content-projects/${id}/lock`, data),
+  archive: (id, data) => request.post(`/content-projects/${id}/archive`, data),
+  restore: (id, data) => request.post(`/content-projects/${id}/restore`, data),
+  duplicate: (id, data) => request.post(`/content-projects/${id}/duplicate`, data),
+  moveToTrash: (id, data) => request.post(`/content-projects/${id}/trash`, data),
+
+  // M7: Creative Bible
+  getCreativeBible: (projectId) => request.get(`/content-projects/${projectId}/creative-bible`),
+  getCreativeBibleHealth: (projectId) => request.get(`/content-projects/${projectId}/creative-bible/health`),
+  createBibleDraft: (projectId, data) => request.post(`/content-projects/${projectId}/creative-bible/versions`, data),
+  confirmBible: (projectId, versionId) => request.post(`/content-projects/${projectId}/creative-bible/versions/${versionId}/confirm`),
+  listEcosystemRules: (projectId, versionId, params) => request.get(`/content-projects/${projectId}/creative-bible/versions/${versionId}/ecosystem-rules`, { params }),
+  createEcosystemRule: (projectId, versionId, data) => request.post(`/content-projects/${projectId}/creative-bible/versions/${versionId}/ecosystem-rules`, data),
+  updateEcosystemRule: (projectId, versionId, ruleId, data) => request.patch(`/content-projects/${projectId}/creative-bible/versions/${versionId}/ecosystem-rules/${ruleId}`, data),
+  listWritingGuides: (projectId, versionId, params) => request.get(`/content-projects/${projectId}/creative-bible/versions/${versionId}/writing-guides`, { params }),
+  saveWritingGuide: (projectId, versionId, data) => request.post(`/content-projects/${projectId}/creative-bible/versions/${versionId}/writing-guides`, data),
+  resolveWritingGuide: (projectId, versionId, data) => request.post(`/content-projects/${projectId}/creative-bible/versions/${versionId}/writing-guides/resolve`, data)
 }
 
 export const tagDictionaryApi = {

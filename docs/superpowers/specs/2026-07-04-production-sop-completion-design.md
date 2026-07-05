@@ -113,6 +113,14 @@ Gate 根据当前业务快照执行适用规则。存在 P0/P1、关键规则 `N
 
 首期 13 项准入规则沿用核心 PRD 定义，但每项必须补齐数据来源、适用范围、结果阈值和证据结构。无法从当前系统事实判断的规则返回 `NOT_READY`，不得使用模拟数据补足。
 
+**问题指纹 (`issue_fingerprint`) 计算算法**：
+
+```
+issue_fingerprint = SHA256(rule_code + ":" + target_type + ":" + target_id)
+```
+
+指纹用于去重：同一项目、同一规则、同一目标的问题视为同一个问题。若规则不绑定具体目标（全局规则如 `PLOT_FIDELITY`），`target_type` 使用 `"project"`，`target_id` 使用 `project_id`。指纹不包含严重等级或结果值——即使严重等级在规则集版本间调整，同一问题仍被视为同一工单。
+
 ### 6.2 结果枚举
 
 | 结果 | 含义 | Gate 处理 |
@@ -143,15 +151,32 @@ Gate 根据当前业务快照执行适用规则。存在 P0/P1、关键规则 `N
 
 SOP 统一使用 `content_projects.id` 作为 `project_id`，可选关联 `content_unit_id` 和 `canvas_project_id`。节点、镜头和资产使用 `target_type + target_id` 表示，避免复制主数据。
 
-### 8.1 `sop_check_runs`
+### 8.1 `sop_rule_set_versions`
+
+记录已发布的规则集版本，确保每次检查绑定的规则集可追溯、不可变。
+
+- `id`：主键。
+- `version`：版本标识（如 `production-readiness-v1`），唯一。
+- `name`：版本名称。
+- `description`：变更说明。
+- `rule_count`：包含的规则数量。
+- `published_at`：发布时间。
+- `published_by`：发布人（系统管理员）。
+- `is_active`：是否为当前激活版本。同一时刻仅一个版本激活。
+
+规则集版本发布后不可修改或删除。新检查始终使用当前激活版本；历史报告保留当时绑定的版本，不受后续发布影响。
+
+### 8.2 `sop_check_runs`
 
 记录一次检查：范围、Gate、触发方式、规则集版本、快照引用与哈希、运行状态、总体灯色、各结果计数、操作者和时间。运行完成后业务字段不可更新，只允许追加过期标记。
 
-### 8.2 `sop_check_results`
+### 8.3 `sop_check_results`
 
 记录逐规则结果：运行 ID、规则编码、结果、严重等级、目标类型/ID、问题指纹、证据 JSON、建议、修复策略和数据依赖状态。
 
-### 8.3 `sop_work_orders` 与 `sop_work_order_events`
+`issue_fingerprint` 计算方式见 6.1 节指纹算法。
+
+### 8.4 `sop_work_orders` 与 `sop_work_order_events`
 
 工单关联来源结果并保存责任岗位、处理人、状态、期限和解决说明。事件表追加记录每次认领、修改、提交复核、通过、驳回和重新打开。
 
@@ -161,15 +186,17 @@ SOP 统一使用 `content_projects.id` 作为 `project_id`，可选关联 `conte
 
 复核失败：`PENDING_REVIEW -> REOPENED -> FIXING`。仅重复问题被证明无效时允许 `CANCELED`，并要求原因和审核人。
 
-### 8.4 `sop_gate_decisions`
+### 8.5 `sop_gate_decisions`
 
 保存 Gate 类型、目标、检查运行、快照哈希、是否放行、阻断数量和请求幂等键。业务动作必须引用一次仍有效的允许决定。
 
-### 8.5 `sop_production_releases`
+### 8.6 `sop_production_releases`
 
 保存生产版本阶段、内容版本、分镜版本、画布版本、资产清单快照、准入运行、审批人和审批时间。阶段为 `DRAFT`、`EDITOR_CONFIRMED`、`DIRECTOR_CONFIRMED`、`PRODUCTION`、`FINAL`。
 
-### 8.6 三期增强表
+> **Phase 2 实现**：`sop_production_releases` 与 `SopReleaseService` 推迟到第二期交付。第一期仅完成准入检查和返工闭环，生产版本晋级在画布质检联动完成后才有完整的业务链条。
+
+### 8.7 三期增强表
 
 - `sop_failure_attempts`：失败类型、次数、恢复动作、执行结果和人工升级状态。
 - `sop_capacity_snapshots`：估算输入、复杂度、预计工时、风险和口径版本。
@@ -193,35 +220,106 @@ SOP 统一使用 `content_projects.id` 作为 `project_id`，可选关联 `conte
 
 保留 `/api/v1/sop` 前缀，并以项目作为主要资源：
 
-| 方法 | 路径 | 用途 |
-|---|---|---|
-| `GET` | `/projects` | 当前用户可访问的 SOP 项目及风险摘要 |
-| `GET` | `/projects/{projectId}/summary` | 控制台总览 |
-| `POST` | `/projects/{projectId}/checks` | 主动发起检查 |
-| `GET` | `/projects/{projectId}/checks` | 检查历史 |
-| `GET` | `/projects/{projectId}/checks/{runId}` | 检查报告与逐项结果 |
-| `GET/POST` | `/projects/{projectId}/work-orders` | 查询/创建返工工单 |
-| `PATCH` | `/projects/{projectId}/work-orders/{id}` | 认领、处理或提交复核 |
-| `POST` | `/projects/{projectId}/work-orders/{id}/review` | 复核通过或驳回 |
-| `POST` | `/projects/{projectId}/gates/{gateType}/evaluate` | 执行生产 Gate |
-| `GET` | `/projects/{projectId}/releases` | 生产版本历史 |
-| `POST` | `/projects/{projectId}/releases/promote` | 版本晋级 |
-| `POST` | `/projects/{projectId}/fixes/{resultId}` | 执行允许的修复命令 |
+### Phase 1 端点
 
-第二期补充画布风险摘要和节点问题查询；第三期补充失败恢复、产能和报告导出接口。现有 `/check/production-readiness` 在迁移期作为兼容入口，内部调用新检查用例，不再维护第二套逻辑。
+| 方法 | 路径 | 用途 | 阶段 |
+|---|---|---|---|
+| `GET` | `/projects` | 当前用户可访问的 SOP 项目及风险摘要 | 1 |
+| `GET` | `/projects/{projectId}/summary` | 控制台总览 | 1 |
+| `POST` | `/projects/{projectId}/checks` | 主动发起检查 | 1 |
+| `GET` | `/projects/{projectId}/checks` | 检查历史 | 1 |
+| `GET` | `/projects/{projectId}/checks/{runId}` | 检查报告与逐项结果 | 1 |
+| `GET` | `/projects/{projectId}/work-orders` | 查询返工工单 | 1 |
+| `POST` | `/projects/{projectId}/work-orders` | 创建返工工单 | 1 |
+| `PATCH` | `/projects/{projectId}/work-orders/{id}` | 认领、处理或提交复核 | 1 |
+| `POST` | `/projects/{projectId}/work-orders/{id}/review` | 复核通过或驳回 | 1 |
+| `POST` | `/projects/{projectId}/gates/production-admission/evaluate` | 执行生产准入 Gate | 1 |
+| `POST` | `/projects/{projectId}/fixes/{resultId}` | 执行允许的修复命令 | 1 |
+
+### Phase 2 端点
+
+| 方法 | 路径 | 用途 | 阶段 |
+|---|---|---|---|
+| `GET` | `/projects/{projectId}/canvas/summary` | 画布风险摘要 | 2 |
+| `GET` | `/projects/{projectId}/canvas/nodes` | 画布节点问题查询 | 2 |
+| `GET` | `/projects/{projectId}/releases` | 生产版本历史 | 2 |
+| `POST` | `/projects/{projectId}/releases/promote` | 版本晋级 | 2 |
+
+### Phase 3 端点
+
+| 方法 | 路径 | 用途 | 阶段 |
+|---|---|---|---|
+| `GET` | `/projects/{projectId}/failures` | 失败恢复历史 | 3 |
+| `GET` | `/projects/{projectId}/capacity` | 产能估算 | 3 |
+| `GET` | `/projects/{projectId}/reports/export` | 报告导出 | 3 |
+
+现有 `/check/production-readiness` 在迁移期作为兼容入口，内部调用新检查用例，不再维护第二套逻辑。
+
+### 分页参数
+
+所有列表接口（`GET /projects`、`GET /checks`、`GET /work-orders`）统一使用以下查询参数：
+
+| 参数 | 类型 | 默认值 | 说明 |
+|---|---|---|---|
+| `page` | int | 1 | 页码（从 1 开始） |
+| `size` | int | 20 | 每页条数（最大 100） |
+| `sort` | string | `created_at` | 排序字段 |
+| `order` | string | `desc` | `asc` 或 `desc` |
+
+响应体包含 `page`、`size`、`total`、`totalPages` 和 `items` 字段。
+
+### 统一错误响应格式
+
+```json
+{
+  "code": 72003,
+  "message": "生产准入 Gate 未通过：存在 3 项阻断问题",
+  "details": [
+    {
+      "ruleCode": "ASSET_BINDING",
+      "result": "BLOCKED",
+      "targetType": "scene",
+      "targetId": "42",
+      "suggestion": "请为第 3 场绑定场景资产"
+    }
+  ],
+  "timestamp": "2026-07-04T10:30:00Z"
+}
+```
+
+`details` 为可选字段，仅在阻断类错误（如 Gate 拒绝、工单冲突）时返回具体原因。`code` 使用 72xxx 段 SOP 专用错误码。
 
 所有写接口使用 DTO、权限校验和幂等键；禁止继续接收或返回无约束的 `Map<String,Object>`。
 
 ## 11. 权限与审计
 
-| 角色 | 权限 |
-|---|---|
-| 制片/PM | 发起检查、分派返工、查看项目全局、提交版本晋级 |
-| 导演/审核人 | 复核 P0/P1、确认高风险修改、批准生产版本 |
-| 生产岗位 | 查看和处理本人问题、执行安全修复、申请复核 |
-| 系统管理员 | 发布规则集版本，不参与业务放行 |
+### 11.1 角色权限矩阵
 
-权限建立在现有项目成员和企业角色上。跨租户访问必须拒绝。检查、Gate、修复、工单和版本操作全部写入审计事件。
+| 角色 | 对应 Action | SOP 权限 |
+|---|---|---|
+| 制片/PM | `Action.PRODUCE` | 发起检查、分派返工、查看项目全局、提交版本晋级(Phase 2) |
+| 导演/审核人 | `Action.REVIEW` | 复核 P0/P1、确认高风险修改、批准生产版本(Phase 2) |
+| 生产岗位(AI画师/配音等) | `Action.PRODUCE` | 查看和处理本人问题、执行安全修复、申请复核 |
+| 普通成员 | `Action.VIEW` | 只读查看检查报告和工单状态 |
+| 系统管理员 | 系统级权限 | 发布规则集版本，不参与业务放行 |
+
+### 11.2 Action 到接口映射
+
+| Action | 允许的接口 |
+|---|---|
+| `Action.VIEW` | `GET /projects`、`GET /summary`、`GET /checks`、`GET /checks/{runId}`、`GET /work-orders` |
+| `Action.PRODUCE` | `VIEW` + `POST /checks`、`POST /work-orders`、`PATCH /work-orders/{id}`、`POST /fixes/{resultId}` |
+| `Action.REVIEW` | `VIEW` + `POST /work-orders/{id}/review` |
+
+### 11.3 审计要求
+
+权限建立在现有项目成员和企业角色上。跨租户访问必须拒绝。检查、Gate、修复、工单和版本操作全部写入审计事件，至少记录：
+
+- 操作时间、操作者 ID、操作者角色。
+- 目标资源类型与 ID。
+- 操作类型（如 `SOP_CHECK_RUN`、`SOP_GATE_EVALUATE`、`SOP_WORK_ORDER_TRANSITION`）。
+- 操作前后状态（关键字段变更）。
+- 请求幂等键。
 
 ## 12. 异常与并发处理
 
@@ -233,12 +331,31 @@ SOP 统一使用 `content_projects.id` 作为 `project_id`，可选关联 `conte
 - 重复工单：通过问题指纹和活动状态唯一约束防重。
 - 重复 Gate/修复请求：通过幂等键返回原决定或原执行结果。
 - 返工并发更新：使用行版本进行乐观锁控制。
+- 限流保护：单项目 30 秒内最多发起 1 次检查；单用户每分钟最多 60 次 SOP API 调用。超限返回 429 并提示 Retry-After。
 
-## 13. 分期交付
+## 13. 通知机制
+
+> **Phase 2 实现**。第一期通过轮询接口查看状态变化；通知机制在画布质检联动完成后统一建设。
+
+### 设计要点
+
+- **通知触发事件**：工单创建、工单分派、复核驳回、Gate 拒绝。
+- **通知渠道**：站内消息中心 + 可选企业微信/飞书推送。
+- **通知内容**：项目名称、问题摘要、责任岗位、期限、直达链接。
+- **免打扰**：同一工单同一状态 24 小时内不重复通知；批量检查产生的批量工单合并为一条汇总通知。
+
+第一期前端通过在工单列表和项目列表中展示未处理数量和红色角标作为替代方案。
+
+## 14. 分期交付
 
 ### 第一期：准入检查与返工闭环
 
 交付项目列表、SOP 控制台、真实数据上下文、13 项规则、检查历史、不可变报告、返工状态机、生产准入 Gate、权限与审计。
+
+**关于 P0/NOT_READY 规则的处理**：第一期存在部分规则因上游数据源尚未建设而永远返回 `NOT_READY`（如 `PLOT_FIDELITY`、`CONTINUITY_INHERITANCE`、`VOICE_BINDING` 等）。这些规则在 `production-readiness-v1` 中设为 `enabled=false`，检查引擎跳过它们，既不参与 Gate 放行判断，也不影响总体灯色。规则定义和校验器代码仍然完整实现，待上游数据源就绪后通过发布新规则集版本 `production-readiness-v2` 将 `enabled` 改为 `true` 即可激活。此设计确保：
+- 第一期能产生有意义的 Gate 放行决定，而非永远被拒。
+- 规则逻辑经过完整测试，只是不参与执行。
+- 数据源就绪后无需修改代码，仅发布新规则版本。
 
 退出条件：真实项目能够完成“发现问题—派单—修复—复核—重检—放行”，且不存在硬编码检查结果。
 
@@ -254,7 +371,7 @@ SOP 统一使用 `content_projects.id` 作为 `project_id`，可选关联 `conte
 
 退出条件：恢复动作可追溯，估算展示输入与口径，报表只使用真实生产记录。
 
-## 14. 测试与验收
+## 15. 测试与验收
 
 - 规则单元测试：每条规则覆盖 `PASS`、`BLOCKED/WARNING`、`NOT_READY` 和 `ERROR`。
 - 服务集成测试：快照过期、Gate 矩阵、工单状态、版本晋级、权限、幂等和并发冲突。
@@ -265,19 +382,20 @@ SOP 统一使用 `content_projects.id` 作为 `project_id`，可选关联 `conte
 
 每期必须同时完成前端、后端、数据库迁移、契约测试和 E2E，不以“页面可点击”作为完成功能的标准。
 
-## 15. 现有代码改造清单
+## 16. 现有代码改造清单
 
 - 移除 `Sop.vue` 的静态项目名、检查项和返工数据，拆分为项目控制台组件与状态层。
 - 新增前端 `sop` API 模块、路由参数解析、项目/集/画布范围选择和错误状态。
 - 将侧边栏 `/sop/1` 改为 SOP 项目入口。
 - 将 `SopController` 改为 DTO + 应用服务调用。
 - 拆除 `SopService` 中的硬编码规则、版本、失败策略和产能数据。
+- 删除现有 `SopService` 的硬编码数据测试，替换为基于真实规则引擎和上下文组装器的服务测试。
 - 新增规则引擎、上下文组装器、Gate、工单、版本和审计服务。
 - 新增数据库迁移，并处理旧 `sop_audits` 数据。
 - 在画布相关生产命令的服务端入口接入 Gate。
 - 补齐前后端契约、权限、集成和 E2E 测试。
 
-## 16. 关键决策汇总
+## 17. 关键决策汇总
 
 1. 采用项目级控制台与画布侧栏完整打通。
 2. P0/P1 强制拦截，P2/P3 只告警。

@@ -68,7 +68,7 @@ Expected: FAIL because the adapter is absent.
 
 - [ ] **Step 3: Implement the adapter**
 
-Emit versioned Outbox events on every export request transition. Project only summary fields into the inbox. Return a task link after approval; never project task `RUNNING/SUCCEEDED/FAILED` into approval status.
+Emit versioned Outbox events on every export request transition. Project only summary fields into the inbox.（`ApprovalType.PROJECT_EXPORT` 在 M1 Task 4 中已随枚举定义预留，此处实现适配器即可；若 M1 未定义则需追加。）Return a task link after approval; never project task `RUNNING/SUCCEEDED/FAILED` into approval status.
 
 - [ ] **Step 4: Run approval regression**
 
@@ -158,6 +158,8 @@ git commit -m "feat: complete enterprise export and audit UI"
 ```
 
 ### Task 5: Migrate and freeze duplicate enterprise master data
+
+> **背景说明：** 设计文档阶段 1 已规划“企业本地主数据盘点与迁移映射”，阶段 6 执行“写入冻结”。本任务覆盖完整的迁移执行——映射核对、业务引用转换、写入冻结和旧表归档。迁移映射和双读验证应在 M0/M1 期间提前完成，M2 执行最终切换。
 
 **Files:**
 - Create: `aicp-backend/src/main/java/com/aicp/module/enterprise/service/EnterpriseMasterDataMigrationService.java`

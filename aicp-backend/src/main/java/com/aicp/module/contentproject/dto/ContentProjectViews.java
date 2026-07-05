@@ -132,6 +132,55 @@ public interface ContentProjectViews {
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record ContextSnapshot(
             Map<String, Long> selectedVersions,
+            Long bibleVersionId,
+            Long projectGuideId,
+            List<Long> characterGuideIds,
+            Long unitGuideId,
+            String resolvedGuideJson,
             String payload,
             String contentHash) {}
+
+    // ===== Warehouse / Lifecycle Views =====
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record WarehouseProjectView(
+            Long id,
+            String uuid,
+            String name,
+            String creationMode,
+            String sourceMode,
+            String contentStatus,
+            String productionStatus,
+            String commercialStatus,
+            String lifecycleStatus,
+            String lastStageKey,
+            Long adoptedVersionId,
+            String primaryAction,
+            String blockedReason,
+            boolean migrationIssue,
+            Integer revision,
+            LocalDateTime updatedAt) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record ProjectTodoView(
+            Long projectId,
+            String projectName,
+            String type,
+            String label,
+            String route,
+            LocalDateTime updatedAt) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record ProjectHubView(
+            ProjectDetail project,
+            WarehouseProjectView summary,
+            List<ContentVersionView> versions,
+            Map<String, Long> relationCounts) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record WarehouseProjectListResult(
+            List<WarehouseProjectView> items,
+            int page,
+            int pageSize,
+            long total) {}
 }

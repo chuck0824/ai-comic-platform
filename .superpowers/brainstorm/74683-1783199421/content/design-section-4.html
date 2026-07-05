@@ -1,0 +1,86 @@
+<h2>第四章：分阶段交付、验收与风险控制</h2>
+<p class="subtitle">不按“大 M0”一次堆叠；每一阶段都必须可独立验收、灰度和回滚</p>
+
+<div class="mockup">
+  <div class="mockup-header">交付序列</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+    <div class="placeholder"><strong>R0 稳定与止损</strong><br>加载降级<br>隐藏假入口<br>节点类型修正<br>Feature Flag</div>
+    <div class="placeholder"><strong>R1 生产内核</strong><br>ShotWorkUnit<br>类型端口<br>快照/候选/采用<br>旧画布兼容</div>
+    <div class="placeholder"><strong>R2 真实导演台</strong><br>Three.js<br>时间线<br>版本流<br>实用预设/检查</div>
+    <div class="placeholder"><strong>R3 模型与 Blender</strong><br>供应商 Gate<br>能力路由<br>预演 Worker<br>Seedance Adapter</div>
+    <div class="placeholder"><strong>R4 质量与交付</strong><br>质量报告<br>正式采用<br>素材清单/ZIP<br>EDL/FCPXML</div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="mockup"><div class="mockup-header">R0：先解决当前可用性</div><div class="mockup-body"><ul>
+    <li>项目中心请求超时或账户中心异常时，进入可解释错误/最近项目只读态，禁止无限骨架屏。</li>
+    <li>统一 <code>director</code> 类型；扫描并分类旧 <code>reference</code> 节点。</li>
+    <li>隐藏分享、通知、批量操作等假入口；移除剪辑和合成入口。</li>
+    <li>建立新旧 API 契约测试、迁移盘点报告和发布开关。</li>
+  </ul></div></div>
+  <div class="mockup"><div class="mockup-header">R1：建立可迁移生产内核</div><div class="mockup-body"><ul>
+    <li>探索/正式生产双模式、ShotWorkUnit、类型端口和连接迁移。</li>
+    <li>请求快照、候选、节点选择、正式采用和任务中心关联。</li>
+    <li>拆分 3194 行 <code>Canvas.vue</code>，先抽领域状态，再替换 UI。</li>
+    <li>单画布升级、备份快照、影子读校验和灰度发布。</li>
+  </ul></div></div>
+</div>
+
+<div class="split">
+  <div class="mockup"><div class="mockup-header">R2–R3：导演台与真实生成</div><div class="mockup-body"><ul>
+    <li>Three.js 视口、GLB、Gizmo、动作片段、摄影机和单镜头时间线。</li>
+    <li>机位/动作/灯光材质预设、自动检查、冻结 revision。</li>
+    <li>Blender Worker 隔离执行、坐标转换、输出校验、超时和幂等重试。</li>
+    <li>Seedance 真实 API 合同验证通过后才启用 Adapter；未通过时保持 Provider Sandbox。</li>
+  </ul></div></div>
+  <div class="mockup"><div class="mockup-header">R4：质量与外部后期交接</div><div class="mockup-body"><ul>
+    <li>质量问题定位到时间区间和来源节点/轨道。</li>
+    <li>严重度策略、授权强制采用和审计原因。</li>
+    <li>固化 ShotAdoption、DeliveryManifest、校验和及素材包。</li>
+    <li>生成 EDL/FCPXML 和路径映射，不在 Canvas 内做剪辑。</li>
+  </ul></div></div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>阶段 Gate</h4><ul>
+    <li>G0：Seedance 真实 API、限额、回调、计费和内容安全合同验证。</li>
+    <li>G1：资产 GLB 归一化、签名 URL、许可和真人肖像授权可追溯。</li>
+    <li>G2：Blender Worker 镜像版本、资源配额、并发、超时与成本压测通过。</li>
+    <li>G3：生成积分冻结、实扣、部分退还、补偿和对账闭环通过。</li>
+  </ul></div>
+  <div class="cons"><h4>主要风险与控制</h4><ul>
+    <li>旧 JSON 形态不可预测：先盘点和影子投影，歧义必须人工确认。</li>
+    <li>Web/Blender 画面不一致：使用黄金场景做坐标、焦段、帧和动作回归。</li>
+    <li>Three.js 性能不足：对象/三角面预算、按需加载、实例化群众和降级预览。</li>
+    <li>质量模型误判：分级阻断、人工覆盖、记录原因并持续校准。</li>
+  </ul></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">必须通过的验收</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+    <div class="placeholder"><strong>数据与迁移</strong><br>旧画布 100% 被分类<br>无静默丢节点/连线<br>冻结快照哈希稳定<br>升级可审计</div>
+    <div class="placeholder"><strong>功能与可靠性</strong><br>普通镜头无需导演台<br>相同幂等键不重复扣费<br>并发草稿不覆盖<br>依赖失败草稿不丢失</div>
+    <div class="placeholder"><strong>视觉与生产</strong><br>Web/Blender 黄金场景一致<br>输出时长/画幅正确<br>候选全链路可追溯<br>外部剪辑清单可导入</div>
+  </div>
+  <ul style="margin-top:12px">
+    <li>测试层次：schema/迁移、单元、API 契约、集成、浏览器 E2E、黄金场景视觉回归、故障注入、结算对账。</li>
+    <li>产品指标：首次可采用率、平均重生成次数、采用镜头平均成本、导演台纠偏耗时、质量定位返工成功率。</li>
+    <li>延续原目标：多角色镜头无效抽卡次数相对基线至少降低 30%。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>发布与清理</h3>
+  <p>使用 <code>CANVAS_KERNEL_V2</code>、<code>TYPED_PORTS</code>、<code>DIRECTOR_V2</code>、<code>MODEL_ADAPTER_V2</code>、<code>QUALITY_DELIVERY_V2</code> 分级开关。按 Workspace/Canvas 灰度；升级后新链路单写。连续两个发布周期完成迁移审计且无回滚需求后，才删除旧合成 API、旧导演 mock 和兼容投影。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="confirm-section-4" onclick="toggleSelect(this)">
+    <div class="letter">✓</div><div class="content"><h3>确认最终设计</h3><p>将四章内容写入正式设计文档并进行一致性自检。</p></div>
+  </div>
+  <div class="option" data-choice="revise-section-4" onclick="toggleSelect(this)">
+    <div class="letter">↺</div><div class="content"><h3>需要修改</h3><p>返回终端说明阶段、验收或范围调整。</p></div>
+  </div>
+</div>

@@ -1,0 +1,54 @@
+<h2>设计 4/4：可靠性、安全与交付分期</h2>
+<p class="subtitle">P0 的完成标准不是“能聊天”，而是一次生产任务可以安全执行、失败恢复、全程追溯。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">异常处理策略</div>
+    <div class="mockup-body" style="padding:16px;background:#0b1020;color:#e5e7eb;font-size:12px;line-height:1.75">
+      <b>模型失败</b>：保留用户消息，可重试生成计划，不创建执行记录。<br>
+      <b>权限或价格变化</b>：执行前二次校验，计划暂停并要求重新确认。<br>
+      <b>工具瞬时失败</b>：按工具策略重试；依赖幂等键避免重复写入与扣费。<br>
+      <b>部分失败</b>：已成功结果保留，只重试失败步骤及其下游。<br>
+      <b>SSE 断线</b>：服务端继续执行，前端按 event_seq 断点续传。<br>
+      <b>额度处理</b>：执行前预占，完成后结算，取消/失败释放未使用额度。
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">安全边界</div>
+    <div class="mockup-body" style="padding:16px;background:#0b1020;color:#e5e7eb;font-size:12px;line-height:1.75">
+      <b>租户隔离</b>：每次查询和执行强制校验 workspace + project 访问权。<br>
+      <b>最小权限</b>：Tool Registry 白名单；READ/WRITE/BILLABLE 风险分级。<br>
+      <b>提示注入防护</b>：项目内容视为数据，不得改变系统策略或扩展工具权限。<br>
+      <b>隐私与日志</b>：密钥不进入模型；日志脱敏；前端不展示隐藏推理。<br>
+      <b>并发控制</b>：项目与步骤乐观锁；同一资源冲突时暂停等待用户处理。<br>
+      <b>审计</b>：记录操作者、计划版本、审批、工具输入摘要、结果引用与成本。
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>交付分期</h3>
+  <div class="options">
+    <div class="option"><div class="letter">M0</div><div class="content"><h3>领域基础</h3><p>数据库迁移、DTO、服务分层、权限模型、状态机；移除内存 Map 作为事实源。</p></div></div>
+    <div class="option"><div class="letter">M1</div><div class="content"><h3>会话与只读副驾</h3><p>历史会话/消息、项目上下文、AI Router 流式回复、引用与成本统计。</p></div></div>
+    <div class="option"><div class="letter">M2</div><div class="content"><h3>计划、审批与受控执行</h3><p>结构化计划、风险分级、成本预估、审批、Tool Adapter、暂停/取消/重试。</p></div></div>
+    <div class="option"><div class="letter">M3</div><div class="content"><h3>可靠性与发布</h3><p>SSE 续传、幂等、额度预占结算、部分失败恢复、审计、限流和完整测试。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>发布验收线</h3>
+  <ul>
+    <li>刷新或重新登录后，会话、消息、计划和执行进度完整恢复。</li>
+    <li>未审批时任何写入、生成和扣费工具均无法执行。</li>
+    <li>断线重连不丢事件；重复提交或重试不重复创建资源、不重复扣费。</li>
+    <li>跨工作区/无项目权限访问全部拒绝，且不能通过会话 ID 绕过。</li>
+    <li>部分失败可仅重试失败步骤，已有成功产物不被覆盖。</li>
+    <li>一次任务可追溯到用户指令、上下文版本、计划审批、工具执行、产物与账单。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>测试结构</h3>
+  <p><b>单元：</b>状态机、审批策略、计划解析、上下文组装、幂等键　·　<b>集成：</b>数据库、权限、额度、SSE　·　<b>契约：</b>AI Router 与 Tool Adapter　·　<b>E2E：</b>确认执行、断线恢复、部分失败、越权拒绝</p>
+</div>

@@ -13,7 +13,7 @@ export default defineConfig({
       imports: ['vue', 'vue-router', 'pinia']
     }),
     Components({
-      resolvers: [ElementPlusResolver()]
+      resolvers: [ElementPlusResolver({ importStyle: 'css' })]
     })
   ],
   resolve: {
@@ -37,7 +37,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          'element-plus': ['element-plus'],
           'echarts': ['echarts', 'vue-echarts']
         }
       }

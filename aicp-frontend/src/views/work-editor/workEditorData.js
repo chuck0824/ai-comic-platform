@@ -75,7 +75,8 @@ export function normalizeEditorResponse(data) {
     } : null,
     revision: data.revision ?? 0,
     settingCounts: data.setting_counts ?? data.settingCounts ?? {},
-    pendingExtractionCount: data.pending_extraction_count ?? data.pendingExtractionCount ?? 0
+    pendingExtractionCount: data.pending_extraction_count ?? data.pendingExtractionCount ?? 0,
+    bibleHealth: data.bible_health ?? data.bibleHealth ?? null
   }
 }
 

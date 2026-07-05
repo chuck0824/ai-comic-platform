@@ -1,0 +1,48 @@
+<h2>导演台、Canvas、Seedance 的职责重划</h2>
+<p class="subtitle">关键原则：创作决策归导演台，生产编排归 Canvas，概率生成归 Seedance，确定性预演归 Blender。</p>
+
+<div class="cards">
+  <div class="card" style="border:2px solid #2563eb"><div class="card-body"><h3>Canvas：生产控制塔</h3><p><strong>负责：</strong>项目/分镜关系、节点连接、资产版本、任务成本、候选版本、审核采用与审计。</p><p><strong>不负责：</strong>3D 场景细节、逐帧关键帧、运镜曲线。</p></div></div>
+  <div class="card" style="border:2px solid #7c3aed"><div class="card-body"><h3>导演台：单镜头决策器</h3><p><strong>负责：</strong>场面调度、表演节拍、摄影机、镜头时长、连续性和控制包编译。</p><p><strong>不负责：</strong>项目级流程、多镜头剪辑、生成计费和最终采用。</p></div></div>
+  <div class="card" style="border:2px solid #059669"><div class="card-body"><h3>Seedance：候选生成器</h3><p><strong>负责：</strong>读取控制包，生成一个或多个候选视频，返回任务结果与模型元数据。</p><p><strong>不负责：</strong>擅自改写分镜、替换角色资产或决定采用版本。</p></div></div>
+  <div class="card" style="border:2px solid #ea580c"><div class="card-body"><h3>Blender Worker：预演编译器</h3><p><strong>负责：</strong>按快照重建镜头、烘焙动作/相机、输出低模预演与首尾帧。</p><p><strong>不负责：</strong>交互编辑和最终艺术渲染。</p></div></div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>相对当前实现必须发生的变化</h3>
+  <div class="mockup"><div class="mockup-body" style="padding:16px;background:#0f172a;color:#e2e8f0">
+    <div style="display:grid;grid-template-columns:170px 1fr 1fr;gap:8px;align-items:stretch">
+      <strong>变化项</strong><strong>当前</strong><strong>目标</strong>
+      <div>导演台数据</div><div>全部塞入 Canvas 节点 JSON</div><div>节点只存摘要和 revision；完整场景/时间线独立版本化</div>
+      <div>节点连线</div><div>通用输入输出</div><div>类型化端口：分镜、角色、场景、道具、音频、控制包</div>
+      <div>截图/预演</div><div>DOM/CSS 模拟截图</div><div>Three.js 实时预览 + Blender 确定性预演</div>
+      <div>Seedance 输入</div><div>用户手工拼提示词和参考图</div><div>控制包适配器自动分配图片/视频/音频槽位并生成引用 Prompt</div>
+      <div>生成结果</div><div>只回写视频 URL</div><div>候选视频 + 输入快照 + 质检报告 + 偏差区间 + 成本</div>
+      <div>返工方式</div><div>整条重新生成</div><div>从偏差区间回到导演台对应轨道，修改后生成新 revision</div>
+    </div>
+  </div></div>
+</div>
+
+<div class="section">
+  <h3>端到端闭环</h3>
+  <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:7px;text-align:center;align-items:center">
+    <div style="padding:12px;background:#1e293b;border-radius:8px">Canvas<br><small>绑定分镜资产</small></div>
+    <div>→</div>
+    <div style="padding:12px;background:#4c1d95;border-radius:8px;color:white">导演台<br><small>制作镜头</small></div>
+    <div>→</div>
+    <div style="padding:12px;background:#7c2d12;border-radius:8px;color:white">Blender<br><small>编译参考包</small></div>
+    <div>→</div>
+    <div style="padding:12px;background:#065f46;border-radius:8px;color:white">Seedance<br><small>生成候选</small></div>
+  </div>
+  <div style="margin:14px auto 0;max-width:760px;text-align:center;padding:12px;background:#172554;color:#dbeafe;border-radius:8px">质量代理比较“导演台快照 vs 生成视频” → 把构图、角色、动作、运镜偏差定位到时间区间 → 回流对应导演轨道</div>
+</div>
+
+<div class="section">
+  <h3>三个不可破坏的所有权规则</h3>
+  <ol><li><strong>Canvas 是项目生产状态唯一事实源：</strong>谁连接了什么资产、用哪个 revision 生成、哪个候选被采用，都由 Canvas 管。</li><li><strong>导演台是镜头创作状态唯一事实源：</strong>站位、动作片段、相机轨和时间码导演脚本只能在导演台修改。</li><li><strong>Seedance 请求必须引用不可变控制包：</strong>生成过程中继续编辑导演台不会改变已提交任务，重试也能复现同一输入。</li></ol>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve-boundaries" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可职责边界</h3><p>继续设计导演台内部界面和时间线。</p></div></div>
+  <div class="option" data-choice="revise-boundaries" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>继续调整</h3><p>请指出哪类数据或决策应该换一个模块负责。</p></div></div>
+</div>

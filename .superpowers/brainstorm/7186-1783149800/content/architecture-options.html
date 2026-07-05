@@ -1,0 +1,60 @@
+<h2>生产 SOP：三种落地方式</h2>
+<p class="subtitle">重点比较：闭环完整性、与现有画布的耦合、交付风险。点击你认可的方案。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a-standalone" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px">
+      <div class="mock-nav">项目中心 → 独立 SOP 页面</div>
+      <div style="display:grid;grid-template-columns:1fr 28px 1fr;align-items:center;gap:8px;margin-top:14px">
+        <div class="placeholder" style="min-height:110px">SOP 中心<br>准入 / 返工 / 版本</div>
+        <div style="text-align:center">⇄</div>
+        <div class="placeholder" style="min-height:110px">画布工作台<br>仅跳转查看结果</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A. 独立 SOP 中心</h3>
+      <p>改造范围小，但画布执行反馈弱，容易再次形成“检查页面孤岛”。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b-embedded" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px">
+      <div class="mock-nav">画布工作台</div>
+      <div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-top:14px">
+        <div class="placeholder" style="min-height:110px">节点画布<br>风险染色</div>
+        <div class="placeholder" style="min-height:110px">质检侧栏<br>修复建议</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 画布内嵌质检</h3>
+      <p>一线操作顺畅，但缺少跨集总览、返工治理、版本晋级和管理报表。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c-dual-surface" onclick="toggleSelect(this)" style="border:2px solid #2563eb">
+    <div class="card-image" style="padding:18px">
+      <div class="mock-nav">共享 SOP 规则引擎与审计数据</div>
+      <div style="display:grid;grid-template-columns:1fr 36px 1fr;align-items:center;gap:8px;margin-top:14px">
+        <div class="placeholder" style="min-height:110px">项目级控制台<br>总览 / 准入 / 返工 / 版本 / 产能</div>
+        <div style="text-align:center;color:#2563eb;font-weight:700">⇄</div>
+        <div class="placeholder" style="min-height:110px">画布质检侧栏<br>节点定位 / 风险染色 / 安全修复</div>
+      </div>
+      <div style="margin-top:10px;padding:8px 12px;background:#eff6ff;border-radius:8px;color:#1d4ed8;font-size:13px">生产动作 → Gate 检查 → P0/P1 拦截 → 返工 → 复核 → 放行</div>
+    </div>
+    <div class="card-body">
+      <h3>C. 双界面、单内核（推荐）</h3>
+      <p>管理与执行各有合适入口，所有检查、工单、版本和操作留痕共用同一事实源。</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:20px">
+  <div class="pros">
+    <h4>推荐方案收益</h4>
+    <ul><li>避免复制两套规则与状态</li><li>能形成真实的拦截—修复—复核闭环</li><li>支持三期渐进交付</li></ul>
+  </div>
+  <div class="cons">
+    <h4>需要控制的风险</h4>
+    <ul><li>必须先统一项目、集、画布、镜头标识</li><li>检查项要声明数据源和不可执行状态</li><li>生产动作必须统一接入 Gate</li></ul>
+  </div>
+</div>

@@ -29,6 +29,12 @@ public class HealthController {
     private final DataSource dataSource;
     private final RedisTemplate<String, Object> redisTemplate;
 
+    /** Aggregate health: delegates to readiness for a quick overall check */
+    @GetMapping("/api/health")
+    public ResponseEntity<Map<String, Object>> health() {
+        return ready();
+    }
+
     /** Liveness：进程是否存活（始终返回 OK） */
     @GetMapping("/api/health/live")
     public ResponseEntity<Map<String, Object>> live() {

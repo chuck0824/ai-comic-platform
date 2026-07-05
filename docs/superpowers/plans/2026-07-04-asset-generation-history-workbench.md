@@ -180,7 +180,8 @@ class AssetWorkbenchSchemaTest {
     void canonicalColumnsExist() {
         assertThat(columns("WORKSPACE_ASSETS")).contains(
                 "CONTENT_PROJECT_ID", "SOURCE_CANVAS_PROJECT_ID", "SOURCE_NODE_ID",
-                "SOURCE_TASK_ID", "MEDIA_TYPE", "PURGE_AT", "PURGE_BLOCKED_REASON");
+                "SOURCE_TASK_ID", "MEDIA_TYPE", "DELETED_AT", "DELETED_BY",
+                "PURGE_AT", "PURGE_BLOCKED_REASON");
         assertThat(columns("ASSET_VERSIONS")).contains(
                 "SOURCE_TASK_ID", "STORAGE_PROVIDER", "STORAGE_BUCKET", "STORAGE_KEY",
                 "MIME_TYPE", "FILE_SIZE", "WIDTH", "HEIGHT", "DURATION_MS", "GENERATION_SNAPSHOT");
@@ -226,7 +227,7 @@ CREATE TABLE IF NOT EXISTS generation_settlement_outbox (
 
 - [ ] **Step 4: Update entities to exactly match the schema**
 
-Add matching Java fields and `@Version` where applicable. Keep `GenerationTask.status` lowercase string-compatible and retain its existing `projectId` field.
+Add matching Java fields. Add `@Version` annotation to `WorkspaceAsset.rowVersion`（MyBatis-Plus 乐观锁插件通过此注解自动递增并校验；当前 `rowVersion` 字段已存在但缺少注解）。Keep `GenerationTask.status` lowercase string-compatible and retain its existing `projectId` field.
 
 - [ ] **Step 5: Run schema and existing asset tests**
 
@@ -267,12 +268,12 @@ Expected: FAIL on legacy string formatting or missing path patterns.
 
 Use `personal_${userId}` in frontend fallback code. In the backend, preserve the exact active Workspace ID provided by account-center context; only parse `personal_` for the local fallback. Add asset and generation paths to `WorkspaceContextFilter`.
 
-- [ ] **Step 4: Run backend and frontend identity tests**
+- [ ] **Step 4: Run backend identity tests and verify frontend build**
 
 Run: `cd aicp-backend && mvn -Dtest=WorkspaceAccessServiceTest test`  
 Expected: PASS.  
-Run: `cd aicp-frontend && node --test tests/login.spec.js`  
-Expected: PASS.
+Run: `cd aicp-frontend && npm run build`  
+Expected: BUILD SUCCESS（`auth.js` 和 `request.js` 的 `personal_${userId}` 格式变更编译通过）。Workspace 身份行为的前端 E2E 验证在 Task 14 的 navigation-contract 测试中覆盖。
 
 - [ ] **Step 5: Commit**
 
@@ -366,7 +367,22 @@ public record SettlementOutput(
 public record SettlementResult(Long assetId, Long versionId, String assetUuid) {}
 ```
 
-`settle(taskId, output)` must validate ownership and output, insert/reuse the Workspace asset, append an immutable version, update `current_version_id`, write activity, write back node/shot, and mark the task succeeded last. Wrap database writes in a transaction and insert a unique outbox row when a cross-boundary write cannot complete.
+`settle(taskId, output)` 必须按以下事务边界执行：
+
+**单数据库事务内（全部成功或全部回滚）：**
+1. 校验 ownership（Workspace + creator 不可为空，不可回退到用户 1）
+2. 校验 output（storage_key 非空，checksum 匹配）
+3. INSERT 或复用 `workspace_asset`（用 `legacy_platform_asset_id` 或 task 信息判断幂等）
+4. INSERT `asset_version`（不可变追加）
+5. UPDATE `workspace_asset.current_version_id`
+6. INSERT `asset_activity_log`
+7. UPDATE `generation_task.status = 'succeeded'`（最后一步）
+
+**事务外操作（通过 outbox 补偿）：**
+1. 画布节点/分镜回写 → outbox stage = `NODE_WRITEBACK`
+2. 对象存储清理（结算失败时清理已上传文件）→ outbox stage = `STORAGE_CLEANUP`
+
+事务内任何步骤失败 → 回滚、任务保持非成功、写入一条 `generation_settlement_outbox`（stage=`ASSET_CREATE`）。outbox 行与 task 为 `(task_id, stage)` 唯一约束，保证幂等重试。
 
 - [ ] **Step 4: Replace `registerAssets` and remove user-1 fallback**
 
@@ -592,7 +608,7 @@ Resolve canonical Workspace asset and current version, then call existing `Asset
 
 - [ ] **Step 4: Implement signed download and regeneration**
 
-Generate a storage URL that expires in 300 seconds. Regeneration reads `generation_snapshot`, applies allowed patches, calls credit estimation, creates a new pending task with `retry_of_task_id`, Workspace, creator, content project, asset type, and idempotency key.
+Generate a storage URL that expires in 300 seconds. Regeneration reads `generation_snapshot`, applies allowed patches (model_id, prompt, negative_prompt, seed, width/height, steps, cfg_scale, reference_assets — provider、asset_type、content_project_id 不可覆盖；见设计文档 9.2.1), calls credit estimation, creates a new pending task with `retry_of_task_id`, Workspace, creator, content project, asset type, and idempotency key.
 
 - [ ] **Step 5: Run tests**
 
@@ -692,7 +708,7 @@ Use Element Plus controls and existing global design tokens. Show counts for pro
 
 - [ ] **Step 4: Implement record cards and grid**
 
-Render pending/running progress, failed/canceled diagnostics, and successful media metadata. Render actions only when present in `allowed_actions`. Add skeleton, retryable error, no-data, no-match, and no-permission states. Use server pagination with 24/48/96 page sizes.
+Render pending/running progress, failed/canceled diagnostics, and successful media metadata. Render actions only when present in `allowed_actions`. Canceled records are collapsed by default with a toggle to expand. Add skeleton, retryable error, no-data, no-match, and no-permission states. Use server pagination with 24/48/96 page sizes.
 
 - [ ] **Step 5: Replace the old AssetHistory shell**
 
@@ -774,7 +790,7 @@ Remove the sidebar item. Retain the route as a redirect function returning `/ass
 
 - [ ] **Step 4: Add typed feature properties**
 
-Use prefix `features.asset` and booleans `canonicalWrite`, `canonicalRead`, `workbenchUi`, `lifecycleManage`, `marketPublish`, and `legacyWrite`. Default new read/UI/manage/publish flags to false; default legacy write to true.
+Use prefix `asset`（与设计文档 Section 15.2 一致）和 booleans `canonical-write`、`canonical-read`、`workbench-ui`、`lifecycle-manage`、`market-publish`、`legacy-write`（kebab-case 对应 Spring `@ConfigurationProperties` 宽松绑定）。Default new read/UI/manage/publish flags to false; default legacy write to true.
 
 - [ ] **Step 5: Run navigation and configuration tests**
 
@@ -821,7 +837,7 @@ Seed 50,000 rows in one Workspace and 500,000 total across Workspaces. Assert re
 
 Create `AssetMetrics` with counters/timers named `asset_success_without_version_total`, `workspace_isolation_violation_total`, `asset_settlement_success_rate`, `asset_compensation_oldest_seconds`, `asset_api_availability`, `records_latency`, `detail_latency`, `command_latency`, `idempotency_duplicate_side_effect_total`, `migration_unexplained_diff_total`, `frontend_asset_error_rate`, and `asset_first_usable_ms`. Tag backend operations with request, Workspace, project, task, asset, operation, status, error, provider, and model identifiers without putting prompts or file URLs into metric labels.
 
-Add the JaCoCo Maven plugin and restrict its check rule to the new workbench controllers/services/policies: line coverage 0.85, branch coverage 0.80, and branch coverage 1.00 for lifecycle, permission, and settlement classes. Add frontend scripts:
+Add the JaCoCo Maven plugin and restrict its check rule to the new workbench controllers/services/policies: line coverage 0.85, branch coverage 0.80, and branch coverage 1.00 for lifecycle, permission, and settlement business branches（排除防御性 `null` 检查、`instanceof` 类型守卫和日志分支；豁免清单写入 JaCoCo exclusion 配置）。 Add frontend scripts:
 
 ```json
 {

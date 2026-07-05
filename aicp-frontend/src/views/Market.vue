@@ -1,67 +1,129 @@
 <template>
-  <div>
-    <h2 class="text-xl font-bold mb-lg">剧本交易市场</h2>
+  <div class="market-page">
+    <div class="market-header">
+      <h2 class="text-2xl font-bold">剧本交易市场</h2>
+      <p class="text-muted text-base mt-sm">发现优质剧本，加速内容创作</p>
+    </div>
+
     <!-- 搜索+筛选 -->
-    <div class="card mb-lg" style="padding:16px">
-      <el-input v-model="search" placeholder="搜索剧本、作者、标签…" style="max-width:400px" clearable />
-      <div class="mt-md">
-        <span class="text-sm font-semibold">4轴标签筛选</span>
-      </div>
+    <div class="card mb-lg" style="padding:18px">
+      <el-input v-model="filters.keyword" placeholder="搜索剧本、作者、标签…" style="max-width:400px" clearable
+        @change="onFilterChange" />
+      <div class="mt-md"><span class="text-sm font-semibold">4轴标签筛选</span></div>
       <div class="flex gap-sm flex-wrap mt-sm">
-        <span class="text-xs font-semibold" style="min-width:40px">题材：</span>
-        <span v-for="g in ['全部','言情','悬疑','科幻']" :key="g" class="tag" :class="{ selected: genre === g || (g==='全部' && !genre) }" @click="genre = g==='全部' ? '' : g">{{ g }}</span>
-      </div>
-      <div class="flex gap-sm flex-wrap mt-sm">
-        <span class="text-xs font-semibold" style="min-width:40px">情节：</span>
-        <span v-for="p in ['全部','重生','先婚后爱']" :key="p" class="tag" :class="{ selected: plot === p || (p==='全部' && !plot) }" @click="plot = p==='全部' ? '' : p">{{ p }}</span>
-      </div>
-      <div class="flex gap-sm flex-wrap mt-sm">
-        <span class="text-xs font-semibold" style="min-width:40px">情绪：</span>
-        <span v-for="t in ['全部','甜宠','爽文']" :key="t" class="tag" :class="{ selected: tone === t || (t==='全部' && !tone) }" @click="tone = t==='全部' ? '' : t">{{ t }}</span>
+        <span class="text-sm font-semibold" style="min-width:44px;line-height:28px">题材：</span>
+        <span v-for="g in genreOptions" :key="g" class="tag"
+          :class="{ selected: filters.genre === g || (g === '全部' && !filters.genre) }"
+          @click="filters.genre = g === '全部' ? '' : g; onFilterChange()">{{ g }}</span>
       </div>
       <div class="flex gap-sm mt-md">
-        <el-select v-model="sort" style="width:140px">
-          <el-option label="热门推荐" value="popular" /><el-option label="最新上架" value="latest" />
-          <el-option label="销量最高" value="sales" /><el-option label="评分最高" value="rating" />
+        <el-select v-model="filters.sort" style="width:140px" @change="onFilterChange">
+          <el-option label="最新上架" value="latest" />
+          <el-option label="热门推荐" value="popular" />
+          <el-option label="销量最高" value="sales" />
+          <el-option label="评分最高" value="rating" />
         </el-select>
       </div>
     </div>
 
-    <div class="grid4">
-      <div v-for="item in items" :key="item.id" class="card card-hover" style="padding:16px">
-        <div class="canvas-mock" style="min-height:120px;margin-bottom:12px;font-size:24px;font-weight:700;color:var(--text-tertiary)">封面图</div>
-        <div class="font-semibold">{{ item.title }}</div>
-        <p class="text-sm text-muted">@{{ item.author }}</p>
-        <div class="flex gap-sm flex-wrap mt-sm">
-          <span v-for="t in item.tags" :key="t" class="tag selected">{{ t }}</span>
+    <!-- Loading -->
+    <div v-if="listings.loading" class="flex flex-col items-center gap-sm py-xl">
+      <el-icon class="is-loading" :size="24"><Loading /></el-icon>
+      <span class="text-muted">加载中…</span>
+    </div>
+
+    <!-- Error -->
+    <div v-else-if="listings.error" class="empty-state">
+      <el-empty description="加载失败">
+        <el-button size="small" @click="fetchListings">重试</el-button>
+      </el-empty>
+    </div>
+
+    <!-- Empty -->
+    <div v-else-if="!listings.data || listings.data.items.length === 0" class="empty-state">
+      <el-empty :description="filters.keyword ? '未找到匹配的剧本' : '暂无上架剧本'" />
+    </div>
+
+    <!-- Grid -->
+    <div v-else class="grid4">
+      <div v-for="item in listings.data.items" :key="item.id" class="card card-interactive" style="padding:16px"
+        @click="goDetail(item.id)">
+        <div class="cover-placeholder">
+          <el-icon :size="32"><VideoCamera /></el-icon>
+          <span>封面图</span>
         </div>
+        <div class="font-semibold mt-sm truncate">{{ item.title }}</div>
+        <p class="text-sm text-muted">@{{ item.authorDisplayName }}</p>
         <p class="text-sm text-muted mt-sm">
-          <el-icon style="vertical-align:-1px;color:#f59e0b"><StarFilled /></el-icon> {{ item.rating }} ·
-          <span :class="item.price > 0 ? 'badge badge-accent' : 'badge badge-success'">
-            {{ item.price > 0 ? '¥' + item.price : '免费' }}
+          <span v-for="lic in item.licenses" :key="lic.licenseType"
+            :class="lic.priceCents > 0 ? 'badge badge-accent' : 'badge badge-success'"
+            style="margin-right:4px">
+            {{ licenseLabel(lic.licenseType) }}
+            {{ lic.priceCents > 0 ? '¥' + (lic.priceCents / 100).toFixed(2) : '免费' }}
           </span>
-          · 已售{{ item.sales }} · {{ item.episodes }}集
         </p>
-        <el-button type="primary" size="small" class="w-full mt-md" @click="ElMessage.info('进入剧本详情')">查看详情</el-button>
+        <p class="text-sm text-muted mt-sm">
+          已售{{ item.salesCount }} · {{ item.episodeCount }}集
+        </p>
       </div>
+    </div>
+
+    <!-- Pagination -->
+    <div v-if="listings.data && listings.data.totalPages > 1" class="flex justify-center mt-lg">
+      <el-pagination
+        v-model:current-page="filters.page"
+        :page-size="filters.pageSize"
+        :total="listings.data.total"
+        layout="prev, pager, next"
+        @current-change="onPageChange" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { VideoCamera, Loading } from '@element-plus/icons-vue'
+import { useTradeMarket } from './trade/useTradeMarket'
+import { licenseLabel } from './trade/tradeState'
 
-const search = ref('')
-const genre = ref('')
-const plot = ref('')
-const tone = ref('')
-const sort = ref('popular')
+const router = useRouter()
+const { listings, filters, fetchListings, syncQuery } = useTradeMarket()
 
-const items = [
-  { id: 1, title: '霸道总裁的替身新娘', author: '编剧小王', tags: ['言情','重生','甜宠'], rating: 4.8, price: 29.9, sales: 128, episodes: 40 },
-  { id: 2, title: '重生之商业帝国', author: '漫剧达人', tags: ['重生','爽文'], rating: 4.5, price: 19.9, sales: 56, episodes: 20 },
-  { id: 3, title: '仙途之逆天改命', author: '仙侠创作者', tags: ['仙侠','系统'], rating: 4.2, price: 49.9, sales: 23, episodes: 80 },
-  { id: 4, title: '穿越之我成了王妃', author: '穿越编剧', tags: ['穿越','甜宠'], rating: 4.0, price: 0, sales: 301, episodes: 20 }
-]
+const genreOptions = ['全部', '言情', '悬疑', '科幻', '仙侠', '都市', '古装', '奇幻']
+
+function onFilterChange() {
+  filters.page = 1
+  syncQuery({ ...filters })
+  fetchListings()
+}
+
+function onPageChange(page) {
+  filters.page = page
+  syncQuery({ ...filters })
+  fetchListings()
+}
+
+function goDetail(id) {
+  router.push(`/market/${id}`)
+}
+
+onMounted(() => {
+  fetchListings()
+})
 </script>
+
+<style scoped>
+.market-page { max-width: 1400px; }
+.market-header { margin-bottom: 24px; }
+.market-header h2 { margin-bottom: 4px; }
+.cover-placeholder {
+  min-height: 120px; border-radius: var(--radius-md);
+  background: var(--bg-surface-hover); border: 1px dashed var(--border);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 4px; color: var(--text-tertiary); font-size: 13px;
+  transition: border-color .2s ease;
+}
+.card-interactive:hover .cover-placeholder { border-color: var(--accent-border); }
+.card-interactive { cursor: pointer; }
+</style>

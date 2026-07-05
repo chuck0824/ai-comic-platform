@@ -1,0 +1,54 @@
+<h2>选择落地路径</h2>
+<p class="subtitle">目标相同：修正现有冲突，并形成可持续演进的 Canvas 生产内核</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px">
+      <div class="mock-nav">现有 Canvas.vue</div>
+      <div style="display:flex;gap:8px;margin-top:12px;align-items:center">
+        <div class="placeholder" style="flex:1">直接拆分与改表</div>
+        <span>→</span>
+        <div class="placeholder" style="flex:1">一次切换</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · 原地大改</h3>
+      <p>直接替换旧节点、接口、导演台和生成链路。工期表面最短，但回滚、数据迁移和联调风险最高。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px">
+      <div class="mock-nav">兼容层 + 新生产内核（推荐）</div>
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:8px;margin-top:12px;align-items:center">
+        <div class="placeholder">旧节点/API<br>只读兼容</div>
+        <span>→</span>
+        <div class="placeholder">类型端口<br>任务快照<br>导演版本流</div>
+      </div>
+      <div class="placeholder" style="margin-top:8px">按 Canvas/Workspace 灰度切换，可回滚</div>
+    </div>
+    <div class="card-body">
+      <h3>B · 分阶段绞杀迁移</h3>
+      <p>先建立统一契约与兼容投影，再逐步替换 UI 和执行链路。能复用现有任务、资产、计费能力，风险最可控。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px">
+      <div class="mock-nav">Canvas V1 ｜ Canvas V2</div>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <div class="placeholder" style="flex:1">旧产品维护</div>
+        <div class="placeholder" style="flex:1">新产品重建</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · 双轨重建 V2</h3>
+      <p>新建独立 Canvas V2，完成后迁移。边界最干净，但重复建设、双轨维护和数据割接成本最大。</p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>推荐 B 的原因</h4><ul><li>现有产品已有任务、资产、Workspace 和计费基础</li><li>可逐阶段发布和回滚</li><li>能保护现有画布与未提交改动</li></ul></div>
+  <div class="cons"><h4>需要接受的代价</h4><ul><li>短期保留兼容适配器</li><li>必须严格定义新旧数据的单向迁移边界</li></ul></div>
+</div>

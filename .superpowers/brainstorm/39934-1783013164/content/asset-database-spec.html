@@ -1,0 +1,106 @@
+<h2>设计确认 3C/4：数据库字段、索引与迁移</h2>
+<p class="subtitle">关键修正：项目中已经存在 <code>workspace_assets + asset_versions</code> 市场资产模型。新方案不再继续扩建 <code>platform_assets</code> 形成第三套资产库，而是将生成资产迁入 Workspace 资产模型，最终退役 platform_assets。</p>
+
+<div class="section">
+  <h3>一、资产模型收敛</h3>
+  <div style="display:grid;grid-template-columns:1fr 50px 1fr;align-items:center;gap:8px;text-align:center">
+    <div style="padding:12px;background:#fee2e2;border-radius:7px"><b>现状：两套资产本体</b><br><code>platform_assets</code>：生成历史<br><code>workspace_assets</code>：资产市场/Workspace 库<br><small>归属、收藏、发布和字段口径重复</small></div>
+    <b>→</b>
+    <div style="padding:12px;background:#dcfce7;border-radius:7px"><b>目标：一套资产本体</b><br><code>workspace_assets</code>：可变元数据与归属<br><code>asset_versions</code>：不可变文件版本<br><code>generation_tasks</code>：生成过程<br><small>市场发布直接复用现有模型</small></div>
+  </div>
+  <p><code>platform_assets</code> 在迁移期只承担旧接口兼容，不再作为新页面的数据源。这样“生成成功 → 资产管理 → 团队共享 → 市场发布”使用同一个 asset_uuid。</p>
+</div>
+
+<div class="section">
+  <h3>二、workspace_assets：资产本体字段</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#eef2ff"><th style="padding:5px;text-align:left">字段</th><th style="padding:5px;text-align:left">类型/约束</th><th style="padding:5px;text-align:left">说明</th><th style="padding:5px;text-align:left">动作</th></tr>
+    <tr><td style="padding:5px"><code>id</code> / <code>uuid</code></td><td style="padding:5px">BIGINT PK / VARCHAR(36) UNIQUE NOT NULL</td><td style="padding:5px">内部关联 / API 标识</td><td style="padding:5px">保留</td></tr>
+    <tr><td style="padding:5px"><code>workspace_id</code></td><td style="padding:5px">VARCHAR(64) NOT NULL</td><td style="padding:5px">租户隔离主键；精确使用账户中心 ID</td><td style="padding:5px">保留并强校验</td></tr>
+    <tr><td style="padding:5px"><code>workspace_type</code></td><td style="padding:5px">VARCHAR(16) NOT NULL</td><td style="padding:5px">personal / enterprise</td><td style="padding:5px">ENUM 改 VARCHAR</td></tr>
+    <tr><td style="padding:5px"><code>creator_user_id</code></td><td style="padding:5px">BIGINT NOT NULL</td><td style="padding:5px">创建者，用于“我的资产”</td><td style="padding:5px">保留</td></tr>
+    <tr><td style="padding:5px"><code>content_project_id</code></td><td style="padding:5px">BIGINT NULL</td><td style="padding:5px">剧本/内容项目分库；NULL=未归档</td><td style="padding:5px;color:#059669">新增</td></tr>
+    <tr><td style="padding:5px"><code>source_canvas_project_id</code></td><td style="padding:5px">BIGINT NULL</td><td style="padding:5px">首次产出画布；不作为目录主键</td><td style="padding:5px;color:#059669">新增</td></tr>
+    <tr><td style="padding:5px"><code>source_node_id</code> / <code>source_task_id</code></td><td style="padding:5px">BIGINT NULL</td><td style="padding:5px">生成来源追踪</td><td style="padding:5px;color:#059669">新增</td></tr>
+    <tr><td style="padding:5px"><code>asset_type</code></td><td style="padding:5px">VARCHAR(32) NOT NULL</td><td style="padding:5px">CHECKPOINT/LORA/STYLE_PACK/PROMPT/CHARACTER/SCENE/PROP/STORYBOARD/VOICE/MUSIC/OTHER</td><td style="padding:5px">ENUM 改 VARCHAR 并扩展</td></tr>
+    <tr><td style="padding:5px"><code>media_type</code></td><td style="padding:5px">VARCHAR(16) NOT NULL</td><td style="padding:5px">image / video / audio / data / other；与业务分类分离</td><td style="padding:5px;color:#059669">新增</td></tr>
+    <tr><td style="padding:5px"><code>name</code></td><td style="padding:5px">VARCHAR(200) NOT NULL</td><td style="padding:5px">可编辑名称</td><td style="padding:5px">保留</td></tr>
+    <tr><td style="padding:5px"><code>description</code> / <code>tags</code></td><td style="padding:5px">TEXT / JSON NOT NULL DEFAULT []</td><td style="padding:5px">描述与标签</td><td style="padding:5px">保留并规范空值</td></tr>
+    <tr><td style="padding:5px"><code>access_scope</code></td><td style="padding:5px">VARCHAR(16) NOT NULL</td><td style="padding:5px">PRIVATE / WORKSPACE</td><td style="padding:5px">保留</td></tr>
+    <tr><td style="padding:5px"><code>source_type</code></td><td style="padding:5px">VARCHAR(24) NOT NULL</td><td style="padding:5px">CREATED / PROJECT_GENERATED / MARKET_CLAIMED / IMPORTED</td><td style="padding:5px">保留</td></tr>
+    <tr><td style="padding:5px"><code>current_version_id</code></td><td style="padding:5px">BIGINT NULL</td><td style="padding:5px">当前文件版本；生成成功后必填</td><td style="padding:5px">保留并加 FK</td></tr>
+    <tr><td style="padding:5px"><code>status</code></td><td style="padding:5px">VARCHAR(16) NOT NULL DEFAULT ACTIVE</td><td style="padding:5px">ACTIVE / ARCHIVED / TRASHED</td><td style="padding:5px">扩展 TRASHED</td></tr>
+    <tr><td style="padding:5px"><code>deleted_at</code> / <code>deleted_by</code> / <code>purge_at</code></td><td style="padding:5px">DATETIME NULL / BIGINT NULL / DATETIME NULL</td><td style="padding:5px">回收站与 30 天清理</td><td style="padding:5px;color:#059669">新增</td></tr>
+    <tr><td style="padding:5px"><code>legacy_platform_asset_id</code></td><td style="padding:5px">BIGINT NULL UNIQUE</td><td style="padding:5px">迁移映射，仅兼容期使用</td><td style="padding:5px;color:#059669">新增临时字段</td></tr>
+    <tr><td style="padding:5px"><code>row_version</code></td><td style="padding:5px">INT NOT NULL DEFAULT 0</td><td style="padding:5px">乐观锁/ETag</td><td style="padding:5px">保留</td></tr>
+    <tr><td style="padding:5px"><code>created_at/updated_at/created_by/updated_by</code></td><td style="padding:5px">DATETIME / BIGINT</td><td style="padding:5px">审计</td><td style="padding:5px">保留并补齐非空策略</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>三、asset_versions：不可变文件版本字段</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#eef2ff"><th style="padding:5px;text-align:left">字段</th><th style="padding:5px;text-align:left">类型/约束</th><th style="padding:5px;text-align:left">用途</th></tr>
+    <tr><td style="padding:5px"><code>id</code>、<code>asset_id</code>、<code>version_number</code></td><td style="padding:5px">BIGINT / BIGINT NOT NULL / INT NOT NULL</td><td style="padding:5px">唯一约束 <code>(asset_id, version_number)</code></td></tr>
+    <tr><td style="padding:5px"><code>source_task_id</code></td><td style="padding:5px">BIGINT NULL</td><td style="padding:5px">生成任务来源；导入/市场资产可空</td></tr>
+    <tr><td style="padding:5px"><code>storage_provider</code>、<code>storage_bucket</code>、<code>storage_key</code></td><td style="padding:5px">VARCHAR(24/128/768)，key NOT NULL</td><td style="padding:5px">持久存储定位；下载 URL 运行时签名，不持久化临时 URL</td></tr>
+    <tr><td style="padding:5px"><code>mime_type</code>、<code>file_size</code>、<code>checksum</code></td><td style="padding:5px">VARCHAR(128) / BIGINT / VARCHAR(128)</td><td style="padding:5px">文件验证与下载头</td></tr>
+    <tr><td style="padding:5px"><code>width</code>、<code>height</code>、<code>duration_ms</code></td><td style="padding:5px">INT NULL</td><td style="padding:5px">图片/视频/音频元数据；按类型校验</td></tr>
+    <tr><td style="padding:5px"><code>preview_url</code>、<code>thumbnail_ref</code></td><td style="padding:5px">VARCHAR(500/768) NULL</td><td style="padding:5px">兼容外部预览和内部缩略图定位</td></tr>
+    <tr><td style="padding:5px"><code>generation_snapshot</code></td><td style="padding:5px">JSON NULL</td><td style="padding:5px">provider、model_id、prompt、parameters 的不可变快照</td></tr>
+    <tr><td style="padding:5px"><code>metadata</code></td><td style="padding:5px">JSON NOT NULL DEFAULT {}</td><td style="padding:5px">扩展元数据；禁止把高频筛选字段只放 JSON</td></tr>
+    <tr><td style="padding:5px"><code>created_by</code>、<code>created_at</code></td><td style="padding:5px">BIGINT / DATETIME</td><td style="padding:5px">版本不可更新，只新增</td></tr>
+  </table>
+  <p>旧 <code>content_ref</code>、<code>preview_url</code> 在兼容期保留；完成 storage_key 回填后，content_ref 标记 deprecated，但不在同一发布中物理删除。</p>
+</div>
+
+<div class="section">
+  <h3>四、generation_tasks：任务归属与重试链</h3>
+  <p>新增 <code>workspace_id VARCHAR(64) NOT NULL</code>、<code>created_by BIGINT NOT NULL</code>、<code>content_project_id BIGINT NULL</code>、<code>asset_type VARCHAR(32) NOT NULL DEFAULT 'OTHER'</code>、<code>retry_of_task_id BIGINT NULL</code>、<code>idempotency_key VARCHAR(64) NULL</code>、<code>request_id VARCHAR(64) NULL</code>。保留现有 project_id 作为 source_canvas_project_id 兼容字段，后续单独重命名，不在本期破坏已有 Mapper。</p>
+  <p>成功约束：<code>status=SUCCEEDED</code> 时必须存在至少一个关联 asset_version；若资产入库失败，任务保持 RUNNING/补偿中或转 FAILED，不允许先标成功再留空资产。</p>
+</div>
+
+<div class="section">
+  <h3>五、新增关系表</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#eef2ff"><th style="padding:5px;text-align:left">表</th><th style="padding:5px;text-align:left">字段</th><th style="padding:5px;text-align:left">唯一/索引</th></tr>
+    <tr><td style="padding:5px"><code>workspace_asset_favorites</code></td><td style="padding:5px">id、user_id、workspace_id、asset_id、created_at</td><td style="padding:5px">UNIQUE(user_id,workspace_id,asset_id)；区别于市场 listing 收藏表 asset_favorites</td></tr>
+    <tr><td style="padding:5px"><code>asset_activity_logs</code></td><td style="padding:5px">id、workspace_id、asset_id、actor_user_id、action、before_data JSON、after_data JSON、request_id、created_at</td><td style="padding:5px">INDEX(workspace_id,asset_id,created_at DESC)；只追加</td></tr>
+    <tr><td style="padding:5px"><code>canvas_asset_placements</code></td><td style="padding:5px">id、workspace_id、asset_id、asset_version_id、canvas_project_id、node_id、placed_by、idempotency_key、created_at</td><td style="padding:5px">UNIQUE(workspace_id,idempotency_key)；INDEX(asset_id,created_at)</td></tr>
+    <tr><td style="padding:5px"><code>asset_command_idempotencies</code></td><td style="padding:5px">workspace_id、user_id、idempotency_key、command_type、request_hash、response_code、response_body、expires_at</td><td style="padding:5px">UNIQUE(workspace_id,user_id,idempotency_key)；定时清理</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>六、索引与约束</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:7px;font-size:11px">
+    <div style="padding:8px;background:#f8fafc"><b>workspace_assets</b><br><code>(workspace_id,content_project_id,status,updated_at DESC)</code><br><code>(workspace_id,creator_user_id,status,created_at DESC)</code><br><code>(workspace_id,asset_type,status,created_at DESC)</code><br><code>(workspace_id,source_task_id)</code></div>
+    <div style="padding:8px;background:#f8fafc"><b>generation_tasks</b><br><code>(workspace_id,content_project_id,status,created_at DESC)</code><br><code>(workspace_id,created_by,created_at DESC)</code><br><code>(retry_of_task_id)</code><br>UNIQUE <code>(workspace_id,idempotency_key)</code></div>
+    <div style="padding:8px;background:#f8fafc"><b>asset_versions</b><br>UNIQUE <code>(asset_id,version_number)</code><br><code>(source_task_id)</code><br><code>(checksum)</code> 非唯一，仅用于诊断/未来去重</div>
+    <div style="padding:8px;background:#f8fafc"><b>外键策略</b><br>asset_versions.asset_id → workspace_assets RESTRICT；来源项目/节点/任务 SET NULL；收藏/放置记录由业务软删除保护。MySQL 与 H2 使用相同逻辑约束。</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>七、迁移步骤与数据回填</h3>
+  <ol style="font-size:12px;line-height:1.7">
+    <li><b>一致性修复：</b>先统一 Workspace ID 来源。使用账户中心返回的真实 ID；开发环境个人默认统一为 <code>personal_{userId}</code>。禁止继续使用 schema 中的 <code>personal:</code>/<code>ent:</code> 字符串拼接。</li>
+    <li><b>加法迁移：</b>为 workspace_assets、asset_versions、generation_tasks 增加 nullable 字段和新表/索引；H2/MySQL 同步提交。</li>
+    <li><b>回填：</b>逐批把 platform_assets 转为 workspace_assets + asset_versions，保留原 uuid，写 legacy_platform_asset_id；项目通过 canvas_projects.content_project_id 映射，无法映射进入未归档。</li>
+    <li><b>分类映射：</b>优先读取明确 category；否则按 generation_tasks.sub_type 映射；仍无法识别设 OTHER 并记录迁移告警，不静默猜测。</li>
+    <li><b>收藏迁移：</b>platform_assets.favorite=1 转为创建者的 workspace_asset_favorites；市场 asset_favorites 不改，因为它收藏的是 listing。</li>
+    <li><b>双写：</b>GenerationExecutor 在特性开关下写新 canonical 模型并继续写 platform_assets；对 asset_uuid、数量、Workspace、项目、文件引用做影子校验。</li>
+    <li><b>切读：</b>新工作台只读 canonical 模型；旧接口继续读 platform_assets。双写稳定且历史回填核对通过后停止旧写。</li>
+    <li><b>退役：</b>旧接口调用量连续 14 天为 0 且至少经过 60 天兼容期后，备份并删除 platform_assets Mapper/实体/表；先删代码，下一发布再删表。</li>
+  </ol>
+</div>
+
+<div class="section">
+  <h3>八、迁移验收与回滚</h3>
+  <p><b>验收：</b>总资产数、按 Workspace/项目/分类计数、文件引用可用率、成功任务关联资产率、收藏数、孤儿记录数必须输出核对报告；成功任务无资产率必须为 0。<br><b>回滚：</b>迁移期间不删除旧列/旧表；读开关可切回旧查询，双写失败进入补偿队列。已写入 canonical 的数据保留，不做反向破坏性回滚。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认数据库与迁移设计</h3><p>下一步汇总错误处理、测试和实施优先级。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请指出表、字段、索引、模型收敛或迁移策略。</p></div></div>
+</div>

@@ -11,6 +11,7 @@ import com.aicp.module.contentproject.dto.ContentProjectViews.*;
 import com.aicp.module.contentproject.service.ContentProjectService;
 import com.aicp.module.contentproject.service.ContentUnitService;
 import com.aicp.module.contentproject.service.LegacyProjectProjectionService;
+import com.aicp.module.contentproject.service.ProjectLifecycleService;
 import com.aicp.module.contentproject.service.ProjectWorkflowService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -28,6 +29,7 @@ public class ContentProjectController {
 
     private final ContentProjectService projects;
     private final ProjectWorkflowService workflow;
+    private final ProjectLifecycleService lifecycle;
     private final ContentUnitService unitService;
     private final LegacyProjectProjectionService legacy;
     private final CanvasProjectManagementService canvasProjects;
@@ -44,9 +46,31 @@ public class ContentProjectController {
     }
 
     @GetMapping
-    public ApiResponse<PageResult<ProjectSummary>> list(
+    public ApiResponse<?> list(
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int pageSize) {
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String creationMode,
+            @RequestParam(required = false) String sourceMode,
+            @RequestParam(required = false) String contentStatus,
+            @RequestParam(required = false) String productionStatus,
+            @RequestParam(required = false) String commercialStatus,
+            @RequestParam(required = false) String lifecycleStatus,
+            @RequestParam(required = false) String updatedFrom,
+            @RequestParam(required = false) String updatedTo,
+            @RequestParam(required = false) String sort) {
+        boolean hasFilters = keyword != null || creationMode != null || sourceMode != null
+                || contentStatus != null || productionStatus != null || commercialStatus != null
+                || lifecycleStatus != null || updatedFrom != null || updatedTo != null || sort != null;
+        if (hasFilters || "warehouse".equals(lifecycleStatus) || lifecycleStatus == null) {
+            // Use warehouse query when filters are present
+            ProjectQuery query = new ProjectQuery(page, pageSize, keyword,
+                    creationMode, sourceMode, contentStatus, productionStatus,
+                    commercialStatus, lifecycleStatus, updatedFrom, updatedTo, sort);
+            var result = projects.list(SecurityUtil.requireCurrentUserId(), query);
+            return ApiResponse.success(PageResult.of(result.items(), page, pageSize, result.total()));
+        }
+        // Legacy simple list
         var result = projects.list(SecurityUtil.requireCurrentUserId(), page, pageSize);
         return ApiResponse.success(PageResult.of(result.items(), page, pageSize, result.total()));
     }
@@ -111,6 +135,26 @@ public class ContentProjectController {
 
     // ===== Canvas Projects (under content project) =====
 
+    // ===== Warehouse Queries =====
+
+    @GetMapping("/recent")
+    public ApiResponse<List<WarehouseProjectView>> recent(
+            @RequestParam(defaultValue = "5") int limit) {
+        return ApiResponse.success(projects.recent(SecurityUtil.requireCurrentUserId(), limit));
+    }
+
+    @GetMapping("/todos")
+    public ApiResponse<List<ProjectTodoView>> todos() {
+        return ApiResponse.success(projects.todos(SecurityUtil.requireCurrentUserId()));
+    }
+
+    @GetMapping("/{id}/summary")
+    public ApiResponse<ProjectHubView> summary(@PathVariable Long id) {
+        return ApiResponse.success(projects.hub(SecurityUtil.requireCurrentUserId(), id));
+    }
+
+    // ===== Canvas Projects (under content project) =====
+
     @GetMapping("/{projectId}/canvas-projects")
     public ApiResponse<PageResult<CanvasProjectSummary>> listCanvasProjects(
             @PathVariable Long projectId,
@@ -141,6 +185,57 @@ public class ContentProjectController {
                         SecurityUtil.requireCurrentUserId(), projectId, unitType, displayNo, title)));
     }
 
+    // ===== Lifecycle Actions =====
+
+    @PostMapping("/{id}/submit-review")
+    public ApiResponse<ProjectDetail> submitReview(@PathVariable Long id,
+            @Valid @RequestBody VersionActionRequest request) {
+        return ApiResponse.success(lifecycle.submitReview(SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/{id}/approve")
+    public ApiResponse<ProjectDetail> approve(@PathVariable Long id,
+            @Valid @RequestBody VersionActionRequest request) {
+        return ApiResponse.success(lifecycle.approve(SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/{id}/request-revision")
+    public ApiResponse<ProjectDetail> requestRevision(@PathVariable Long id,
+            @Valid @RequestBody VersionActionRequest request) {
+        return ApiResponse.success(lifecycle.requestRevision(SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/{id}/lock")
+    public ApiResponse<ProjectDetail> lock(@PathVariable Long id,
+            @Valid @RequestBody VersionActionRequest request) {
+        return ApiResponse.success(lifecycle.lock(SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/{id}/archive")
+    public ApiResponse<ProjectDetail> archive(@PathVariable Long id,
+            @Valid @RequestBody ProjectActionRequest request) {
+        return ApiResponse.success(lifecycle.archive(SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/{id}/restore")
+    public ApiResponse<ProjectDetail> restore(@PathVariable Long id,
+            @Valid @RequestBody ProjectActionRequest request) {
+        return ApiResponse.success(lifecycle.restore(SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/{id}/duplicate")
+    public ApiResponse<ProjectDetail> duplicate(@PathVariable Long id,
+            @Valid @RequestBody ProjectActionRequest request) {
+        return ApiResponse.success(lifecycle.duplicate(SecurityUtil.requireCurrentUserId(), id, request));
+    }
+
+    @PostMapping("/{id}/trash")
+    public ApiResponse<Void> moveToTrash(@PathVariable Long id,
+            @Valid @RequestBody ProjectActionRequest request) {
+        lifecycle.moveToTrash(SecurityUtil.requireCurrentUserId(), id, request);
+        return ApiResponse.success();
+    }
+
     // ===== Legacy Backfill =====
 
     @PostMapping("/backfill-legacy")
@@ -151,5 +246,11 @@ public class ContentProjectController {
                 "units", result.units(),
                 "versions", result.versions(),
                 "skipped", result.skipped()));
+    }
+
+    @GetMapping("/legacy-scripts/{scriptId}/resolve")
+    public ApiResponse<Map<String, Long>> resolveLegacy(@PathVariable Long scriptId) {
+        var project = legacy.resolveOrCreate(SecurityUtil.requireCurrentUserId(), scriptId);
+        return ApiResponse.success(Map.of("project_id", project.getId()));
     }
 }

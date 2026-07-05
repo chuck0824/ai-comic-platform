@@ -1,0 +1,79 @@
+<h2>设计确认 4/4：组件、异常处理、测试与交付优先级</h2>
+<p class="subtitle">目标不是只完成页面，而是跑通“生成任务 → 资产入库 → 项目分类 → 复用/发布 → 回收”的可靠闭环。</p>
+
+<div class="section">
+  <h3>一、系统组件边界</h3>
+  <div style="display:grid;grid-template-columns:1fr 45px 1fr 45px 1fr;align-items:center;gap:6px;text-align:center;font-size:12px">
+    <div style="padding:10px;background:#eef2ff;border-radius:7px"><b>前端工作台</b><br>AssetHistory 容器<br>项目树/分类/筛选<br>记录卡/详情/批量栏<br>画布/发布/回收弹窗</div><b>→</b>
+    <div style="padding:10px;background:#e0f2fe;border-radius:7px"><b>资产应用服务</b><br>HistoryQueryService<br>AssetCommandService<br>CanvasPlacementService<br>AssetMigrationService</div><b>→</b>
+    <div style="padding:10px;background:#dcfce7;border-radius:7px"><b>统一数据模型</b><br>generation_tasks<br>workspace_assets<br>asset_versions<br>favorites/activity/placements</div>
+  </div>
+  <p>查询与命令分离：列表筛选不承载写逻辑；移动、删除、发布、画布放置各自有明确事务边界。Controller 只做鉴权上下文、校验和 DTO 转换。</p>
+</div>
+
+<div class="section">
+  <h3>二、关键数据流</h3>
+  <div style="display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;font-size:11px">
+    <div style="padding:8px;background:#f8fafc;border-radius:6px"><b>1 创建任务</b><br>写 Workspace、内容项目、分类、创建人</div>
+    <div style="align-self:center">→</div><div style="padding:8px;background:#f8fafc;border-radius:6px"><b>2 异步执行</b><br>pending → running</div>
+    <div style="align-self:center">→</div><div style="padding:8px;background:#f8fafc;border-radius:6px"><b>3 校验输出</b><br>文件存在、元数据完整</div>
+    <div style="align-self:center">→</div><div style="padding:8px;background:#f8fafc;border-radius:6px"><b>4 原子入库</b><br>asset + version + 节点回写</div>
+    <div style="align-self:center">→</div><div style="padding:8px;background:#dcfce7;border-radius:6px"><b>5 标记成功</b><br>工作台出现可复用资产</div>
+  </div>
+  <p>第 3/4 步任一失败时不得标记 succeeded。跨存储和数据库无法单事务时，使用 outbox/补偿任务：文件已上传但数据库失败则延迟登记或清理；数据库成功但节点回写失败则重试回写并展示“处理中”。</p>
+</div>
+
+<div class="section">
+  <h3>三、异常处理矩阵</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <tr style="background:#eef2ff"><th style="padding:5px;text-align:left">异常</th><th style="padding:5px;text-align:left">服务端处理</th><th style="padding:5px;text-align:left">页面反馈</th></tr>
+    <tr><td style="padding:5px">列表请求失败/超时</td><td style="padding:5px">记录 request_id，不清空已有成功数据</td><td style="padding:5px">局部错误条 + 重试，保留筛选和列表</td></tr>
+    <tr><td style="padding:5px">请求竞态</td><td style="padding:5px">无额外写入</td><td style="padding:5px">仅采纳最后一次查询序号，旧响应丢弃</td></tr>
+    <tr><td style="padding:5px">版本冲突</td><td style="padding:5px">409 + 当前 row_version</td><td style="padding:5px">提示数据已更新，刷新详情，不覆盖他人修改</td></tr>
+    <tr><td style="padding:5px">文件缺失</td><td style="padding:5px">422/48008；生成修复事件</td><td style="padding:5px">预览区显示“文件不可用”，保留元数据与诊断入口</td></tr>
+    <tr><td style="padding:5px">批量部分失败</td><td style="padding:5px">逐项事务，返回成功/失败明细</td><td style="padding:5px">成功项更新，失败项保留选中并可重试</td></tr>
+    <tr><td style="padding:5px">双击发送画布</td><td style="padding:5px">Idempotency-Key 重放同一 placement</td><td style="padding:5px">只出现一个节点，不重复弹成功提示</td></tr>
+    <tr><td style="padding:5px">发布状态变化</td><td style="padding:5px">409/48006，返回当前 PENDING/APPROVED 等状态</td><td style="padding:5px">刷新发布区，不重复提交审批</td></tr>
+    <tr><td style="padding:5px">生成成功但资产登记失败</td><td style="padding:5px">任务不进入 succeeded；补偿重试并报警</td><td style="padding:5px">显示“结果入库中/失败原因”，允许人工重试登记</td></tr>
+    <tr><td style="padding:5px">Workspace 被切换</td><td style="padding:5px">每次请求重新校验 header</td><td style="padding:5px">取消未完成查询、清空选中项、加载新 Workspace</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>四、测试矩阵</h3>
+  <div class="cards">
+    <div class="card"><div class="card-body"><h3>后端单元测试</h3><p>分类映射、状态机、allowed_actions、Workspace 权限、重试链、软删除期限、幂等哈希、DTO 映射。</p></div></div>
+    <div class="card"><div class="card-body"><h3>数据库集成测试</h3><p>H2/MySQL 迁移一致；分页筛选、索引、乐观锁、唯一约束、回填、部分失败、事务补偿。</p></div></div>
+    <div class="card"><div class="card-body"><h3>前端组件测试</h3><p>URL 状态、项目切换、请求竞态、三类卡片、媒体预览、权限禁用、局部错误、批量结果。</p></div></div>
+    <div class="card"><div class="card-body"><h3>E2E 验收</h3><p>生成到入库、项目分类、收藏刷新、失败重试、画布幂等、团队审批、删除恢复、越权不可见。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>五、强制验收指标</h3>
+  <ul style="font-size:12px;line-height:1.7">
+    <li>不同剧本/项目资产零混入；无归属资产只出现在未归档区。</li>
+    <li>跨 Workspace 资产查询、详情、下载、移动、画布和发布全部不可枚举、不可操作。</li>
+    <li>生成任务 SUCCEEDED 与可用 asset_version 一一对应，验收数据中“成功无资产”数量为 0。</li>
+    <li>收藏刷新后保持；删除后 30 天内可恢复；已存在画布节点不因资产进回收站失效。</li>
+    <li>相同幂等键重复发送画布 10 次只创建 1 个节点。</li>
+    <li>50,000 条 Workspace 数据下，常用列表查询 p95 ≤ 500ms（服务端，不含媒体加载），无全表扫描。</li>
+    <li>旧 /task-monitor 正确重定向；旧资产接口兼容期有弃用头和调用量监控。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>六、交付优先级</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="background:#eef2ff"><th style="padding:6px;text-align:left">阶段</th><th style="padding:6px;text-align:left">范围</th><th style="padding:6px;text-align:left">完成标准</th></tr>
+    <tr><td style="padding:6px"><b>P0 数据可信</b></td><td style="padding:6px">Workspace ID 统一、canonical 模型、迁移/回填、任务归属、输出校验、补偿机制、权限</td><td style="padding:6px">成功无资产=0，跨 Workspace 越权=0</td></tr>
+    <tr><td style="padding:6px"><b>P1 可用工作台</b></td><td style="padding:6px">项目树、业务分类、统一任务卡、分页筛选、详情预览、持久收藏、重试/取消、真实发送画布</td><td style="padding:6px">核心日常生产闭环可用，旧 TaskMonitor 合并</td></tr>
+    <tr><td style="padding:6px"><b>P2 管理闭环</b></td><td style="padding:6px">批量操作、未归档整理、签名下载、回收站、活动日志、个人直发/团队审批</td><td style="padding:6px">资产可整理、可追踪、可发布</td></tr>
+    <tr><td style="padding:6px"><b>后续版本</b></td><td style="padding:6px">复杂版本树、版权合同、自动内容审核、指纹去重、跨项目依赖图</td><td style="padding:6px">不阻塞本期，不提前建设</td></tr>
+  </table>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认完整设计</h3><p>将全部确认内容写入正式规格文档并自检。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请指出组件边界、异常、测试、指标或阶段。</p></div></div>
+</div>

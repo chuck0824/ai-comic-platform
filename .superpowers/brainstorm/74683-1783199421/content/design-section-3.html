@@ -1,0 +1,105 @@
+<h2>第三章：工作台、导演台与生成闭环</h2>
+<p class="subtitle">目标：让页面展示的每个入口都有真实状态、真实接口和可追溯结果</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Canvas 工作台</div>
+    <div class="mockup-body">
+      <div class="mock-nav">返回项目中心 ｜ 探索/正式生产 ｜ 自动保存 ｜ 交付清单</div>
+      <div style="display:flex;min-height:300px">
+        <div class="mock-sidebar" style="width:150px">六类节点<br>项目资产<br>生成历史<br><br><small>未接入功能隐藏</small></div>
+        <div class="mock-content" style="flex:1">
+          <div class="placeholder">ShotWorkUnit 01<br>输入齐套 → 费用确认 → 生成 → 质检 → 正式采用</div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <div class="placeholder" style="flex:1">脚本 / 图片 / 音频</div>
+            <div class="placeholder" style="flex:1">导演台（可选）</div>
+            <div class="placeholder" style="flex:1">视频候选</div>
+          </div>
+          <div class="placeholder" style="margin-top:10px">浮动编辑器：内容参数｜参考素材｜候选结果｜任务记录</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">删除或替换</div>
+    <div class="mockup-body"><ul>
+      <li>删除七轨时间线、视频剪辑、视频合成、音频截取和音频变速。</li>
+      <li>“合成导出”替换为“交付清单/素材包”。</li>
+      <li>隐藏未接真实服务的分享、通知和批量操作，不显示假提示。</li>
+      <li>模型选择不再由执行函数硬编码覆盖。</li>
+      <li>候选和质检以内嵌资源呈现，不继续扩张节点种类。</li>
+      <li>项目中心加载超过阈值必须进入明确错误/只读降级态，不能无限骨架屏。</li>
+    </ul></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">导演台独立工作区</div>
+  <div class="mockup-body">
+    <div class="mock-nav">返回 Canvas ｜ SHOT / 时长 / FPS ｜ 草稿状态 ｜ 冻结版本 ｜ 生成预演</div>
+    <div style="display:grid;grid-template-columns:180px 1fr 220px;gap:8px;min-height:260px;margin-top:8px">
+      <div class="placeholder">场景树<br>资产版本<br>显示/锁定</div>
+      <div class="placeholder">Three.js 真实 3D 视口<br>导演视角 / 机位视角<br>Gizmo / 安全框</div>
+      <div class="placeholder">对象属性<br>动作片段<br>摄影参数<br>连续性检查</div>
+    </div>
+    <div class="placeholder" style="margin-top:8px">单镜头时间线：对象变换｜动作片段｜摄影机｜镜头参数｜对白节拍｜连续性标记</div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>必须补入的技术约束</h4><ul>
+    <li>协议统一使用右手 Y-up、米制；Blender 原生 Z-up 由 Worker 入口/出口做显式矩阵转换。</li>
+    <li>旋转以 Quaternion 为持久化真值，Euler 仅用于界面编辑，避免万向锁。</li>
+    <li>时间区间采用半开区间 <code>[0, duration)</code>，帧索引 <code>0..N-1</code>，输出按时间基精确截取。</li>
+    <li>草稿停顿 1 秒自动保存并使用 <code>If-Match</code>；冻结 revision 后不可修改。</li>
+    <li>预演、生成和质检状态属于独立 Task，不写回不可变导演包状态机。</li>
+  </ul></div>
+  <div class="cons"><h4>首期明确不做</h4><ul>
+    <li>骨骼关节级动画、材质节点、灯光曲线和 Blender 工程同步。</li>
+    <li>多人实时同屏编辑。</li>
+    <li>导演台自动插入或根据失败视频反推场景。</li>
+    <li>Canvas 内最终混音、转场、特效和成片合成。</li>
+  </ul></div>
+</div>
+
+<div class="section">
+  <h3>本期追加的实用增强包</h3>
+  <ul>
+    <li>内置机位、镜头运动、角色动作片段以及受控灯光/材质预设；只暴露业务参数，不开放 Blender 节点级编辑。</li>
+    <li>冻结前自动检查资产缺失、动作重叠、镜头越界、越轴风险、相机穿模、参考职责冲突和模型能力限制。</li>
+    <li>交付清单支持生成 EDL/FCPXML 与素材路径映射，供 Premiere、DaVinci Resolve 或其他外部后期工具接续。</li>
+  </ul>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">模型调用与质量闭环</div>
+  <div class="mockup-body" style="display:flex;gap:7px;align-items:stretch;flex-wrap:wrap">
+    <div class="placeholder">节点意图<br>能力请求</div><span>→</span>
+    <div class="placeholder">能力编译<br>模型路由</div><span>→</span>
+    <div class="placeholder">适配预览<br>费用确认</div><span>→</span>
+    <div class="placeholder">不可变快照<br>Task/Attempt</div><span>→</span>
+    <div class="placeholder">候选<br>质量报告</div><span>→</span>
+    <div class="placeholder">ShotAdoption<br>交付清单</div>
+  </div>
+  <ul style="margin-top:12px">
+    <li>Seedance 槽位、时长和画幅限制来自版本化能力配置，不写入节点领域模型。</li>
+    <li>确认费用后模型失效：重新预览并再次确认，禁止静默换模型。</li>
+    <li>部分候选失败：保留成功候选，按实际失败部分结算/退还。</li>
+    <li>资产版本失效或上游变化：标记输入过期并准确定位，不自动重生成。</li>
+    <li>质检按严重度配置阻断；允许授权用户填写原因强制采用。质量代理可指出问题，但不得建议或自动创建导演台。</li>
+  </ul>
+</div>
+
+<div class="section">
+  <h3>前端拆分</h3>
+  <p><code>Canvas.vue</code> 只保留路由、页面骨架和模块协调；拆为 workspace、node-registry、ports、shot-units、director、generation、quality、delivery 八个边界模块。导演台使用独立路由，Three.js 生命周期不得继续留在 Canvas 根组件。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="confirm-section-3" onclick="toggleSelect(this)">
+    <div class="letter">✓</div><div class="content"><h3>确认第三章</h3><p>继续分阶段交付、测试、验收和风险控制。</p></div>
+  </div>
+  <div class="option" data-choice="revise-section-3" onclick="toggleSelect(this)">
+    <div class="letter">↺</div><div class="content"><h3>需要修改</h3><p>返回终端说明需要调整的交互或技术边界。</p></div>
+  </div>
+</div>

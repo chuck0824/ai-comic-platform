@@ -1,0 +1,103 @@
+<h2>剧本创作完整体系架构</h2>
+<p class="subtitle">覆盖产品层、领域层、AI 层、数据层、下游契约与平台治理；现有功能保留并纳入统一体系</p>
+
+<div class="mockup">
+  <div class="mockup-header">一、产品入口与页面职责</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+    <div style="padding:12px;border:1px solid #cbd5e1;border-radius:10px"><strong>创作首页</strong><p>新建、上传、最近创作、待办</p></div>
+    <div style="padding:12px;border:2px solid #6366f1;border-radius:10px;background:#f5f3ff"><strong>创作工作台</strong><p>梗概、大纲、正文、审核、锁稿</p></div>
+    <div style="padding:12px;border:1px solid #8b5cf6;border-radius:10px;background:#faf5ff"><strong>创作圣经</strong><p>生态、设定、关系、口径、连续性</p></div>
+    <div style="padding:12px;border:1px solid #22c55e;border-radius:10px"><strong>项目详情</strong><p>版本、审核、分镜、生产、商业流转</p></div>
+    <div style="padding:12px;border:1px solid #64748b;border-radius:10px"><strong>剧本仓库</strong><p>筛选、归档、恢复、全生命周期管理</p></div>
+  </div>
+</div>
+
+<div style="text-align:center;font-size:22px;color:#64748b;padding:7px">↓ 统一内容项目与权限上下文</div>
+
+<div class="mockup">
+  <div class="mockup-header">二、创作圣经：项目唯一事实源</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div style="padding:12px;border:1px solid #38bdf8;border-radius:10px;background:#f0f9ff"><strong>总体生态</strong><p>时代与世界规则<br>社会结构与制度禁忌<br>势力与组织<br>资源与能力体系<br>地点体系与关键历史</p></div>
+    <div style="padding:12px;border:1px solid #f472b6;border-radius:10px;background:#fdf2f8"><strong>实体设定</strong><p>人物、背景、势力<br>地点、物品<br>别名、状态、引用<br>字段级来源与版本</p></div>
+    <div style="padding:12px;border:1px solid #f59e0b;border-radius:10px;background:#fffbeb"><strong>动态关系网</strong><p>人物/势力/地点/物品关系<br>方向、性质、强度、状态<br>起止集章与证据<br>时间轴回放和冲突检测</p></div>
+    <div style="padding:12px;border:1px solid #a78bfa;border-radius:10px;background:#faf5ff"><strong>写作口径</strong><p>项目级叙事基线<br>角色口吻与知识边界<br>单集/单章局部覆盖<br>继承、优先级与禁用表达</p></div>
+  </div>
+</div>
+
+<div style="text-align:center;font-size:22px;color:#64748b;padding:7px">↓ 事实版本 + 生成上下文快照</div>
+
+<div class="mockup">
+  <div class="mockup-header">三、完整创作流水线</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;align-items:stretch">
+      <div style="padding:10px;border:1px solid #94a3b8;border-radius:9px"><strong>1 输入</strong><p>构思/上传/已有版本</p></div>
+      <div style="padding:10px;border:1px dashed #f59e0b;border-radius:9px"><strong>2 提取</strong><p>AI 候选、证据、置信度</p></div>
+      <div style="padding:10px;border:1px solid #6366f1;border-radius:9px"><strong>3 确认</strong><p>人工审核进入事实库</p></div>
+      <div style="padding:10px;border:1px solid #3b82f6;border-radius:9px"><strong>4 创作</strong><p>梗概→大纲→正文</p></div>
+      <div style="padding:10px;border:1px solid #fb7185;border-radius:9px"><strong>5 校验</strong><p>一致性、关系、口径、风险</p></div>
+      <div style="padding:10px;border:1px solid #22c55e;border-radius:9px"><strong>6 审核</strong><p>提交、退回、批准</p></div>
+      <div style="padding:10px;border:2px solid #16a34a;border-radius:9px;background:#f0fdf4"><strong>7 锁稿</strong><p>形成不可变内容契约</p></div>
+    </div>
+    <div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:8px"><strong>每一步都保留：</strong>上游版本、圣经版本、参数版本、Prompt 版本、模型、用户修订、生成任务、费用、审核结果和审计记录。</div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">四、AI 与人工控制面</div>
+    <div class="mockup-body">
+      <p><strong>上下文组装器：</strong>按模式、阶段和当前集章裁剪事实，避免全量堆入 Prompt。</p>
+      <p><strong>生成编排：</strong>幂等任务、异步状态、取消、重试、超时和真实失败。</p>
+      <p><strong>专业审校：</strong>钩子 Agent、编导 Agent、导演 Agent，加事实一致性与写作口径检查。</p>
+      <p><strong>人工闸门：</strong>AI 只能生成候选，不得静默写入事实或覆盖用户版本。</p>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">五、版本、冲突与连续性</div>
+    <div class="mockup-body">
+      <p><strong>版本隔离：</strong>事实、梗概、大纲、正文、分镜、画布分别版本化。</p>
+      <p><strong>影响分析：</strong>上游变化标记受影响集章、关系、伏笔和下游资产。</p>
+      <p><strong>连续性快照：</strong>人物位置/状态、关系变化、道具、伏笔、场景与知识边界。</p>
+      <p><strong>并发冲突：</strong>乐观锁、差异展示、保留本地草稿，不做最后写入覆盖。</p>
+    </div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">六、下游边界与独立画布耦合</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 70px 1fr 70px 1fr 70px 1fr;gap:8px;align-items:center">
+      <div style="padding:12px;border:1px solid #16a34a;border-radius:9px"><strong>锁稿剧本</strong><p>内容 + 圣经 + 连续性快照</p></div><div style="text-align:center">→</div>
+      <div style="padding:12px;border:1px solid #8b5cf6;border-radius:9px"><strong>分镜 Master</strong><p>A/B/C 档独立版本</p></div><div style="text-align:center">→</div>
+      <div style="padding:12px;border:2px solid #f59e0b;border-radius:9px;background:#fffbeb"><strong>导入契约</strong><p>不可变画布快照</p></div><div style="text-align:center">→</div>
+      <div style="padding:12px;border:1px solid #475569;border-radius:9px"><strong>画布模块</strong><p>独立生产与资产采用</p></div>
+    </div>
+    <div style="margin-top:12px;padding:10px;background:#fef2f2;border-left:4px solid #ef4444"><strong>反向只返回状态和差异：</strong>画布回传生产状态、采用资产和质量结果；不反写剧本事实。剧本更新只产生差异报告，用户确认后创建新导入快照。</div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">七、平台治理与兼容底座</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+    <div><strong>权限</strong><p>Owner / Editor / Reviewer / Producer / Viewer</p></div>
+    <div><strong>审计</strong><p>确认、覆盖、锁稿、放行、导入和回退记录</p></div>
+    <div><strong>成本与任务</strong><p>额度预估、实际费用、失败不伪成功、任务监控</p></div>
+    <div><strong>安全与合规</strong><p>内容风险、敏感规则、来源版权确认、规则版本</p></div>
+    <div><strong>兼容与迁移</strong><p>旧 scripts 映射、旧链接可用、渐进迁移、可回滚</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>模式适配</h3>
+  <p><strong>长篇：</strong>完整生态与时间轴默认开放；<strong>短剧：</strong>保留人物、势力、关键规则和集级关系变化，隐藏低频项；<strong>TVC：</strong>映射为品牌、产品、受众、竞品、卖点、禁区与角色口吻。底层版本与审计机制一致。</p>
+</div>
+
+<div class="section">
+  <h3>规格文档必须继续展开的内容</h3>
+  <p>信息架构、字段模型、继承与覆盖规则、关系类型字典、状态机、API 契约、上下文裁剪、异常处理、权限矩阵、埋点指标、迁移策略、测试矩阵、分期范围和验收标准，均纳入正式方案，不以本图代替。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="complete-architecture-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>完整架构范围确认</h3><p>以此为基线继续设计页面与详细功能</p></div></div>
+  <div class="option" data-choice="complete-architecture-revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>仍有缺项</h3><p>请指出需要纳入的业务域或控制能力</p></div></div>
+</div>

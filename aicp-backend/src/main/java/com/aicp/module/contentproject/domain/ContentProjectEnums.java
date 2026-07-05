@@ -62,6 +62,14 @@ public final class ContentProjectEnums {
         }
     }
 
+    public enum LifecycleStatus {
+        ACTIVE, ARCHIVED;
+
+        public String value() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
     public enum Role {
         OWNER, EDITOR, REVIEWER, PRODUCER, VIEWER;
 
@@ -77,7 +85,8 @@ public final class ContentProjectEnums {
         REVIEW(EnumSet.of(Role.OWNER, Role.REVIEWER)),
         PRODUCE(EnumSet.of(Role.OWNER, Role.PRODUCER)),
         MANAGE_MEMBERS(EnumSet.of(Role.OWNER)),
-        DELETE_PROJECT(EnumSet.of(Role.OWNER));
+        DELETE_PROJECT(EnumSet.of(Role.OWNER)),
+        MANAGE_AGENT_CONFIG(EnumSet.of(Role.OWNER, Role.REVIEWER)); // OWNER=管理员, REVIEWER=导演
 
         private final Set<Role> allowedRoles;
 

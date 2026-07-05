@@ -1,0 +1,59 @@
+<h2>Agent 会话首期：三种落地路径</h2>
+<p class="subtitle">目标已确定：项目生产副驾 + 分级确认 + 可用闭环。请选择技术落地路径。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;background:#111827">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:10px;align-items:center;color:#e5e7eb;font-size:12px">
+        <div style="border:1px solid #4f46e5;border-radius:8px;padding:12px">Vue 会话台<br><small>SSE 状态流</small></div>
+        <div>→</div>
+        <div style="border:1px solid #10b981;border-radius:8px;padding:12px">Spring Agent 域<br><small>会话 / 计划 / 执行</small></div>
+        <div style="grid-column:3;border-left:2px solid #6b7280;height:14px;margin-left:20px"></div>
+        <div style="grid-column:3;border:1px solid #f59e0b;border-radius:8px;padding:12px">AI Router + Tool Adapter<br><small>画布 / 资产 / 生成任务</small></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A · 单体内垂直闭环（推荐）</h3>
+      <p>在现有 Spring Boot 中建立清晰 Agent 领域层，复用认证、项目、画布、生成任务和计费能力。先通过数据库 + 异步执行器 + SSE 做成生产可用闭环。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优势</h4><ul><li>改造成本最低</li><li>事务与权限边界清楚</li><li>可逐步拆服务</li></ul></div>
+        <div class="cons"><h4>代价</h4><ul><li>需控制模块边界</li><li>高并发后再独立扩容</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;background:#111827">
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;color:#e5e7eb;font-size:12px">
+        <div style="border:1px solid #4f46e5;border-radius:8px;padding:12px">平台 API</div><div>→</div>
+        <div style="border:1px solid #ec4899;border-radius:8px;padding:12px">独立 agent-svc</div><div>↔</div>
+        <div style="border:1px solid #f59e0b;border-radius:8px;padding:12px">消息总线</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B · 独立 Agent 微服务</h3>
+      <p>一次性建设 agent-svc、事件总线、独立存储和工具网关，Agent 与平台业务通过事件和内部 API 协作。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优势</h4><ul><li>独立扩容</li><li>执行隔离好</li><li>适合复杂多 Agent</li></ul></div>
+        <div class="cons"><h4>代价</h4><ul><li>首期复杂度显著增加</li><li>分布式事务与联调成本高</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;background:#111827">
+      <div style="display:flex;gap:8px;align-items:center;justify-content:center;color:#e5e7eb;font-size:12px">
+        <div style="border:1px solid #4f46e5;border-radius:8px;padding:12px">增强会话 UI</div><div>→</div>
+        <div style="border:1px dashed #ef4444;border-radius:8px;padding:12px">Mock 计划 / 伪状态</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C · 前端优先演示版</h3>
+      <p>先补齐会话列表、消息卡片和执行面板，后端仍以 Mock 或一次性同步响应为主。</p>
+      <div class="pros-cons">
+        <div class="pros"><h4>优势</h4><ul><li>展示最快</li><li>短期改动少</li></ul></div>
+        <div class="cons"><h4>代价</h4><ul><li>不能形成真实生产闭环</li><li>后续大概率重做</li></ul></div>
+      </div>
+    </div>
+  </div>
+</div>

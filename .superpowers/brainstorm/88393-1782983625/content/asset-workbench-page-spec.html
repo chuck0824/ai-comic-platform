@@ -1,0 +1,63 @@
+<h2>设计确认 3A/4：页面级详细规格</h2>
+<p class="subtitle">主路由：<code>/asset-history</code>。页面状态全部映射到 URL，刷新、分享链接和浏览器前进后退都能恢复。</p>
+
+<div class="section">
+  <h3>页面区域与字段</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#eef2ff"><th style="padding:7px;text-align:left;width:140px">区域</th><th style="padding:7px;text-align:left">展示字段/控件</th><th style="padding:7px;text-align:left">行为</th></tr>
+    <tr><td style="padding:7px"><b>顶部范围栏</b></td><td style="padding:7px">我的资产、团队资产、全局搜索、视图切换、批量模式</td><td style="padding:7px">切换 scope 后清空失效项目；团队入口按权限显示</td></tr>
+    <tr><td style="padding:7px"><b>项目树</b></td><td style="padding:7px">project_id、项目名、封面、题材、资产数、进行中数、失败数；未归档、收藏、已发布、回收站</td><td style="padding:7px">支持按最近使用/名称排序；项目只做一级分库，不把题材当目录层级</td></tr>
+    <tr><td style="padding:7px"><b>资产分类</b></td><td style="padding:7px">全部、角色、场景、道具、分镜、配音、音乐、其他；每类显示数量</td><td style="padding:7px">分类字段使用 category，不依赖 image/video/audio 媒体类型</td></tr>
+    <tr><td style="padding:7px"><b>筛选栏</b></td><td style="padding:7px">keyword、status、media_type、model_id、created_by、created_from/to、tags、sort</td><td style="padding:7px">300ms 防抖；服务端查询；一键清空；展示已启用筛选数量</td></tr>
+    <tr><td style="padding:7px"><b>记录区</b></td><td style="padding:7px">网格/列表视图、总数、分页、每页 24/48/96、当前选择数</td><td style="padding:7px">请求竞态保护；加载骨架；空态区分无数据/无匹配/无权限/加载失败</td></tr>
+    <tr><td style="padding:7px"><b>详情抽屉</b></td><td style="padding:7px">预览、基础信息、生成参数、来源与引用、操作记录</td><td style="padding:7px">打开后 URL 写入 record_id；关闭后保留列表位置</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>记录卡片：按状态展示</h3>
+  <div class="cards">
+    <div class="card"><div class="card-body"><h3>pending / running</h3><p>任务名、category、模型、创建人、排队位置或进度、已耗时、预计积分；操作：取消、查看参数。</p></div></div>
+    <div class="card"><div class="card-body"><h3>failed / canceled</h3><p>失败阶段、error_code、用户可读原因、失败时间；操作：重试、复制参数、移入回收站。取消记录默认折叠。</p></div></div>
+    <div class="card"><div class="card-body"><h3>succeeded asset</h3><p>缩略图/波形、名称、category、媒体类型、尺寸/时长、模型、创建人、时间、收藏/发布状态；操作：预览、画布、下载、更多。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>详情抽屉字段</h3>
+  <div class="split">
+    <div style="padding:10px;background:#f8fafc;border-radius:7px"><b>概览</b><br><small>asset_id / task_id、名称、项目、category、media_type、文件格式、大小、宽高、时长、创建人、创建/更新时间、标签、收藏、发布状态。</small></div>
+    <div style="padding:10px;background:#f8fafc;border-radius:7px"><b>生成参数</b><br><small>provider、model_id、prompt、negative_prompt、seed、分辨率、帧率、时长、参考资产、原始 parameters JSON（折叠展示）。</small></div>
+  </div>
+  <div class="split" style="margin-top:8px">
+    <div style="padding:10px;background:#f8fafc;border-radius:7px"><b>来源与引用</b><br><small>来源画布/节点/分镜、重试来源、目标画布引用列表；可跳转到仍有权限访问的来源。</small></div>
+    <div style="padding:10px;background:#f8fafc;border-radius:7px"><b>活动记录</b><br><small>创建、重命名、移动、收藏、发送画布、发布、删除、恢复；显示操作者与时间。</small></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>操作与弹窗精确定义</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#eef2ff"><th style="padding:7px;text-align:left">操作</th><th style="padding:7px;text-align:left">输入</th><th style="padding:7px;text-align:left">成功结果</th><th style="padding:7px;text-align:left">禁止条件</th></tr>
+    <tr><td style="padding:7px">发送到画布</td><td style="padding:7px">目标项目、目标画布、放置方式</td><td style="padding:7px">创建节点，提供“留在此处/打开画布”</td><td style="padding:7px">回收站、文件缺失、无目标权限</td></tr>
+    <tr><td style="padding:7px">再次生成</td><td style="padding:7px">复制原参数，可修改模型/Prompt</td><td style="padding:7px">新任务出现在同项目同分类顶部</td><td style="padding:7px">来源参数不可读、模型下线且未重新选择</td></tr>
+    <tr><td style="padding:7px">移动/归档</td><td style="padding:7px">目标项目、目标 category</td><td style="padding:7px">更新归属并刷新两侧计数</td><td style="padding:7px">无目标项目编辑权限</td></tr>
+    <tr><td style="padding:7px">发布市场</td><td style="padding:7px">标题、简介、标签、许可、预览图</td><td style="padding:7px">个人进入发布结果；团队生成审批单</td><td style="padding:7px">文件缺失、已删除、正在审批</td></tr>
+    <tr><td style="padding:7px">删除</td><td style="padding:7px">确认；展示引用数量</td><td style="padding:7px">进入回收站并显示到期时间</td><td style="padding:7px">无删除权限、资产处于发布处理中</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>批量操作规则</h3>
+  <p>同一 Workspace 内可批量移动、改分类、加/删标签、删除、恢复和下载；跨项目选择允许，但执行前逐项鉴权。部分失败时返回成功/失败明细，不整体伪装成功。发布市场不做批量，避免审批与元数据质量失控。</p>
+</div>
+
+<div class="section">
+  <h3>URL 参数</h3>
+  <p><code>scope</code>、<code>project_id</code>、<code>category</code>、<code>status</code>、<code>media_type</code>、<code>model_id</code>、<code>created_by</code>、<code>from</code>、<code>to</code>、<code>tags</code>、<code>keyword</code>、<code>sort</code>、<code>page</code>、<code>page_size</code>、<code>view</code>、<code>record_id</code>。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认页面级规格</h3><p>下一步展开接口请求与响应字段。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整页面</h3><p>请指出区域、字段、状态或操作。</p></div></div>
+</div>

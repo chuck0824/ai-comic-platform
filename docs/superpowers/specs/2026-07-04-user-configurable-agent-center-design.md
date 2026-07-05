@@ -40,18 +40,26 @@
 
 ## 3. 目标与非目标
 
-### 3.1 首期目标
+### 3.1 目标（按里程碑）
 
-1. 用户可以基于四个系统基础框架新增任意数量的个人 Agent。
-2. 普通用户通过结构化业务参数配置 Agent，专业用户可以编辑高级 Prompt。
-3. Agent 支持草稿、校验、试跑对比、发布、归档和回滚。
-4. 支持用户默认、项目默认和单次临时调整。
-5. 项目管理员或导演可以发布项目级绑定；普通成员只能使用或进行不留存的单次调整。
-6. 剧本、钩子、分镜和导演四条业务链路真实读取已解析的 Agent 配置。
-7. 每次执行均可追溯到系统框架、用户 Agent、发布版本、临时参数、项目上下文、模型和最终 Prompt 快照。
-8. 所有 AI 正文或分镜修改先产生预览或 Diff，经用户确认后创建新业务版本。
+**[M1] 基础能力（本计划交付）**
+
+1. [M1] 用户可以基于四个系统基础框架新增任意数量的个人 Agent。
+2. [M1] 普通用户通过结构化业务参数配置 Agent，专业用户可以编辑高级 Prompt。
+3. [M1] Agent 支持草稿、校验、试跑对比、发布、归档和回滚。
+4. [M1] 支持用户默认、项目默认和单次临时调整。
+5. [M1] 项目管理员或导演可以发布项目级绑定；普通成员只能使用或进行不留存的单次调整。
+
+**[M2–M4] 业务集成与收口（后续计划交付）**
+
+6. [M2] 剧本、钩子两条业务链路真实读取已解析的 Agent 配置。
+7. [M3] 分镜和导演两条业务链路真实读取已解析的 Agent 配置。
+8. [M2–M3] 每次执行均可追溯到系统框架、用户 Agent、发布版本、临时参数、项目上下文、模型和最终 Prompt 快照。
+9. [M2–M3] 所有 AI 正文或分镜修改先产生预览或 Diff，经用户确认后创建新业务版本。
 
 ### 3.2 首期非目标
+
+以下为全部里程碑（M1–M4）的非目标，M1 额外不涉及业务链路接入：
 
 1. 不支持用户定义新工具、外部 API、数据库权限或上下文读取范围。
 2. 不支持脱离四类基础框架创建完全空白的能力类型。
@@ -279,7 +287,9 @@ DRAFT -> PUBLISHED -> ARCHIVED
 
 业务页面不复制完整 Agent 编辑器。
 
-## 8. 剧本创作模块的新增和改造
+## 8. 剧本创作模块的新增和改造（M2–M3 范围）
+
+> ⚠️ 本章内容属于 M2（剧本与钩子）和 M3（分镜与导演）里程碑。M1 仅交付 Agent 配置中心与解析基础设施，不接入业务链路。本章在此列出以保证设计完整性，实施时请参照对应里程碑计划。
 
 ### 8.1 改造后的协作流程
 
@@ -349,7 +359,9 @@ DRAFT -> PUBLISHED -> ARCHIVED
 | 按审核意见修订 | 编剧 | 导演提供问题清单 | 逐段 Diff 和新正文版本 |
 | 锁稿前审核 | 导演 | 钩子 | 审核报告和可执行修订项 |
 
-## 9. 其他现有功能改造范围
+## 9. 其他现有功能改造范围（M2–M4 范围）
+
+> ⚠️ 本章内容属于 M2–M4 里程碑。M1 不改动现有业务服务、分镜、审核或 Prompt 模板。本章在此列出以保证设计完整性。
 
 ### 9.1 专业分镜
 
@@ -409,8 +421,8 @@ BlueprintService   AgentVersionService    AgentBindingService
 
 ### 10.1 模块职责
 
-- `BlueprintService`：读取系统角色框架和版本，禁止用户修改锁定字段。
-- `UserAgentService`：新增、修改元数据、复制和归档用户 Agent。
+- `AgentBlueprintService`：读取系统角色框架和版本，禁止用户修改锁定字段。
+- `UserAgentDefinitionService`：新增、修改元数据、复制和归档用户 Agent。
 - `AgentVersionService`：草稿、校验、发布、归档、版本 Diff 和回滚。
 - `AgentBindingService`：用户和项目默认绑定、权限、唯一性和乐观锁。
 - `AgentTestRunService`：试跑、A/B 对比、成本和结果记录。
@@ -433,14 +445,16 @@ BlueprintService   AgentVersionService    AgentBindingService
 
 `role_type + blueprint_version` 唯一。已被引用的 Blueprint 版本不可覆盖。
 
-### 11.2 `user_agents`
+### 11.2 `user_agent_definitions`
 
-- `id`, `uuid`, `blueprint_id`, `owner_user_id`。
+- `id`, `uuid`, `blueprint_id`, `owner_user_id`, `current_published_version_id`。
 - `name`, `description`, `icon`, `applicable_genres_json`, `platforms_json`。
-- `visibility`：首期为 `PRIVATE`，预留 `TEAM`。
+- `visibility`：枚举 `PRIVATE | TEAM`，首期仅使用 `PRIVATE`。
 - `lifecycle_status`：`ACTIVE | ARCHIVED`。
-- `current_published_version_id`, `row_version`。
+- `row_version`：乐观锁版本号。
 - `created_at`, `updated_at`。
+
+同一用户下 `name` 唯一。Blueprint 引用通过 `blueprint_id` 外键约束。
 
 ### 11.3 `agent_versions`
 
@@ -449,15 +463,16 @@ BlueprintService   AgentVersionService    AgentBindingService
 - `status`：`DRAFT | PUBLISHED | ARCHIVED`。
 - `change_summary`, `content_hash`。
 - `created_by`, `published_by`, `published_at`。
-- `row_version`, `created_at`, `updated_at`。
+- `row_version`：乐观锁，更新草稿时校验。已发布版本的 `row_version` 不可变。
+- `created_at`, `updated_at`。
 
-`user_agent_id + version_no` 唯一。
+`user_agent_id + version_no` 唯一。`editable_prompt` 上限 16000 字符。
 
 ### 11.4 `agent_bindings`
 
 - `id`, `uuid`, `scope_type`：`USER | PROJECT`。
 - `scope_id`, `role_type`, `user_agent_id`, `agent_version_id`。
-- `created_by`, `updated_by`, `row_version`。
+- `created_by`, `updated_by`, `row_version`：乐观锁，upsert 时校验。
 - `created_at`, `updated_at`。
 
 `scope_type + scope_id + role_type` 唯一。
@@ -473,7 +488,7 @@ BlueprintService   AgentVersionService    AgentBindingService
 ### 11.6 `agent_execution_snapshots`
 
 - `id`, `uuid`, `blueprint_id`, `blueprint_version`。
-- `user_agent_id`, `agent_version_id`, `binding_source`。
+- `user_agent_id`, `agent_version_id`, `binding_source`：`USER | PROJECT | SYSTEM | TEMPORARY`。
 - `resolved_parameters_json`, `temporary_overrides_json`。
 - `resolved_prompt`, `prompt_hash`, `output_schema_version`。
 - `project_id`, `context_hash`, `context_refs_json`。
@@ -484,42 +499,241 @@ BlueprintService   AgentVersionService    AgentBindingService
 
 ## 12. API 设计
 
-### 12.1 Blueprint 和 UserAgent
+### 12.1 Blueprint 和 UserAgent 定义
 
-- `GET /api/v1/agent/blueprints`
-- `GET /api/v1/agent/blueprints/{id}`
-- `POST /api/v1/agent/definitions`
-- `GET /api/v1/agent/definitions`
-- `GET /api/v1/agent/definitions/{id}`
-- `PATCH /api/v1/agent/definitions/{id}`
-- `POST /api/v1/agent/definitions/{id}/copies`
-- `POST /api/v1/agent/definitions/{id}/archive`
+- `GET /api/v1/agent/blueprints` — 列出所有 ACTIVE Blueprint
+- `GET /api/v1/agent/blueprints/{id}` — Blueprint 详情（含完整 Schema）
+- `POST /api/v1/agent/definitions` — 新增用户 Agent 定义
+- `GET /api/v1/agent/definitions` — 列出当前用户的 Agent 定义
+- `GET /api/v1/agent/definitions/{id}` — Agent 定义详情
+- `PATCH /api/v1/agent/definitions/{id}` — 更新名称、描述等元数据
+- `POST /api/v1/agent/definitions/{id}/copies` — 复制 Agent（产生新 UserAgentDefinition + 初始 DRAFT）
+- `POST /api/v1/agent/definitions/{id}/archive` — 归档 Agent
 
 `definitions` 表示用户新增的 Agent，避免与现有会话 `/agent/sessions` 混淆。
 
+**示例 — 新增 Agent 定义：**
+
+```json
+// POST /api/v1/agent/definitions
+{
+  "blueprintId": "bp-hook-v1",
+  "name": "女频复仇强钩子",
+  "description": "前三秒强冲突，中段持续升级"
+}
+
+// Response
+{
+  "code": 200,
+  "data": {
+    "id": "agent_a1b2c3d4",
+    "blueprintId": "bp-hook-v1",
+    "roleType": "HOOK",
+    "name": "女频复仇强钩子",
+    "description": "前三秒强冲突，中段持续升级",
+    "lifecycleStatus": "ACTIVE",
+    "currentPublishedVersionId": null,
+    "rowVersion": 0,
+    "createdAt": "2026-07-04T10:00:00Z"
+  }
+}
+```
+
+**示例 — 复制 Agent：**
+
+```json
+// POST /api/v1/agent/definitions/agent_a1b2c3d4/copies
+// (无请求体)
+
+// Response
+{
+  "code": 200,
+  "data": {
+    "id": "agent_e5f6g7h8",
+    "name": "女频复仇强钩子 (副本)",
+    "lifecycleStatus": "ACTIVE",
+    "currentPublishedVersionId": null
+  }
+}
+```
+
 ### 12.2 版本和试跑
 
-- `GET /api/v1/agent/definitions/{id}/versions`
-- `POST /api/v1/agent/definitions/{id}/drafts`
-- `GET /api/v1/agent/versions/{versionId}`
-- `PUT /api/v1/agent/versions/{versionId}`
-- `POST /api/v1/agent/versions/{versionId}/validate`
-- `POST /api/v1/agent/versions/{versionId}/test-runs`
-- `POST /api/v1/agent/versions/{versionId}/publish`
-- `POST /api/v1/agent/versions/{versionId}/activate`
-- `GET /api/v1/agent/test-runs/{id}`
+- `GET /api/v1/agent/definitions/{id}/versions` — 列出 Agent 的所有版本
+- `POST /api/v1/agent/definitions/{id}/drafts` — 基于当前发布版本创建新 DRAFT
+- `GET /api/v1/agent/versions/{versionId}` — 版本详情（含完整 Prompt）
+- `PUT /api/v1/agent/versions/{versionId}` — 更新 DRAFT（需 `rowVersion`）
+- `POST /api/v1/agent/versions/{versionId}/validate` — 校验参数、变量和 Prompt
+- `POST /api/v1/agent/versions/{versionId}/test-runs` — 执行试跑
+- `POST /api/v1/agent/versions/{versionId}/publish` — 发布版本（需成功试跑）
+- `POST /api/v1/agent/versions/{versionId}/activate` — 回滚激活历史版本
+- `GET /api/v1/agent/test-runs/{id}` — 试跑详情与结果
+
+**示例 — 更新 DRAFT：**
+
+```json
+// PUT /api/v1/agent/versions/ver_a1b2c3d4
+{
+  "rowVersion": 2,
+  "parameters": {
+    "opening_seconds": 3,
+    "hook_density": "high",
+    "reversal_strength": 0.8,
+    "closing_hook_strength": "strong",
+    "minimum_score": 75
+  },
+  "editablePrompt": "{{user_method}}\n\n分析剧本前三秒开场，确保冲突立即呈现。",
+  "examples": [
+    {"input": "古装宅斗开场", "output": "{\"score\":88,\"hooks\":[...]}"}
+  ],
+  "modelPolicy": {"default_model": "deepseek-v3"}
+}
+
+// Response
+{
+  "code": 200,
+  "data": {
+    "versionId": "ver_a1b2c3d4",
+    "versionNo": 2,
+    "status": "DRAFT",
+    "rowVersion": 3,
+    "valid": true
+  }
+}
+```
+
+**示例 — 试跑：**
+
+```json
+// POST /api/v1/agent/versions/ver_a1b2c3d4/test-runs
+{
+  "taskInput": "测试剧本片段文本...",
+  "contextRefs": { "projectId": 100 }
+}
+
+// Response
+{
+  "code": 200,
+  "data": {
+    "id": "run_x1y2z3",
+    "status": "SUCCEEDED",
+    "outputJson": { "score": 88, "hooks": [...] },
+    "outputSchemaValid": true,
+    "modelId": "deepseek-v3",
+    "promptTokens": 520,
+    "completionTokens": 180,
+    "creditCost": 0.07,
+    "durationMs": 2300
+  }
+}
+```
+
+试跑成功判定标准：模型返回 HTTP 200、输出为合法 JSON、且通过 Blueprint 定义的 `output_schema_json` 校验。四类 Agent 的试跑输入均为自由文本 `taskInput`，默认提供一段简短样例文本即可。
+
+**示例 — 发布：**
+
+```json
+// POST /api/v1/agent/versions/ver_a1b2c3d4/publish
+{
+  "rowVersion": 3,
+  "changeSummary": "调高钩子强度，新增古装剧示例"
+}
+
+// Response
+{
+  "code": 200,
+  "data": {
+    "versionId": "ver_a1b2c3d4",
+    "status": "PUBLISHED",
+    "publishedAt": "2026-07-04T12:00:00Z"
+  }
+}
+```
 
 ### 12.3 绑定和解析预览
 
-- `PUT /api/v1/agent/user-bindings/{roleType}`
-- `DELETE /api/v1/agent/user-bindings/{roleType}`
-- `GET /api/v1/projects/{projectId}/agent-bindings`
-- `PUT /api/v1/projects/{projectId}/agent-bindings/{roleType}`
-- `DELETE /api/v1/projects/{projectId}/agent-bindings/{roleType}`
-- `POST /api/v1/agent/resolve-preview`
-- `GET /api/v1/agent/execution-snapshots/{id}`
+- `PUT /api/v1/agent/user-bindings/{roleType}` — 设置用户默认绑定
+- `DELETE /api/v1/agent/user-bindings/{roleType}` — 移除用户默认绑定
+- `GET /api/v1/projects/{projectId}/agent-bindings` — 列出项目所有角色绑定
+- `PUT /api/v1/projects/{projectId}/agent-bindings/{roleType}` — 设置项目默认绑定
+- `DELETE /api/v1/projects/{projectId}/agent-bindings/{roleType}` — 移除项目默认绑定
+- `POST /api/v1/agent/resolve-preview` — 预览配置解析结果（不产生快照）
+- `GET /api/v1/agent/execution-snapshots/{id}` — 查看历史执行快照
 
-### 12.4 业务 API 调整
+**示例 — 项目绑定：**
+
+```json
+// PUT /api/v1/projects/100/agent-bindings/HOOK
+{
+  "versionId": "ver_a1b2c3d4"
+}
+
+// Response
+{
+  "code": 200,
+  "data": {
+    "scopeType": "PROJECT",
+    "scopeId": "100",
+    "roleType": "HOOK",
+    "agentVersionId": "ver_a1b2c3d4",
+    "userAgentName": "女频复仇强钩子",
+    "rowVersion": 1
+  }
+}
+```
+
+**示例 — 解析预览：**
+
+```json
+// POST /api/v1/agent/resolve-preview
+{
+  "projectId": 100,
+  "roleType": "HOOK",
+  "temporaryOverrides": { "hook_density": "extreme" }
+}
+
+// Response
+{
+  "code": 200,
+  "data": {
+    "bindingSource": "PROJECT",
+    "userAgentId": "agent_a1b2c3d4",
+    "userAgentName": "女频复仇强钩子",
+    "versionId": "ver_a1b2c3d4",
+    "versionNo": 2,
+    "blueprintId": "bp-hook-v1",
+    "roleType": "HOOK",
+    "resolvedParameters": {
+      "opening_seconds": 3,
+      "hook_density": "extreme",
+      "minimum_score": 75
+    },
+    "compiledPrompt": "平台锁定：仅生成钩子结构。\n\n分析剧本前三秒开场...",
+    "promptHash": "sha256:abcd1234"
+  }
+}
+```
+
+### 12.4 通用约定
+
+**分页：** 列表接口统一使用 `?page=1&size=20` 查询参数，响应体包含 `{ "items": [...], "total": 100, "page": 1, "size": 20 }`。
+
+**错误响应格式：**
+
+```json
+{
+  "code": 49024,
+  "message": "Agent配置校验失败",
+  "detail": "包含未声明变量: {{unknown_var}}",
+  "timestamp": "2026-07-04T12:00:00Z"
+}
+```
+
+**命名唯一性：** Agent 名称在同一用户下唯一；不同用户可以拥有同名 Agent。
+
+**Blueprint 升级路径（M4 范围）：** 当 Blueprint 发布新版本（如 `bp-hook-v2`）时，已有 UserAgent 继续使用原 Blueprint 版本。用户可主动将 Agent 迁移到新版 Blueprint，迁移时系统生成新 DRAFT 并保留旧版本不变。系统默认绑定可在 Blueprint 升级后指向新版本，但已明确绑定的项目不受影响。
+
+### 12.5 业务 API 调整（M2–M3 范围）
 
 剧本、钩子、审核和分镜任务请求增加可选字段：
 
@@ -668,8 +882,8 @@ BlueprintService   AgentVersionService    AgentBindingService
 
 - 新建六张核心表和服务。
 - 写入四类 Blueprint 和系统默认版本。
-- 完成配置中心、新增向导、版本发布和用户默认绑定。
-- Resolver 在没有用户配置时返回系统默认版本。
+- 完成配置中心、新增向导、版本发布和用户/项目绑定。
+- M1 的 `resolve-preview` API 可按 PROJECT > USER > SYSTEM 优先级返回解析结果和编译 Prompt，供开发验证和后续业务服务集成。业务生成链路在 M2 才接入。
 
 ### M2：剧本与钩子
 
@@ -735,18 +949,27 @@ BlueprintService   AgentVersionService    AgentBindingService
 
 ## 19. 验收标准
 
-1. 用户能够从四类 Blueprint 新增任意数量的独立 Agent。
-2. 每个 Agent 支持多个不可变发布版本和一个可编辑草稿。
-3. 普通参数和高级 Prompt 修改的是同一个 AgentVersion。
-4. 草稿未通过校验或没有成功试跑时不能发布。
-5. 用户默认、项目默认和单次覆盖按固定优先级生效。
-6. 普通项目成员不能修改或发布项目默认 Agent。
-7. 剧本、大纲、钩子、导演审核和分镜任务真实使用选中的 AgentVersion。
-8. 任何 AI 正文或分镜修改都先预览，用户确认后创建新版本。
-9. 任务和内容版本可以查看完整 Agent 来源与执行快照。
-10. 发布新版 Agent 不影响历史任务；重跑生成新业务版本。
-11. 四条核心业务链路不再直接使用用户可调的硬编码创作 Prompt。
-12. 旧 Prompt 数据迁移后可追溯，且平台不存在两个同时生效的角色配置源。
+### M1 验收标准（本计划交付）
+
+1. [M1] 用户能够从四类 Blueprint 新增任意数量的独立 Agent。
+2. [M1] 每个 Agent 支持多个不可变发布版本和一个可编辑草稿。
+3. [M1] 普通参数和高级 Prompt 修改的是同一个 AgentVersion。
+4. [M1] 草稿未通过校验或没有成功试跑时不能发布。
+5. [M1] 用户默认、项目默认、系统默认和单次覆盖按固定优先级生效。
+6. [M1] 普通项目成员不能修改或发布项目默认 Agent。
+7. [M1] Agent 配置中心页面可从导航进入，完整支持新增→编辑→试跑→发布→绑定流程。
+8. [M1] `resolve-preview` API 返回正确的绑定来源和编译 Prompt。
+9. [M1] 后端和前端测试套件全部通过，生产构建成功。
+10. [M1] 不修改任何现有业务服务代码。
+
+### M2–M4 验收标准（后续计划交付）
+
+11. [M2–M3] 剧本、大纲、钩子、导演审核和分镜任务真实使用选中的 AgentVersion。
+12. [M2–M3] 任何 AI 正文或分镜修改都先预览，用户确认后创建新版本。
+13. [M2–M3] 任务和内容版本可以查看完整 Agent 来源与执行快照。
+14. [M2–M4] 发布新版 Agent 不影响历史任务；重跑生成新业务版本。
+15. [M4] 四条核心业务链路不再直接使用用户可调的硬编码创作 Prompt。
+16. [M4] 旧 Prompt 数据迁移后可追溯，且平台不存在两个同时生效的角色配置源。
 
 ## 20. 后续扩展边界
 

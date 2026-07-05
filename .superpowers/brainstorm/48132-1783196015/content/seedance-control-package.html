@@ -1,0 +1,61 @@
+<h2>导演台 → Seedance 2.0：低偏差镜头控制包</h2>
+<p class="subtitle">借鉴 DVStudio 的节点编排、场景理解、关键帧时间线和资产管理，把每个镜头编译成“职责明确、互不冲突”的多模态参考包。</p>
+
+<div class="mockup">
+  <div class="mockup-header">单镜头控制链路</div>
+  <div class="mockup-body" style="padding:18px;background:#08111f;color:#dbeafe">
+    <div style="display:grid;grid-template-columns:1fr 44px 1.2fr 44px 1fr;gap:8px;align-items:center;text-align:center">
+      <div style="padding:16px;border-radius:9px;background:#172554"><strong>导演台镜头</strong><br><small>场景 · 角色 · 动作片段<br>相机轨 · 时长 · 节奏点</small></div>
+      <div style="font-size:22px">→</div>
+      <div style="padding:16px;border:2px solid #2563eb;border-radius:9px;background:#1e3a8a"><strong>参考包编译器</strong><br><small>拆分参考职责 · 编号绑定<br>时间码提示词 · 冲突检测</small></div>
+      <div style="font-size:22px">→</div>
+      <div style="padding:16px;border-radius:9px;background:#064e3b"><strong>Seedance 任务</strong><br><small>图片 ≤ 9 · 视频 ≤ 3 · 音频 ≤ 3<br>自然语言导演指令</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>P0：首期必须增加的 7 项能力</h3>
+  <div class="cards">
+    <div class="card"><div class="card-body"><h3>1. 参考角色编译器</h3><p>把素材明确标记为“身份、场景、道具、构图、动作、运镜、声音”，生成 @Image/@Video 引用清单，避免模型猜测每个素材用途。</p></div></div>
+    <div class="card"><div class="card-body"><h3>2. 首帧 / 尾帧锁定</h3><p>从 Three.js/Blender 输出同相机、同角色状态的首尾帧；同时生成关键节拍帧，约束运动起点、终点和中段姿态。</p></div></div>
+    <div class="card"><div class="card-body"><h3>3. 运镜参考视频</h3><p>将相机关键帧单独渲染成低模预演视频，仅表达推拉摇移、速度和节奏，不让角色外观干扰镜头理解。</p></div></div>
+    <div class="card"><div class="card-body"><h3>4. 动作参考视频</h3><p>将角色动作片段和交互关系输出为独立参考视频；复杂动作按节拍标注接触点、朝向和先后顺序。</p></div></div>
+    <div class="card"><div class="card-body"><h3>5. 时间码导演脚本</h3><p>自动把时间线编译为 0–2s、2–4s 等分段指令，描述主体、动作、镜头、构图和声音，禁止互相矛盾的运镜词。</p></div></div>
+    <div class="card"><div class="card-body"><h3>6. 连续性资产锁</h3><p>锁定角色版本、服装、场景、道具和色彩圣经；每次生成记录真实使用的资产版本与 Seedance 输入快照。</p></div></div>
+    <div class="card"><div class="card-body"><h3>7. 生成前冲突检查</h3><p>检查时长超限、主体过多、参考外观冲突、相机轨冲突、穿模/遮挡、动作不可达和参考槽位超量。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>推荐的 Seedance 单镜头输入分配</h3>
+  <div class="mockup"><div class="mockup-body" style="padding:15px;background:#0f172a;color:#e2e8f0">
+    <div style="display:grid;grid-template-columns:110px 1fr;gap:8px;align-items:center">
+      <strong>图片 1</strong><div>带时间码的镜头故事板 / 构图表</div>
+      <strong>图片 2–4</strong><div>主要角色身份图（正面、侧面、服装统一）</div>
+      <strong>图片 5</strong><div>场景基准图</div>
+      <strong>图片 6–7</strong><div>关键道具与首/尾状态</div>
+      <strong>图片 8–9</strong><div>首帧、尾帧或关键节拍帧</div>
+      <strong>视频 1</strong><div>纯相机运动低模预演</div>
+      <strong>视频 2</strong><div>角色动作/交互参考</div>
+      <strong>视频 3</strong><div>风格或物理效果参考（仅确有需要时使用）</div>
+      <strong>音频 1</strong><div>对白与准确时长</div>
+      <strong>音频 2</strong><div>动作节拍 / 关键音效</div>
+      <strong>音频 3</strong><div>环境氛围或音乐节奏（可选）</div>
+    </div>
+  </div></div>
+</div>
+
+<div class="section">
+  <h3>P1：进一步降低偏差</h3>
+  <div class="options" data-multiselect>
+    <div class="option" data-choice="shot-qc" onclick="toggleSelect(this)"><div class="letter">A</div><div class="content"><h3>生成后镜头质检</h3><p>角色一致性、构图偏移、动作顺序、运镜轨迹与时长自动评分，超阈值才允许采用。</p></div></div>
+    <div class="option" data-choice="auto-repair" onclick="toggleSelect(this)"><div class="letter">B</div><div class="content"><h3>偏差定位与定向重生成</h3><p>定位偏差发生区间，只修改对应角色、动作或镜头指令，保留其他约束。</p></div></div>
+    <div class="option" data-choice="reference-ab" onclick="toggleSelect(this)"><div class="letter">C</div><div class="content"><h3>参考包 A/B 测试</h3><p>比较不同参考组合的稳定率、成本和采用率，沉淀题材与镜头模板。</p></div></div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve-seedance-package" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可 P0 控制包方案</h3><p>继续确认导演台界面与时间线设计。</p></div></div>
+  <div class="option" data-choice="revise-seedance-package" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请说明希望增加、删除或改变的能力。</p></div></div>
+</div>

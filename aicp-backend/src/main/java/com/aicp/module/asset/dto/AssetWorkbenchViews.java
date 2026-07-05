@@ -4,7 +4,10 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * View DTOs (camelCase) for the asset workbench API.
+ * View DTOs for the asset workbench API.
+ * Uses camelCase serialization (frontend client contract).
+ * Note: original design specified snake_case; migration requires
+ * coordinated backend+frontend change with @JsonNaming.
  */
 public final class AssetWorkbenchViews {
     private AssetWorkbenchViews() {}

@@ -1,0 +1,73 @@
+<h2>设计四：三期交付路线与验收门槛</h2>
+<p class="subtitle">每一期都形成可独立验收的闭环；后一期复用前一期内核，不推翻数据模型。</p>
+
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+  <div style="border:2px solid #2563eb;border-radius:12px;padding:16px;background:#eff6ff">
+    <div class="label">PHASE 1 · 核心闭环</div>
+    <h3>准入检查 + 返工治理</h3>
+    <ul style="font-size:13px;line-height:1.7">
+      <li>项目级 SOP 控制台</li>
+      <li>真实数据上下文与13项规则</li>
+      <li>PASS/WARNING/BLOCKED/NOT_READY/ERROR</li>
+      <li>不可变报告与检查历史</li>
+      <li>返工单、责任人、复核状态机</li>
+      <li>生产准入 Gate 与权限审计</li>
+    </ul>
+    <div style="padding:8px;background:white;border-radius:8px;font-size:12px"><strong>退出条件：</strong>发现问题 → 派单 → 修复 → 复核 → 重检 → 放行全链路可用</div>
+  </div>
+
+  <div style="border:2px solid #16a34a;border-radius:12px;padding:16px;background:#f0fdf4">
+    <div class="label">PHASE 2 · 生产联动</div>
+    <h3>画布质检 + 动作 Gate</h3>
+    <ul style="font-size:13px;line-height:1.7">
+      <li>画布质检侧栏与节点染色</li>
+      <li>问题定位到节点/镜头</li>
+      <li>生图、转视频、采用、导出 Gate</li>
+      <li>低风险一键修复</li>
+      <li>Prompt/参数修改前确认</li>
+      <li>报告过期与增量重检</li>
+    </ul>
+    <div style="padding:8px;background:white;border-radius:8px;font-size:12px"><strong>退出条件：</strong>任何生产入口都不能绕过 P0/P1 拦截，控制台与画布状态一致</div>
+  </div>
+
+  <div style="border:2px solid #7c3aed;border-radius:12px;padding:16px;background:#faf5ff">
+    <div class="label">PHASE 3 · 运营增强</div>
+    <h3>失败恢复 + 产能与报告</h3>
+    <ul style="font-size:13px;line-height:1.7">
+      <li>失败次数与策略状态机</li>
+      <li>安全自动重试与人工升级</li>
+      <li>镜头复杂度、工时与风险估算</li>
+      <li>质量趋势与返工统计</li>
+      <li>检查报告导出与版本归档</li>
+      <li>规则效果监控与版本升级</li>
+    </ul>
+    <div style="padding:8px;background:white;border-radius:8px;font-size:12px"><strong>退出条件：</strong>恢复动作可追溯，估算口径可解释，管理报表来自真实生产记录</div>
+  </div>
+</div>
+
+<div class="split" style="margin-top:18px">
+  <div class="mockup">
+    <div class="mockup-header">权限边界</div>
+    <div class="mockup-body" style="font-size:13px;line-height:1.8">
+      <strong>制片 / PM：</strong>发起检查、分派返工、查看全局、提交版本晋级<br>
+      <strong>导演 / 审核人：</strong>复核 P0/P1、确认高风险修改、批准生产版本<br>
+      <strong>生产岗位：</strong>查看并处理本人问题、执行安全修复、申请复核<br>
+      <strong>系统管理员：</strong>发布规则版本；不参与业务放行<br>
+      <strong>共同限制：</strong>任何角色都不能直接篡改检查结果或绕过 P0/P1 Gate
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">自动化验收</div>
+    <div class="mockup-body" style="font-size:13px;line-height:1.8">
+      <strong>规则单测：</strong>每条规则覆盖通过、阻断、待配置、异常<br>
+      <strong>服务集成：</strong>快照过期、Gate 矩阵、工单状态、幂等重试<br>
+      <strong>API 契约：</strong>字段、枚举、权限和错误码稳定<br>
+      <strong>前端状态：</strong>加载、空态、过期、部分失败、无权限<br>
+      <strong>E2E：</strong>发现问题 → 定位 → 修复 → 复核 → 重检 → 放行
+    </div>
+  </div>
+</div>
+
+<div style="margin-top:16px;padding:12px;border-radius:8px;background:#fff7ed;border:1px solid #fed7aa;font-size:13px">
+  <strong>现有代码处理：</strong>Sop.vue 静态数据全部移除；新增前端 SOP API 与状态层；SopController 改为 DTO + 应用服务；现有 SopService 硬编码逻辑拆除；补充数据库迁移、权限校验和前后端契约测试。
+</div>

@@ -29,6 +29,8 @@ The current draft files `aicp-frontend/src/views/Warehouse.vue`, `aicp-frontend/
 | `service/ProjectStatusProjection.java` | Pure mapping from stored detailed state to three public axes and one primary action |
 | `service/ContentProjectService.java` | Search, pagination, recent projects, todos, detail summary, rename, duplicate |
 | `service/ProjectLifecycleService.java` | Submit, approve, revise, lock, archive, and restore transitions |
+| `service/ProjectAccessService.java` | Permission gate used by lifecycle and production services |
+| `service/ProjectProductionGate.java` | Locked-version prerequisite check for storyboard and canvas entry |
 | `service/LegacyProjectProjectionService.java` | Idempotent old-script resolution and migration |
 | `controller/ContentProjectController.java` | HTTP query and action endpoints |
 
@@ -87,6 +89,37 @@ void archivedProjectAlwaysUsesRestoreAsPrimaryAction() {
 
     assertThat(ProjectStatusProjection.from(project).primaryAction()).isEqualTo("restore");
 }
+
+@Test
+void lockedProjectWithoutLockedVersionReceivesBlockedReason() {
+    ContentProject project = new ContentProject();
+    project.setId(1L);
+    project.setContentStatus("locked");
+    project.setProductionStatus("not_started");
+    project.setMarketStatus("private");
+    project.setLifecycleStatus("active");
+
+    ProjectStatusProjection.StatusView result = ProjectStatusProjection.from(project,
+            id -> "请先锁定一个审核通过的内容版本");
+
+    assertThat(result.primaryAction()).isEqualTo("create_storyboard");
+    assertThat(result.blockedReason()).isEqualTo("请先锁定一个审核通过的内容版本");
+}
+
+@Test
+void activeDraftSkipsGateCheck() {
+    ContentProject project = new ContentProject();
+    project.setId(1L);
+    project.setContentStatus("draft");
+    project.setProductionStatus("not_started");
+    project.setMarketStatus("private");
+    project.setLifecycleStatus("active");
+
+    ProjectStatusProjection.StatusView result = ProjectStatusProjection.from(project,
+            id -> "should not be called");
+
+    assertThat(result.blockedReason()).isNull();
+}
 ```
 
 - [ ] **Step 2: Run the tests and verify the missing type failure**
@@ -129,6 +162,11 @@ public final class ProjectStatusProjection {
             String blockedReason) {}
 
     public static StatusView from(ContentProject p) {
+        return from(p, null);
+    }
+
+    public static StatusView from(ContentProject p,
+            java.util.function.Function<Long, String> productionGate) {
         String lifecycle = valueOr(p.getLifecycleStatus(), "active");
         if ("archived".equals(lifecycle)) {
             return new StatusView(p.getContentStatus(), publicProduction(p),
@@ -141,8 +179,14 @@ public final class ProjectStatusProjection {
             case "locked" -> lockedAction(p);
             default -> "continue_creation";
         };
+        String blocked = null;
+        if (productionGate != null && ("locked".equals(p.getContentStatus())
+                || "create_storyboard".equals(action)
+                || "view_production".equals(action))) {
+            blocked = productionGate.apply(p.getId());
+        }
         return new StatusView(p.getContentStatus(), publicProduction(p),
-                publicCommercial(p.getMarketStatus()), lifecycle, action, null);
+                publicCommercial(p.getMarketStatus()), lifecycle, action, blocked);
     }
 
     private static String publicProduction(ContentProject p) {
@@ -235,7 +279,7 @@ git commit -m "feat: add content project lifecycle projection"
 @Test
 void warehouseQueryIsOwnerScopedAndExcludesArchivedByDefault() {
     ProjectQuery query = new ProjectQuery(1, 20, "账本", "short_drama", null,
-            "needs_revision", null, null, null, "updated_desc");
+            "needs_revision", null, null, null, null, null, "updated_desc");
 
     service.list(7L, query);
 
@@ -275,6 +319,8 @@ record ProjectQuery(
         String productionStatus,
         String commercialStatus,
         String lifecycleStatus,
+        String updatedFrom,
+        String updatedTo,
         String sort) {}
 
 record WarehouseProjectView(
@@ -302,6 +348,33 @@ record ProjectHubView(ProjectDetail project, WarehouseProjectView summary,
                       List<ContentVersionView> versions,
                       Map<String, Long> relationCounts) {}
 
+record CreateProjectRequest(
+        @NotBlank String name,
+        String creationMode,
+        String sourceMode,
+        @Size(max = 500) String premise,
+        String category,
+        String tenantType,
+        String description) {}
+
+record ProjectDetail(
+        Long id,
+        String uuid,
+        String name,
+        String creationMode,
+        String sourceMode,
+        String contentStatus,
+        String productionStatus,
+        String commercialStatus,
+        String lifecycleStatus,
+        Integer revision,
+        Long adoptedVersionId,
+        Long ownerUserId,
+        String tenantType,
+        Long legacyScriptId,
+        LocalDateTime createdAt,
+        LocalDateTime updatedAt) {}
+
 record WarehouseProjectListResult(List<WarehouseProjectView> items,
                                   int page, int pageSize, long total) {}
 ```
@@ -313,17 +386,21 @@ Use `market_status` only as an internal persistence name; all new response recor
 Add service methods:
 
 ```java
+public ProjectDetail create(Long userId, CreateProjectRequest request)
 public WarehouseProjectListResult list(Long userId, ProjectQuery query)
 public List<WarehouseProjectView> recent(Long userId, int limit)
 public List<ProjectTodoView> todos(Long userId)
 public ProjectHubView hub(Long userId, Long projectId)
 ```
 
-Build MyBatis predicates only from validated allowlisted fields. Clamp `pageSize` to `1..100`; map sort values with a switch and default to `updated_desc`. Map every result through `ProjectStatusProjection.from(project)`.
+Build MyBatis predicates only from validated allowlisted fields. Include `updated_from`/`updated_to` as optional time-range filters on `updated_at`. Clamp `pageSize` to `1..100`; map sort values with a switch and default to `updated_desc`. Map every list result through `ProjectStatusProjection.from(project, productionGate)`.
 
 Expose:
 
 ```java
+@PostMapping
+public ApiResponse<ProjectDetail> create(@Valid @RequestBody CreateProjectRequest request)
+
 @GetMapping
 public ApiResponse<PageResult<WarehouseProjectView>> list(...)
 
@@ -370,7 +447,7 @@ git commit -m "feat: add content project warehouse queries"
 - Modify: `aicp-backend/src/main/java/com/aicp/module/contentproject/controller/ContentProjectController.java`
 - Modify: `aicp-backend/src/main/java/com/aicp/module/contentproject/controller/ContentStoryboardController.java`
 - Modify: `aicp-backend/src/main/java/com/aicp/module/contentproject/controller/ProductionController.java`
-- Modify: `aicp-backend/src/main/resources/db/migration/V3__content_project_lifecycle.sql`
+- Create: `aicp-backend/src/main/resources/db/migration/V4__project_audit_logs.sql`
 - Modify: `aicp-backend/src/main/resources/db/schema.sql`
 - Modify: `aicp-backend/src/main/resources/db/schema-h2.sql`
 - Modify: `aicp-backend/src/main/resources/db/schema-mysql.sql`
@@ -450,7 +527,7 @@ record ProjectActionRequest(
         @Size(max = 2000) String comment) {}
 ```
 
-Add this table to V3 and all schema mirrors:
+Create `V4__project_audit_logs.sql` (NOT modifying V3 — V3 may have already executed in dev) and add this table to all schema mirrors:
 
 ```sql
 CREATE TABLE project_audit_logs (
@@ -483,14 +560,14 @@ void moveToTrash(Long userId, Long projectId, ProjectActionRequest request)
 ProjectDetail duplicate(Long userId, Long projectId, ProjectActionRequest request)
 ```
 
-Each method must:
+Each method must be annotated `@Transactional` and:
 
-1. call `ProjectAccessService.require` with `EDIT_CONTENT`, `REVIEW`, `PRODUCE`, or `DELETE_PROJECT` as appropriate;
+1. call `ProjectAccessService.require(userId, projectId, scope)` where `scope` is one of `EDIT_CONTENT`, `REVIEW`, `PRODUCE`, or `DELETE_PROJECT` as appropriate (see `ContentProjectPermission` enum in `ProjectAccessService`);
 2. load and validate the target version belongs to the project when a version is required;
 3. reject invalid source states;
 4. update with `WHERE id = ? AND revision = ?`;
 5. insert one audit row in the same transaction;
-6. return the updated project view;
+6. return the updated `ProjectDetail`;
 7. return the prior result for a repeated idempotency key.
 
 The content version changes in the same transaction as the project: submit sets both to `reviewing`, approve sets both to `approved`, revision request sets both to `needs_revision`, and lock sets both to `locked`. Editing after approval or lock creates a new draft and does not mutate the adopted version.
@@ -562,6 +639,7 @@ git commit -m "feat: enforce content project lifecycle actions"
 - Modify: `aicp-backend/src/main/java/com/aicp/module/contentproject/controller/ContentProjectController.java`
 - Modify: `aicp-backend/src/main/java/com/aicp/module/script/controller/ScriptRepoController.java`
 - Modify: `aicp-backend/src/main/java/com/aicp/module/script/service/ScriptService.java`
+- Modify: `aicp-backend/src/main/java/com/aicp/module/script/mapper/ScriptMapper.java`
 - Test: `aicp-backend/src/test/java/com/aicp/module/contentproject/service/LegacyProjectProjectionServiceTest.java`
 - Test: `aicp-backend/src/test/java/com/aicp/module/contentproject/ContentProjectM1IntegrationTest.java`
 
@@ -662,7 +740,6 @@ git commit -m "refactor: unify legacy scripts under content projects"
 **Files:**
 - Modify: `aicp-frontend/src/api/contentProject.js`
 - Create: `aicp-frontend/src/views/warehouse/projectWarehouseViewModel.js`
-- Delete: `aicp-frontend/src/views/warehouse/scriptWarehouseViewModel.js`
 - Test: `aicp-frontend/tests/project-warehouse.test.js`
 
 - [ ] **Step 1: Write failing pure-function tests**
@@ -867,6 +944,7 @@ git commit -m "feat: add script creation launchpad"
 - Modify: `aicp-frontend/src/views/Warehouse.vue`
 - Create: `aicp-frontend/src/views/warehouse/ProjectCard.vue`
 - Delete: `aicp-frontend/src/views/warehouse/ScriptCard.vue`
+- Delete: `aicp-frontend/src/views/warehouse/scriptWarehouseViewModel.js`
 - Test: `aicp-frontend/tests/project-warehouse.test.js`
 
 - [ ] **Step 1: Extend failing tests for card actions and labels**
@@ -972,6 +1050,7 @@ Commit:
 ```bash
 git add aicp-frontend/src/views/Warehouse.vue aicp-frontend/src/views/warehouse \
   aicp-frontend/tests/project-warehouse.test.js
+git rm aicp-frontend/src/views/warehouse/scriptWarehouseViewModel.js
 git commit -m "feat: make warehouse manage content projects"
 ```
 
@@ -1095,10 +1174,13 @@ git commit -m "feat: add script project hub and unified navigation"
 - Modify: `aicp-frontend/tests/navigation-contract.test.js`
 - Create: `aicp-frontend/tests/script-warehouse-flow.spec.js`
 - Modify: `aicp-backend/src/test/java/com/aicp/module/contentproject/ContentProjectM1IntegrationTest.java`
-- Modify: `aicp-backend/src/test/java/com/aicp/module/contentproject/ContentProjectM2ScaleTest.java`
 - Update after successful build only: `aicp-backend/src/main/resources/static/**`
 
+> **Pre-existing service dependencies for integration tests:** The fixtures in Step 1 assume these services/mappers already exist and are NOT created by this plan: `ContentUnitService`, `ContentUnitMapper`, `ContentVersionMapper`, `StoryboardMasterMapper`. If any are missing, stub them with Mockito or create minimal H2-backed mappers scoped to the integration test classpath.
+
 - [ ] **Step 1: Add an integration test for the complete backend lifecycle**
+
+> **Pre-existing dependencies:** `ContentUnitService`, `ContentUnitMapper`, `ContentVersionMapper`, and `StoryboardMasterMapper` are assumed to exist before this plan executes. The test fixtures in this step use them directly. If any are missing, create minimal H2-backed mappers for the integration test classpath or stub with Mockito.
 
 ```java
 @Test
@@ -1122,7 +1204,7 @@ void projectCanMoveFromCreationToWarehouseAndLockedProductionEntry() {
 
     assertThat(locked.contentStatus()).isEqualTo("locked");
     ProjectQuery query = new ProjectQuery(1, 20, null, null, null,
-            null, null, null, "active", "updated_desc");
+            null, null, null, "active", null, null, "updated_desc");
     assertThat(projectService.list(7L, query).items())
             .extracting(WarehouseProjectView::id)
             .contains(created.id());

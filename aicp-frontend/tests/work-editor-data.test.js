@@ -64,6 +64,42 @@ describe('normalizeEditorResponse', () => {
     assert.equal(norm.profile.genreTag, '言情')
     assert.deepEqual(norm.profile.plotTags, ['重生'])
   })
+
+  it('normalizes bibleHealth from snake_case', () => {
+    const raw = {
+      project_id: 1, title: 'Test', total_words: 0, permissions: 'owner',
+      profile: null, revision: 1, setting_counts: {}, pending_extraction_count: 0,
+      bible_health: {
+        status: 'confirmed', current_version_id: 5, current_version_no: 2,
+        confirmed_fact_count: 8, pending_change_count: 0, ready_for_generation: true
+      }
+    }
+    const norm = normalizeEditorResponse(raw)
+    assert.equal(norm.bibleHealth.status, 'confirmed')
+    assert.equal(norm.bibleHealth.current_version_no, 2)
+    assert.equal(norm.bibleHealth.ready_for_generation, true)
+  })
+
+  it('normalizes bibleHealth from camelCase', () => {
+    const raw = {
+      projectId: 1, title: 'Test', totalWords: 0, permissions: 'owner',
+      profile: null, revision: 1, settingCounts: {}, pendingExtractionCount: 0,
+      bibleHealth: { status: 'missing', current_version_id: 0, current_version_no: 0,
+        confirmed_fact_count: 0, pending_change_count: 0, ready_for_generation: false }
+    }
+    const norm = normalizeEditorResponse(raw)
+    assert.equal(norm.bibleHealth.status, 'missing')
+    assert.equal(norm.bibleHealth.ready_for_generation, false)
+  })
+
+  it('tolerates absent bibleHealth', () => {
+    const raw = {
+      project_id: 1, title: 'Test', total_words: 0, permissions: 'owner',
+      profile: null, revision: 1, setting_counts: {}, pending_extraction_count: 0
+    }
+    const norm = normalizeEditorResponse(raw)
+    assert.equal(norm.bibleHealth, null)
+  })
 })
 
 describe('makeTagPayload', () => {

@@ -33,7 +33,7 @@
 ## 3. 已确认的产品决策
 
 1. 资产历史包含任务状态，独立“任务监控”入口合并到工作台。
-2. 提供“我的资产 / 团队资产”双视图，并严格按当前 Workspace 隔离。
+2. 提供“个人空间 / 企业空间”双视图（对应 `personal_{userId}` 和 `enterprise_{enterpriseId}` 格式的 Workspace），并严格按当前 Workspace 隔离。
 3. 个人资产可直接进入市场发布流程；团队资产复用现有发布申请和审批流程。
 4. 删除采用 30 天回收站，可恢复；画布已有引用不被破坏。
 5. 主页面采用资产工作台布局：左侧项目树，中部分类与记录，右侧详情抽屉。
@@ -158,11 +158,13 @@ Controller 不直接暴露实体 Map。查询和命令分离，查询服务不�
 目标模型：
 
 ```text
-generation_tasks 1 ── 0..n asset_versions n ── 1 workspace_assets
-                                           │
-                                           ├── workspace_asset_favorites
-                                           ├── asset_activity_logs
-                                           └── canvas_asset_placements
+generation_tasks 1 ── 0..1 workspace_assets (通过 source_task_id：成功时创建资产，失败时无资产)
+                         │
+                         └── 1..n asset_versions (同一资产可因再生而产生多个版本)
+                         │
+                         ├── workspace_asset_favorites (用户维度的资产收藏)
+                         ├── asset_activity_logs (只追加操作记录)
+                         └── canvas_asset_placements (资产到画布节点的放置引用)
 ```
 
 `platform_assets` 迁移到 `workspace_assets + asset_versions`，新工作台不读取旧表。
@@ -188,7 +190,9 @@ generation_tasks 1 ── 0..n asset_versions n ── 1 workspace_assets
 | `purge_blocked_reason` | VARCHAR(64) NULL | 存在画布引用时记录延迟清理原因 |
 | `legacy_platform_asset_id` | BIGINT NULL UNIQUE | 兼容期迁移映射 |
 
-将 `workspace_type` 和 `asset_type` 从 MySQL ENUM 改为 VARCHAR，避免分类扩展要求表级 ENUM 变更。`tags` 规范为非空 JSON 数组。
+将 `workspace_type` 和 `asset_type` 从 MySQL ENUM 改为 VARCHAR，避免分类扩展要求表级 ENUM 变更。`tags` 规范为非空 JSON 数组，迁移时将 NULL 值转换为 `[]`。
+
+**注意：**`workspace_assets.status` 数据库存储值为大写（`ACTIVE`/`ARCHIVED`/`TRASHED`），与现有实现保持一致。
 
 ### 8.3 asset_versions
 
@@ -209,7 +213,7 @@ generation_tasks 1 ── 0..n asset_versions n ── 1 workspace_assets
 | `generation_snapshot` | JSON NULL | provider/model/prompt/parameters 快照 |
 | `metadata` | JSON NOT NULL | 低频扩展元数据 |
 
-短时签名下载 URL 不入库。旧 `content_ref` 在完成 `storage_key` 回填后标记弃用，但不在同一发布中删除。
+短时签名下载 URL 不入库，由 `GET /assets/{assetUuid}/download-url` 实时生成。`preview_url` 仅当存储商提供非临时公共 URL 时写入；前端预览应优先使用签名下载 API 获取临时展示 URL。旧 `content_ref` 在完成 `storage_key` 回填后标记弃用，但不在同一发布中删除。
 
 ### 8.4 generation_tasks
 
@@ -219,7 +223,16 @@ generation_tasks 1 ── 0..n asset_versions n ── 1 workspace_assets
 
 状态为 `succeeded` 时必须至少存在一个有效 `asset_version`。资产登记失败时任务不得先标记为成功。
 
-数据库沿用现有小写任务状态 `pending/running/succeeded/failed/canceled`；API 也返回小写状态。本文其他位置出现的大写状态只表示概念名称，不引入第二套持久化枚举。
+数据库沿用现有小写任务状态 `pending/running/succeeded/failed/canceled`；API 也返回小写状态。本文其他位置出现的大写状态只表示概念名称，不引入第二套持久化枚举。`workspace_assets` 的 `status` 字段为独立状态机，使用大写（`ACTIVE`/`ARCHIVED`/`TRASHED`），两者互不干扰。
+
+### 8.4.1 历史数据迁移说明
+
+现有 `generation_tasks` 表缺少 `workspace_id`、`created_by`、`owner_user_id` 等字段。迁移时按以下规则回填：
+
+- `workspace_id`：从关联的 `platform_assets` 或调用上下文推断；无法确定时使用 `personal_{ownerUserId}` 格式。
+- `created_by`：从同一条 `generation_tasks` 的调用者或关联资产的创建者回填；不允许回退到用户 ID 1。
+- `content_project_id`：通过 `canvas_projects.content_project_id` 映射解析；无法映射的任务保持 NULL，对应“未归档”。
+- `project_id`（现有字段）：保留当前语义为“来源画布项目”，后续版本单独重命名为 `source_canvas_project_id`。
 
 ### 8.5 新表
 
@@ -278,6 +291,24 @@ generation_tasks 1 ── 0..n asset_versions n ── 1 workspace_assets
 
 修改类请求使用 `If-Match: "{row_version}"`，响应返回 `ETag`。缺失返回 428，版本冲突返回 409/48004。
 
+### 9.2.1 再次生成参数规范
+
+`POST /assets/{assetUuid}/regenerate` 的 `parameters_patch` 允许部分覆盖生成快照中的字段：
+
+| 字段 | 类型 | 允许修改 | 说明 |
+|---|---|---|---|
+| `model_id` | string | 是 | 更换模型（目标模型必须在线可用） |
+| `prompt` / `negative_prompt` | string | 是 | 修改提示词 |
+| `seed` | long \| null | 是 | 设置或清除随机种子 |
+| `width` / `height` | int | 是 | 修改输出分辨率 |
+| `steps` / `cfg_scale` | int / float | 是 | 采样参数 |
+| `reference_assets` | string[] | 是 | 替换参考资产列表 |
+| `provider` | string | 否 | 保持与原任务相同 |
+| `asset_type` | string | 否 | 资产分类由原 asset 决定 |
+| `content_project_id` | string | 否 | 项目归属不变 |
+
+未在允许列表中的字段将被静默忽略。原快照不可读时返回 48008，目标模型已下线且未指定替代时返回 48007。
+
 ### 9.3 发送画布
 
 `POST /assets/{assetUuid}/send-to-canvas`
@@ -307,20 +338,40 @@ generation_tasks 1 ── 0..n asset_versions n ── 1 workspace_assets
 | E5 一致性 | 48016、48017 | 409/500 | 不标成功，进入补偿 |
 | E6 迁移 | MIG-001~004 | 内部 | 单项隔离并暂停异常批次 |
 
+已有错误码复用清单（48xxx 段，来自现有 `ErrorCode.java`）：
+
+| 码 | 标识 | 本期语义 | 变更 |
+|---|---|---|---|
+| 48001 | ASSET_NOT_FOUND | 资产或任务记录不存在（含跨 Workspace 查询） | 语义扩展，原仅表示资产市场资产 |
+| 48002 | ASSET_PERMISSION_DENIED | 无当前资产操作权限 | 不变 |
+| 48003 | LISTING_UNAVAILABLE | 资产市场 listing 不可用 | 继续只用于市场场景 |
+| 48004 | ASSET_VERSION_CONFLICT | 乐观锁冲突（row_version 不匹配） | 语义扩展 |
+| 48005 | ASSET_INCOMPATIBLE | 媒体类型与目标画布不兼容（如将音频资产放入纯图像画布） | 不变 |
+| 48006 | PUBLISH_STATE_CONFLICT | 发布状态冲突（资产已处于发布流程中或已发布） | 不变 |
+| 48007 | ASSET_TYPE_UNSUPPORTED | 资产生产类型不支持目标操作（如将 LORA 模型直接发布为普通资产） | 不变 |
+
 新增业务码：
 
-- 48008 ASSET_FILE_MISSING
-- 48009 ASSET_LIFECYCLE_CONFLICT
-- 48010 ASSET_CATEGORY_INVALID
-- 48011 ASSET_PURGED
-- 48012 ASSET_BATCH_LIMIT
-- 48013 ASSET_IDEMPOTENCY_CONFLICT
-- 48014 ASSET_CANVAS_TARGET_INVALID
-- 48015 ASSET_DOWNLOAD_SIGN_FAILED
-- 48016 ASSET_SETTLEMENT_FAILED
-- 48017 ASSET_COMPENSATION_EXHAUSTED
-- 46020 GENERATION_TASK_NOT_FOUND
-- 46021 GENERATION_TASK_STATE_CONFLICT
+| 码 | 标识 | HTTP | 触发场景 |
+|---|---|---|---|
+| 48008 | ASSET_FILE_MISSING | 422 | 存储文件不存在或 storage_key 为空；下载/发布前校验失败 |
+| 48009 | ASSET_LIFECYCLE_CONFLICT | 409 | 状态不允许操作（如恢复未进入回收站的资产、删除发布中的资产） |
+| 48010 | ASSET_CATEGORY_INVALID | 422 | 指定的 `asset_type` 不在枚举范围内或与 `media_type` 冲突 |
+| 48011 | ASSET_PURGED | 410 | 资产已物理清理，不可恢复 |
+| 48012 | ASSET_BATCH_LIMIT | 400 | 批量操作超过 100 项上限 |
+| 48013 | ASSET_IDEMPOTENCY_CONFLICT | 409 | 相同幂等键但请求载荷不一致 |
+| 48014 | ASSET_CANVAS_TARGET_INVALID | 422 | 目标画布/项目不存在、不属于当前 Workspace 或缺少放置权限 |
+| 48015 | ASSET_DOWNLOAD_SIGN_FAILED | 503 | 签名 URL 生成失败（存储服务不可用） |
+| 48016 | ASSET_SETTLEMENT_FAILED | 409 | 结算流程中资产/版本写入失败，任务不会标记为成功 |
+| 48017 | ASSET_COMPENSATION_EXHAUSTED | 500 | 补偿重试 4 次全部失败，已进入人工处理队列 |
+| 46020 | GENERATION_TASK_NOT_FOUND | 404 | 生成任务不存在或不属于当前 Workspace |
+| 46021 | GENERATION_TASK_STATE_CONFLICT | 409 | 任务状态不允许当前操作（如对非 pending/running 任务执行取消） |
+
+**48005/48007/48010 区分规则：**
+
+- **48005 (ASSET_INCOMPATIBLE)**：资产本身有效，但与目标画布的媒体兼容性不匹配（如将音频发给纯视觉画布）。
+- **48007 (ASSET_TYPE_UNSUPPORTED)**：资产的生产类型（CHECKPOINT、LORA、STYLE_PACK）不支持当前操作（如将训练产物直接发布为可交易资产）。
+- **48010 (ASSET_CATEGORY_INVALID)**：请求中指定的 `asset_type` 值不在合法枚举集中，或者 `asset_type` 与 `media_type` 的组合不合法。
 
 同步更新 `GlobalExceptionHandler` 的 HTTP 映射。
 
@@ -379,7 +430,7 @@ generation_tasks 1 ── 0..n asset_versions n ── 1 workspace_assets
 | 新代码覆盖率 | 行 ≥85%，分支 ≥80%；权限、生命周期、结算分支 100% | 低于任一阈值 |
 | API 契约 | 每端点至少成功、校验、权限、冲突各一例 | DTO/OpenAPI/前端不一致 |
 | 隔离安全 | 个人↔个人、个人↔企业、企业 A↔B 全操作矩阵通过 | 任何越权可见或可操作 |
-| 核心 E2E | 12 条主场景连续 3 轮 100% 通过，flaky=0 | 任一失败或需人工刷新 |
+| 核心 E2E | 12 条主场景连续 3 轮 100% 通过，无新增 flaky 用例 | 任一新增失败；已有 flaky 需 24 小时内修复并记录跟踪 |
 | 迁移 | 10k 脱敏样本和全量预演；重复 3 次结果一致 | 任一未解释差异 |
 | 性能 | 50k/Workspace、500k 总量；常用 SQL 无全表扫描 | 超过 SLO 或生成吞吐下降 >5% |
 | 回滚 | 6 个能力开关逐项回滚；旧读恢复 ≤5 分钟 | 任一无法无损切回 |
@@ -413,7 +464,7 @@ generation_tasks 1 ── 0..n asset_versions n ── 1 workspace_assets
 |---|---|---|---|
 | M0 基线审计 | 表、接口、Workspace ID、数据量和空资产报告 | 差异清单确认，样本可复现 | 无数据写入 |
 | M1 Schema/契约 | 加法迁移、索引、Workspace 统一、DTO/ErrorCode | H2/MySQL 迁移通过，旧功能无回归 | 关闭新字段使用 |
-| M2 Canonical 双写 | 结算服务、asset/version、补偿、影子核对 | 连续 7 天成功无资产=0，双写差异=0 | 停 canonical 写，保留旧写 |
+| M2 Canonical 双写 | 结算服务、asset/version、补偿、影子核对 | 连续 7 天 `asset_success_without_version_total = 0`（无成功任务缺失资产版本）且双写核对差异 = 0 | 停 canonical 写，保留旧写 |
 | M3 API | 查询和命令接口 | 契约、安全和性能门禁通过 | API 切旧读 |
 | M4 工作台 | 项目分类、任务卡、详情、收藏、重试和画布 | E2E 通过，小流量无 SEV0/1/2 | 路由切旧页面 |
 | M5 管理闭环 | 批量、未归档、下载、回收、日志和发布 | 生命周期、审批和批量验收通过 | 逐能力关闭 |

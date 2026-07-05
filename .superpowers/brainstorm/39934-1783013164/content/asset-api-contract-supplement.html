@@ -1,0 +1,86 @@
+<h2>接口契约补充：路径、字段、状态码与兼容规则</h2>
+<p class="subtitle">本页作为 3B 的补充，可直接约束 Controller、DTO、前端 API 和接口测试。</p>
+
+<div class="section">
+  <h3>一、路径与协议统一规则</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="background:#eef2ff"><th style="padding:6px;text-align:left">规则</th><th style="padding:6px;text-align:left">确定口径</th></tr>
+    <tr><td style="padding:6px"><b>资源路径</b></td><td style="padding:6px">复数名词 + kebab-case；命令使用子资源。列表 <code>/assets/history/records</code>，详情改为 <code>/assets/history/records/{recordKind}/{recordUuid}</code>，避免把 <code>task:uuid</code> 复合值塞进单个路径变量。</td></tr>
+    <tr><td style="padding:6px"><b>外部标识</b></td><td style="padding:6px">页面/API 只使用 <code>asset_uuid</code>、<code>task_uuid</code>、<code>project_uuid</code>、<code>canvas_uuid</code>、<code>node_uuid</code>；内部自增 ID 只用于表关联。</td></tr>
+    <tr><td style="padding:6px"><b>Workspace</b></td><td style="padding:6px"><code>X-Workspace-Id</code> 必填，1–64 字符；不允许请求体覆盖。<code>scope=mine</code> 仅附加 created_by=当前用户，<code>scope=workspace</code> 查询当前 Workspace 可见资产。</td></tr>
+    <tr><td style="padding:6px"><b>字段命名</b></td><td style="padding:6px">该模块 DTO 统一 snake_case；使用 DTO 级 <code>@JsonNaming(SnakeCaseStrategy)</code>，不修改 Jackson 全局策略，避免影响现有模块。</td></tr>
+    <tr><td style="padding:6px"><b>幂等</b></td><td style="padding:6px">创建类命令使用请求头 <code>Idempotency-Key</code>，1–64 字符，24 小时有效；同键同载荷重放原响应，同键不同载荷返回 409/48013。</td></tr>
+    <tr><td style="padding:6px"><b>并发控制</b></td><td style="padding:6px">修改/移动/删除/恢复使用 <code>If-Match: &quot;{row_version}&quot;</code>；响应返回 <code>ETag</code>。缺失返回 428，版本冲突返回 409/48004。</td></tr>
+    <tr><td style="padding:6px"><b>时间</b></td><td style="padding:6px">请求/响应使用 RFC 3339 UTC，例如 <code>2026-07-03T04:20:00Z</code>；前端按 Asia/Shanghai 展示。</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>二、查询参数类型与约束</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:12px">
+    <div style="padding:9px;background:#f8fafc"><b>分页</b><br><code>page</code>: int，默认 1，最小 1<br><code>page_size</code>: 24/48/96，默认 24，最大 100<br>非法值返回 400/40002</div>
+    <div style="padding:9px;background:#f8fafc"><b>排序</b><br><code>sort</code>: <code>created_at:desc</code>（默认）、<code>created_at:asc</code>、<code>updated_at:desc</code>、<code>name:asc</code>；白名单之外拒绝</div>
+    <div style="padding:9px;background:#f8fafc"><b>搜索</b><br><code>keyword</code>: trim 后 1–100 字符；搜索名称、Prompt、task_uuid、asset_uuid；特殊字符参数化查询，不拼 SQL</div>
+    <div style="padding:9px;background:#f8fafc"><b>枚举</b><br><code>record_kind</code>: task/asset<br><code>media_type</code>: image/video/audio/other<br><code>category</code>: character/scene/prop/storyboard/voice/music/other</div>
+    <div style="padding:9px;background:#f8fafc"><b>状态</b><br><code>status</code> 可逗号分隔，最多 5 个：pending/running/succeeded/failed/canceled；资产成功统一映射为 succeeded</div>
+    <div style="padding:9px;background:#f8fafc"><b>日期与标签</b><br><code>created_from/to</code>: RFC 3339，from ≤ to，范围最多 366 天<br><code>tags</code>: 逗号分隔，最多 10 个，每项 1–32 字符，AND 匹配</div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>三、请求字段精确定义</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="background:#eef2ff"><th style="padding:6px;text-align:left">命令</th><th style="padding:6px;text-align:left">字段约束</th></tr>
+    <tr><td style="padding:6px"><code>PATCH /assets/{uuid}</code></td><td style="padding:6px"><code>name</code> 1–200；<code>category</code> 枚举；<code>tags</code> 最多 20 个、去重、每项 1–32。至少提交一个字段；禁止修改 media_type、file_url、owner。</td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{uuid}/move</code></td><td style="padding:6px"><code>target_project_uuid</code> nullable（null=未归档）；<code>target_category</code> 必填；目标必须属于当前 Workspace 且用户有编辑权。</td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/batch</code></td><td style="padding:6px"><code>asset_uuids</code> 1–100、去重；<code>operation</code> 枚举；<code>payload</code> 随操作校验。每项独立事务，响应明确部分成功。</td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{uuid}/send-to-canvas</code></td><td style="padding:6px"><code>target_project_uuid</code>、<code>target_canvas_uuid</code> 必填；<code>placement</code> 为 viewport_center/auto/absolute；absolute 时 x/y 必填且为有限数值。</td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{uuid}/regenerate</code></td><td style="padding:6px"><code>model_id</code> 1–100；<code>prompt</code> 最大 20,000；<code>parameters_patch</code> 最大 32KB，只允许模型注册表声明的参数；先执行积分预估。</td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{uuid}/publish</code></td><td style="padding:6px"><code>title</code> 1–120；<code>description</code> 1–2000；<code>tags</code> 1–10；<code>license_code</code> 必须来自市场字典；团队资产禁止 direct。</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>四、响应与状态枚举</h3>
+  <p><b>统一外壳：</b><code>{ code:int, message:string, data:object|null, request_id:string, timestamp:epoch_seconds }</code>。列表 data 使用现有 <code>PageResult</code>：<code>items</code> + <code>pagination{page,page_size,total,total_pages,has_more}</code>，额外 facets 与 pagination 同级。</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:7px;font-size:12px">
+    <div style="padding:8px;background:#eff6ff"><b>任务状态</b><br>PENDING → RUNNING → SUCCEEDED / FAILED<br>PENDING/RUNNING → CANCELED<br>终态不可原地回退；重试创建新任务</div>
+    <div style="padding:8px;background:#eff6ff"><b>资产生命周期</b><br>ACTIVE → TRASHED → ACTIVE（恢复）<br>TRASHED 到期后物理清理文件和主记录，审计日志保留</div>
+    <div style="padding:8px;background:#eff6ff"><b>发布状态</b><br>NONE / PENDING / APPROVED / REJECTED / CANCELLED<br>复用现有资产市场枚举，不新增同义状态</div>
+  </div>
+  <p><b>allowed_actions：</b>后端返回 <code>preview</code>、<code>edit</code>、<code>favorite</code>、<code>download</code>、<code>send_to_canvas</code>、<code>regenerate</code>、<code>publish</code>、<code>trash</code>、<code>restore</code>、<code>cancel_task</code>、<code>retry_task</code>；前端不自行猜权限。</p>
+</div>
+
+<div class="section">
+  <h3>五、HTTP 状态与业务码映射</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="background:#eef2ff"><th style="padding:6px;text-align:left">HTTP</th><th style="padding:6px;text-align:left">场景</th><th style="padding:6px;text-align:left">业务码</th></tr>
+    <tr><td style="padding:6px">200</td><td style="padding:6px">查询、更新、删除/恢复、收藏、批量（含部分失败）、幂等重放</td><td style="padding:6px">0</td></tr>
+    <tr><td style="padding:6px">201</td><td style="padding:6px">创建画布放置、重生成任务、直接发布 listing</td><td style="padding:6px">0</td></tr>
+    <tr><td style="padding:6px">202</td><td style="padding:6px">团队发布申请已创建，等待审批</td><td style="padding:6px">0</td></tr>
+    <tr><td style="padding:6px">400</td><td style="padding:6px">字段格式、分页、排序、时间范围非法</td><td style="padding:6px">40002 PARAM_INVALID</td></tr>
+    <tr><td style="padding:6px">401 / 403</td><td style="padding:6px">未登录 / 当前 Workspace 内无命令权限</td><td style="padding:6px">40003 / 48002</td></tr>
+    <tr><td style="padding:6px">404</td><td style="padding:6px">不存在，或资产属于其他 Workspace（防枚举）</td><td style="padding:6px">48001 ASSET_NOT_FOUND</td></tr>
+    <tr><td style="padding:6px">409</td><td style="padding:6px">版本、幂等、生命周期、发布状态冲突</td><td style="padding:6px">48004 / 48006 / 48009 / 48013</td></tr>
+    <tr><td style="padding:6px">422</td><td style="padding:6px">文件缺失、分类不合法、目标画布不兼容、类型不支持</td><td style="padding:6px">48005 / 48007 / 48008 / 48010 / 48014</td></tr>
+    <tr><td style="padding:6px">428</td><td style="padding:6px">修改命令缺少 If-Match</td><td style="padding:6px">40002</td></tr>
+    <tr><td style="padding:6px">429 / 503</td><td style="padding:6px">频率限制 / 存储或下游暂不可用</td><td style="padding:6px">40001 / 50002</td></tr>
+  </table>
+  <p><b>新增 ErrorCode：</b><code>48008 ASSET_FILE_MISSING</code>、<code>48009 ASSET_LIFECYCLE_CONFLICT</code>、<code>48010 ASSET_CATEGORY_INVALID</code>、<code>48011 ASSET_PURGED</code>、<code>48012 ASSET_BATCH_LIMIT</code>、<code>48013 ASSET_IDEMPOTENCY_CONFLICT</code>、<code>48014 ASSET_CANVAS_TARGET_INVALID</code>、<code>48015 ASSET_DOWNLOAD_SIGN_FAILED</code>；任务补充 <code>46020 GENERATION_TASK_NOT_FOUND</code>、<code>46021 GENERATION_TASK_STATE_CONFLICT</code>。同步更新 GlobalExceptionHandler 映射。</p>
+</div>
+
+<div class="section">
+  <h3>六、兼容与迁移规则</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:12px">
+    <div style="padding:9px;background:#f8fafc"><b>阶段 1：加字段与回填</b><br>只做 additive migration。workspace_id 按现有 owner/project 回填；category 按 sub_type 映射，无法识别归 other；favorite=1 迁入个人收藏表；默认 lifecycle=ACTIVE。</div>
+    <div style="padding:9px;background:#f8fafc"><b>阶段 2：双写与影子校验</b><br>GenerationExecutor 同时写旧字段和新字段；新查询与旧查询做数量/归属抽样对比。禁止双写两套任务表，generation_tasks 是唯一资产任务源。</div>
+    <div style="padding:9px;background:#f8fafc"><b>阶段 3：前端切换</b><br>新工作台切 records API；旧 <code>/task-monitor</code> 302/前端 redirect 到 <code>/asset-history?status=pending,running,failed</code>；旧侧栏入口移除。</div>
+    <div style="padding:9px;background:#f8fafc"><b>阶段 4：弃用清理</b><br>旧 <code>GET /assets/history</code> 保留 2 个发布版本且至少 60 天，响应增加 <code>Deprecation: true</code>、<code>Sunset</code>、<code>Link</code>。调用量连续 14 天为 0 后移除。</div>
+  </div>
+  <p><b>发送画布特殊兼容：</b>旧接口缺少 target_canvas_uuid 时返回 422 和迁移提示，绝不继续返回假成功。旧数字 assetId 仅在兼容 Controller 内解析，响应一律返回 UUID。<b>回滚：</b>新字段、双写和新读路径均由独立开关控制；回滚只切回旧读，不删除已写新字段。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认接口补充规范</h3><p>下一步进入数据库字段、索引与迁移细化。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>仍需调整</h3><p>请指出具体路径、字段约束、状态映射或兼容阶段。</p></div></div>
+</div>

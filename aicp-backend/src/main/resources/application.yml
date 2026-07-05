@@ -76,6 +76,12 @@ new-api:
   api-key: dev-mock-key
   timeout: 120000
 
+aicp:
+  wallet:
+    base-url: ${AICP_WALLET_BASE_URL:http://localhost:3001}
+    service-name: ${AICP_WALLET_SERVICE_NAME:aicp-8080}
+    service-secret: ${AICP_WALLET_SERVICE_SECRET:dev-wallet-secret}
+
 minio:
   endpoint: http://localhost:9000
   access-key: minioadmin

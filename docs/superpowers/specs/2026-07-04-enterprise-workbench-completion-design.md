@@ -303,6 +303,14 @@ Membership 响应保持 `permissions: string[]` 兼容现有调用方，并新�
 
 唯一约束：`(source_type, source_id)`。投影消费各领域 Outbox 事件；事件重复投递必须幂等。
 
+`asset_outbox_events`（资产域 Outbox，与 `trade_outbox_events` 共同驱动审批投影）：
+
+- `id`、`event_id`（唯一约束）。
+- `aggregate_type`、`aggregate_id`。
+- `event_type`、`payload`（JSON）、`status`、`attempts`。
+- `created_at`、`processed_at`。
+- 资产状态变更时在源事务内写入；审批投影器同时消费交易和资产两个 Outbox。
+
 ### 8.4 项目导出审批
 
 新增 `project_export_requests`，由项目/导出域持有：
@@ -483,12 +491,14 @@ Membership 响应保持 `permissions: string[]` 兼容现有调用方，并新�
 
 ## 15. 分期交付
 
+实施分为三个里程碑：**M0**（阶段 1–2，Workspace 底座与企业外壳）、**M1**（阶段 3–4，预算与统一审批）、**M2**（阶段 5–6，导出审计与验收收尾）。
+
 ### 阶段 1：Workspace 与权限底座
 
 - 3001 Workspace 列表、部门、成员、角色和范围能力。
 - 8080 Account Center Adapter 与增强 WorkspaceContext。
 - 前端 Workspace 切换和缓存隔离。
-- 企业本地主数据迁移与写入冻结。
+- 企业本地主数据盘点与迁移映射（写入冻结在阶段 6 执行）。
 
 ### 阶段 2：组织与角色化概览
 
@@ -508,6 +518,8 @@ Membership 响应保持 `permissions: string[]` 兼容现有调用方，并新�
 - 企业工作台审批详情与资产市场深链。
 - 发布、驳回、撤回和审计闭环。
 
+> **实施说明：** 在 M1 中与阶段 3 合并实施——统一审批投影、命令路由和审批收件箱同时覆盖采购和资产发布两类审批，不单独拆分里程碑。
+
 ### 阶段 5：项目导出审批
 
 - 项目导出申请状态机、合规证据和导出任务创建。
@@ -518,7 +530,7 @@ Membership 响应保持 `permissions: string[]` 兼容现有调用方，并新�
 
 - 企业审计索引、来源回查和数据范围过滤。
 - 故障降级、Outbox 告警、投影重建和端到端回归。
-- 旧静态页面、接口和本地主数据依赖清理。
+- 企业本地主数据写入冻结、旧静态页面、接口和本地主数据依赖清理。
 
 ## 16. 验收标准
 

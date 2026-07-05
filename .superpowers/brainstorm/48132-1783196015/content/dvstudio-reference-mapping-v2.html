@@ -1,0 +1,50 @@
+<h2>DVStudio 功能拆解与导演台借鉴映射</h2>
+<p class="subtitle">基于官方仓库与源码核查：借鉴编辑器内核，将“视频合成”改造为“单镜头 3D 预演”。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">DVStudio 已有能力</div>
+    <div class="mockup-body" style="padding:16px;background:#0f172a;color:#e2e8f0;min-height:390px">
+      <div style="display:grid;gap:9px">
+        <div style="padding:11px;border-radius:8px;background:#1e3a8a"><strong>AI 工作流蓝图</strong><br><small>文本 → 图片 → 视频 / 3D 模型 / 场景布局</small></div>
+        <div style="padding:11px;border-radius:8px;background:#312e81"><strong>视频动画编辑器</strong><br><small>FPS、总帧数、图层、关键帧、缓动曲线、音频波形</small></div>
+        <div style="padding:11px;border-radius:8px;background:#155e75"><strong>WebGL2 / Three.js 舞台</strong><br><small>实时渲染、选择、变换、GLTF 加载、场景预览</small></div>
+        <div style="padding:11px;border-radius:8px;background:#3f6212"><strong>3D 场景布局</strong><br><small>占位体、模型绑定、位置关系、灯光预览、尺度适配</small></div>
+        <div style="padding:11px;border-radius:8px;background:#7c2d12"><strong>外部引擎桥接</strong><br><small>结构化快照 → Unreal 插件 → 任务与结果回传</small></div>
+        <div style="padding:11px;border-radius:8px;background:#374151"><strong>本地资产与任务</strong><br><small>项目目录、SQLite、资源协议、导出任务、生成服务</small></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">我们的导演台吸收方式</div>
+    <div class="mockup-body" style="padding:16px;background:#08111f;color:#dbeafe;min-height:390px">
+      <div style="display:grid;gap:9px">
+        <div style="padding:11px;border-radius:8px;background:#1d4ed8"><strong>沿用节点入口</strong><br><small>分镜节点 → 导演台 → AI 视频生成节点</small></div>
+        <div style="padding:11px;border-radius:8px;background:#4338ca"><strong>改造为镜头时间线</strong><br><small>单 shot 时长、对象轨、动作片段轨、相机轨</small></div>
+        <div style="padding:11px;border-radius:8px;background:#0e7490"><strong>升级真实 3D 舞台</strong><br><small>Three.js 场景、角色、道具、相机、Gizmo、实时播放</small></div>
+        <div style="padding:11px;border-radius:8px;background:#4d7c0f"><strong>增加导演语义</strong><br><small>景别、运镜、注视、构图安全框、动作片段与过渡</small></div>
+        <div style="padding:11px;border-radius:8px;background:#7e22ce"><strong>Blender 替代 Unreal</strong><br><small>镜头快照 → Blender Worker → MP4 / 首尾帧 / 参数清单</small></div>
+        <div style="padding:11px;border-radius:8px;background:#065f46"><strong>平台化资产与任务</strong><br><small>对象存储 + 版本化资产 + 异步渲染任务 + 结果回流</small></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>保留与排除</h3>
+  <div class="pros-cons">
+    <div class="pros"><h4>直接借鉴</h4><ul><li>FPS / 总帧数 / 当前帧模型</li><li>关键帧与 Cubic Bézier 缓动</li><li>舞台与时间线可拖拽分屏</li><li>Three.js TransformControls / GLTF</li><li>不可变快照与外部引擎任务桥</li></ul></div>
+    <div class="cons"><h4>不直接照搬</h4><ul><li>2D 矩形、文字、线条图层</li><li>多轨视频剪辑与转场合成</li><li>Electron 本地文件协议和 SQLite</li><li>Unreal 专用插件协议</li><li>完整骨骼级专业动画器</li></ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>架构修订</h3>
+  <p><code>Shot Scene Schema</code> 成为编辑器核心。Web 时间线、Three.js 视口和 Blender Worker 都通过该协议交互。动作保存为“动作片段 + 入出点 + 混合时长”；对象与相机使用帧级关键帧和缓动曲线。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve-dvstudio-mapping" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可这个借鉴范围</h3><p>继续设计导演台界面与镜头时间线。</p></div></div>
+  <div class="option" data-choice="expand-dvstudio-mapping" onclick="toggleSelect(this)"><div class="letter">＋</div><div class="content"><h3>希望借鉴更多</h3><p>请说明还希望加入 DVStudio 的哪类能力。</p></div></div>
+</div>

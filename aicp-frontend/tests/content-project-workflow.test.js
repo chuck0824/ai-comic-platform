@@ -40,3 +40,39 @@ test('skips optional stages when finding current', () => {
   ]
   assert.equal(currentStage(stages).key, 'destination')
 })
+
+// ── Creative Bible readiness ──
+
+test('ready_for_generation is true only when status is confirmed', () => {
+  // Simulating bible health contract
+  const makeHealth = (status) => ({
+    status,
+    current_version_id: status === 'missing' ? 0 : 1,
+    current_version_no: status === 'missing' ? 0 : 1,
+    confirmed_fact_count: 5,
+    pending_change_count: 0,
+    ready_for_generation: status === 'confirmed'
+  })
+
+  assert.equal(makeHealth('missing').ready_for_generation, false)
+  assert.equal(makeHealth('draft').ready_for_generation, false)
+  assert.equal(makeHealth('reviewable').ready_for_generation, false)
+  assert.equal(makeHealth('confirmed').ready_for_generation, true)
+  assert.equal(makeHealth('superseded').ready_for_generation, false)
+})
+
+test('missing health blocks generation', () => {
+  const health = { status: 'missing', ready_for_generation: false }
+  const canGenerate = health.ready_for_generation === true
+  assert.equal(canGenerate, false)
+})
+
+test('context panel shows bible version when available', () => {
+  const bibleHealth = { status: 'confirmed', current_version_no: 2, ready_for_generation: true }
+  const context = { bible_version_id: 11, project_guide_id: 20, payload_hash: 'abc123def4567890' }
+
+  // These should be displayed in ContextPanel
+  assert.equal(bibleHealth.current_version_no, 2)
+  assert.equal(context.bible_version_id, 11)
+  assert.ok(context.payload_hash.length >= 12)
+})

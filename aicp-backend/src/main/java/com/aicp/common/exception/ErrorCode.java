@@ -96,6 +96,14 @@ public enum ErrorCode {
     XLSX_VALIDATION_FAILED(45010, "分镜工作簿校验失败"),
     STORYBOARD_JOB_CONFLICT(45011, "同类分镜任务正在运行"),
 
+    // SOP 生产准入 72xxx
+    SOP_RUN_NOT_FOUND(72001, "检查记录不存在"),
+    SOP_RUN_STALE(72002, "检查报告已过期，请重新执行检查"),
+    SOP_GATE_BLOCKED(72003, "生产准入 Gate 未通过"),
+    SOP_WORK_ORDER_CONFLICT(72004, "工单操作冲突"),
+    SOP_INVALID_TRANSITION(72005, "工单状态转换不允许"),
+    SOP_MODULE_DISABLED(72006, "SOP 模块未启用"),
+
     // 资产市场 48xxx
     ASSET_NOT_FOUND(48001, "资产不存在"),
     ASSET_PERMISSION_DENIED(48002, "无资产操作权限"),
@@ -115,7 +123,17 @@ public enum ErrorCode {
     ASSET_SETTLEMENT_FAILED(48016, "资产结算失败"),
     ASSET_COMPENSATION_EXHAUSTED(48017, "资产补偿已耗尽"),
     GENERATION_TASK_NOT_FOUND(46020, "生成任务不存在"),
-    GENERATION_TASK_STATE_CONFLICT(46021, "生成任务状态冲突");
+    GENERATION_TASK_STATE_CONFLICT(46021, "生成任务状态冲突"),
+
+    // Agent 配置中心 49xxx
+    AGENT_BLUEPRINT_NOT_FOUND(49020, "Agent基础框架不存在"),
+    AGENT_DEFINITION_NOT_FOUND(49021, "Agent定义不存在"),
+    AGENT_VERSION_NOT_FOUND(49022, "Agent版本不存在"),
+    AGENT_CONFIG_ACCESS_DENIED(49023, "无Agent配置权限"),
+    AGENT_CONFIG_INVALID(49024, "Agent配置校验失败"),
+    AGENT_VERSION_STATE_CONFLICT(49025, "Agent版本状态冲突"),
+    AGENT_BINDING_CONFLICT(49026, "Agent绑定版本冲突"),
+    AGENT_TEST_RUN_REQUIRED(49027, "发布前必须完成成功试跑");
 
     private final int code;
     private final String message;

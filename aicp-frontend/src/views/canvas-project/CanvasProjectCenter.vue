@@ -157,7 +157,7 @@ async function onCanvasCommand({ action, canvas }) {
 function onCreated(canvas) {
   showCreateDialog.value = false
   ElMessage.success('画布创建成功')
-  search()
+  router.push(`/canvas/${canvas.uuid}`)
 }
 
 onMounted(search)

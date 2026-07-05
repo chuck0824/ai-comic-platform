@@ -1,0 +1,85 @@
+<h2>剧本创作完整体系：业务域与控制能力</h2>
+<p class="subtitle">在完整架构基础上补齐领域边界、输入输出契约和横向控制面</p>
+
+<div class="mockup">
+  <div class="mockup-header">一、核心业务域地图</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    <div style="padding:14px;border:1px solid #64748b;border-radius:10px"><strong>D1 内容项目域</strong><p>模式、来源、平台、受众、生命周期、成员与当前工作位置。</p><small>产出：项目身份与工作流上下文</small></div>
+    <div style="padding:14px;border:2px solid #6366f1;border-radius:10px;background:#f5f3ff"><strong>D2 创作圣经域</strong><p>生态、人物、势力、地点、物品、关系、口径与事实版本。</p><small>产出：正式事实快照</small></div>
+    <div style="padding:14px;border:1px solid #38bdf8;border-radius:10px;background:#f0f9ff"><strong>D3 故事结构域</strong><p>故事种子、梗概、剧情任务、总纲、分卷、分集/分章大纲、钩子和伏笔。</p><small>产出：结构版本</small></div>
+    <div style="padding:14px;border:1px solid #3b82f6;border-radius:10px"><strong>D4 正文创作域</strong><p>单集/单章工作单元、草稿、AI 生成、人工修订、局部口径覆盖与采用版本。</p><small>产出：内容版本</small></div>
+    <div style="padding:14px;border:1px solid #fb7185;border-radius:10px;background:#fff1f2"><strong>D5 连续性与质量域</strong><p>事实冲突、关系跳变、知识越界、伏笔、时序、口径偏离和三智能体审校。</p><small>产出：问题清单与连续性快照</small></div>
+    <div style="padding:14px;border:1px solid #22c55e;border-radius:10px;background:#f0fdf4"><strong>D6 审核与锁稿域</strong><p>提交审核、退回、批准、风险放行、锁定/解锁及审计理由。</p><small>产出：锁稿内容契约</small></div>
+    <div style="padding:14px;border:1px solid #a78bfa;border-radius:10px;background:#faf5ff"><strong>D7 改编与 TVC 域</strong><p>源版本派生、模式化模板、品牌/产品/受众/卖点/禁区和分秒脚本。</p><small>产出：独立改编或 TVC 版本</small></div>
+    <div style="padding:14px;border:1px solid #8b5cf6;border-radius:10px"><strong>D8 分镜协同域</strong><p>分镜意向、A/B/C Master、升档、锁定、内容引用与生产准入。</p><small>产出：锁定分镜契约</small></div>
+    <div style="padding:14px;border:2px solid #f59e0b;border-radius:10px;background:#fffbeb"><strong>D9 画布交付契约域</strong><p>导入快照、差异报告、用户确认、画布状态投影与采用资产回执。</p><small>产出：不可变画布导入快照</small></div>
+    <div style="padding:14px;border:1px solid #64748b;border-radius:10px"><strong>D10 仓库与恢复域</strong><p>查询、筛选、最近创作、待办、归档、回收站、恢复和旧项目兼容。</p><small>产出：统一项目视图</small></div>
+    <div style="padding:14px;border:1px solid #14b8a6;border-radius:10px"><strong>D11 素材引用域</strong><p>角色/场景/道具/声音/风格资产引用，成熟度与版本绑定，不复制资产本体。</p><small>产出：资产引用清单</small></div>
+    <div style="padding:14px;border:1px solid #64748b;border-radius:10px"><strong>D12 商业与导出边界域</strong><p>上架准入、授权范围、导出清单、来源追溯；交易仍由独立市场域负责。</p><small>产出：商业准入与交付 Manifest</small></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">二、业务域主流向</div>
+  <div class="mockup-body">
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <span style="padding:8px 10px;background:#f1f5f9;border-radius:8px">D1 项目</span><b>→</b>
+      <span style="padding:8px 10px;background:#ede9fe;border-radius:8px">D2 圣经</span><b>→</b>
+      <span style="padding:8px 10px;background:#e0f2fe;border-radius:8px">D3 结构</span><b>→</b>
+      <span style="padding:8px 10px;background:#dbeafe;border-radius:8px">D4 正文</span><b>↔</b>
+      <span style="padding:8px 10px;background:#ffe4e6;border-radius:8px">D5 质量</span><b>→</b>
+      <span style="padding:8px 10px;background:#dcfce7;border-radius:8px">D6 锁稿</span><b>→</b>
+      <span style="padding:8px 10px;background:#f3e8ff;border-radius:8px">D7 改编/TVC 或 D8 分镜</span><b>→</b>
+      <span style="padding:8px 10px;background:#fef3c7;border-radius:8px">D9 画布契约</span>
+    </div>
+    <p style="margin-top:12px"><strong>旁路关系：</strong>D10 仓库聚合所有域的状态投影；D11 素材引用被圣经、分镜和画布契约消费；D12 只消费已锁定版本和授权信息，不反向修改创作事实。</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">三、横向控制能力（覆盖全部业务域）</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+    <div style="padding:12px;border-left:4px solid #6366f1;background:#f8fafc"><strong>C1 身份与权限</strong><p>项目归属、角色权限、字段/动作级授权、跨组织隔离。</p></div>
+    <div style="padding:12px;border-left:4px solid #6366f1;background:#f8fafc"><strong>C2 工作流与状态机</strong><p>阶段进入/退出条件、必选/可选任务、模式自适应和准入闸门。</p></div>
+    <div style="padding:12px;border-left:4px solid #6366f1;background:#f8fafc"><strong>C3 版本与来源追踪</strong><p>不可变版本、派生链、采用版本、参数/规则/Prompt/模型版本。</p></div>
+    <div style="padding:12px;border-left:4px solid #6366f1;background:#f8fafc"><strong>C4 上下文组装</strong><p>按阶段、集章、角色和 Token 预算裁剪，记录实际输入快照。</p></div>
+    <div style="padding:12px;border-left:4px solid #f59e0b;background:#fffbeb"><strong>C5 AI 任务编排</strong><p>幂等、排队、进度、取消、超时、重试、降级和失败透明。</p></div>
+    <div style="padding:12px;border-left:4px solid #f59e0b;background:#fffbeb"><strong>C6 人工确认与冲突合并</strong><p>候选区、证据、逐字段选择、批量确认、乐观锁与差异合并。</p></div>
+    <div style="padding:12px;border-left:4px solid #f59e0b;background:#fffbeb"><strong>C7 影响分析</strong><p>事实变更定位受影响结构、正文、关系、伏笔、分镜和画布快照。</p></div>
+    <div style="padding:12px;border-left:4px solid #ef4444;background:#fef2f2"><strong>C8 质量与生产准入</strong><p>硬阻断、软警告、风险放行；锁稿、分镜、画布和上架分别设闸门。</p></div>
+    <div style="padding:12px;border-left:4px solid #ef4444;background:#fef2f2"><strong>C9 安全与内容合规</strong><p>敏感内容、平台规则、版权声明、未成年人/品牌风险和规则版本。</p></div>
+    <div style="padding:12px;border-left:4px solid #10b981;background:#ecfdf5"><strong>C10 成本与额度</strong><p>生成前预估、确认扣费、实际结算、失败退款/不扣费和预算阈值。</p></div>
+    <div style="padding:12px;border-left:4px solid #10b981;background:#ecfdf5"><strong>C11 事件与状态投影</strong><p>域事件、Outbox、幂等消费、仓库/详情/画布状态最终一致。</p></div>
+    <div style="padding:12px;border-left:4px solid #10b981;background:#ecfdf5"><strong>C12 审计与可观测性</strong><p>操作日志、生成链路、错误码、指标、告警和用户可理解的失败原因。</p></div>
+    <div style="padding:12px;border-left:4px solid #64748b;background:#f8fafc"><strong>C13 配置与字典治理</strong><p>标签、关系类型、口径模板、平台规则、Schema 和生效时间版本化。</p></div>
+    <div style="padding:12px;border-left:4px solid #64748b;background:#f8fafc"><strong>C14 数据迁移与兼容</strong><p>旧 scripts 映射、双读校验、一次性回填、兼容 API 和回滚策略。</p></div>
+    <div style="padding:12px;border-left:4px solid #64748b;background:#f8fafc"><strong>C15 缓存与性能</strong><p>长篇分页、关系图增量加载、上下文缓存失效、异步分析和大项目限流。</p></div>
+    <div style="padding:12px;border-left:4px solid #64748b;background:#f8fafc"><strong>C16 数据保留与恢复</strong><p>软删除、归档、草稿恢复、任务重放、版本回退和导出备份。</p></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">四、关键控制矩阵</div>
+  <div class="mockup-body" style="overflow:auto">
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr><th style="text-align:left;padding:8px;border-bottom:1px solid #cbd5e1">业务动作</th><th>权限</th><th>版本</th><th>人工确认</th><th>质量闸门</th><th>影响分析</th><th>审计</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:8px">AI 提取生态/关系/口径</td><td>Editor</td><td>候选批次</td><td>必须</td><td>Schema/证据</td><td>应用时</td><td>完整</td></tr>
+        <tr><td style="padding:8px">修改正式事实</td><td>Editor</td><td>事实新版本</td><td>本人确认</td><td>冲突检查</td><td>必须</td><td>完整</td></tr>
+        <tr><td style="padding:8px">生成/重写正文</td><td>Editor</td><td>内容草稿版</td><td>采用时</td><td>一致性/口径</td><td>可选预览</td><td>任务链</td></tr>
+        <tr><td style="padding:8px">批准并锁稿</td><td>Reviewer</td><td>锁稿版</td><td>必须</td><td>硬闸门</td><td>必须</td><td>理由必填</td></tr>
+        <tr><td style="padding:8px">导入画布</td><td>Producer</td><td>导入快照</td><td>必须</td><td>生产准入</td><td>差异确认</td><td>完整</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h3>防止“功能缺失”的规格约束</h3>
+  <p>每个业务域在正式方案中必须具备：职责、实体、状态、输入、输出、权限、版本、异常、事件、API、页面入口、测试和验收标准。每个控制能力必须明确覆盖哪些域、阻断点和降级策略；没有这些内容的功能不得标记为完成。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="domains-controls-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>业务域与控制能力确认</h3><p>下一步展开创作台页面与交互结构</p></div></div>
+  <div class="option" data-choice="domains-controls-revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>仍需补充</h3><p>请指出遗漏的业务动作或治理要求</p></div></div>
+</div>

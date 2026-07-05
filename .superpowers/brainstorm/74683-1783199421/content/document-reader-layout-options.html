@@ -1,0 +1,39 @@
+<h2>选择长文阅读布局</h2>
+<p class="subtitle">同一份完整方案，不同的信息组织方式</p>
+
+<div class="cards">
+  <div class="card" data-choice="docs-site" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#f8fafc">
+      <div style="display:grid;grid-template-columns:150px 1fr 120px;gap:8px;height:250px">
+        <div style="background:#111827;color:#d1d5db;padding:12px;border-radius:8px;font-size:12px">搜索<br><br>01 结论<br>02 产品审计<br>03 冲突决策<br>04 核心模型<br>…<br>19 实施要求</div>
+        <div style="background:white;padding:14px;border:1px solid #e5e7eb;border-radius:8px;color:#334155"><strong style="font-size:18px">Canvas 生产内核</strong><p style="font-size:12px">阅读进度 · 章节锚点 · 表格与代码高亮</p><hr><p style="font-size:12px;line-height:1.8">适合持续阅读、查找和评审的文档站布局。</p></div>
+        <div style="font-size:11px;color:#64748b;padding:8px">本章目录<br><br>4.1 模式<br>4.2 工作单元<br>4.3 节点端口</div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · 文档站（推荐）</h3><p>左侧全文目录、中间正文、右侧本章目录；支持搜索、阅读进度、深色模式和返回顶部。</p></div>
+  </div>
+
+  <div class="card" data-choice="book" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#eee7dc">
+      <div style="max-width:430px;margin:auto;background:#fffdf8;padding:24px;height:202px;box-shadow:0 8px 24px #0002;color:#3f3a32"><strong style="font-family:serif;font-size:20px">Canvas 生产内核</strong><p style="font-family:serif;font-size:12px;line-height:2">沉浸式单栏排版，强调连续阅读与打印观感。</p><hr><p style="font-size:11px">上一章　　阅读进度 24%　　下一章</p></div>
+    </div>
+    <div class="card-body"><h3>B · 电子书</h3><p>单栏、宽行距、章节翻页，阅读舒适；但跨章节查找和技术评审效率较低。</p></div>
+  </div>
+
+  <div class="card" data-choice="review-cards" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#f5f7fb">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:10px;height:250px">
+        <div style="background:white;border-radius:10px;padding:14px;color:#334155"><strong>01 结论</strong><p style="font-size:11px">核心决策卡片</p></div>
+        <div style="background:white;border-radius:10px;padding:14px;color:#334155"><strong>02 审计</strong><p style="font-size:11px">问题与优先级</p></div>
+        <div style="background:white;border-radius:10px;padding:14px;color:#334155"><strong>03 冲突</strong><p style="font-size:11px">旧口径与最终决策</p></div>
+        <div style="background:white;border-radius:10px;padding:14px;color:#334155"><strong>04 模型</strong><p style="font-size:11px">领域对象图</p></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>C · 评审卡片</h3><p>章节卡片化，适合快速扫读；但 637 行全文会被过度切碎。</p></div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>推荐 A</h4><ul><li>最适合 19 章技术方案</li><li>表格、代码块和锚点可读性最好</li><li>便于研发、产品和测试共同评审</li></ul></div>
+  <div class="cons"><h4>实现范围</h4><ul><li>仅更新本地展示页</li><li>不修改已提交 Markdown</li><li>不引入项目运行时依赖</li></ul></div>
+</div>

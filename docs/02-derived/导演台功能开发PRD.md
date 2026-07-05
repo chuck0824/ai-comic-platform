@@ -1,5 +1,10 @@
 # 导演台功能开发 PRD
 
+> **[superpowers 更新 V1.7]（2026-07-04）**：
+> - **浮动编辑器入口**：画布浮动编辑器改造后，导演节点显示摘要卡片 +「打开导演台」按钮。导演台本身作为独立编辑器打开，不再嵌入右侧属性栏。详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
+> - **乐观锁 + 版本快照**：导演台状态保存补充 `row_version` 乐观锁（409 Conflict 冲突检测）和不可变快照（`capture screenshot` 时创建 `director_desk_snapshot` 记录）。详见跨域规范
+> - **Agent 配置中心**：导演 Agent 纳入 4 系统蓝图（DIRECTOR）。用户可自定义导演 Agent 参数（节奏偏好/视觉风格/可制作性标准）并通过项目绑定生效。详见 `docs/superpowers/specs/2026-07-04-user-configurable-agent-center-design.md`
+
 ## 1. 文档信息
 
 | 项目 | 内容 |
@@ -8,6 +13,9 @@
 | 功能模块 | 导演台 |
 | 文档类型 | 开发 PRD |
 | 目标版本 | V1.2 / 二期增强 |
+| 最后修订 | 2026-07-02（基于 superpowers 更新） |
+
+> **[superpowers 更新]**：导演节点在画布浮动编辑器中显示摘要 +「打开导演台」入口按钮（非在浮动编辑器内直接操作 3D 场景）。浮动编辑器改造详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
 | 优先级 | P1，MVP 内核心链路按 P0 执行 |
 | 目标读者 | 产品、交互、前端、3D/WebGL、后端、算法、测试 |
 | 输入依据 | `提取自LibTV使用指南(1).pdf` 中 2.4 导演台操作说明；现有画布、节点、资产、API 文档 |

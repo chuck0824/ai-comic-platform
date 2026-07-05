@@ -1,0 +1,63 @@
+<h2>第二部分：统一状态模型</h2>
+<p class="subtitle">一个 Task Case 聚合全过程；顶层统一，域内状态保持精确。</p>
+
+<div class="section">
+  <h3>统一顶层状态</h3>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+    <div class="placeholder">待处理</div><span>→</span>
+    <div class="placeholder">进行中</div><span>→</span>
+    <div class="placeholder">成功</div>
+    <div class="placeholder">失败</div>
+    <div class="placeholder">已取消</div>
+    <div class="placeholder" style="border-color:#ef4444">异常待处置</div>
+  </div>
+  <p>同时独立记录健康度：<strong>正常 / 有风险 / SLA 超时 / 数据不一致</strong>；“业务失败”和“系统异常”不混为一谈。</p>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">生成 Task Case</div>
+    <div class="mockup-body" style="padding:20px;line-height:2">
+      创建<br>↓<br>
+      积分预估与冻结<br>↓<br>
+      排队 → 模型执行<br>↓<br>
+      输出校验 → 资产入库 → 节点回写<br>↓<br>
+      实际费用结算 → <strong>成功</strong>
+      <hr>
+      任一阶段失败 → 释放冻结 / 退款<br>
+      结算或入库失败 → <strong>异常待补偿</strong>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">交易 Task Case</div>
+    <div class="mockup-body" style="padding:20px;line-height:2">
+      创建订单 / 企业审批<br>↓<br>
+      待支付 → 支付处理中 → 已支付<br>↓<br>
+      权益快照 → 内容交付<br>↓<br>
+      卖家资金冻结期 → <strong>结算完成</strong>
+      <hr>
+      退款申请 → 审核 → 原交易冲正<br>
+      支付、交付、账本不一致 → <strong>异常待对账</strong>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>每个 Task Case 必备信息</h3>
+  <p><strong>身份：</strong>case_uuid、domain、task_type、Workspace、创建人、关联项目/订单/资产。</p>
+  <p><strong>状态：</strong>summary_status、domain_stage、health_status、progress、current_owner、next_action。</p>
+  <p><strong>时间：</strong>创建、开始、最近事件、阶段截止、完成时间。</p>
+  <p><strong>财务：</strong>预估、冻结、实扣、退款/冲正、币种或积分、账本交易号。</p>
+  <p><strong>追踪：</strong>request_id、trace_id、idempotency_key、重试链、事件时间线。</p>
+</div>
+
+<div class="section">
+  <h3>关键规则</h3>
+  <ul>
+    <li>“支付成功但未交付”显示为进行中 + 数据不一致，不显示为支付失败。</li>
+    <li>“模型已出结果但资产入库失败”显示为异常待补偿，不提前标记生成成功。</li>
+    <li>重试创建新执行尝试并挂到原 Task Case，保留完整成本和失败记录。</li>
+    <li>所有状态来自事件序列，允许重放重建投影；晚到事件按版本号与发生时间处理。</li>
+  </ul>
+</div>

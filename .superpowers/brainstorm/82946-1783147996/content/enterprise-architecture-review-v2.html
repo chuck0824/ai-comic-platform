@@ -1,0 +1,59 @@
+<h2>企业工作台 · 架构一致性修正版</h2>
+<p class="subtitle">保留统一入口，但不让企业工作台成为新的业务事实源。它是 Workspace 级控制台、BFF 聚合层和命令路由入口。</p>
+
+<div class="mockup">
+  <div class="mockup-header"><strong>正确的数据与命令流</strong></div>
+  <div class="mockup-body">
+    <div style="text-align:center;border:2px solid #6366f1;border-radius:10px;padding:14px;margin-bottom:18px;background:#eef2ff">
+      <strong>企业工作台 UI</strong><br><span style="color:#52525b">工作区切换 · 角色化概览 · 统一审批入口 · 管理入口</span>
+    </div>
+    <div style="text-align:center;font-size:22px;margin:-8px 0 8px">↓</div>
+    <div style="text-align:center;border:2px solid #0f766e;border-radius:10px;padding:14px;margin-bottom:18px;background:#f0fdfa">
+      <strong>8080 Enterprise Workspace Facade</strong><br><span style="color:#52525b">聚合查询 · 权限化 allowed_actions · 错误转换 · 审计关联；不复制账户、余额或领域状态</span>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      <div style="border:1px solid #a5b4fc;border-radius:9px;padding:14px;background:#fafaff">
+        <div class="label">账户事实源</div><h3>3001 账户中心</h3>
+        <p>个人/企业 Workspace、部门、成员、角色权限、共享余额、AI 用量与成员限额。</p>
+        <p style="font-size:13px;color:#52525b">企业工作台经适配层读写，不落 8080 企业成员副本。</p>
+      </div>
+      <div style="border:1px solid #fdba74;border-radius:9px;padding:14px;background:#fffaf5">
+        <div class="label">业务事实源</div><h3>8080 各业务域</h3>
+        <p>交易域拥有采购申请；资产域拥有发布申请；项目/导出域拥有导出审核。</p>
+        <p style="font-size:13px;color:#52525b">企业工作台只聚合与回源命令，不直接改状态表。</p>
+      </div>
+      <div style="border:1px solid #86efac;border-radius:9px;padding:14px;background:#f7fff9">
+        <div class="label">过程投影</div><h3>任务事件中心</h3>
+        <p>生成、交易、费用、异常与时间线；向企业概览提供待办和执行态摘要。</p>
+        <p style="font-size:13px;color:#52525b">不替代领域状态机，不管理资产元数据。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>修正后的页面模块与数据来源</h3>
+  <div style="overflow:auto">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr style="text-align:left;background:#f4f4f5"><th style="padding:10px">页面</th><th style="padding:10px">数据/命令来源</th><th style="padding:10px">边界</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:10px;border-top:1px solid #e4e4e7"><b>企业概览</b></td><td style="padding:10px;border-top:1px solid #e4e4e7">3001 用量 + 任务投影 + 业务摘要</td><td style="padding:10px;border-top:1px solid #e4e4e7">只读聚合，可重建</td></tr>
+        <tr><td style="padding:10px;border-top:1px solid #e4e4e7"><b>统一审批</b></td><td style="padding:10px;border-top:1px solid #e4e4e7">交易 / 资产 / 导出审批适配器</td><td style="padding:10px;border-top:1px solid #e4e4e7">命令回源，审批不等于付款</td></tr>
+        <tr><td style="padding:10px;border-top:1px solid #e4e4e7"><b>组织与成员</b></td><td style="padding:10px;border-top:1px solid #e4e4e7">3001 Workspace API</td><td style="padding:10px;border-top:1px solid #e4e4e7">8080 不保存副本</td></tr>
+        <tr><td style="padding:10px;border-top:1px solid #e4e4e7"><b>预算与用量</b></td><td style="padding:10px;border-top:1px solid #e4e4e7">3001 余额/AI 限额；8080 采购审批策略</td><td style="padding:10px;border-top:1px solid #e4e4e7">预算不是第二个钱包</td></tr>
+        <tr><td style="padding:10px;border-top:1px solid #e4e4e7"><b>企业资产</b></td><td style="padding:10px;border-top:1px solid #e4e4e7">复用资产市场 Workspace 资产库</td><td style="padding:10px;border-top:1px solid #e4e4e7">工作台仅摘要和跳转</td></tr>
+        <tr><td style="padding:10px;border-top:1px solid #e4e4e7"><b>审计记录</b></td><td style="padding:10px;border-top:1px solid #e4e4e7">账户审计 + 各业务域审计关联</td><td style="padding:10px;border-top:1px solid #e4e4e7">统一查询，不覆盖原日志</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h3>本期上线顺序</h3>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div style="padding:12px;border-radius:9px;background:#eef2ff"><b>1. 工作区底座</b><br><small>列表、切换、成员权限</small></div>
+    <div style="padding:12px;border-radius:9px;background:#ecfeff"><b>2. 组织与概览</b><br><small>3001 BFF + 角色化首页</small></div>
+    <div style="padding:12px;border-radius:9px;background:#fff7ed"><b>3. 审批与预算</b><br><small>采购、资产；导出先补领域能力</small></div>
+    <div style="padding:12px;border-radius:9px;background:#f0fdf4"><b>4. 审计闭环</b><br><small>跨域关联、异常和验收</small></div>
+  </div>
+</div>

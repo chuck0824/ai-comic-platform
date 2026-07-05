@@ -1,0 +1,70 @@
+<h2>导演台 × Blender：三种落地路径</h2>
+<p class="subtitle">目标：按分镜时长制作单镜头，Web 端实时编辑位置、姿势片段和机位变化，Blender 输出供 AI 生图/生视频使用的控制参考。</p>
+
+<div class="cards">
+  <div class="card" data-choice="hybrid" onclick="toggleSelect(this)" style="border:2px solid #2563eb">
+    <div class="card-image" style="padding:18px;background:#0f172a;color:#e2e8f0;min-height:240px">
+      <div style="font-size:12px;color:#93c5fd;margin-bottom:10px">A · 推荐</div>
+      <div style="display:grid;gap:10px;text-align:center">
+        <div style="padding:10px;border-radius:8px;background:#1e293b">分镜镜头<br><small>时长 / 角色 / 场景 / 台词</small></div>
+        <div>↓</div>
+        <div style="padding:10px;border-radius:8px;background:#1d4ed8">Web 3D 导演台<br><small>Three.js 实时编排 + 关键帧时间线</small></div>
+        <div>↓ 提交镜头快照</div>
+        <div style="padding:10px;border-radius:8px;background:#7c3aed">Blender 渲染服务<br><small>资产装配 / 动作混合 / 相机动画 / 预演渲染</small></div>
+        <div>↓</div>
+        <div style="padding:10px;border-radius:8px;background:#065f46">AI 视频生成节点<br><small>预演视频 + 首尾帧 + 镜头参数</small></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>混合式镜头预演</h3>
+      <p>编辑零等待，渲染按需执行。Web 与 Blender 使用同一份镜头描述协议。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="web-only" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;background:#111827;color:#e5e7eb;min-height:240px">
+      <div style="font-size:12px;color:#fbbf24;margin-bottom:10px">B · 快速但能力有限</div>
+      <div style="display:grid;gap:16px;text-align:center;padding-top:30px">
+        <div style="padding:14px;border-radius:8px;background:#374151">Web 3D 导演台</div>
+        <div>↓ 浏览器直接导出</div>
+        <div style="padding:14px;border-radius:8px;background:#065f46">AI 视频生成节点</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>纯 Web 输出</h3>
+      <p>开发快，但动作、镜头一致性、批量渲染和后续 Blender 扩展受限。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="remote-blender" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:18px;background:#111827;color:#e5e7eb;min-height:240px">
+      <div style="font-size:12px;color:#f87171;margin-bottom:10px">C · 暂不建议</div>
+      <div style="display:grid;gap:16px;text-align:center;padding-top:30px">
+        <div style="padding:14px;border-radius:8px;background:#7c2d12">Web 操作面板</div>
+        <div>⇅ 高频同步 / 视频串流</div>
+        <div style="padding:14px;border-radius:8px;background:#7c3aed">常驻 Blender 实例</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>远程 Blender 操控</h3>
+      <p>画面最接近 Blender，但并发、延迟、实例隔离和成本明显更高。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:28px">
+  <h3>推荐方案中的单镜头时间线</h3>
+  <div class="mockup">
+    <div class="mockup-header">SHOT 03 · 6.0 秒 · 24 fps</div>
+    <div class="mockup-body" style="padding:16px;background:#0b1220;color:#cbd5e1">
+      <div style="display:grid;grid-template-columns:130px 1fr;gap:6px;align-items:center">
+        <strong>摄像机</strong><div style="height:28px;background:linear-gradient(90deg,#2563eb 0 35%,#1d4ed8 35% 100%);border-radius:5px;padding:5px 10px">固定　　→ 推近　　→ 微摇</div>
+        <strong>角色 A / 位置</strong><div style="height:28px;background:#1e293b;border-radius:5px;padding:5px 10px">●────────●────────●</div>
+        <strong>角色 A / 动作</strong><div style="height:28px;background:linear-gradient(90deg,#475569 0 28%,#0f766e 28% 78%,#7c3aed 78%);border-radius:5px;padding:5px 10px">站立　｜　行走　｜　回头</div>
+        <strong>角色 B / 动作</strong><div style="height:28px;background:#374151;border-radius:5px;padding:5px 10px">站立　　　　　　　　指向</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:18px">请点击你认可的路径；当前建议选择 A。</p>

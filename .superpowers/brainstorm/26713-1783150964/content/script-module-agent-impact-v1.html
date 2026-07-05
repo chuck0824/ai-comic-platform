@@ -1,0 +1,88 @@
+<h2>剧本创作模块：Agent 功能改造方案</h2>
+<p class="subtitle">剧本模块不再只调用固定 Prompt，而是成为“项目上下文 + 用户 Agent + 人工确认 + 内容版本”的协作工作台。</p>
+
+<div class="section">
+  <div class="label">一、改造后的完整创作链路</div>
+  <div class="mockup" style="margin-top:12px"><div class="mockup-body">
+    <div style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;text-align:center">
+      <span style="padding:11px;border:1px solid #334155;border-radius:8px">创作圣经<br><small>题材、人物、世界观、禁改项</small></span><strong>→</strong>
+      <span style="padding:11px;border:2px solid #6366f1;border-radius:8px">编剧 Agent<br><small>大纲 / 分集 / 正文初稿</small></span><strong>→</strong>
+      <span style="padding:11px;border:2px solid #6366f1;border-radius:8px">钩子 Agent<br><small>开场、反转、章尾、下集承诺</small></span><strong>→</strong>
+      <span style="padding:11px;border:2px solid #6366f1;border-radius:8px">导演 Agent<br><small>节奏、可视化、可拍性审核</small></span><strong>→</strong>
+      <span style="padding:11px;border:1px solid #334155;border-radius:8px">用户确认 Diff</span><strong>→</strong>
+      <span style="padding:11px;border:1px solid #334155;border-radius:8px">新剧本版本</span><strong>→</strong>
+      <span style="padding:11px;border:1px solid #334155;border-radius:8px">选择分镜 Agent</span>
+    </div>
+  </div></div>
+  <p>这里采用平台固定的协作顺序，不开放用户随意编排工具。用户可以跳过非必需审核，但任何正文修改都先预览、再确认。</p>
+</div>
+
+<div class="section">
+  <div class="label">二、需要新增的前端功能</div>
+  <div class="cards" style="margin-top:12px">
+    <div class="card"><div class="card-body"><h3>1. 项目 Agent 配置</h3><p>在剧本项目设置中选择默认编剧、钩子和导演 Agent；显示来源为系统默认、用户默认或项目覆盖，并可查看当前发布版本。</p></div></div>
+    <div class="card"><div class="card-body"><h3>2. 创作任务 Agent 选择器</h3><p>生成大纲、生成正文、重新下钩子、AI 修订、审核前可切换 Agent；支持单次临时参数，并可“另存为新 Agent”。</p></div></div>
+    <div class="card"><div class="card-body"><h3>3. Agent 协作侧栏</h3><p>展示当前角色、版本、读取的上下文、执行步骤、预计成本、输出摘要；不展示模型隐藏推理。</p></div></div>
+    <div class="card"><div class="card-body"><h3>4. 修订预览与逐段确认</h3><p>显示原文/建议稿 Diff、修改原因、影响范围；支持逐段接受、全部接受、拒绝和要求 Agent 重做。</p></div></div>
+    <div class="card"><div class="card-body"><h3>5. Agent 结果对比</h3><p>同一段内容可选择两个 Agent 或版本试跑，比较正文、钩子评分、导演评分、耗时与成本，再采用其中一个。</p></div></div>
+    <div class="card"><div class="card-body"><h3>6. 执行与来源记录</h3><p>每个内容版本显示由哪个 Agent、哪个版本、哪些临时参数产生，可打开执行快照并从该版本再次运行。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">三、现有剧本功能如何改造</div>
+  <div class="options" style="margin-top:12px">
+    <div class="option"><div class="letter">A</div><div class="content"><h3>项目创建与创作首页</h3><p>保留当前创作模式和源文本选择；新增“使用项目默认 Agent”摘要。高级用户可在创建后进入项目 Agent 设置，不在首屏堆叠完整 Prompt。</p></div></div>
+    <div class="option"><div class="letter">B</div><div class="content"><h3>故事圣经、设定与写作指南</h3><p>继续作为项目事实源。新增“Agent 可见范围”和锁定字段；Agent 能读取，但不能未经确认修改人物核心设定、世界观规则和已锁字段。</p></div></div>
+    <div class="option"><div class="letter">C</div><div class="content"><h3>大纲与分集生成</h3><p>由编剧 Agent 生成结构；钩子 Agent 补充每集开场、升级点、章尾和下一集承诺。生成结果携带两个 Agent 的版本快照。</p></div></div>
+    <div class="option"><div class="letter">D</div><div class="content"><h3>正文编辑器</h3><p>增加选中文本 AI 操作：润色、压缩、扩写、重写对白、增强冲突、增强钩子、按导演意见修订。输出统一走 Patch 预览，不直接覆盖正文。</p></div></div>
+    <div class="option"><div class="letter">E</div><div class="content"><h3>钩子面板</h3><p>从只展示分析结果升级为可操作工作台：选择钩子 Agent、锁定满意字段、单独重做某一类钩子、查看版本对比、将建议应用到正文。</p></div></div>
+    <div class="option"><div class="letter">F</div><div class="content"><h3>联合审核</h3><p>钩子和导演评审 Prompt、阈值及重点由各自 Agent 决定；总审核流程和输出 Schema 由平台锁定。审核问题可一键形成修订任务。</p></div></div>
+    <div class="option"><div class="letter">G</div><div class="content"><h3>版本与锁稿</h3><p>Agent 应用修改后立即创建新内容版本，记录 base_revision、Agent 快照和差异摘要；已锁版本不能原地修改，只能派生新草稿。</p></div></div>
+    <div class="option"><div class="letter">H</div><div class="content"><h3>进入分镜</h3><p>剧本审核通过后新增“选择分镜 Agent”步骤，将锁定剧本版本、创作圣经和导演意见作为只读输入，生成新的分镜版本。</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">四、典型任务与参与 Agent</div>
+  <div class="mockup" style="margin-top:12px"><div class="mockup-body">
+    <table style="width:100%;border-collapse:collapse">
+      <thead><tr><th style="text-align:left;padding:8px">用户操作</th><th style="text-align:left;padding:8px">主 Agent</th><th style="text-align:left;padding:8px">辅助 Agent</th><th style="text-align:left;padding:8px">产物</th></tr></thead>
+      <tbody>
+        <tr><td style="padding:8px;border-top:1px solid #334155">生成分集大纲</td><td>编剧</td><td>钩子</td><td>大纲草稿 + 每集钩子结构</td></tr>
+        <tr><td style="padding:8px;border-top:1px solid #334155">生成单集正文</td><td>编剧</td><td>钩子（可选）</td><td>正文草稿 + 钩子评分</td></tr>
+        <tr><td style="padding:8px;border-top:1px solid #334155">重新下钩子</td><td>钩子</td><td>编剧（应用时）</td><td>候选钩子 + 正文 Patch</td></tr>
+        <tr><td style="padding:8px;border-top:1px solid #334155">按意见修订</td><td>编剧</td><td>导演提供问题清单</td><td>逐段 Diff + 新正文版本</td></tr>
+        <tr><td style="padding:8px;border-top:1px solid #334155">锁稿前审核</td><td>导演</td><td>钩子</td><td>审核报告 + 可执行修订项</td></tr>
+      </tbody>
+    </table>
+  </div></div>
+</div>
+
+<div class="section">
+  <div class="label">五、后端与数据改造</div>
+  <div class="split" style="margin-top:12px">
+    <div class="mockup"><div class="mockup-header">替换硬编码 Prompt</div><div class="mockup-body"><ul>
+      <li>剧本生成与修订服务</li><li>钩子生成 / 分析服务</li><li>三 Agent 联合审核服务</li><li>内容生成执行器</li><li>旧版 ScriptGen 兼容链路</li>
+    </ul></div></div>
+    <div class="mockup"><div class="mockup-header">新增执行数据</div><div class="mockup-body"><ul>
+      <li>任务使用的 Agent 与发布版本</li><li>解析后的参数和 Prompt 哈希</li><li>项目上下文版本与内容 base_revision</li><li>预览 Patch、审批人与应用结果</li><li>模型、Token、成本、错误与重试</li>
+    </ul></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">六、首期不改造的剧本能力</div>
+  <p>仓库归档、交易市场、版权与授权、源文件上传格式本身保持现状；它们只需要继续引用最终内容版本。图片、视频、配音生成 Prompt 也不并入本期四类 Agent。</p>
+</div>
+
+<div class="section">
+  <div class="label">七、剧本模块验收标准</div>
+  <ul>
+    <li>用户能为同一剧本项目分别绑定编剧、钩子和导演 Agent。</li>
+    <li>大纲、正文、钩子、审核四类任务确实读取绑定版本，而不是代码内固定 Prompt。</li>
+    <li>任何 AI 正文修改都可预览、拒绝和逐段接受，不能静默覆盖。</li>
+    <li>内容版本可追溯到具体 Agent、版本、临时参数和项目上下文。</li>
+    <li>发布新版 Agent 不改变已有剧本版本；选择重跑后生成新版本。</li>
+  </ul>
+</div>

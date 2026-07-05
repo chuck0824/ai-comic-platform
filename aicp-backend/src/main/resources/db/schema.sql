@@ -96,6 +96,11 @@ CREATE TABLE scripts (
     source ENUM('ai_generated','purchased','uploaded') DEFAULT 'ai_generated' COMMENT '剧本来源',
     status ENUM('draft','pending_review','listed','sold','delisted') DEFAULT 'draft',
     current_version VARCHAR(20) DEFAULT 'v0.1',
+    maturity_level ENUM('L0','L1','L2','L3','L4') DEFAULT 'L0' COMMENT '资产成熟度',
+    plugin_pack JSON COMMENT '插件包配置',
+    rating DECIMAL(2,1) DEFAULT 0 COMMENT '评分1-5',
+    review_count INT DEFAULT 0 COMMENT '评论数',
+    sales_count INT DEFAULT 0 COMMENT '销量',
     is_deleted TINYINT DEFAULT 0 COMMENT '软删除标记',
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -265,58 +270,226 @@ CREATE TABLE asset_market_items (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='AI资产市场商品表';
 
 -- ============================================================
--- 9. 订单表
+-- 9. Script Trading Market (V6 — unified trade domain)
+-- All money in BIGINT cents. Currency is CNY.
 -- ============================================================
-CREATE TABLE orders (
+
+CREATE TABLE IF NOT EXISTS script_listings (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    order_no VARCHAR(32) NOT NULL UNIQUE COMMENT '订单号',
-    buyer_user_id BIGINT NOT NULL,
-    buyer_enterprise_id BIGINT COMMENT '买家企业',
+    workspace_id VARCHAR(64) NOT NULL,
     seller_user_id BIGINT NOT NULL,
     script_id BIGINT NOT NULL,
-    license_type ENUM('normal','exclusive','buyout') NOT NULL COMMENT '授权类型',
-    amount DECIMAL(10,2) NOT NULL COMMENT '订单金额',
-    platform_fee DECIMAL(10,2) DEFAULT 0 COMMENT '平台手续费',
-    seller_income DECIMAL(10,2) DEFAULT 0 COMMENT '卖家收入',
-    status ENUM('pending','paid','completed','refunded','cancelled') DEFAULT 'pending',
-    payment_method ENUM('wechat','alipay') COMMENT '支付方式',
-    paid_at DATETIME,
-    expire_at DATETIME COMMENT '订单过期时间(15分钟)',
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (buyer_user_id) REFERENCES users(id),
-    FOREIGN KEY (seller_user_id) REFERENCES users(id),
-    FOREIGN KEY (script_id) REFERENCES scripts(id),
-    INDEX idx_order_no (order_no),
-    INDEX idx_buyer (buyer_user_id),
-    INDEX idx_seller (seller_user_id),
-    INDEX idx_status (status),
-    INDEX idx_buyer_status (buyer_user_id, status)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单表';
-
--- ============================================================
--- 10. 企业采购申请表
--- ============================================================
-CREATE TABLE enterprise_purchase_requests (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    enterprise_id BIGINT NOT NULL,
-    requester_user_id BIGINT NOT NULL COMMENT '申请人',
-    script_id BIGINT NOT NULL,
-    license_type ENUM('normal','exclusive','buyout') NOT NULL,
-    amount DECIMAL(10,2) NOT NULL,
-    reason VARCHAR(500) COMMENT '申请理由',
-    budget_remaining DECIMAL(10,2) COMMENT '采购后剩余预算',
-    status ENUM('pending','approved','rejected','cancelled') DEFAULT 'pending',
-    approver_user_id BIGINT COMMENT '审批人',
-    approval_note VARCHAR(500) COMMENT '审批意见',
+    script_version_id BIGINT NOT NULL,
+    title VARCHAR(200) NOT NULL,
+    synopsis VARCHAR(5000),
+    cover_url VARCHAR(500),
+    tags_json JSON,
+    characters_json JSON,
+    episode_count INT DEFAULT 0,
+    author_display_name VARCHAR(100),
+    preview_episode_count INT NOT NULL DEFAULT 1,
+    preview_episodes_json JSON,
+    review_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    review_reason VARCHAR(2000),
+    reviewed_by BIGINT,
+    reviewed_at DATETIME NULL,
+    listing_status VARCHAR(20) NOT NULL DEFAULT 'DRAFT',
+    exclusive_license_type VARCHAR(10) NULL,
+    historical_normal_count INT NOT NULL DEFAULT 0,
+    reserved_order_no VARCHAR(32) NULL,
+    reservation_expires_at DATETIME NULL,
+    row_version INT NOT NULL DEFAULT 0,
+    listed_at DATETIME NULL,
+    delisted_at DATETIME NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    FOREIGN KEY (enterprise_id) REFERENCES enterprises(id),
-    FOREIGN KEY (requester_user_id) REFERENCES users(id),
-    FOREIGN KEY (script_id) REFERENCES scripts(id),
-    FOREIGN KEY (approver_user_id) REFERENCES users(id),
-    INDEX idx_enterprise_status (enterprise_id, status),
-    INDEX idx_requester (requester_user_id)
+    INDEX idx_listings_status (listing_status),
+    INDEX idx_listings_workspace (workspace_id),
+    INDEX idx_listings_updated (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='剧本上架表';
+
+CREATE TABLE IF NOT EXISTS listing_license_options (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    listing_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    price_cents BIGINT NOT NULL DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    term_json JSON,
+    agreement_text TEXT,
+    agreement_version VARCHAR(20),
+    agreement_hash VARCHAR(64),
+    enabled TINYINT NOT NULL DEFAULT 1,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_license_listing_type (listing_id, license_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='授权选项表';
+
+CREATE TABLE IF NOT EXISTS trade_orders (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL,
+    status VARCHAR(24) NOT NULL DEFAULT 'PENDING_PAYMENT',
+    buyer_user_id BIGINT NOT NULL,
+    buyer_workspace_id VARCHAR(64) NOT NULL,
+    buyer_workspace_type VARCHAR(16) NOT NULL DEFAULT 'PERSONAL',
+    seller_user_id BIGINT NOT NULL,
+    seller_workspace_id VARCHAR(64) NOT NULL,
+    total_amount_cents BIGINT NOT NULL DEFAULT 0,
+    platform_fee_cents BIGINT NOT NULL DEFAULT 0,
+    seller_income_cents BIGINT NOT NULL DEFAULT 0,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    wallet_transfer_no VARCHAR(64) NULL,
+    wallet_status VARCHAR(20) NULL,
+    create_idempotency_key VARCHAR(128) NOT NULL,
+    expires_at DATETIME NULL,
+    paid_at DATETIME NULL,
+    fulfilled_at DATETIME NULL,
+    completed_at DATETIME NULL,
+    refunded_at DATETIME NULL,
+    row_version INT NOT NULL DEFAULT 0,
+    failure_reason VARCHAR(2000),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_trade_order_no (order_no),
+    UNIQUE KEY uk_trade_order_idempotent (buyer_workspace_id, create_idempotency_key),
+    INDEX idx_trade_orders_buyer (buyer_user_id, buyer_workspace_id),
+    INDEX idx_trade_orders_seller (seller_user_id),
+    INDEX idx_trade_orders_status (status),
+    INDEX idx_trade_orders_updated (updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易订单表';
+
+CREATE TABLE IF NOT EXISTS trade_order_items (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_id BIGINT NOT NULL,
+    listing_id BIGINT NOT NULL,
+    script_id BIGINT NOT NULL,
+    script_version_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    price_cents BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    title_snapshot VARCHAR(200),
+    author_snapshot VARCHAR(100),
+    tags_snapshot JSON,
+    agreement_text TEXT,
+    agreement_version VARCHAR(20),
+    agreement_hash VARCHAR(64),
+    historical_normal_count INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_order_item (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='订单项表';
+
+CREATE TABLE IF NOT EXISTS script_entitlements (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL,
+    beneficiary_workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL,
+    script_version_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    effective_from DATETIME DEFAULT CURRENT_TIMESTAMP,
+    effective_until DATETIME NULL,
+    max_accounts INT NULL,
+    allow_commercial TINYINT NOT NULL DEFAULT 0,
+    allow_adaptation TINYINT NOT NULL DEFAULT 0,
+    allow_sublicense TINYINT NOT NULL DEFAULT 0,
+    territory_restriction VARCHAR(200),
+    revoked_at DATETIME NULL,
+    revoke_reason VARCHAR(2000),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_entitlement_order_item (order_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='授权凭证表';
+
+CREATE TABLE IF NOT EXISTS purchased_script_copies (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_item_id BIGINT NOT NULL,
+    workspace_id VARCHAR(64) NOT NULL,
+    listing_id BIGINT NOT NULL,
+    source_version_id BIGINT NOT NULL,
+    content_json JSON,
+    title VARCHAR(200),
+    created_by_user_id BIGINT NOT NULL,
+    source_listing_id BIGINT,
+    source_author_name VARCHAR(100),
+    status VARCHAR(20) NOT NULL DEFAULT 'AVAILABLE',
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_copy_order_item (order_item_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='已购剧本副本表';
+
+CREATE TABLE IF NOT EXISTS purchase_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    workspace_id VARCHAR(64) NOT NULL,
+    requester_user_id BIGINT NOT NULL,
+    listing_id BIGINT NOT NULL,
+    license_type VARCHAR(10) NOT NULL,
+    amount_cents BIGINT NOT NULL,
+    currency VARCHAR(3) NOT NULL DEFAULT 'CNY',
+    reason VARCHAR(2000),
+    approver_user_id BIGINT NULL,
+    approval_comment VARCHAR(2000),
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING_APPROVAL',
+    order_no VARCHAR(32) NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_pr_workspace_status (workspace_id, status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='企业采购申请表';
+
+CREATE TABLE IF NOT EXISTS refund_requests (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    order_no VARCHAR(32) NOT NULL,
+    requester_user_id BIGINT NOT NULL,
+    reason_code VARCHAR(30),
+    reason_text VARCHAR(2000),
+    evidence_json JSON,
+    status VARCHAR(20) NOT NULL DEFAULT 'REQUESTED',
+    reviewer_user_id BIGINT NULL,
+    review_comment VARCHAR(2000),
+    reviewed_at DATETIME NULL,
+    refund_amount_cents BIGINT,
+    wallet_reversal_no VARCHAR(64),
+    row_version INT NOT NULL DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_rf_order (order_no),
+    INDEX idx_rf_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='退款申请表';
+
+CREATE TABLE IF NOT EXISTS trade_outbox_events (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    aggregate_type VARCHAR(50) NOT NULL,
+    aggregate_id VARCHAR(64) NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    payload JSON,
+    idempotency_key VARCHAR(128) NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    retry_count INT NOT NULL DEFAULT 0,
+    max_retries INT NOT NULL DEFAULT 10,
+    next_retry_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    last_error VARCHAR(2000),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_outbox_idempotent (aggregate_type, aggregate_id, event_type, idempotency_key),
+    INDEX idx_outbox_dispatch (status, next_retry_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易Outbox事件表';
+
+CREATE TABLE IF NOT EXISTS trade_audit_logs (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    actor_user_id BIGINT,
+    workspace_id VARCHAR(64),
+    action VARCHAR(50) NOT NULL,
+    target_type VARCHAR(50) NOT NULL,
+    target_id VARCHAR(64) NOT NULL,
+    before_summary VARCHAR(2000),
+    after_summary VARCHAR(2000),
+    correlation_id VARCHAR(64),
+    client_ip VARCHAR(45),
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_audit_target (target_type, target_id),
+    INDEX idx_audit_actor (actor_user_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易审计日志表';
 
 -- ============================================================
 -- 11. 画布项目表
@@ -545,16 +718,31 @@ VALUES
 ('usr_b2c3d4e5f6a1', '13800000002', 'buyer@aicp.com', '漫剧达人',
  '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'personal', 'free', 'unverified');
 
--- 测试剧本
-INSERT INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, episode_count, total_words, synopsis,
-  genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version)
-VALUES
-('scr_abc123def456', 'PROJ_DOMINEERING_PRESIDENT', '霸道总裁的替身新娘', 1, 1, 40, 58000,
- '她是被家族抛弃的私生女，意外成为权势滔天的商业帝王唯一在意的女人…',
- '言情', '["重生", "先婚后爱"]', '["甜宠", "打脸", "爽文"]', '现代', 'ai_generated', 'draft', 'v0.1'),
-('scr_def456abc123', 'PROJ_REBIRTH_EMPIRE', '重生之商业帝国', 1, 2, 80, 120000,
- '商业大亨被害身亡，重生回到20年前，这一世他要改写一切…',
- '言情', '["重生", "权谋"]', '["爽文", "逆袭"]', '现代', 'ai_generated', 'listed', 'v1.0');
+-- 测试剧本 (幂等: INSERT IGNORE, 覆盖5种状态 × 4种题材)
+INSERT IGNORE INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+VALUES ('scr-demo-001', 'PROJ_DEMO_001', '暗夜追光者', 1, 1, 'personal', 60, 60, 95000,
+        '前刑警队长林深为追查妹妹失踪真相，卧底进入神秘组织"暗夜"。在正义与黑暗的边缘，他发现了一个惊天秘密…',
+        '悬疑', '["卧底","复仇","悬疑"]', '["紧张","反转","暗黑"]', '现代', 'ai_generated', 'listed', 'v2.0', 'L2', 4.7, 128, 45);
+
+INSERT IGNORE INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+VALUES ('scr-demo-002', 'PROJ_DEMO_002', '星海迷航', 2, 2, 'personal', 80, 45, 72000,
+        '公元2250年，人类星际移民船团在深空遭遇未知文明。年轻的领航员苏瑾被迫在人类存亡与外星文明之间做出抉择…',
+        '科幻', '["星际","文明冲突","冒险"]', '["宏大","紧张","感人"]', '未来', 'ai_generated', 'listed', 'v1.5', 'L1', 4.4, 89, 32);
+
+INSERT IGNORE INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+VALUES ('scr-demo-003', 'PROJ_DEMO_003', '长安十二时辰之幻术师', 1, 1, 'personal', 40, 40, 68000,
+        '盛唐长安，天才幻术师白鹤在朱雀大街摆摊卖艺，却卷入了一场涉及皇室秘宝的惊天阴谋。真幻交织，谁才是幕后黑手？',
+        '奇幻', '["古装","探案","玄幻"]', '["奇幻","紧张","史诗"]', '古代', 'ai_generated', 'listed', 'v1.0', 'L1', 4.9, 256, 98);
+
+INSERT IGNORE INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+VALUES ('scr-demo-004', 'PROJ_DEMO_004', '校园奇妙物语', 2, 2, 'personal', 24, 24, 35000,
+        '平凡高中生在校园角落发现一扇通往"里世界"的门，与同伴们一起在表里世界之间守护日常的奇妙冒险。',
+        '奇幻', '["校园","冒险","青春"]', '["轻松","治愈","搞笑"]', '现代', 'ai_generated', 'draft', 'v0.5', 'L0', 3.8, 15, 0);
+
+INSERT IGNORE INTO scripts (uuid, project_id, title, author_user_id, owner_user_id, owner_type, episode_count, completed_episodes, total_words, synopsis, genre_tag, plot_tags, tone_tags, setting_tag, source, status, current_version, maturity_level, rating, review_count, sales_count)
+VALUES ('scr-demo-005', 'PROJ_DEMO_005', '锦绣未央之医女倾城', 1, 1, 'personal', 52, 30, 58000,
+        '现代女医生穿越古代成为落魄医女，凭借精湛医术与智慧在乱世中立足，收获爱情与事业的双重逆袭。',
+        '言情', '["穿越","医术","逆袭"]', '["甜宠","励志","虐心"]', '古代', 'ai_generated', 'pending_review', 'v0.8', 'L1', 4.2, 42, 12);
 
 -- 测试资产
 INSERT INTO assets (asset_id, asset_type, name, owner_user_id, maturity_level, is_locked,
@@ -578,11 +766,11 @@ VALUES
  '{"contentVersionId":1,"storyboardVersionId":1,"platformRuleVersion":"v1","aspectRatio":"9:16","resolution":"1080p","fps":25}',
  'official', 'migrated:canvas_a1b2c3', 0, 0);
 
--- 测试订单
-INSERT INTO orders (order_no, buyer_user_id, seller_user_id, script_id, license_type,
-  amount, platform_fee, seller_income, status, payment_method, paid_at)
+-- 测试订单 (V6 schema)
+INSERT INTO trade_orders (order_no, buyer_user_id, buyer_workspace_id, seller_user_id, seller_workspace_id,
+  total_amount_cents, platform_fee_cents, seller_income_cents, status, create_idempotency_key, paid_at)
 VALUES
-('ORD20260608153000001', 2, 1, 2, 'normal', 29.90, 5.98, 23.92, 'paid', 'wechat', '2026-06-08 15:32:00');
+('ORD20260608153000001', 2, 'ws_personal_2', 1, 'ws_personal_1', 2990, 598, 2392, 'FULFILLED', 'seed-ord-001', '2026-06-08 15:32:00');
 
 -- 测试通知偏好
 INSERT INTO notification_preferences (user_id, preferences) VALUES
@@ -612,6 +800,8 @@ CREATE TABLE IF NOT EXISTS content_projects (
     legacy_script_id BIGINT,
     converted_from_project_id BIGINT,
     copied_from_project_id BIGINT,
+    lifecycle_status VARCHAR(20) NOT NULL DEFAULT 'active',
+    adopted_version_id BIGINT,
     revision INT NOT NULL DEFAULT 0,
     is_deleted TINYINT NOT NULL DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -726,6 +916,8 @@ CREATE TABLE IF NOT EXISTS outbox_events (
 
 CREATE INDEX IF NOT EXISTS idx_cp_tenant_updated ON content_projects(tenant_type, tenant_id, updated_at);
 CREATE INDEX IF NOT EXISTS idx_cp_owner_updated ON content_projects(owner_user_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_cp_owner_lifecycle_updated ON content_projects(owner_user_id, lifecycle_status, updated_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uk_cp_legacy_script ON content_projects(legacy_script_id);
 CREATE INDEX IF NOT EXISTS idx_pm_user_project ON project_members(user_id, project_id);
 CREATE INDEX IF NOT EXISTS idx_cu_project_display ON content_units(project_id, display_no);
 CREATE INDEX IF NOT EXISTS idx_cv_project_created ON content_versions(project_id, created_at);
@@ -941,3 +1133,81 @@ CREATE TABLE IF NOT EXISTS plugin_packs (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_plugin_pack_version UNIQUE (storyboard_master_id, version_no)
 );
+
+-- ============================================================
+-- P0 创作圣经基础表
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS creative_bible_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    version_no INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    source_version_id BIGINT NULL,
+    summary VARCHAR(500) NULL,
+    snapshot_json JSON NOT NULL,
+    snapshot_hash VARCHAR(64) NULL,
+    confirmed_by BIGINT NULL,
+    confirmed_at TIMESTAMP NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_cbv_project_version UNIQUE (project_id, version_no)
+);
+
+CREATE TABLE IF NOT EXISTS ecosystem_rules (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    bible_version_id BIGINT NOT NULL,
+    rule_type VARCHAR(40) NOT NULL,
+    name VARCHAR(200) NOT NULL,
+    summary TEXT NULL,
+    details_json JSON NULL,
+    scope_json JSON NULL,
+    exceptions_json JSON NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    source_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+    evidence_json JSON NULL,
+    revision INT NOT NULL DEFAULT 0,
+    created_by BIGINT NOT NULL,
+    updated_by BIGINT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_eco_project_bible ON ecosystem_rules(project_id, bible_version_id);
+
+CREATE TABLE IF NOT EXISTS project_writing_guides (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    bible_version_id BIGINT NOT NULL,
+    scope_type VARCHAR(20) NOT NULL,
+    scope_id BIGINT NOT NULL DEFAULT 0,
+    version_no INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    guide_json JSON NOT NULL,
+    parent_guide_id BIGINT NULL,
+    source_type VARCHAR(20) NOT NULL DEFAULT 'manual',
+    confirmed_by BIGINT NULL,
+    confirmed_at TIMESTAMP NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_pwg_scope_version UNIQUE
+        (project_id, bible_version_id, scope_type, scope_id, version_no)
+);
+CREATE INDEX IF NOT EXISTS idx_pwg_project_scope ON project_writing_guides(project_id, scope_type, scope_id);
+
+CREATE TABLE IF NOT EXISTS generation_context_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    generation_job_id BIGINT NOT NULL,
+    project_id BIGINT NOT NULL,
+    bible_version_id BIGINT NOT NULL,
+    project_guide_id BIGINT NULL,
+    character_guide_ids_json JSON NULL,
+    unit_guide_id BIGINT NULL,
+    selected_versions_json JSON NOT NULL,
+    resolved_guide_json JSON NOT NULL,
+    payload_json JSON NOT NULL,
+    payload_hash VARCHAR(64) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_gcs_job UNIQUE (generation_job_id)
+);
+CREATE INDEX IF NOT EXISTS idx_gcs_project ON generation_context_snapshots(project_id);

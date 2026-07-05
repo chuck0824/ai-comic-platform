@@ -1,0 +1,62 @@
+<h2>Canvas 一体化导演台：从分镜意图到 Seedance 镜头</h2>
+<p class="subtitle">导演台是画布中的“单镜头导演控制节点”，负责把文字和资产转换为可执行的表演、调度、摄影与时间约束。</p>
+
+<div class="mockup">
+  <div class="mockup-header">Canvas 生产链路</div>
+  <div class="mockup-body" style="padding:20px;background:#08111f;color:#dbeafe;overflow:auto">
+    <div style="display:flex;gap:12px;align-items:center;min-width:1060px;text-align:center">
+      <div style="width:160px;padding:16px;border-radius:10px;background:#1e293b"><strong>分镜节点</strong><br><small>shot_id · 时长<br>台词 · 动作意图</small></div>
+      <div style="font-size:24px">→</div>
+      <div style="width:160px;padding:16px;border-radius:10px;background:#164e63"><strong>角色/场景资产</strong><br><small>身份图 · 服装<br>道具 · 场景基准</small></div>
+      <div style="font-size:24px">→</div>
+      <div style="width:220px;padding:20px;border:3px solid #60a5fa;border-radius:12px;background:#1e3a8a"><strong>导演台节点</strong><br><small>场面调度 · 动作节拍<br>镜头/焦段 · 构图<br>关键帧时间线</small></div>
+      <div style="font-size:24px">→</div>
+      <div style="width:180px;padding:16px;border-radius:10px;background:#5b21b6"><strong>镜头控制包</strong><br><small>首尾帧 · 参考视频<br>时间码 Prompt · Manifest</small></div>
+      <div style="font-size:24px">→</div>
+      <div style="width:180px;padding:16px;border-radius:10px;background:#065f46"><strong>Seedance 2.0</strong><br><small>生成候选视频<br>任务/成本/版本</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>导演台节点的输入与输出</h3>
+  <div class="split">
+    <div class="pros"><h4>输入端口</h4><ul><li>分镜：镜头编号、时长、台词、动作描述</li><li>角色：身份、服装、比例、连续性版本</li><li>场景/道具：空间尺寸、位置关系、材质参考</li><li>参考：构图图、动作视频、运镜视频、对白音频</li><li>创作圣经：视觉风格、禁用项、连续性规则</li></ul></div>
+    <div class="pros"><h4>输出端口</h4><ul><li>首帧、尾帧、关键节拍帧</li><li>相机运动低模预演视频</li><li>角色动作与交互参考视频</li><li>时间码导演脚本与负向约束</li><li>Seedance 引用绑定清单与不可变快照</li></ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>更接近真实影视创作的五层控制</h3>
+  <div class="cards">
+    <div class="card"><div class="card-body"><h3>1. 场面调度 Blocking</h3><p>角色入画、出画、站位、朝向、视线、人与道具的接触关系。</p></div></div>
+    <div class="card"><div class="card-body"><h3>2. 表演节拍 Performance</h3><p>动作片段、停顿、反应、回头、指向等按时间排列，并设置过渡时长。</p></div></div>
+    <div class="card"><div class="card-body"><h3>3. 摄影设计 Cinematography</h3><p>景别、机位、焦段、相机高度、注视目标、推拉摇移和运动速度。</p></div></div>
+    <div class="card"><div class="card-body"><h3>4. 连续性 Continuity</h3><p>锁定轴线、视线方向、出入画方向、角色服装、道具状态和光线方向。</p></div></div>
+    <div class="card"><div class="card-body"><h3>5. 模型约束 Model Control</h3><p>把导演决策编译为 Seedance 可理解的图、视频、音频与时间码文本。</p></div></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">导演台节点卡片（画布态）</div>
+  <div class="mockup-body" style="padding:16px;background:#0f172a;color:#e2e8f0">
+    <div style="max-width:560px;margin:auto;border:2px solid #3b82f6;border-radius:12px;overflow:hidden">
+      <div style="display:flex;justify-content:space-between;padding:12px 14px;background:#172554"><strong>导演台 · SHOT 03</strong><span>6.0s / 24fps</span></div>
+      <div style="padding:16px;display:grid;grid-template-columns:180px 1fr;gap:14px">
+        <div style="height:105px;border-radius:7px;background:linear-gradient(135deg,#334155,#111827);display:flex;align-items:center;justify-content:center">最近预演缩略图</div>
+        <div><div>角色 2　机位 1　动作片段 4</div><div style="margin-top:8px">控制包：<span style="color:#86efac">检查通过</span></div><div style="margin-top:8px">Seedance 候选：3</div><button class="mock-button" style="margin-top:12px">打开导演台</button></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;padding:9px 14px;border-top:1px solid #334155"><small>输入：分镜 / 角色 / 场景 / 音频</small><small>输出：镜头控制包</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:22px">
+  <h3>明确不做</h3>
+  <p>导演台不承担多镜头剪辑、转场、混音或最终成片合成；这些会破坏现有 Canvas 的节点职责。一个导演台节点只控制一个 shot，多镜头组织仍由分镜节点和画布连接关系负责。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve-canvas-director" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可此产品定位</h3><p>继续确认导演台内部界面与时间线。</p></div></div>
+  <div class="option" data-choice="revise-canvas-director" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请说明导演台与 Canvas 或 Seedance 的职责需要怎样变化。</p></div></div>
+</div>

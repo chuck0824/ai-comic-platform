@@ -1,0 +1,71 @@
+<h2>设计确认 1/4：资产工作台信息架构</h2>
+<p class="subtitle">核心规则：资产首先属于某个剧本/项目，再按业务资产类型管理；任务状态直接呈现在对应资产槽位中。</p>
+
+<div class="mockup">
+  <div class="mockup-header">资产生成历史 · 工作台</div>
+  <div class="mockup-body" style="background:#0f172a;color:#cbd5e1;padding:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div><b style="font-size:18px">资产工作台</b>　<span style="color:#94a3b8">我的资产｜团队资产</span></div>
+      <div><span style="background:#1e293b;padding:6px 12px;border-radius:5px">搜索全部资产</span>　<span style="background:#4f46e5;padding:6px 12px;border-radius:5px">批量操作</span></div>
+    </div>
+    <div style="display:grid;grid-template-columns:170px 1fr 225px;gap:10px;min-height:410px">
+      <aside style="background:#111827;border-radius:7px;padding:10px">
+        <b>剧本 / 项目</b>
+        <div style="margin-top:10px;line-height:2.25">
+          <div style="background:#312e81;padding:0 7px;border-radius:4px">暗夜追凶 <small>42</small></div>
+          <div style="padding:0 7px">长安幻术师 <small>31</small></div>
+          <div style="padding:0 7px">赛博山海 <small>18</small></div>
+          <div style="padding:0 7px;color:#fbbf24">未归档资产 <small>7</small></div>
+          <div style="border-top:1px solid #334155;margin-top:8px;padding:7px">收藏　12</div>
+          <div style="padding:0 7px">已发布　9</div>
+          <div style="padding:0 7px">回收站　3</div>
+        </div>
+      </aside>
+
+      <main>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:9px">
+          <span style="background:#4f46e5;padding:5px 9px;border-radius:4px">全部 42</span>
+          <span style="background:#1e293b;padding:5px 9px;border-radius:4px">角色 8</span>
+          <span style="background:#1e293b;padding:5px 9px;border-radius:4px">场景 12</span>
+          <span style="background:#1e293b;padding:5px 9px;border-radius:4px">道具 5</span>
+          <span style="background:#1e293b;padding:5px 9px;border-radius:4px">分镜 10</span>
+          <span style="background:#1e293b;padding:5px 9px;border-radius:4px">配音 4</span>
+          <span style="background:#1e293b;padding:5px 9px;border-radius:4px">音乐 3</span>
+        </div>
+        <div style="background:#1e293b;padding:7px;border-radius:5px;margin-bottom:9px;color:#94a3b8">状态　模型　创建人　时间范围　标签　　　　　　　　　排序：最近更新</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">
+          <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:75px;background:#334155;border-radius:4px"></div><b style="font-size:12px">夜王角色立绘</b><br><small>角色 · 已完成</small></div>
+          <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:75px;background:#312e81;border-radius:4px;display:grid;place-items:center">生成中 62%</div><b style="font-size:12px">码头追逐镜头</b><br><small>分镜 · 可取消</small></div>
+          <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:75px;background:#7f1d1d;border-radius:4px;display:grid;place-items:center">生成失败 · 重试</div><b style="font-size:12px">雨夜环境音</b><br><small>音乐 · 参数可复用</small></div>
+          <div style="background:#1e293b;padding:7px;border-radius:6px"><div style="height:75px;background:#334155;border-radius:4px"></div><b style="font-size:12px">机械面具</b><br><small>道具 · 已发布</small></div>
+        </div>
+      </main>
+
+      <aside style="background:#111827;border-radius:7px;padding:10px">
+        <b>资产详情</b>
+        <div style="height:115px;background:#334155;border-radius:5px;margin:9px 0"></div>
+        <div style="line-height:1.9;font-size:12px">名称：夜王角色立绘<br>类型：角色<br>模型：image-model-v2<br>来源任务：IMG-240702<br>创建人：张三<br>版本：当前结果</div>
+        <div style="margin-top:9px;display:grid;grid-template-columns:1fr 1fr;gap:5px;font-size:11px">
+          <span style="background:#4f46e5;padding:5px;text-align:center">发送到画布</span>
+          <span style="background:#334155;padding:5px;text-align:center">再次生成</span>
+          <span style="background:#334155;padding:5px;text-align:center">下载</span>
+          <span style="background:#334155;padding:5px;text-align:center">发布市场</span>
+        </div>
+      </aside>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>核心操作流</h3>
+  <p>选择项目 → 选择资产类型 → 查看该类型的生成中/失败/成功记录 → 预览详情 → 发送画布、复用参数再次生成、下载、发布或移入回收站。无项目资产统一进入“未归档资产”，支持批量归档。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)">
+    <div class="letter">✓</div><div class="content"><h3>确认此信息架构</h3><p>继续进入功能边界与状态流设计。</p></div>
+  </div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)">
+    <div class="letter">↺</div><div class="content"><h3>需要调整</h3><p>请在对话中说明希望改变的分类、布局或操作路径。</p></div>
+  </div>
+</div>

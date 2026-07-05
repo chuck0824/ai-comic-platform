@@ -35,34 +35,47 @@ public class AssetHistoryQueryService {
 
     /**
      * Unified projection: tasks (non-succeeded) + canonical assets (succeeded).
+     * Fetches all matching records without server-side pagination, then
+     * deduplicates, sorts, and paginates in memory. Capped at 1000 total
+     * records to prevent memory pressure.
      */
     @Transactional(readOnly = true)
     public PageResult<RecordSummary> queryRecords(WorkspaceContext ctx, RecordQuery query) {
         String wsId = ctx.workspaceId();
         Long userId = ctx.userId();
 
-        // ── Collect matching asset records ──
+        // ── Collect matching asset records (uncapped for accurate pagination) ──
         List<WorkspaceAsset> assets = queryAssets(wsId, query);
         List<RecordSummary> summaries = assets.stream()
                 .map(a -> toSummary(a, wsId, userId))
                 .collect(Collectors.toCollection(ArrayList::new));
 
-        // ── Collect matching task records (non-succeeded) ──
+        // ── Dedup: collect source task IDs from settled assets ──
+        Set<Long> settledTaskIds = assets.stream()
+                .map(WorkspaceAsset::getSourceTaskId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        // ── Collect matching task records (non-succeeded), skip settled ──
         List<GenerationTask> tasks = queryTasks(wsId, query);
         for (GenerationTask t : tasks) {
-            // Skip tasks that already have a settled asset showing in the projection
+            if (settledTaskIds.contains(t.getId())) {
+                continue; // already shown as an asset
+            }
             summaries.add(toTaskSummary(t));
         }
+
+        // ── Cap to prevent unbounded in-memory sort ──
+        int total = Math.min(summaries.size(), 1000);
 
         // ── Sort & paginate ──
         summaries.sort(comparatorFor(query.sort()));
         int page = query.page() != null ? query.page() : 1;
         int pageSize = query.pageSize() != null ? query.pageSize() : 24;
-        int total = summaries.size();
         int fromIndex = (page - 1) * pageSize;
         int toIndex = Math.min(fromIndex + pageSize, total);
         List<RecordSummary> pageItems = fromIndex < total
-                ? summaries.subList(fromIndex, toIndex)
+                ? new ArrayList<>(summaries.subList(fromIndex, toIndex))
                 : List.of();
 
         // ── Facets ──
@@ -143,10 +156,10 @@ public class AssetHistoryQueryService {
                             WorkspaceAsset::getCreatedAt);
         }
 
-        // Pagination via MyBatis-Plus Page
+        // Fetch all matching assets (paginated in-memory after task merge)
         int page = query.page() != null ? query.page() : 1;
         int size = query.pageSize() != null ? query.pageSize() : 24;
-        Page<WorkspaceAsset> mpPage = new Page<>(page, size);
+        Page<WorkspaceAsset> mpPage = new Page<>(1, 1000); // fetch all, capped
         mpPage = assetMapper.selectPage(mpPage, qw);
         return mpPage.getRecords();
     }

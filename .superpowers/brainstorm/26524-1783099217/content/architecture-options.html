@@ -1,0 +1,57 @@
+<h2>任务监控中心：三种架构路径</h2>
+<p class="subtitle">目标：统一生成任务与交易任务，并支持用户操作、运营处置、告警、SLA 和对账。</p>
+
+<div class="cards">
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px">
+      <div class="mock-nav">生成服务　交易服务　钱包服务</div>
+      <div style="text-align:center;padding:14px">↓ 标准事件 / Outbox ↓</div>
+      <div class="placeholder" style="padding:18px;text-align:center">统一任务投影 + 操作编排 + 告警/SLA</div>
+      <div style="text-align:center;padding:14px">↓</div>
+      <div class="mock-nav">用户任务中心　｜　运营控制台</div>
+    </div>
+    <div class="card-body">
+      <h3>A. 统一任务事件中心（推荐）</h3>
+      <p>保留各业务状态机，通过统一事件、时间线和读模型聚合；操作仍回到所属业务服务执行。</p>
+      <p><strong>优点：</strong>边界清楚，可追溯，适合分阶段融合 B 与 C。<br><strong>代价：</strong>需要事件规范、投影表和补偿机制。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px">
+      <div class="mock-nav">前端任务中心</div>
+      <div style="display:flex;gap:12px;padding-top:18px">
+        <div class="placeholder" style="flex:1;text-align:center">生成 API</div>
+        <div class="placeholder" style="flex:1;text-align:center">订单 API</div>
+        <div class="placeholder" style="flex:1;text-align:center">钱包 API</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B. 前端聚合现有接口</h3>
+      <p>页面分别请求生成、订单和钱包接口，在浏览器中拼装状态和时间线。</p>
+      <p><strong>优点：</strong>交付快、后端改动少。<br><strong>代价：</strong>分页、权限、对账和跨服务状态一致性难以可靠实现。</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:24px">
+      <div class="mock-nav">统一流程编排引擎</div>
+      <div style="text-align:center;padding:14px">控制所有状态迁移</div>
+      <div style="display:flex;gap:12px">
+        <div class="placeholder" style="flex:1;text-align:center">生成执行器</div>
+        <div class="placeholder" style="flex:1;text-align:center">交易执行器</div>
+        <div class="placeholder" style="flex:1;text-align:center">财务执行器</div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C. 全量流程编排平台</h3>
+      <p>把生成、交易、结算和补偿全部迁入统一工作流引擎，由中心直接控制状态。</p>
+      <p><strong>优点：</strong>控制力最强。<br><strong>代价：</strong>改造面过大，会重写现有业务边界，不适合作为当前完善项目。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>推荐落地方式</h3>
+  <p>采用 A，并分两层交付：先完成统一可视、操作闭环与异常队列；同一模型上继续补充 SLA、告警、自动对账和人工工单。不是先做一个一次性只读页面，再推倒重来。</p>
+</div>

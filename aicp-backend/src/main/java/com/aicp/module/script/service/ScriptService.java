@@ -66,14 +66,25 @@ public class ScriptService {
         return script;
     }
 
-    public Page<Script> getScripts(int page, int pageSize, String status, String genre, String keyword) {
+    public Page<Script> getScripts(int page, int pageSize, String status, String genre, String keyword,
+                                  String plot, String tone, String setting, String sort) {
         Long userId = SecurityUtil.requireCurrentUserId();
         LambdaQueryWrapper<Script> query = new LambdaQueryWrapper<>();
         query.eq(Script::getOwnerUserId, userId);
         if (status != null) query.eq(Script::getStatus, status);
         if (genre != null) query.eq(Script::getGenreTag, genre);
         if (keyword != null) query.like(Script::getTitle, keyword);
-        query.orderByDesc(Script::getUpdatedAt);
+        if (plot != null) query.like(Script::getPlotTags, plot);
+        if (tone != null) query.like(Script::getToneTags, tone);
+        if (setting != null) query.eq(Script::getSettingTag, setting);
+        // Dynamic sort
+        switch (sort != null ? sort : "updatedAt") {
+            case "createdAt": query.orderByDesc(Script::getCreatedAt); break;
+            case "title": query.orderByAsc(Script::getTitle); break;
+            case "episodeCount": query.orderByDesc(Script::getEpisodeCount); break;
+            case "rating": query.orderByDesc(Script::getRating); break;
+            default: query.orderByDesc(Script::getUpdatedAt);
+        }
         return scriptMapper.selectPage(new Page<>(page, pageSize), query);
     }
 

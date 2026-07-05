@@ -1,0 +1,70 @@
+<h2>企业工作台 · 数据模型与关键流程</h2>
+<p class="subtitle">原则：主数据不复制、领域状态不搬家、聚合读模型可重建、所有写命令回源。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header"><strong>3001：账户与授权事实</strong></div>
+    <div class="mockup-body">
+      <div style="padding:10px;border:1px solid #c7d2fe;border-radius:8px;margin-bottom:8px"><b>Workspace</b><br><small>企业名称、类型、状态、所有者、认证状态</small></div>
+      <div style="padding:10px;border:1px solid #c7d2fe;border-radius:8px;margin-bottom:8px"><b>Department</b><br><small>部门树、负责人、启停状态</small></div>
+      <div style="padding:10px;border:1px solid #c7d2fe;border-radius:8px;margin-bottom:8px"><b>WorkspaceMember</b><br><small>成员、部门、角色、状态、加入时间</small></div>
+      <div style="padding:10px;border:1px solid #c7d2fe;border-radius:8px;margin-bottom:8px"><b>Role / PermissionGrant</b><br><small>权限码 + WORKSPACE / DEPARTMENT / SELF 数据范围</small></div>
+      <div style="padding:10px;border:1px solid #c7d2fe;border-radius:8px"><b>Billing / Usage Limit</b><br><small>共享余额、AI 日/月限额、实际用量</small></div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header"><strong>8080：业务事实与企业投影</strong></div>
+    <div class="mockup-body">
+      <div style="padding:10px;border:1px solid #fed7aa;border-radius:8px;margin-bottom:8px"><b>Purchase Budget Policy</b><br><small>采购月预算、单笔阈值、审批层级；引用 3001 部门 ID</small></div>
+      <div style="padding:10px;border:1px solid #fed7aa;border-radius:8px;margin-bottom:8px"><b>Budget Journal</b><br><small>RESERVE / RELEASE / CONSUME / REVERSE，不保存钱包余额</small></div>
+      <div style="padding:10px;border:1px solid #fed7aa;border-radius:8px;margin-bottom:8px"><b>Domain Requests</b><br><small>交易采购、资产发布、项目导出各自拥有状态机</small></div>
+      <div style="padding:10px;border:1px dashed #fb923c;border-radius:8px;margin-bottom:8px"><b>Approval Inbox Projection</b><br><small>跨域统一分页、筛选和待办；可由事件重建</small></div>
+      <div style="padding:10px;border:1px dashed #fb923c;border-radius:8px"><b>Dashboard / Audit Projection</b><br><small>只读聚合，保存来源引用和更新时间</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>统一权限命名</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+    <div style="padding:12px;background:#eef2ff;border-radius:8px"><b>组织治理</b><br><small>org.member.manage<br>org.role.manage<br>enterprise.dashboard.view</small></div>
+    <div style="padding:12px;background:#fff7ed;border-radius:8px"><b>业务审批</b><br><small>trade.purchase.request / approve / pay<br>asset.publish.request / approve<br>project.export.request / approve</small></div>
+    <div style="padding:12px;background:#f0fdf4;border-radius:8px"><b>财务与审计</b><br><small>enterprise.budget.view / manage<br>enterprise.audit.view</small></div>
+  </div>
+  <p style="font-size:13px;color:#52525b">旧的 can_*、ent_admin、dept_head 只作为迁移映射，不再作为新接口授权契约。</p>
+</div>
+
+<div class="section">
+  <h3>流程 1：切换企业工作区</h3>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="padding:9px;background:#eef2ff;border-radius:7px">3001 返回可加入 Workspace</span><b>→</b>
+    <span style="padding:9px;background:#eef2ff;border-radius:7px">用户选择</span><b>→</b>
+    <span style="padding:9px;background:#ecfeff;border-radius:7px">刷新 Membership + Grants</span><b>→</b>
+    <span style="padding:9px;background:#ecfeff;border-radius:7px">清理旧空间缓存</span><b>→</b>
+    <span style="padding:9px;background:#f0fdf4;border-radius:7px">携带 X-Workspace-Id 重载</span>
+  </div>
+</div>
+
+<div class="section">
+  <h3>流程 2：企业采购预算与审批</h3>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="padding:9px;background:#fff7ed;border-radius:7px">提交申请</span><b>→</b>
+    <span style="padding:9px;background:#fff7ed;border-radius:7px">预算原子预占 RESERVE</span><b>→</b>
+    <span style="padding:9px;background:#fff7ed;border-radius:7px">审批</span><b>→</b>
+    <span style="padding:9px;background:#fefce8;border-radius:7px">批准后等待有付款权限者确认</span><b>→</b>
+    <span style="padding:9px;background:#f0fdf4;border-radius:7px">3001 钱包扣款</span><b>→</b>
+    <span style="padding:9px;background:#f0fdf4;border-radius:7px">预算 CONSUME</span>
+  </div>
+  <p style="font-size:13px;color:#52525b">驳回、撤回、过期时 RELEASE；退款成功后 REVERSE。审批通过绝不自动扣款。</p>
+</div>
+
+<div class="section">
+  <h3>流程 3：统一审批收件箱</h3>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span style="padding:9px;background:#faf5ff;border-radius:7px">领域 Outbox 事件</span><b>→</b>
+    <span style="padding:9px;background:#faf5ff;border-radius:7px">Approval Projection</span><b>→</b>
+    <span style="padding:9px;background:#eef2ff;border-radius:7px">按权限范围返回 allowed_actions</span><b>→</b>
+    <span style="padding:9px;background:#fff7ed;border-radius:7px">幂等命令路由回原业务域</span><b>→</b>
+    <span style="padding:9px;background:#f0fdf4;border-radius:7px">新事件更新收件箱</span>
+  </div>
+</div>

@@ -1,0 +1,36 @@
+<h2>修订：用户可以新增 Agent</h2>
+<p class="subtitle">“新增”是正式产品能力，不再只表达为复制；每个新 Agent 必须继承一个系统基础角色框架。</p>
+
+<div class="mockup">
+  <div class="mockup-header">新增 Agent 向导</div>
+  <div class="mockup-body">
+    <div style="display:flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap;text-align:center">
+      <div style="padding:16px;border:2px solid #6366f1;border-radius:10px"><strong>1. 选择基础框架</strong><br><small>钩子 / 编剧 / 分镜 / 导演</small></div><strong>→</strong>
+      <div style="padding:16px;border:1px solid #334155;border-radius:10px"><strong>2. 定义身份</strong><br><small>名称、用途、适用题材与平台</small></div><strong>→</strong>
+      <div style="padding:16px;border:1px solid #334155;border-radius:10px"><strong>3. 调整能力</strong><br><small>结构化参数、Prompt、示例</small></div><strong>→</strong>
+      <div style="padding:16px;border:1px solid #334155;border-radius:10px"><strong>4. 试跑发布</strong><br><small>A/B 对比、版本说明、作用域</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">三层对象模型</div>
+  <div class="options" style="margin-top:12px">
+    <div class="option"><div class="letter">1</div><div class="content"><h3>系统基础框架 AgentBlueprint</h3><p>平台维护。定义角色能力边界、参数 Schema、允许工具、安全规则、输入输出协议。用户不能删除或覆盖。</p></div></div>
+    <div class="option"><div class="letter">2</div><div class="content"><h3>用户新增 Agent</h3><p>用户拥有的独立 Agent。必须绑定一个 Blueprint，但有自己的名称、描述、参数、Prompt、示例、图标和适用范围。</p></div></div>
+    <div class="option"><div class="letter">3</div><div class="content"><h3>AgentVersion</h3><p>每次发布生成不可变版本。项目绑定到确切版本；回滚实质是重新激活某个历史版本。</p></div></div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card"><div class="card-body"><h3>示例：新增钩子 Agent</h3><p>“女频复仇强钩子”继承钩子框架，强化前三秒冲突、每集反转和章尾悬念。</p></div></div>
+  <div class="card"><div class="card-body"><h3>示例：新增分镜 Agent</h3><p>“低成本室内戏分镜”继承分镜框架，限制场景数量、群演、复杂运镜与特效镜头。</p></div></div>
+  <div class="card"><div class="card-body"><h3>示例：新增导演 Agent</h3><p>“竖屏快节奏导演”继承导演框架，强调近景、情绪特写、竖屏构图和快速切镜。</p></div></div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>用户可以</h4><ul><li>新增任意数量的四类 Agent</li><li>修改、复制、试跑、发布、回滚</li><li>设置用户默认、项目默认或单次使用</li></ul></div>
+  <div class="cons"><h4>用户不能</h4><ul><li>脱离四类框架创建新能力类型</li><li>增加未授权工具或扩大数据范围</li><li>修改安全规则和输出协议</li></ul></div>
+</div>
+
+<p><strong>对整体方案的修订：</strong>原“系统模板 → 用户变体”更新为“系统 Blueprint → 用户新增 Agent → 不可变版本 → 作用域绑定 → 执行快照”。其余继承、权限、试跑、发布和历史保护机制不变。</p>

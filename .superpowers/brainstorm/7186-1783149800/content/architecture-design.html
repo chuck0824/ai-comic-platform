@@ -1,0 +1,60 @@
+<h2>设计一：双界面、单内核的 SOP 闭环</h2>
+<p class="subtitle">项目管理者与画布生产人员使用不同入口，但共享同一套规则、报告、返工单和审计记录。</p>
+
+<div class="mockup">
+  <div class="mockup-header">用户界面层</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div style="padding:14px;border:1px solid #bfdbfe;background:#eff6ff;border-radius:10px">
+      <strong>项目级 SOP 控制台</strong>
+      <div style="font-size:13px;margin-top:8px;line-height:1.7">健康总览 · 13项准入 · 返工工单<br>生产版本 · 失败恢复 · 产能与报告</div>
+    </div>
+    <div style="padding:14px;border:1px solid #bbf7d0;background:#f0fdf4;border-radius:10px">
+      <strong>画布质检侧栏</strong>
+      <div style="font-size:13px;margin-top:8px;line-height:1.7">节点风险染色 · 问题定位 · 修复建议<br>重新检查 · 生产动作拦截与放行</div>
+    </div>
+  </div>
+</div>
+
+<div style="text-align:center;font-size:24px;color:#64748b;margin:8px">↓</div>
+
+<div class="mockup">
+  <div class="mockup-header">共享 SOP 应用内核</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px">
+    <div class="placeholder"><strong>规则引擎</strong><br><span style="font-size:12px">规则注册 / 数据依赖 / 结果分级</span></div>
+    <div class="placeholder"><strong>生产 Gate</strong><br><span style="font-size:12px">生成 / 转视频 / 采用 / 导出</span></div>
+    <div class="placeholder"><strong>返工服务</strong><br><span style="font-size:12px">责任人 / 状态机 / 复核 / 留痕</span></div>
+    <div class="placeholder"><strong>版本晋级</strong><br><span style="font-size:12px">准入报告绑定生产快照</span></div>
+    <div class="placeholder"><strong>失败恢复</strong><br><span style="font-size:12px">安全重试 / 人工确认 / 升级处理</span></div>
+    <div class="placeholder"><strong>产能与报表</strong><br><span style="font-size:12px">复杂度 / 风险 / 工时 / 趋势</span></div>
+  </div>
+</div>
+
+<div style="text-align:center;font-size:24px;color:#64748b;margin:8px">↓ 读取业务事实，不复制业务主数据</div>
+
+<div class="mockup">
+  <div class="mockup-header">现有业务事实源</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;font-size:13px">
+    <div class="placeholder">内容项目<br>与集</div>
+    <div class="placeholder">分镜 Master<br>与镜头</div>
+    <div class="placeholder">画布节点<br>与采用版本</div>
+    <div class="placeholder">资产成熟度<br>与锁定状态</div>
+    <div class="placeholder">生成任务<br>与交付物</div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:20px">
+  <h3>一次完整闭环</h3>
+  <div style="display:flex;gap:6px;align-items:stretch;flex-wrap:wrap;font-size:13px">
+    <div class="placeholder" style="flex:1;min-width:120px">1. 创建检查快照</div><div>→</div>
+    <div class="placeholder" style="flex:1;min-width:120px">2. 执行确定性规则</div><div>→</div>
+    <div class="placeholder" style="flex:1;min-width:120px">3. 持久化不可变报告</div><div>→</div>
+    <div class="placeholder" style="flex:1;min-width:120px">4. Gate 判定</div><div>→</div>
+    <div class="placeholder" style="flex:1;min-width:120px">5. 返工与复核</div><div>→</div>
+    <div class="placeholder" style="flex:1;min-width:120px">6. 重检后放行</div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>固定规则</h4><ul><li>P0/P1 阻断生产动作</li><li>P2/P3 告警但允许继续</li><li>数据源缺失＝待配置，不允许绿灯</li><li>检查报告绑定当时的数据快照</li></ul></div>
+  <div class="cons"><h4>明确不做</h4><ul><li>不在 SOP 内复制剧本、分镜、资产主数据</li><li>不让 AI 直接决定 Gate 放行</li><li>不允许高风险内容静默自动修改</li><li>不把“接口调用成功”当作质检通过</li></ul></div>
+</div>

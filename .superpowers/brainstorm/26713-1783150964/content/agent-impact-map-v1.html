@@ -1,0 +1,56 @@
+<h2>Agent 配置中心：功能改造范围</h2>
+<p class="subtitle">首期不是单独增加一个设置页，而是让 4 个核心 Agent 真正接管对应业务链路。</p>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-body"><div class="label">新增</div><h3>Agent 配置中心</h3><p>角色模板、我的变体、结构化参数、高级 Prompt、草稿、试跑对比、发布、回滚、复制。</p></div>
+  </div>
+  <div class="card">
+    <div class="card-body"><div class="label">新增</div><h3>项目 Agent 设置</h3><p>为项目选择钩子、编剧、分镜、导演的默认变体；展示继承来源和当前发布版本。</p></div>
+  </div>
+  <div class="card">
+    <div class="card-body"><div class="label">新增</div><h3>任务级选择器</h3><p>在“重新下钩子、修订、生成分镜、导演审核”前选择 Agent，允许临时参数，不直接修改项目默认值。</p></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">必须改造的现有业务功能</div>
+  <div class="options" style="margin-top:12px">
+    <div class="option"><div class="letter">1</div><div class="content"><h3>剧本创作与修订</h3><p>剧本生成、章节/分集修订、对白与节奏优化从“代码内固定 Prompt”改为读取编剧 Agent；结果保存 Agent 版本与执行快照。</p></div></div>
+    <div class="option"><div class="letter">2</div><div class="content"><h3>钩子生成与联合审核</h3><p>开场钩子、章尾钩子、下一集承诺、钩子评分和联合审核权重改由钩子 Agent 配置；支持按集重跑并生成新版本。</p></div></div>
+    <div class="option"><div class="letter">3</div><div class="content"><h3>专业分镜</h3><p>A 档拆镜、B 档导演意图、C 档生产提示参数读取分镜 Agent；分镜密度、镜头时长、构图、运镜和场景合并策略可配置。</p></div></div>
+    <div class="option"><div class="letter">4</div><div class="content"><h3>导演审核与调整</h3><p>导演 Agent 的可拍性、节奏、镜头语言、成本约束和修改建议可配置；建议先生成预览/Diff，确认后形成新剧本或分镜版本。</p></div></div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">平台基础能力改造</div>
+    <div class="mockup-body">
+      <ul>
+        <li><strong>Prompt 管理器：</strong>现有 12 槽位入口下线或迁移，避免两套配置源</li>
+        <li><strong>Skill 管理：</strong>首期不作为用户主入口；核心角色可复用其执行概念，但不复用松散数据模型</li>
+        <li><strong>Agent 会话：</strong>显示当前项目所用 Agent 及版本，创建计划时冻结配置</li>
+        <li><strong>生成任务：</strong>增加 agent_variant_id、agent_version_id、resolved_config_snapshot</li>
+        <li><strong>权限与审计：</strong>项目管理员/导演发布，成员只能单次使用；记录发布和回滚</li>
+      </ul>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">首期明确不改</div>
+    <div class="mockup-body">
+      <ul>
+        <li>不开放用户自定义工具与 API 权限</li>
+        <li>不改图片、视频、配音模型市场</li>
+        <li>不让新版 Agent 自动覆盖历史资产</li>
+        <li>不建设任意节点式多 Agent 工作流</li>
+        <li>不让用户覆盖安全规则和结构化输出协议</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">后端核心变化</div>
+  <p style="margin-top:10px"><strong>新增统一配置解析器：</strong>业务模块不再自行拼 Prompt，而是传入角色、用户、项目、任务参数；解析器合并继承层级、校验锁定字段并生成不可变执行快照。</p>
+</div>

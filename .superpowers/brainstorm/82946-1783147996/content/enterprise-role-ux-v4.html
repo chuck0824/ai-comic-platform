@@ -1,0 +1,64 @@
+<h2>企业工作台 · 角色化功能设计</h2>
+<p class="subtitle">同一套路由与组件，后端根据 Membership 返回菜单能力、数据范围和 allowed_actions。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header"><strong>管理员 / 部门负责人</strong></div>
+    <div class="mockup-body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+        <div style="padding:10px;background:#eef2ff;border-radius:8px"><small>共享余额</small><br><b>¥18,420</b></div>
+        <div style="padding:10px;background:#fff7ed;border-radius:8px"><small>采购预算可用</small><br><b>¥6,720</b></div>
+        <div style="padding:10px;background:#fef2f2;border-radius:8px"><small>待我审批</small><br><b>3</b></div>
+      </div>
+      <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px;margin-bottom:8px"><b>统一审批</b><br><small>采购 / 资产发布 / 导出，按 Workspace 或部门范围处理</small></div>
+      <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px;margin-bottom:8px"><b>组织与权限</b><br><small>部门、邀请、成员状态、角色与权限模板</small></div>
+      <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px;margin-bottom:8px"><b>预算与用量</b><br><small>采购预算分配、单笔阈值、AI 用量和成员限额</small></div>
+      <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px"><b>审计</b><br><small>按人员、动作、对象、时间检索</small></div>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header"><strong>普通企业成员</strong></div>
+    <div class="mockup-body">
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+        <div style="padding:10px;background:#eef2ff;border-radius:8px"><small>我的 AI 用量</small><br><b>42%</b></div>
+        <div style="padding:10px;background:#fff7ed;border-radius:8px"><small>我的采购额度</small><br><b>¥800</b></div>
+        <div style="padding:10px;background:#fefce8;border-radius:8px"><small>待我补充</small><br><b>1</b></div>
+      </div>
+      <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px;margin-bottom:8px"><b>我的申请</b><br><small>查看审批进度、补充材料、撤回尚未处理的申请</small></div>
+      <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px;margin-bottom:8px"><b>我的项目</b><br><small>继续剧本、画布和导出任务</small></div>
+      <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px;margin-bottom:8px"><b>企业资产</b><br><small>跳转现有 Workspace 资产库，按权限使用或提交发布</small></div>
+      <div style="padding:11px;border:1px dashed #d4d4d8;border-radius:8px;color:#71717a"><b>不显示</b><br><small>组织管理、全局预算、全企业审计</small></div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:24px">
+  <h3>统一审批中心</h3>
+  <div class="mockup">
+    <div class="mockup-header">待我处理　|　我发起的　|　已处理</div>
+    <div class="mockup-body" style="display:grid;grid-template-columns:1.15fr .85fr;gap:14px">
+      <div>
+        <div style="display:flex;gap:6px;margin-bottom:10px"><span style="padding:5px 9px;background:#eef2ff;border-radius:12px">全部 3</span><span style="padding:5px 9px;background:#f4f4f5;border-radius:12px">采购</span><span style="padding:5px 9px;background:#f4f4f5;border-radius:12px">资产发布</span><span style="padding:5px 9px;background:#f4f4f5;border-radius:12px">项目导出</span></div>
+        <div style="padding:11px;background:#fff7ed;border-radius:8px;margin-bottom:7px"><b>采购 · 《都市逆袭》企业授权</b><br><small>张三 · 内容一部 · ¥299 · 2小时前</small></div>
+        <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px;margin-bottom:7px"><b>资产发布 · 国风角色模型包</b><br><small>赵六 · 美术组 · 5小时前</small></div>
+        <div style="padding:11px;border:1px solid #e4e4e7;border-radius:8px"><b>导出 · 《重生商战》第 3 集</b><br><small>李四 · 内容一部 · 昨天</small></div>
+      </div>
+      <div style="border:1px solid #e4e4e7;border-radius:8px;padding:12px">
+        <b>采购审批详情</b>
+        <p style="font-size:13px;color:#52525b">申请理由、授权条款、历史授权、预算预占、共享余额摘要、申请时间线。</p>
+        <div style="padding:8px;background:#f0fdf4;border-radius:6px;margin:10px 0"><small>预算校验通过 · 审批后仍需付款确认</small></div>
+        <input class="mock-input" placeholder="审批意见（驳回时必填）" style="width:100%;box-sizing:border-box">
+        <div style="display:flex;gap:8px;margin-top:10px"><button class="mock-button">批准</button><button class="mock-button" style="background:#fff;color:#b91c1c;border-color:#fecaca">驳回</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键交互约束</h3>
+  <div class="options">
+    <div class="option"><div class="letter">1</div><div class="content"><h3>不做批量审批</h3><p>三类审批证据不同，核心版逐项决策并保留完整意见与审计。</p></div></div>
+    <div class="option"><div class="letter">2</div><div class="content"><h3>最后管理员保护</h3><p>禁止移除、禁用或降级企业最后一名 Workspace 管理员。</p></div></div>
+    <div class="option"><div class="letter">3</div><div class="content"><h3>权限变更即时生效</h3><p>收到 403 或成员失效后刷新 Membership；必要时回退个人 Workspace。</p></div></div>
+  </div>
+</div>

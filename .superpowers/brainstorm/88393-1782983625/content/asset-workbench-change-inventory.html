@@ -1,0 +1,63 @@
+<h2>设计确认 2/4（代码级）：具体新增、删除、改变项</h2>
+<p class="subtitle">以下清单可直接拆分研发任务；“删除”默认先兼容重定向或迁移数据，再移除旧实现。</p>
+
+<div class="section">
+  <h3>一、前端具体变更</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#eef2ff"><th style="padding:7px;text-align:left;width:90px">动作</th><th style="padding:7px;text-align:left">具体项</th><th style="padding:7px;text-align:left">结果</th></tr>
+    <tr><td style="padding:7px;color:#059669"><b>新增</b></td><td style="padding:7px"><code>AssetProjectTree</code>、<code>AssetCategoryTabs</code>、<code>AssetFilterBar</code></td><td style="padding:7px">项目分库、角色/场景/道具/分镜/配音/音乐分类、复合筛选</td></tr>
+    <tr><td style="padding:7px;color:#059669"><b>新增</b></td><td style="padding:7px"><code>AssetRecordCard</code>、<code>AssetDetailDrawer</code>、<code>AssetBatchBar</code></td><td style="padding:7px">统一显示任务与资产；分媒体预览；批量移动、标签、删除</td></tr>
+    <tr><td style="padding:7px;color:#059669"><b>新增</b></td><td style="padding:7px"><code>CanvasTargetDialog</code>、<code>AssetPublishDialog</code>、<code>AssetTrashPanel</code></td><td style="padding:7px">选择目标画布、市场发布、30 天回收站</td></tr>
+    <tr><td style="padding:7px;color:#2563eb"><b>改变</b></td><td style="padding:7px"><code>AssetHistory.vue</code></td><td style="padding:7px">从单文件静态网格改为工作台容器；筛选状态写入 URL，列表使用服务端分页</td></tr>
+    <tr><td style="padding:7px;color:#2563eb"><b>改变</b></td><td style="padding:7px"><code>generation.js</code></td><td style="padding:7px">增加查询、更新、批量、收藏、移动、回收、恢复、下载、重生成、发布接口</td></tr>
+    <tr><td style="padding:7px;color:#dc2626"><b>删除</b></td><td style="padding:7px"><code>TaskMonitor.vue</code> 独立入口与侧栏菜单</td><td style="padding:7px">旧 <code>/task-monitor</code> 保留重定向到 <code>/asset-history?status=active</code></td></tr>
+    <tr><td style="padding:7px;color:#dc2626"><b>删除</b></td><td style="padding:7px">前端 <code>asset.favorite = !asset.favorite</code>、全量数组本地过滤</td><td style="padding:7px">收藏与筛选都以服务端结果为准，刷新不丢失</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>二、接口具体变更</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div style="padding:10px;background:#ecfdf5;border-radius:7px"><b>新增查询</b><br><code>GET /assets/workbench/projects</code><br><code>GET /assets/history/records</code><br><code>GET /assets/history/records/{id}</code><br><small>统一返回项目计数、任务/资产记录、详情；支持分页与筛选。</small></div>
+    <div style="padding:10px;background:#ecfdf5;border-radius:7px"><b>新增资产命令</b><br><code>PATCH /assets/{id}</code><br><code>PUT|DELETE /assets/{id}/favorite</code><br><code>POST /assets/{id}/move</code><br><code>POST /assets/batch</code><br><small>重命名、标签、收藏、归档和批量操作。</small></div>
+    <div style="padding:10px;background:#ecfdf5;border-radius:7px"><b>新增生命周期</b><br><code>DELETE /assets/{id}</code><br><code>POST /assets/{id}/restore</code><br><code>GET /assets/{id}/download-url</code><br><code>POST /assets/{id}/regenerate</code><br><small>软删除、恢复、签名下载、参数复用重生成。</small></div>
+    <div style="padding:10px;background:#ecfdf5;border-radius:7px"><b>新增市场衔接</b><br><code>POST /assets/{id}/publish</code><br><small>个人资产进入直接发布流程；团队资产创建现有 publish request。</small></div>
+    <div style="padding:10px;background:#eff6ff;border-radius:7px"><b>改变发送画布</b><br><code>POST /assets/{id}/send-to-canvas</code><br><small>请求增加 project_id、canvas_id、position、idempotency_key；响应返回 node_id、node_uuid、redirect_url。</small></div>
+    <div style="padding:10px;background:#fff1f2;border-radius:7px"><b>删除占位行为</b><br><small>移除“无任何数据库写入也返回资产已发送”的实现；节点未创建时必须返回明确错误。</small></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>三、数据库具体变更</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <tr style="background:#eef2ff"><th style="padding:7px;text-align:left">表</th><th style="padding:7px;text-align:left">新增/改变字段</th><th style="padding:7px;text-align:left">用途</th></tr>
+    <tr><td style="padding:7px"><code>platform_assets</code></td><td style="padding:7px"><code>workspace_id</code>、<code>category</code>、<code>lifecycle_status</code>、<code>deleted_at/by</code>、<code>updated_at</code>、<code>created_by</code>、<code>row_version</code></td><td style="padding:7px">Workspace 隔离、业务分类、回收站、审计、并发更新</td></tr>
+    <tr><td style="padding:7px"><code>generation_tasks</code></td><td style="padding:7px"><code>workspace_id</code>、<code>created_by</code>、<code>retry_of_task_id</code>、<code>asset_category</code></td><td style="padding:7px">任务归属、重试链和成功后的正确分类</td></tr>
+    <tr><td style="padding:7px"><code>platform_asset_favorites</code></td><td style="padding:7px">新增 <code>user_id + workspace_id + asset_id</code> 唯一约束</td><td style="padding:7px">团队资产下的个人收藏；替代资产表上的共享 favorite 布尔值</td></tr>
+    <tr><td style="padding:7px"><code>asset_activity_logs</code></td><td style="padding:7px">新增操作人、动作、资产、前后值、时间</td><td style="padding:7px">移动、删除、恢复、发布等关键操作审计</td></tr>
+    <tr><td style="padding:7px"><code>canvas_asset_placements</code></td><td style="padding:7px">新增幂等键、资产、画布、节点关联</td><td style="padding:7px">发送画布幂等与引用追踪</td></tr>
+  </table>
+  <p><b>字段口径：</b><code>type</code> 继续表示 image/video/audio 等媒体类型；新增 <code>category</code> 表示 character/scene/prop/storyboard/voice/music/other，禁止混用。</p>
+</div>
+
+<div class="section">
+  <h3>四、后端代码具体变更</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px">
+    <div style="padding:9px;background:#eff6ff"><b>改变 Controller</b><br><small>资产接口不再用 ObjectMapper 直接暴露实体 Map；改为明确请求/响应 DTO 和 PageResult。</small></div>
+    <div style="padding:9px;background:#eff6ff"><b>拆分 Service</b><br><small>从 GenerationService 拆出 AssetHistoryQueryService、AssetCommandService、CanvasPlacementService，职责可独立测试。</small></div>
+    <div style="padding:9px;background:#eff6ff"><b>改变 Executor</b><br><small>输出文件校验通过后才创建资产；显式携带用户/Workspace；任务、资产、节点回写使用事务或补偿。</small></div>
+    <div style="padding:9px;background:#fff1f2"><b>删除危险兜底</b><br><small>删除 <code>resolveOwnerId()</code> 失败时返回用户 1 的逻辑，归属不明时任务进入可诊断失败/补偿状态。</small></div>
+    <div style="padding:9px;background:#eff6ff"><b>改变权限校验</b><br><small>所有查询与命令统一校验 Workspace、项目访问权和资产可见性；禁止仅凭 assetId 操作。</small></div>
+    <div style="padding:9px;background:#fff1f2"><b>修正契约冲突</b><br><small>统一 H2/MySQL/实体中的 generation_variants 与 platform_assets 字段，移除测试库专属失配结构。</small></div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>五、验收测试具体新增</h3>
+  <p>项目隔离、Workspace 越权、分页筛选、任务五状态、重试链、收藏持久化、批量移动、软删除/恢复、30 天清理、音视频预览、签名下载、发送画布幂等、团队发布审批、任务成功但资产入库失败的补偿，共 14 类主验收场景。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认代码级变更项</h3><p>继续确认数据流、错误处理和兼容迁移。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要继续细化</h3><p>请说明希望细化到字段、接口还是页面交互的哪一部分。</p></div></div>
+</div>

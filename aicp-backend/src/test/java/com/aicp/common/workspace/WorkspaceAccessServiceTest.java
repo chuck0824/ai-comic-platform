@@ -41,8 +41,8 @@ class WorkspaceAccessServiceTest {
         void resolvesEnterpriseMember() throws Exception {
             when(client.membership(eq("ent_100"), anyString()))
                     .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
-                            "ent_100", "enterprise", 9L,
-                            List.of("asset.view", "asset.use")));
+                            "ent_100", "enterprise", 9L, "MEMBER",
+                            List.of("asset.view", "asset.use"), List.of(), List.of()));
 
             WorkspaceContext ctx = service.resolve("ent_100", "Bearer token", 9L);
 
@@ -57,8 +57,8 @@ class WorkspaceAccessServiceTest {
         void resolvesPersonalMember() throws Exception {
             when(client.membership(eq("personal_7"), anyString()))
                     .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
-                            "personal_7", "personal", 7L,
-                            List.of("asset.view", "asset.use", "asset.manage")));
+                            "personal_7", "personal", 7L, "OWNER",
+                            List.of("asset.view", "asset.use", "asset.manage"), List.of(), List.of()));
 
             WorkspaceContext ctx = service.resolve("personal_7", "Bearer token", 7L);
 
@@ -71,7 +71,8 @@ class WorkspaceAccessServiceTest {
         void rejectsMismatchedUser() throws Exception {
             when(client.membership(eq("ent_100"), anyString()))
                     .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
-                            "ent_100", "enterprise", 9L, List.of("asset.view")));
+                            "ent_100", "enterprise", 9L, "MEMBER",
+                            List.of("asset.view"), List.of(), List.of()));
 
             assertThatThrownBy(() -> service.resolve("ent_100", "Bearer token", 99L))
                     .isInstanceOf(BizException.class)
@@ -132,7 +133,7 @@ class WorkspaceAccessServiceTest {
         void personalUnderscoreFormatResolvesPersonal() throws Exception {
             when(client.membership(eq("personal_7"), anyString()))
                     .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
-                            "personal_7", "personal", 7L, List.of("asset.view")));
+                            "personal_7", "personal", 7L, "OWNER", List.of("asset.view"), List.of(), List.of()));
 
             WorkspaceContext ctx = service.resolve("personal_7", "Bearer token", 7L);
             assertThat(ctx.workspaceType()).isEqualTo("personal");
@@ -144,7 +145,7 @@ class WorkspaceAccessServiceTest {
         void enterpriseUnderscoreFormatResolvesEnterprise() throws Exception {
             when(client.membership(eq("enterprise_42"), anyString()))
                     .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
-                            "enterprise_42", "enterprise", 9L, List.of("asset.view")));
+                            "enterprise_42", "enterprise", 9L, "MEMBER", List.of("asset.view"), List.of(), List.of()));
 
             WorkspaceContext ctx = service.resolve("enterprise_42", "Bearer token", 9L);
             assertThat(ctx.workspaceType()).isEqualTo("enterprise");
@@ -155,7 +156,7 @@ class WorkspaceAccessServiceTest {
         void entPrefixFormatResolvesEnterprise() throws Exception {
             when(client.membership(eq("ent_100"), anyString()))
                     .thenReturn(new AccountCenterPermissionClient.MembershipResponse(
-                            "ent_100", "enterprise", 10L, List.of("asset.view")));
+                            "ent_100", "enterprise", 10L, "MEMBER", List.of("asset.view"), List.of(), List.of()));
 
             WorkspaceContext ctx = service.resolve("ent_100", "Bearer token", 10L);
             assertThat(ctx.workspaceType()).isEqualTo("enterprise");

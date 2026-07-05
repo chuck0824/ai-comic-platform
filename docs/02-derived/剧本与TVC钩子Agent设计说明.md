@@ -1,5 +1,10 @@
 # 剧本与 TVC 钩子 Agent 完整落地方案
 
+> **[superpowers 更新 V1.7]（2026-07-04）**：
+> - **Agent 配置中心**：钩子 Agent 已纳入 4 系统蓝图（HOOK）之一。钩子策略模板纳入创作圣经写作指南 L1 层。用户可通过 Agent 配置中心自定义钩子 Agent 参数/Prompt 并发布版本。详见 `docs/superpowers/specs/2026-07-04-user-configurable-agent-center-design.md`
+> - **执行快照冻结**：钩子 Agent 每次正式执行时冻结 `agent_execution_snapshots`（blueprint_id/version、resolved_prompt、prompt_hash、context_refs），确保生成可回溯。详见 `docs/superpowers/specs/2026-07-04-user-configurable-agent-center-design.md`
+> - **钩子前置**：钩子 Agent 参与小说正文创作阶段的选题和分集大纲，而非仅在分镜阶段介入。详见 `docs/02-derived/小说正文与分镜脚本解耦改造方案.md`
+
 ## 1. 文档目的
 
 本文整理“钩子 Agent”在剧本创作与 TVC 创作中的产品逻辑、分类体系、用户流程和开发落地建议，便于产品经理、设计、前后端开发和 AI Prompt/Agent 开发统一理解。
@@ -8,6 +13,10 @@
 
 - 钩子不是单纯的开头文案，也不是只在每集结尾放一个悬念。
 - 钩子应作为内容结构控制器，参与选题、分集大纲、单集剧本、分镜和投流素材生成。
+
+> **[superpowers 更新]（2026-07-02）**：
+> - **创作圣经集成**：钩子策略模板纳入创作圣经的写作指南 L1 层；连续性快照包含钩子履行状态。详见 `docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`
+> - **解耦架构**：钩子前移至小说创作阶段（而非脚本/分镜阶段）。参见 `小说正文与分镜脚本解耦改造方案.md`
 - 钩子 Agent 应先区分大类：剧本 / TVC。
 - 大类之下还需要结合小分类、受众、题材、情节、情绪/基调、时空背景、内容长度等维度，生成不同的钩子策略。
 - 剧本类重点是追更粘性，TVC 类重点是注意力、记忆和转化。

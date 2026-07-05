@@ -77,6 +77,7 @@ Expected: FAIL because the service is absent.
 - [ ] **Step 3: Implement the service contract**
 
 ```java
+// BudgetSubject.type 取值为 WORKSPACE、DEPARTMENT、MEMBER（参见设计文档第 8.2 节）
 public record BudgetSubject(String type, String id) {}
 public record BudgetSnapshot(long amountCents, long reservedCents, long consumedCents, long availableCents, int rowVersion) {}
 
@@ -165,7 +166,7 @@ Expected: FAIL because projection classes are absent.
 
 - [ ] **Step 3: Implement projection and router**
 
-Define `ApprovalType { PURCHASE, ASSET_PUBLISH, PROJECT_EXPORT }` and `ApprovalDecisionCommand(boolean approved, String reason, int expectedVersion, String idempotencyKey)`. Add `asset_outbox_events` to the V7 migration with unique `event_id`, aggregate ID/type, event type, payload, status, attempts, and timestamps. Purchase transitions write `TradeOutboxEvent`; asset transitions write `AssetOutboxEvent` in the same source transaction. Projectors may update only `enterprise_approval_items`; router adapters call `PurchaseApprovalService` or `AssetPublicationService` after source re-read and scoped authorization.
+Define `ApprovalType { PURCHASE, ASSET_PUBLISH, PROJECT_EXPORT }` and `ApprovalDecisionCommand(boolean approved, String reason, int expectedVersion, String idempotencyKey)`. Add `asset_outbox_events` to the V7 migration（注意：V7 迁移在 Task 1 中已创建，此处需修改该文件以追加 `asset_outbox_events` 表定义；参见设计文档第 8.3 节）with unique `event_id`, aggregate ID/type, event type, payload, status, attempts, and timestamps. Purchase transitions write `TradeOutboxEvent`; asset transitions write `AssetOutboxEvent` in the same source transaction. Projectors may update only `enterprise_approval_items`; router adapters call `PurchaseApprovalService` or `AssetPublicationService` after source re-read and scoped authorization.
 
 - [ ] **Step 4: Run projection tests**
 

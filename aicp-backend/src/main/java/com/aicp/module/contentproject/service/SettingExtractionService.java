@@ -27,6 +27,7 @@ public class SettingExtractionService {
     private final ProjectSettingService settingService;
     private final ProjectAccessService accessService;
     private final ProjectContextPublisher contextPublisher;
+    private final CreativeBibleService creativeBibleService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     static final Set<String> VALID_STATUSES = Set.of("queued", "running", "review_ready",
@@ -160,6 +161,9 @@ public class SettingExtractionService {
 
         // 发布上下文
         contextPublisher.publish(projectId, userId);
+
+        // 确保存在创作圣经草稿以追踪变更
+        creativeBibleService.ensureDraftForChange(userId, projectId, "extraction_applied");
 
         log.info("提取批次 {} 应用完成，创建/更新 {} 条设定", batchId, applied);
 

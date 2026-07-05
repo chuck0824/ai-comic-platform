@@ -18,7 +18,7 @@ This plan implements M1 only. It intentionally does not replace prompts in the p
 2. `storyboard-director-agent-integration`: connect A/B/C storyboard generation, director review, and storyboard-version provenance.
 3. `agent-prompt-migration-rollout`: migrate four-role `prompt_templates`, remove the old role entry, add audits, and run gray-release checks.
 
-M1 is independently usable: a user can configure, test, publish, bind, and resolve Agents before business generators consume them.
+M1 is independently usable: a user can configure, test, publish, bind, and resolve Agents before business generators consume them. The M1 “end-user deliverable” is the full Agent 配置中心 UI plus the `resolve-preview` API — an authenticated user can create an Agent from a Blueprint, edit and validate a draft, run a test against the real model, publish, bind it as their default, and inspect the resolved configuration. What M1 intentionally does NOT do is feed that resolved configuration into `ScriptGenService`, `ContentHookService`, or any other business service; those integrations are delivered by the follow-up plans below.
 
 ## File structure
 
@@ -64,11 +64,11 @@ M1 is independently usable: a user can configure, test, publish, bind, and resol
 
 ### Frontend files to create
 
-- `aicp-frontend/src/views/agent-config/agentConfigState.js`: pure mapping, filtering, inheritance labels, and wizard state.
-- `aicp-frontend/src/views/agent-config/useAgentConfig.js`: API-backed orchestration.
+- `aicp-frontend/src/utils/agentConfigHelpers.js`: pure mapping, filtering, inheritance labels, and wizard state — shared by config center and future business-page lightweight entries (design §7.4).
+- `aicp-frontend/src/views/agent-config/useAgentConfig.js`: API-backed orchestration composable.
 - `aicp-frontend/src/views/agent-config/AgentConfigCenter.vue`: three-column configuration center.
 - `aicp-frontend/src/views/agent-config/components/AgentDefinitionList.vue`
-- `aicp-frontend/src/views/agent-config/components/AgentEditorPanel.vue`
+- `aicp-frontend/src/views/agent-config/components/AgentEditorPanel.vue`（含项目绑定管理 tab）
 - `aicp-frontend/src/views/agent-config/components/CreateAgentWizard.vue`
 - `aicp-frontend/src/views/agent-config/components/AgentTestRunPanel.vue`
 - `aicp-frontend/src/views/agent-config/components/AgentVersionPanel.vue`
@@ -455,9 +455,17 @@ public BindingView bindProject(Long userId, Long projectId, RoleType role,
                                BindVersionRequest request) {
     access.require(projectId, userId, Action.MANAGE_AGENT_CONFIG);
     AgentVersion version = versions.requirePublishedAndRole(request.versionId(), role);
-    return upsert("PROJECT", projectId, role.name(), version, userId, request.rowVersion());
+    return upsert("PROJECT", projectId, role.name(), version, userId);
 }
 ```
+
+The binding upsert uses `INSERT ... ON DUPLICATE KEY UPDATE` with a `row_version` check in the `WHERE` clause. On zero updated rows, throw `AGENT_BINDING_CONFLICT` — another admin changed the binding concurrently.
+
+- [ ] **Step 3b: Handle edge cases**
+
+- When an Agent is archived while still bound to a project, the resolver fails with `AGENT_VERSION_STATE_CONFLICT` — explicit bindings must not silently fall back.
+- User deletion of their own binding (via `DELETE /api/v1/agent/user-bindings/{roleType}`) is allowed; project binding deletion requires `MANAGE_AGENT_CONFIG`.
+- A `GET /api/v1/projects/{projectId}/agent-bindings` returns all four role bindings (or empty if none set), so the project settings page can display the full picture.
 
 - [ ] **Step 4: Implement strict resolver precedence**
 
@@ -541,7 +549,9 @@ Expected: FAIL because the service does not exist.
 
 - [ ] **Step 3: Implement synchronous M1 test runs**
 
-Create the test-run row as `RUNNING`, call `AiRouter.chatCompletion` with the compiled prompt, validate that returned text is nonblank JSON for M1, then set `SUCCEEDED` or `FAILED`. Never mark a failed/invalid-output run successful.
+`AgentTestRunService` depends on the existing `com.aicp.common.ai.AiRouter` (the same router used by `ScriptGenService` and other generation services). Create the test-run row as `RUNNING`, call `aiRouter.chatCompletion(messages, modelPolicy)` with the compiled prompt, validate that returned text is nonblank JSON that satisfies the Blueprint `output_schema_json`, then set `SUCCEEDED` or `FAILED`. If the call throws or times out, store `FAILED` with the error details and rethrow as `BizException`. Never mark a failed/invalid-output run successful.
+
+`AiRouter` timeout is 60s for test runs; a timed-out run stores `FAILED` with `error_code = 'TIMEOUT'`.
 
 - [ ] **Step 4: Add thin validated controller methods**
 
@@ -567,8 +577,38 @@ public ApiResponse<BindingView> bindProject(@PathVariable Long projectId,
 
 Use these exact controller bases and cover every M1 endpoint in controller methods:
 
-- `AgentConfigController` at `/api/v1/agent`: Blueprint list/detail, definition CRUD/copy/archive, draft list/create/update/validate/test/publish/activate, user bindings, resolve preview, and snapshot detail.
+- `AgentConfigController` at `/api/v1/agent`: Blueprint list/detail, definition CRUD/copy/archive, draft list/create/update/validate/test/publish/activate, versions list, test-run detail, user bindings CRUD, resolve preview, and snapshot detail.
 - `ProjectAgentBindingController` at `/api/v1/projects`: project binding list/put/delete at `/{projectId}/agent-bindings[/{role}]`.
+
+Full M1 endpoint inventory (all implemented in this task):
+
+| Method | Path | Handler |
+|---|---|---|
+| `GET` | `/api/v1/agent/blueprints` | Blueprint list |
+| `GET` | `/api/v1/agent/blueprints/{id}` | Blueprint detail |
+| `POST` | `/api/v1/agent/definitions` | Create definition |
+| `GET` | `/api/v1/agent/definitions` | List user definitions |
+| `GET` | `/api/v1/agent/definitions/{id}` | Definition detail |
+| `PATCH` | `/api/v1/agent/definitions/{id}` | Update metadata |
+| `POST` | `/api/v1/agent/definitions/{id}/copies` | Copy definition |
+| `POST` | `/api/v1/agent/definitions/{id}/archive` | Archive definition |
+| `GET` | `/api/v1/agent/definitions/{id}/versions` | List versions |
+| `POST` | `/api/v1/agent/definitions/{id}/drafts` | Create draft |
+| `GET` | `/api/v1/agent/versions/{versionId}` | Version detail |
+| `PUT` | `/api/v1/agent/versions/{versionId}` | Update draft |
+| `POST` | `/api/v1/agent/versions/{versionId}/validate` | Validate draft |
+| `POST` | `/api/v1/agent/versions/{versionId}/test-runs` | Run test |
+| `GET` | `/api/v1/agent/test-runs/{id}` | Test run detail |
+| `POST` | `/api/v1/agent/versions/{versionId}/publish` | Publish version |
+| `POST` | `/api/v1/agent/versions/{versionId}/activate` | Activate/rollback |
+| `GET` | `/api/v1/agent/user-bindings` | List user bindings |
+| `PUT` | `/api/v1/agent/user-bindings/{roleType}` | Set user binding |
+| `DELETE` | `/api/v1/agent/user-bindings/{roleType}` | Delete user binding |
+| `POST` | `/api/v1/agent/resolve-preview` | Resolve preview |
+| `GET` | `/api/v1/agent/execution-snapshots/{id}` | Snapshot detail |
+| `GET` | `/api/v1/projects/{projectId}/agent-bindings` | List project bindings |
+| `PUT` | `/api/v1/projects/{projectId}/agent-bindings/{roleType}` | Set project binding |
+| `DELETE` | `/api/v1/projects/{projectId}/agent-bindings/{roleType}` | Delete project binding |
 
 - [ ] **Step 5: Run all Agent backend tests**
 
@@ -587,7 +627,7 @@ git commit -m "feat: add agent configuration APIs"
 
 **Files:**
 - Modify: `aicp-frontend/src/api/agent.js`
-- Create: `aicp-frontend/src/views/agent-config/agentConfigState.js`
+- Create: `aicp-frontend/src/views/agent-config/agentConfigHelpers.js`
 - Create: `aicp-frontend/tests/agent-config-state.test.js`
 - Modify: `aicp-frontend/package.json`
 
@@ -596,7 +636,7 @@ git commit -m "feat: add agent configuration APIs"
 ```js
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createWizardState, canPublish, bindingSourceLabel } from '../src/views/agent-config/agentConfigState.js'
+import { createWizardState, canPublish, bindingSourceLabel } from '../src/utils/agentConfigHelpers.js'
 
 test('new agent wizard starts by selecting a blueprint', () => {
   assert.deepEqual(createWizardState(), {
@@ -629,7 +669,7 @@ test('binding labels are explicit', () => {
 
 Run: `cd aicp-frontend && npm test -- --test-name-pattern='agent'`
 
-Expected: FAIL because `agentConfigState.js` does not exist.
+Expected: FAIL because `agentConfigHelpers.js` does not exist.
 
 - [ ] **Step 3: Implement pure state helpers**
 
@@ -649,18 +689,34 @@ export const bindingSourceLabel = source => ({
 - [ ] **Step 4: Add API methods**
 
 ```js
+// Blueprint 与 Agent 定义
 getBlueprints: () => request.get('/agent/blueprints'),
+getBlueprint: id => request.get(`/agent/blueprints/${id}`),
 getDefinitions: (params) => request.get('/agent/definitions', { params }),
+getDefinition: id => request.get(`/agent/definitions/${id}`),
 createDefinition: data => request.post('/agent/definitions', data),
 updateDefinition: (id, data) => request.patch(`/agent/definitions/${id}`, data),
+copyDefinition: id => request.post(`/agent/definitions/${id}/copies`),
+archiveDefinition: id => request.post(`/agent/definitions/${id}/archive`),
+// 版本与试跑
+getVersions: id => request.get(`/agent/definitions/${id}/versions`),
 createDraft: id => request.post(`/agent/definitions/${id}/drafts`),
+getVersion: id => request.get(`/agent/versions/${id}`),
 updateVersion: (id, data) => request.put(`/agent/versions/${id}`, data),
 validateVersion: id => request.post(`/agent/versions/${id}/validate`),
 testVersion: (id, data) => request.post(`/agent/versions/${id}/test-runs`, data),
+getTestRun: id => request.get(`/agent/test-runs/${id}`),
 publishVersion: (id, data) => request.post(`/agent/versions/${id}/publish`, data),
 activateVersion: id => request.post(`/agent/versions/${id}/activate`),
+// 绑定与解析
+getUserBindings: () => request.get('/agent/user-bindings'),
+setUserBinding: (roleType, data) => request.put(`/agent/user-bindings/${roleType}`, data),
+deleteUserBinding: roleType => request.delete(`/agent/user-bindings/${roleType}`),
 getProjectBindings: projectId => request.get(`/projects/${projectId}/agent-bindings`),
-bindProjectAgent: (projectId, role, data) => request.put(`/projects/${projectId}/agent-bindings/${role}`, data)
+bindProjectAgent: (projectId, role, data) => request.put(`/projects/${projectId}/agent-bindings/${role}`, data),
+deleteProjectBinding: (projectId, role) => request.delete(`/projects/${projectId}/agent-bindings/${role}`),
+resolvePreview: data => request.post('/agent/resolve-preview', data),
+getSnapshot: id => request.get(`/agent/execution-snapshots/${id}`)
 ```
 
 - [ ] **Step 5: Run frontend tests**
@@ -672,7 +728,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add aicp-frontend/package.json aicp-frontend/src/api/agent.js aicp-frontend/src/views/agent-config/agentConfigState.js aicp-frontend/tests/agent-config-state.test.js
+git add aicp-frontend/package.json aicp-frontend/src/api/agent.js aicp-frontend/src/utils/agentConfigHelpers.js aicp-frontend/tests/agent-config-state.test.js
 git commit -m "feat: add agent configuration frontend state"
 ```
 
@@ -722,7 +778,7 @@ export function useAgentConfig() {
 
 - [ ] **Step 4: Build the three-column page and four-step wizard**
 
-`AgentConfigCenter.vue` owns layout only. `CreateAgentWizard.vue` emits `created`, `close`, and never calls unrelated project APIs. `AgentEditorPanel.vue` renders tabs for base, parameters, advanced prompt, versions, and usage. Locked Blueprint content is read-only.
+`AgentConfigCenter.vue` owns layout only. `CreateAgentWizard.vue` emits `created`, `close`, and never calls unrelated project APIs. `AgentEditorPanel.vue` renders tabs for base, parameters, advanced prompt, versions, test runs, and usage/bindings. Locked Blueprint content is read-only. The “使用项目和默认绑定” tab displays project assignments and lets the owner set a user default; project-level binding management (add/edit/delete) is also accessible from this tab when the user has `MANAGE_AGENT_CONFIG` permission on the selected project.
 
 Use this event contract:
 
@@ -741,11 +797,13 @@ Use this event contract:
 />
 ```
 
-- [ ] **Step 5: Run tests and production build**
+- [ ] **Step 5: Run pure-function tests and production build**
 
 Run: `cd aicp-frontend && npm test && npm run build`
 
 Expected: all tests PASS and Vite build exits 0.
+
+> **组件测试策略：** M1 阶段通过 `agentConfigHelpers.js` 的纯函数测试覆盖状态转换、过滤、校验和绑定标签逻辑。Vue 组件的交互测试（wizard 步骤流转、editor tab 切换、试跑结果渲染）在 M2 中随业务集成端到端测试一同补充。M1 的生产构建 (`npm run build`) 已确保模板编译无误。
 
 - [ ] **Step 6: Commit**
 
@@ -871,13 +929,14 @@ git commit -m "docs: document agent configuration center APIs"
 
 ## M1 definition of done
 
-- Four active Blueprints exist in H2 and MySQL bootstrap paths.
-- A user can create, copy, archive, and list only their own Agent definitions.
+- Four active Blueprints exist in H2 and MySQL bootstrap paths, each with complete JSON Schema (parameters, input, output, tools, context, model policy).
+- A user can create, copy, archive, and list only their own Agent definitions. Agent names are unique per user.
 - Drafts validate variables and locked boundaries; published versions are immutable.
-- Publishing requires a successful test run.
-- User and project bindings are authorized and use optimistic concurrency.
-- Resolver precedence is PROJECT > USER > SYSTEM; explicit invalid bindings fail closed.
-- A resolved configuration can be frozen and reloaded as an immutable snapshot.
-- The configuration center and four-step wizard are reachable from navigation.
-- Backend tests, frontend tests, and production build all pass.
+- Publishing requires at least one successful test run (model returns valid JSON that satisfies the output schema).
+- User and project bindings are authorized and use optimistic concurrency (`row_version` on both versions and bindings).
+- Resolver precedence is PROJECT > USER > SYSTEM; explicit invalid bindings fail closed (no silent fallback).
+- A resolved configuration can be frozen as an immutable snapshot via `POST /api/v1/agent/resolve-preview`; snapshots are retrievable by ID.
+- All 25 M1 REST endpoints respond correctly under the dev profile.
+- The configuration center and four-step wizard are reachable from navigation; the editor panel includes a bindings tab for user-default and project-level management.
+- Backend tests, frontend pure-function tests, and production build all pass. Vue component interaction tests deferred to M2.
 - No production script/hook/storyboard/director service is changed in M1; those integrations are separate plans.

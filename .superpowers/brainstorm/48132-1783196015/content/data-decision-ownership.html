@@ -1,0 +1,37 @@
+<h2>哪些数据与决策需要换模块负责</h2>
+<p class="subtitle">判断标准：导演台只拥有“如何拍这个单镜头”；其他模块拥有“拍什么、用什么、怎么执行、是否采用”。</p>
+
+<div class="mockup">
+  <div class="mockup-header">数据所有权调整表</div>
+  <div class="mockup-body" style="padding:16px;background:#0f172a;color:#e2e8f0;overflow:auto">
+    <div style="display:grid;grid-template-columns:1.1fr 1fr 1.2fr 1.7fr;gap:8px;min-width:900px;align-items:stretch">
+      <strong>数据 / 决策</strong><strong>不应归属</strong><strong>正确归属</strong><strong>导演台只保留</strong>
+      <div>镜头编号、基础时长、台词</div><div>导演台</div><div style="color:#93c5fd">分镜系统 / Canvas</div><div>本次使用的只读快照；修改时发起同步变更</div>
+      <div>角色身份、服装、场景和道具版本</div><div>导演台内部副本</div><div style="color:#93c5fd">资产库 + Canvas 连接</div><div>asset_version_id、摆位、朝向和状态覆盖</div>
+      <div>世界观、色彩、连续性规则</div><div>导演台自由填写</div><div style="color:#93c5fd">创作圣经 / 连续性服务</div><div>当前镜头适用规则及局部例外</div>
+      <div>站位、表演节拍、相机和构图</div><div>Canvas 属性栏</div><div style="color:#c4b5fd">导演台</div><div>完整场景、动作片段、关键帧与镜头语义</div>
+      <div>Seedance 9图/3视频/3音频槽位</div><div>导演台硬编码</div><div style="color:#86efac">模型适配器服务</div><div>语义参考：身份、场景、动作、运镜、声音</div>
+      <div>模型专用 Prompt</div><div>导演台手写最终文本</div><div style="color:#86efac">模型适配器 + Prompt 编译器</div><div>时间码导演脚本、正向意图、禁止项</div>
+      <div>Blender 分辨率、采样、编码参数</div><div>导演台逐项配置</div><div style="color:#fdba74">Blender Worker / 渲染预设</div><div>草稿/标准预演等质量档位</div>
+      <div>积分预估、排队、重试和取消</div><div>导演台</div><div style="color:#93c5fd">Canvas 任务中心</div><div>提交生成、查看状态和跳转任务详情</div>
+      <div>构图、人物、动作、运镜偏差评分</div><div>Seedance 节点自评</div><div style="color:#f9a8d4">独立质量代理</div><div>按时间段展示问题并定位对应轨道</div>
+      <div>候选视频采用 / 驳回</div><div>导演台自动决定</div><div style="color:#93c5fd">Canvas / 分镜 Master</div><div>打开候选对比与按偏差返工入口</div>
+      <div>文件 URL、缩略图、生命周期</div><div>节点 JSON 长期保存</div><div style="color:#93c5fd">统一资产服务</div><div>asset_id、版本和派生关系</div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:22px">
+  <h3>最重要的架构修正：增加“模型适配器”</h3>
+  <p>导演台不应直接认识 Seedance 的具体槽位数量。它输出模型无关的 <code>Director Shot Package</code>：角色身份、场景、动作、运镜、声音和时间码。Seedance Adapter 再将这些语义映射为当前版本支持的图片、视频、音频及 Prompt。未来切换 Seedance 新版本、Veo 或 Kling 时，导演台无需重做。</p>
+</div>
+
+<div class="section">
+  <h3>允许覆盖，但不能夺取所有权</h3>
+  <ul><li>导演台可以调整镜头时长，但应形成分镜 revision，并由 Canvas 同步，而不是悄悄改副本。</li><li>导演台可以切换角色服装，但必须选择资产库已有版本或创建新版本。</li><li>导演台可以提出连续性例外，但必须记录原因并触发审核提示。</li><li>导演台可以选择 Seedance 生成策略，但不能直接拼装底层 API 请求。</li></ul>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approve-ownership" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>认可数据所有权</h3><p>以此边界继续设计导演台内部功能。</p></div></div>
+  <div class="option" data-choice="revise-ownership" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>调整某项归属</h3><p>请指出具体数据或决策。</p></div></div>
+</div>

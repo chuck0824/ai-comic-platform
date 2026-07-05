@@ -1,0 +1,103 @@
+<h2>用户可配置 Agent：完整整体方案</h2>
+<p class="subtitle">目标：让用户安全地调整“怎么创作、怎么判断、怎么修改”，同时由平台控制工具权限、数据安全与输出协议。</p>
+
+<div class="section">
+  <div class="label">一、产品结构</div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px">
+    <div class="option" style="flex:1;min-width:145px"><div class="content"><h3>系统角色模板</h3><p>4 个核心能力<br>锁定工具与输出协议</p></div></div><strong>→</strong>
+    <div class="option" style="flex:1;min-width:145px"><div class="content"><h3>用户 Agent 变体</h3><p>复制、命名、调参数<br>编辑创作 Prompt</p></div></div><strong>→</strong>
+    <div class="option" style="flex:1;min-width:145px"><div class="content"><h3>版本生命周期</h3><p>草稿 → 试跑对比<br>发布 → 回滚</p></div></div><strong>→</strong>
+    <div class="option" style="flex:1;min-width:145px"><div class="content"><h3>作用域绑定</h3><p>用户默认 → 项目覆盖<br>→ 单次临时调整</p></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">二、首期四个核心 Agent</div>
+  <div class="cards" style="margin-top:12px">
+    <div class="card"><div class="card-body"><h3>钩子 Agent</h3><p>开场抓人秒数、钩子密度、反转强度、章尾悬念、下一集承诺、评分阈值、平台偏好。</p><small>接管：重新下钩子、钩子分析、联合审核中的钩子部分。</small></div></div>
+    <div class="card"><div class="card-body"><h3>编剧修订 Agent</h3><p>修订强度、对白密度、冲突升级、情绪节奏、人物一致性、单集长度、禁改项。</p><small>接管：剧本生成、逐集修订、对白与节奏优化。</small></div></div>
+    <div class="card"><div class="card-body"><h3>分镜 Agent</h3><p>镜头密度、平均时长、A/B/C 档、构图、运镜、切镜节奏、连续性与低成本策略。</p><small>接管：A 档拆镜、B 档导演意图、C 档生产字段。</small></div></div>
+    <div class="card"><div class="card-body"><h3>导演 Agent</h3><p>视觉风格、节奏判断、可拍性、预算约束、审核阈值、问题严重度、建议或修订模式。</p><small>接管：导演审核、可拍性判断、剧本/分镜调整建议。</small></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">三、Prompt 安全分层</div>
+  <div class="mockup" style="margin-top:12px"><div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 1.3fr 1fr;gap:12px;text-align:center">
+      <div style="padding:16px;border:1px solid #334155;border-radius:10px"><strong>平台锁定层</strong><br><small>工具白名单、安全规则<br>输入/输出 Schema、审计要求</small></div>
+      <div style="padding:16px;border:2px solid #6366f1;border-radius:10px"><strong>用户可编辑层</strong><br><small>角色方法、判断标准、风格<br>任务指令、变量、示例</small></div>
+      <div style="padding:16px;border:1px solid #334155;border-radius:10px"><strong>运行时上下文</strong><br><small>项目圣经、当前剧本/分镜<br>选中范围、临时参数</small></div>
+    </div>
+    <p style="text-align:center;margin:14px 0 0"><strong>三层编译为最终 Prompt；执行前校验，执行后冻结快照。</strong></p>
+  </div></div>
+</div>
+
+<div class="section">
+  <div class="label">四、配置解析与执行链路</div>
+  <div class="mockup" style="margin-top:12px"><div class="mockup-body">
+    <div style="display:flex;align-items:center;gap:8px;justify-content:center;flex-wrap:wrap;text-align:center">
+      <span style="padding:10px;border:1px solid #334155;border-radius:8px">业务入口</span><strong>→</strong>
+      <span style="padding:10px;border:1px solid #334155;border-radius:8px">解析继承范围</span><strong>→</strong>
+      <span style="padding:10px;border:2px solid #6366f1;border-radius:8px">生成执行快照</span><strong>→</strong>
+      <span style="padding:10px;border:1px solid #334155;border-radius:8px">AI Router</span><strong>→</strong>
+      <span style="padding:10px;border:1px solid #334155;border-radius:8px">Schema 校验</span><strong>→</strong>
+      <span style="padding:10px;border:1px solid #334155;border-radius:8px">预览 / Diff</span><strong>→</strong>
+      <span style="padding:10px;border:1px solid #334155;border-radius:8px">用户确认</span><strong>→</strong>
+      <span style="padding:10px;border:1px solid #334155;border-radius:8px">新业务版本</span>
+    </div>
+  </div></div>
+  <p>配置优先级固定为：单次临时参数 ＞ 项目发布版本 ＞ 用户默认版本 ＞ 系统默认版本。历史任务始终读取自己的执行快照，不随配置更新漂移。</p>
+</div>
+
+<div class="section">
+  <div class="label">五、需要新增和修改的产品功能</div>
+  <div class="split" style="margin-top:12px">
+    <div class="mockup"><div class="mockup-header">新增功能</div><div class="mockup-body"><ul>
+      <li>全局 Agent 配置中心</li><li>结构化参数 / 高级 Prompt 双层编辑器</li><li>我的 Agent 变体与复制</li><li>草稿、试跑 A/B 对比、发布、回滚</li><li>项目 Agent 设置与角色默认绑定</li><li>任务前 Agent 选择器与临时调整</li><li>执行记录、配置来源与快照查看</li>
+    </ul></div></div>
+    <div class="mockup"><div class="mockup-header">改造现有功能</div><div class="mockup-body"><ul>
+      <li>剧本生成、修订和版本保存</li><li>钩子生成、钩子评分和三 Agent 审核</li><li>专业分镜 A/B/C 档生成</li><li>导演审核、修改建议和 Diff 审批</li><li>Agent 会话的项目配置感知</li><li>生成任务的 Agent 版本与快照字段</li><li>旧 PromptManager 数据迁移并下线入口</li>
+    </ul></div></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">六、后台模块与数据模型</div>
+  <div class="options" style="margin-top:12px">
+    <div class="option"><div class="letter">A</div><div class="content"><h3>AgentTemplate</h3><p>系统定义的角色能力、锁定规则、参数 Schema、Prompt 基线、输出 Schema、允许工具。</p></div></div>
+    <div class="option"><div class="letter">B</div><div class="content"><h3>AgentVariant / Version</h3><p>用户派生变体与不可变版本；状态为草稿、已发布、已归档，支持版本 Diff 和回滚。</p></div></div>
+    <div class="option"><div class="letter">C</div><div class="content"><h3>AgentBinding</h3><p>记录用户默认和项目默认；同一角色、同一作用域只能有一个当前生效版本。</p></div></div>
+    <div class="option"><div class="letter">D</div><div class="content"><h3>TestRun / ExecutionSnapshot</h3><p>保存试跑输入、结果、评分、成本；正式任务冻结最终 Prompt、参数、模型和来源版本。</p></div></div>
+  </div>
+  <p><strong>新增统一服务：</strong>配置解析器、Prompt 编译器、版本发布服务、试跑服务、绑定服务和执行快照服务。业务模块只提交角色类型与上下文，不再硬编码创作 Prompt。</p>
+</div>
+
+<div class="section">
+  <div class="label">七、权限、错误与治理</div>
+  <div class="pros-cons" style="margin-top:12px">
+    <div class="pros"><h4>规则</h4><ul><li>个人可创建和发布自己的变体</li><li>项目管理员/导演可绑定项目默认</li><li>普通成员仅使用或做单次临时调整</li><li>发布、回滚、绑定、执行全部记审计</li></ul></div>
+    <div class="cons"><h4>失败处理</h4><ul><li>配置无效时禁止发布，不静默降级</li><li>结构化输出最多自动修复一次</li><li>执行中版本变化不影响已冻结快照</li><li>权限或项目版本冲突时停止写入</li></ul></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">八、迁移与上线顺序</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px;text-align:center">
+    <div style="padding:14px;border:1px solid #334155;border-radius:10px"><strong>M1 基础</strong><br><small>数据表、四个系统模板、配置中心、版本发布</small></div>
+    <div style="padding:14px;border:1px solid #334155;border-radius:10px"><strong>M2 剧本</strong><br><small>接入钩子与编剧修订，迁移相关旧 Prompt</small></div>
+    <div style="padding:14px;border:1px solid #334155;border-radius:10px"><strong>M3 分镜</strong><br><small>接入分镜与导演，补齐 Diff 与任务选择器</small></div>
+    <div style="padding:14px;border:1px solid #334155;border-radius:10px"><strong>M4 收口</strong><br><small>下线旧入口、审计验收、灰度和回滚演练</small></div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="label">九、验收标准</div>
+  <ul>
+    <li>四个角色均可复制出多个变体，并完成草稿、试跑、发布和回滚。</li>
+    <li>同一输入切换 Agent 版本后结果可观察地变化；执行记录能还原所用配置。</li>
+    <li>项目配置按权限生效，普通成员不能发布或覆盖项目默认。</li>
+    <li>新版 Agent 不影响历史任务；重跑产生新业务版本，不覆盖旧结果。</li>
+    <li>代码内四条核心业务链路不再使用硬编码创作 Prompt。</li>
+  </ul>
+</div>

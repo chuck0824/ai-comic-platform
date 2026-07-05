@@ -1,0 +1,71 @@
+<h2>第三部分：双视图页面与操作闭环</h2>
+<p class="subtitle">独立任务中心，用户端解决任务，运营端治理异常。</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">用户任务中心 /task-center</div>
+    <div class="mockup-body" style="padding:16px">
+      <div class="mock-nav">概览　生成任务　交易订单　费用明细</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0">
+        <div class="placeholder">进行中 4</div>
+        <div class="placeholder">待我处理 2</div>
+        <div class="placeholder">本月费用</div>
+        <div class="placeholder">异常 1</div>
+      </div>
+      <input class="mock-input" style="width:100%" placeholder="搜索任务、订单、项目；筛选状态、类型、时间">
+      <div class="placeholder" style="margin-top:12px">
+        <strong>视频生成 · 正在结算</strong><br>
+        《山海异闻录》 · 已完成模型执行 · 预计 48 / 实际 45 积分<br>
+        <button class="mock-button">查看时间线</button>
+      </div>
+      <div class="placeholder" style="margin-top:8px">
+        <strong>剧本订单 · 交付异常</strong><br>
+        支付已成功，平台正在重新交付；无需重复付款<br>
+        <button class="mock-button">查看订单</button>
+        <button class="mock-button">联系支持</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">运营控制台 /ops/task-center</div>
+    <div class="mockup-body" style="padding:16px">
+      <div class="mock-nav">态势　生成　交易　对账异常　告警　工单</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0">
+        <div class="placeholder">SLA 超时 12</div>
+        <div class="placeholder">账实不符 3</div>
+        <div class="placeholder">待补偿 7</div>
+        <div class="placeholder">未分派 5</div>
+      </div>
+      <input class="mock-input" style="width:100%" placeholder="Workspace、用户、trace_id、订单号、模型、错误码">
+      <div class="placeholder" style="margin-top:12px">
+        <strong>P1 · 支付成功但权益未交付</strong><br>
+        已持续 8 分钟 · 责任域：交易 · 自动补偿 2/5<br>
+        <button class="mock-button">认领</button>
+        <button class="mock-button">重发交付</button>
+      </div>
+      <div class="placeholder" style="margin-top:8px">
+        <strong>P2 · 生成结算回执缺失</strong><br>
+        已持续 16 分钟 · 责任域：钱包 · 待对账<br>
+        <button class="mock-button">查账</button>
+        <button class="mock-button">创建工单</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>详情抽屉</h3>
+  <p>统一包含：概览、业务阶段、事件时间线、费用/账本、输入输出、关联对象、执行尝试、告警与工单、审计记录。敏感 Prompt、合同、账本信息按权限脱敏。</p>
+</div>
+
+<div class="section">
+  <h3>操作规则</h3>
+  <ul>
+    <li><strong>用户：</strong>取消、重试、继续支付、取消未付订单、查看交付、提交退款、补充凭证。</li>
+    <li><strong>运营：</strong>认领/转派、重新查单、重发交付、重跑资产入库、发起补偿、关闭告警、关联工单。</li>
+    <li>按钮完全由后端 <code>allowed_actions</code> 返回；每个命令要求幂等键、操作原因和审计记录。</li>
+    <li>退款、人工冲正、赠送积分等财务操作必须二次确认；超过阈值进入双人审批，不能直接修改余额。</li>
+    <li>轮询仅作兜底；页面优先使用 SSE 推送状态与时间线增量，断线后按游标补事件。</li>
+  </ul>
+</div>

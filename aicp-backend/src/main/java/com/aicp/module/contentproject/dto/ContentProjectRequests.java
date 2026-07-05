@@ -66,4 +66,34 @@ public interface ContentProjectRequests {
     record StoryboardIntentRequest(
             @NotBlank String intent,
             Long sourceVersionId) {}
+
+    // ===== Warehouse / Lifecycle =====
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record ProjectQuery(
+            int page,
+            int pageSize,
+            String keyword,
+            String creationMode,
+            String sourceMode,
+            String contentStatus,
+            String productionStatus,
+            String commercialStatus,
+            String lifecycleStatus,
+            String updatedFrom,
+            String updatedTo,
+            String sort) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record VersionActionRequest(
+            Long versionId,
+            Integer revision,
+            @NotBlank String idempotencyKey,
+            @Size(max = 2000) String comment) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record ProjectActionRequest(
+            Integer revision,
+            @NotBlank String idempotencyKey,
+            @Size(max = 2000) String comment) {}
 }

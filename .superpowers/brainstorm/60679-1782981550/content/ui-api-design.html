@@ -1,0 +1,55 @@
+<h2>设计 3/4：项目生产副驾工作台</h2>
+<p class="subtitle">三栏布局：会话导航、对话与审批、上下文与执行时间线。</p>
+
+<div class="mockup">
+  <div class="mockup-header">Agent 会话 · 《暗夜追光者》</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:210px 1fr 290px;min-height:470px;background:#0b1020;color:#e5e7eb;font-size:12px">
+    <aside style="border-right:1px solid #273244;padding:14px">
+      <button class="mock-button" style="width:100%;margin-bottom:12px">＋ 新建项目会话</button>
+      <div style="color:#94a3b8;margin:10px 0">当前项目 · 3</div>
+      <div style="background:#312e81;border-radius:7px;padding:10px;margin-bottom:7px"><b>第 3 集分镜生产</b><br><span style="color:#c7d2fe">执行中 · 6/12</span></div>
+      <div style="padding:10px;margin-bottom:7px"><b>角色一致性检查</b><br><span style="color:#94a3b8">昨天</span></div>
+      <div style="padding:10px"><b>场景资产整理</b><br><span style="color:#94a3b8">6 月 29 日</span></div>
+    </aside>
+
+    <main style="padding:18px;display:flex;flex-direction:column;gap:12px">
+      <div style="align-self:flex-end;max-width:72%;background:#4f46e5;border-radius:10px;padding:11px">为第 3 集生成全部角色定妆图，沿用项目国漫风格。</div>
+      <div style="max-width:78%;background:#1e293b;border-radius:10px;padding:11px">已读取第 3 集分镜、5 个角色资产和项目风格规范。我整理了执行计划，请确认。</div>
+
+      <div style="border:1px solid #7c3aed;background:#17152b;border-radius:11px;padding:14px">
+        <div style="display:flex;justify-content:space-between"><b>执行计划 v1</b><span style="color:#fbbf24">中风险 · 需确认</span></div>
+        <div style="margin:10px 0;color:#cbd5e1">影响：更新 5 个角色节点，创建 15 个图片生成任务，不覆盖已采用版本。</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+          <div style="background:#0f172a;padding:8px;border-radius:6px">预计积分<br><b>300–450</b></div>
+          <div style="background:#0f172a;padding:8px;border-radius:6px">预计时长<br><b>8–15 分钟</b></div>
+          <div style="background:#0f172a;padding:8px;border-radius:6px">执行步骤<br><b>12 步</b></div>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end"><button class="mock-button">要求调整</button><button class="mock-button" style="background:#4f46e5;color:white">确认并执行</button></div>
+      </div>
+
+      <div style="margin-top:auto;border:1px solid #334155;border-radius:9px;padding:10px;color:#94a3b8">输入指令…　<span style="float:right;color:#c4b5fd">上下文：第 3 集 · 画布 A</span></div>
+    </main>
+
+    <aside style="border-left:1px solid #273244;padding:14px">
+      <b>上下文</b>
+      <div style="margin:9px 0 16px;color:#94a3b8">项目：暗夜追光者<br>内容单元：第 3 集<br>画布：生产画布 A<br>权限：编辑 + 生成</div>
+      <b>执行时间线</b>
+      <div style="border-left:2px solid #475569;margin:10px 0 0 6px;padding-left:12px;line-height:2.15">
+        <div style="color:#86efac">✓ 读取角色资产</div>
+        <div style="color:#86efac">✓ 校验风格规范</div>
+        <div style="color:#fbbf24">● 等待计划确认</div>
+        <div style="color:#64748b">○ 创建生成任务</div>
+        <div style="color:#64748b">○ 质量检查与回写</div>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<div class="section">
+  <h3>P0 API 契约</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px">
+    <div style="border:1px solid #334155;border-radius:8px;padding:12px"><b>会话与消息</b><br><code>GET /agent/sessions?project_id=&cursor=</code><br><code>POST /agent/sessions</code><br><code>GET /agent/sessions/{id}</code><br><code>GET /agent/sessions/{id}/messages?cursor=</code><br><code>POST /agent/sessions/{id}/messages</code></div>
+    <div style="border:1px solid #334155;border-radius:8px;padding:12px"><b>计划与控制</b><br><code>POST /agent/plans/{id}/approval</code><br><code>POST /agent/runs/{id}/actions</code><br><code>POST /agent/steps/{id}/retries</code><br><code>GET /agent/sessions/{id}/events?after=</code></div>
+  </div>
+  <p style="margin-top:10px">所有创建/控制接口接收 <b>Idempotency-Key</b>；列表使用游标分页；写接口校验 workspace、project、角色权限和计划版本。</p>
+</div>

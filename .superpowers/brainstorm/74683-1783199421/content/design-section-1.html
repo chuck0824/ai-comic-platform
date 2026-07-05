@@ -1,0 +1,54 @@
+<h2>第一章：产品边界与核心对象</h2>
+<p class="subtitle">已选方案：兼容层驱动的分阶段绞杀迁移</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">当前冲突</div>
+    <div class="mockup-body">
+      <ul>
+        <li>项目中心可能长期停留在骨架屏</li>
+        <li><code>director</code> / <code>reference</code> 节点类型不一致</li>
+        <li>剪辑、音频处理、合成导出仍暴露在 Canvas</li>
+        <li>模型硬编码、固定积分、部分接口仍为 mock</li>
+        <li>导演状态混存在节点 JSON，缺少版本流</li>
+        <li>节点采用与镜头采用存在双事实源</li>
+      </ul>
+    </div>
+  </div>
+  <div class="mockup">
+    <div class="mockup-header">目标边界</div>
+    <div class="mockup-body">
+      <div class="placeholder">CanvasProject<br>探索模式 / 正式生产模式</div>
+      <div style="text-align:center;margin:6px">↓</div>
+      <div class="placeholder">ShotWorkUnit<br>临时镜头 / 正式 shot revision</div>
+      <div style="text-align:center;margin:6px">↓</div>
+      <div class="placeholder">六类节点 + 共享 DirectorScene 版本流</div>
+      <div style="text-align:center;margin:6px">↓</div>
+      <div class="placeholder">请求快照 → 候选 → 正式采用 → 交付清单</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>必须遵守的规则</h3>
+  <ul>
+    <li>空白画布可探索、使用导演台和试生成；正式采用与交付前绑定内容项目和分镜 revision。</li>
+    <li>节点严格保持文本、图片、视频、音频、脚本、导演台六类；候选、质检、任务不是节点。</li>
+    <li>每个镜头工作单元共享一个导演台版本流，多个视频节点可复用冻结版本。</li>
+    <li>冻结导演包和生成请求快照不可变；执行状态只属于 Task/Attempt。</li>
+    <li><code>ShotAdoption</code> 是正式采用唯一事实源。</li>
+    <li>Canvas 只交付采用镜头、清单、校验和素材包，不做多轨剪辑和成片合成。</li>
+    <li>Seedance 进入开发前必须通过真实供应商 API 合同验证 Gate。</li>
+  </ul>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="confirm-section-1" onclick="toggleSelect(this)">
+    <div class="letter">✓</div>
+    <div class="content"><h3>确认第一章</h3><p>继续数据、API 与兼容迁移设计。</p></div>
+  </div>
+  <div class="option" data-choice="revise-section-1" onclick="toggleSelect(this)">
+    <div class="letter">↺</div>
+    <div class="content"><h3>需要修改</h3><p>返回终端说明需要调整的内容。</p></div>
+  </div>
+</div>

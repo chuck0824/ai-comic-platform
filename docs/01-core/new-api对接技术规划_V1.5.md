@@ -1,4 +1,4 @@
-# new-api 对接技术规划 V1.6
+# new-api 对接技术规划 V1.7
 
 > 基于《后端产品功能设计_V1.5.md》与《AI漫剧与视频内容工业化生产工作台 PRD V1.5》  
 > 对接目标：[new-api](https://github.com/QuantumNous/new-api) — 新一代 AI 模型聚合管理与分发系统  
@@ -7,7 +7,7 @@
 
 ---
 
-## 基于 superpowers 的更新记录（2026-07-02）
+## 基于 superpowers 的更新记录（2026-07-04）
 
 | 更新项 | 说明 | 依据 superpowers |
 |---|---|---|
@@ -17,8 +17,13 @@
 | 交易支付链路 | 8080→3001 钱包预扣/结算/退款调用链，双服务财务架构（Outbox + 最终一致性） | `script-trading-market-completion-design.md` |
 | 部署拓扑 | 反映 3001 内部 API 端点、8080 新增模块（创作圣经/Agent/交易/资产市场） | 全部 |
 | 风险更新 | 视频生成通道扩展 → 已规划、统一身份同步 → 已决策（3001 为唯一源） | `unified-account-model-billing-design.md` |
+| 统一任务事件中心 `[superpowers 更新 V1.7]` | new-api 回调 + SSE 推送、任务状态变更事件、供应商侧任务状态回写、SLA 检测集成、任务案例关联 | `unified-task-event-center-design.md` |
+| Agent 配置中心 `[superpowers 更新 V1.7]` | 模型调用通道（4 系统蓝图路由规则）、试跑链路、执行快照冻结、配置解析优先级链 | `agent-config-center-design.md` |
+| 企业工作台 `[superpowers 更新 V1.7]` | 3001 BFF 适配层（组织/成员/角色/余额查询代理） | `enterprise-workbench-bff-design.md` |
+| 资产工作台 `[superpowers 更新 V1.7]` | generation_tasks 扩展（workspace_id/idempotency_key 字段）、统一生成历史+任务监控查询 | `asset-workbench-generation-tasks-design.md` |
+| 跨域规范补强 `[superpowers 更新 V1.7]` | 幂等键去重（409 拒绝）、乐观锁并发控制、故障关闭策略（fail-closed） | `cross-domain-specifications-design.md` |
 
-> **注意**：本文档中标注 `[superpowers 更新]` 的段落为本次新增或修改内容。
+> **注意**：本文档中标注 `[superpowers 更新]` 和 `[superpowers 更新 V1.7]` 的段落为本次新增或修改内容。
 
 ---
 
@@ -36,6 +41,8 @@
 10. [部署拓扑](#10-部署拓扑)
 11. [分期实施路线图](#11-分期实施路线图)
 12. [风险与应对](#12-风险与应对)
+13. [统一任务事件中心的 new-api 集成](#13-统一任务事件中心的-new-api-集成-superpowers-更新-v17)
+14. [Agent 配置中心的模型调用通道](#14-agent-配置中心的模型调用通道-superpowers-更新-v17)
 
 ---
 
@@ -227,6 +234,12 @@ new-api = 模型供应商的“聚合层 + 计费层 + 渠道层”
     │  │  (用户)    │ (剧本生成)     │ (剧本仓库)       │ (交易)    │ (画布引擎)     │ │
     │  │            │                │                  │           │         │      │ │
     │  │  asset-market-svc │ sop-svc │ notify-svc │ agent-svc                       │ │
+│  │            │                │                  │           │         │      │ │
+│  │  🆕 task-event-svc │ 🆕 enterprise-svc │ 🆕 asset-workbench-svc            │ │
+│  │  (任务事件中心)    │ (企业工作台 BFF)   │ (资产工作台)                      │ │
+│  │                    │                    │                                  │ │
+│  │  🆕 agent-config-svc                                                            │ │
+│  │  (Agent 配置中心)                                                               │ │
     │  │  (资产市场)       │ (质检)  │ (通知)     │ (Agent/Skill)                   │ │
     │  └─────────────────────────────────────────────────────────────────────────────┘ │
     └──────────────────────────────────────────────────────────────────────────────────┘
@@ -301,6 +314,14 @@ stateDiagram-v2
 ## 3. AI Router 设计：我们自建的核心层
 
 AI Router 是我们平台与 new-api 之间的唯一桥梁。**所有 AI 调用必须经过 AI Router**，不允许微服务直连 new-api。
+
+### 3.0 任务事件采集与 SLA 检测 `[superpowers 更新 V1.7]`
+
+`[superpowers 更新 V1.7]` AI Router 层新增以下能力：
+
+- **任务事件采集路径**：生成任务 events → `task_events` 表。每次模型调用从 AI Router → new-api 链路采集 `provider_request_id`、模型、参数、耗时、费用，统一写入任务事件中心。
+- **SLA 超时检测集成**：在 Router 层检测模型调用耗时，超过阈值触发 `task_alerts`。包括：生成排队超时、模型执行超时、2 分钟无有效资产、5 分钟无结算回执。
+- **资产工作台查询支持**：`generation_tasks` 新增 `workspace_id`、`content_project_id`、`idempotency_key` 字段，支持按 workspace/项目/幂等键查询生成历史与任务监控。
 
 ### 3.1 模块架构
 
@@ -478,6 +499,10 @@ CREATE TABLE ai_model_capabilities (
 | **user-svc** | — | 不直接调 AI | — |
 | **trade-svc** | — | 不直接调 AI | — |
 | **notify-svc** | — | 不直接调 AI | — |
+| 🆕 **task-event-svc** `[superpowers 更新 V1.7]` | 事件消费 + SSE 推送 | new-api 回调 + SSE 推送 | 消费生成/交易事件，构建统一任务案例（P0） |
+| 🆕 **enterprise-svc** `[superpowers 更新 V1.7]` | 3001 内部 API 代理 | 3001 内部 API | 组织/成员/角色/余额查询（P0） |
+| 🆕 **agent-config-svc** `[superpowers 更新 V1.7]` | LLM 模型调用 | new-api LLM | 试跑 + 配置解析 + 执行快照冻结（P1） |
+| 🆕 **asset-workbench-svc** `[superpowers 更新 V1.7]` | 生成任务查询 | new-api 生成任务 | 任务状态查询 + 结果消费 + 统一生成历史（P0） |
 
 ### 4.1 调用量预估
 
@@ -660,6 +685,16 @@ AI Router OmniReferenceAdapter:
 
 ## 8. Agent/Skill 与 new-api 的交互
 
+### 8.0 Agent 配置中心的模型调用通道 `[superpowers 更新 V1.7]`
+
+`[superpowers 更新 V1.7]` Agent 配置中心提供以下能力：
+
+- **配置读取与路由**：Agent 配置中心读取已发布 Agent 配置（4 系统蓝图：HOOK/SCREENWRITER/STORYBOARD/DIRECTOR）→ 解析优先级链（临时参数 > 项目绑定 > 用户默认 > 系统默认）→ 编译 Prompt → 调用 new-api LLM。
+- **执行快照冻结**：每次正式执行时保存完整配置快照到 `agent_execution_snapshots`，记录 `blueprint_id`/`version`、`resolved_prompt`、`model_id`。
+- **模型调用参数解耦**：模型调用参数由配置解析优先级链决定，不再硬编码在业务服务中。
+
+### 8.1 Agent 决策调用链路
+
 ```
 用户自然语言指令: "把第3集的角色图全部生成，用国漫风格"
   │
@@ -814,7 +849,14 @@ GET new-api/api/user/balance?platform_user_id=our_user_12345
 │  └──────────┬──────────┘  │                                  │   │
 │             │              │  微服务 Pods (每个 2-5 副本)      │   │
 │             │              │  user-svc │ script-gen-svc       │   │
-│             │  内网 HTTP   │  canvas-svc │ agent-svc │ ...    │   │
+│             │              │  canvas-svc │ agent-svc │ ...    │   │
+│             │              │  🆕 task-event-svc               │   │
+│             │              │  🆕 agent-config-svc             │   │
+│             │              │  🆕 enterprise-svc (3001 BFF)    │   │
+│             │              │  🆕 asset-workbench-svc          │   │
+│             │  内网 HTTP   │  Outbox 投递器（trade_outbox、   │   │
+│             │              │  asset_outbox、                  │   │
+│             │              │  generation_settlement_outbox）  │   │
 │             └──────────────┤                                  │   │
 │                            │  前端 (Nginx + Vue 3) ×2         │   │
 │                            └──────────────────────────────────┘   │
@@ -895,11 +937,136 @@ GET new-api/api/user/balance?platform_user_id=our_user_12345
 | 视频生成异步等待 | 用户体验差 | 低 | WebSocket/SSE 实时推送生成进度，不阻塞画布操作 |
 | 8080↔3001 数据一致性 `[superpowers 更新]` | 交易订单与钱包状态不一致 | 中 | Outbox 模式 + 幂等键 + 定期对账；3001 账本不可变 |
 | 统一账号同步延迟 `[superpowers 更新]` | 用户禁用/权限变更不及时 | 低 | 决策：3001 为唯一数据源；8080 关键路径实时查询（不缓存授权信息） |
+| 3001 不可用故障关闭 `[superpowers 更新 V1.7]` | 所有依赖 3001 的操作中断 | 中 | 所有依赖 3001 的操作必须 fail-closed（返回 503 + Retry-After），禁止 mock 成功；关键路径实施断路器模式 |
+| 幂等键去重风险 `[superpowers 更新 V1.7]` | 相同 key 不同 payload 导致重复扣费 | 中 | 相同 key 不同 payload 必须拒绝（409 Conflict），防止重复扣费；幂等键格式统一为 `{service}_{entity}_{idempotency_key}` |
+| Workspace ID 格式不一致 `[superpowers 更新 V1.7]` | 跨服务路由错误、数据归属混乱 | 低 | 统一 `personal_{userId}` / `enterprise_{enterpriseId}` 格式；所有服务在入口层校验并标准化 |
+| Outbox 投递失败 `[superpowers 更新 V1.7]` | 事件丢失导致跨服务数据不一致 | 中 | 指数退避重试 → 死信队列 → 告警 → 人工介入；定期对账兜底 |
 
 ---
 
-> **文档状态**：V1.6 修订版（基于 superpowers 增量更新）
+## 13. 统一任务事件中心的 new-api 集成 `[superpowers 更新 V1.7]`
+
+`[superpowers 更新 V1.7]` 任务事件中心（task-event-svc）负责统一消费所有生成/交易事件，构建可追溯的任务案例。
+
+### 13.1 事件采集链路
+
+```
+生成任务 events 从 AI Router → new-api 链路采集
+  │
+  ├── provider_request_id  (new-api 侧请求 ID)
+  ├── model                (实际使用的模型)
+  ├── parameters           (输入参数快照)
+  ├── duration_ms          (调用耗时)
+  ├── credit_cost          (费用)
+  └── → task_events 表
+```
+
+### 13.2 SSE 推送机制
+
+8080 任务事件中心通过 SSE（Server-Sent Events）向客户端实时推送任务状态变更：
+
+| 事件类型 | 触发条件 | 推送内容 |
+|---|---|---|
+| `task.created` | generation_task 创建 | task_id、type、status=pending |
+| `task.progress` | 进度更新 | task_id、progress%、estimated_remaining |
+| `task.completed` | 任务成功 | task_id、output_assets、credit_cost |
+| `task.failed` | 任务失败 | task_id、error_code、error_message |
+| `task.alert` | SLA 检测触发 | task_id、alert_type、threshold、actual |
+
+### 13.3 供应商侧任务状态回写
+
+```
+new-api 异步任务完成
+  → new-api 回调 webhook (POST /api/callback/new-api/task-status)
+  → Domain Event Adapter 转换为平台事件格式
+  → Task Event Store 写入 task_events + 更新 generation_tasks.status
+  → SSE 推送到订阅客户端
+```
+
+### 13.4 SLA 检测集成
+
+| 检测项 | 阈值 | 触发动作 |
+|---|---|---|
+| 生成排队超时 | > 60s 未进入 running | 创建 `task_alerts` 记录 + SSE 推送 |
+| 模型执行超时 | > 300s 模型侧未返回 | 取消任务 + 退还积分 + 通知用户 |
+| 2 分钟无有效资产 | succeeded 后 120s 内无 output_assets | 标记异常 + 触发人工审核 |
+| 5 分钟无结算回执 | succeeded 后 300s 内 credit_cost=0 | 触发对账 + 告警 |
+
+### 13.5 任务案例关联
+
+`task_case_links` 表记录任务与外部案例的关联：
+
+```sql
+CREATE TABLE task_case_links (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    task_id BIGINT NOT NULL,                    -- generation_tasks.id
+    link_type VARCHAR(50) NOT NULL,             -- 'generation_task'
+    external_id VARCHAR(255) NOT NULL,          -- new-api provider_request_id
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_task_link (task_id, link_type, external_id)
+);
+```
+
+---
+
+## 14. Agent 配置中心的模型调用通道 `[superpowers 更新 V1.7]`
+
+`[superpowers 更新 V1.7]` Agent 配置中心（agent-config-svc）作为模型调用的配置管理层，解耦业务服务与模型参数。
+
+### 14.1 4 系统蓝图与模型路由
+
+| 蓝图 (Blueprint) | 英文标识 | 用途 | 默认模型 |
+|---|---|---|---|
+| 钩子 | HOOK | 剧本钩子策略分析 | DeepSeek-V3 |
+| 编剧 | SCREENWRITER | 剧本生成与改编 | DeepSeek-V3 / GPT-4o |
+| 分镜师 | STORYBOARD | 分镜拆分与优化 | DeepSeek-V3 |
+| 导演 | DIRECTOR | AI 导演决策与 Skill 编排 | Claude Sonnet 4 |
+
+### 14.2 试跑调用链路
+
+```
+前端触发试跑
+  → AgentConfigService 读取已发布配置
+  → 解析优先级链：临时参数 > 项目绑定 > 用户默认 > 系统默认
+  → 编译最终 Prompt（含创作圣经上下文注入）
+  → AI Router → new-api LLM
+  → 返回输出 + token 统计 + 费用
+  → 写入 agent_test_runs 表
+```
+
+### 14.3 执行快照冻结
+
+每次正式执行时保存完整配置快照到 `agent_execution_snapshots`：
+
+```sql
+CREATE TABLE agent_execution_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    blueprint_id VARCHAR(50) NOT NULL,          -- HOOK/SCREENWRITER/STORYBOARD/DIRECTOR
+    blueprint_version INT NOT NULL,             -- 配置版本号
+    resolved_prompt TEXT NOT NULL,              -- 编译后的完整 Prompt
+    model_id VARCHAR(100) NOT NULL,             -- 实际使用的模型
+    parameters JSON,                            -- 解析后的模型参数
+    token_usage JSON,                           -- token 消耗统计
+    credit_cost DECIMAL(10,4),                  -- 费用
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+### 14.4 配置解析优先级链
+
+最终模型调用参数由以下优先级链决定（高到低）：
+
+1. **临时参数**：单次调用时前端/调用方传入的覆盖参数
+2. **项目绑定**：`content_project_id` 绑定的 Agent 配置版本
+3. **用户默认**：用户在 Agent 配置中心设置的默认值
+4. **系统默认**：平台级别的全局默认配置
+
+任何低优先级配置会在高优先级配置存在时被覆盖。业务服务不再硬编码模型参数，全部从 Agent 配置中心读取。
+
+---
+
+> **文档状态**：V1.7 修订版（基于 superpowers 增量更新）
 > **编写日期**：2026-06-15  
-> **最后修订**：2026-07-02
-> **依赖文档**：《后端产品功能设计_V1.5.md》、`docs/superpowers/specs/` 下统一账户模型/交易市场设计
-> **后续步骤**：AI Router 联调 → new-api 视频渠道扩展 → 交易支付链路 8080↔3001 联调
+> **最后修订**：2026-07-04
+> **依赖文档**：《后端产品功能设计_V1.5.md》、`docs/superpowers/specs/` 下统一账户模型/交易市场设计/任务事件中心/Agent配置中心/企业工作台/资产工作台
+> **后续步骤**：AI Router 联调 → new-api 视频渠道扩展 → 交易支付链路 8080↔3001 联调 → 任务事件中心 + Agent 配置中心联调

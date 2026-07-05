@@ -184,7 +184,7 @@ Add an association switch after the name field and render existing upstream fiel
 Initialize blank-first state and clear stale binding values when association is disabled:
 
 ```js
-import { validateCanvasDraft, buildIdempotencyKey, buildAdmissionParams } from './canvasProjectViewModel.js'
+import { validateCanvasDraft, buildAdmissionParams } from './canvasProjectViewModel.js'
 
 const linkContent = ref(false)
 
@@ -208,7 +208,7 @@ function resetForm() {
 
 watch(linkContent, enabled => {
   if (enabled) {
-    form.value.productionUnitType = 'episode'
+    form.value.productionUnitType = 'episode' // 当前仅有剧集型生产单元，后续扩展其他类型不在此改造范围
     loadProjects()
     return
   }
@@ -222,6 +222,12 @@ watch(linkContent, enabled => {
 ```
 
 Use `buildAdmissionParams(form.value)` in `checkAdmission`. Build the create payload with upstream fields set to `null` when `linkContent` is false. The existing `onCreated` event remains unchanged.
+
+**错误处理补充：**
+
+- 内容项目或版本加载失败时，在关联区域显示 `el-alert type="error"` 并附带重试按钮调用 `loadProjects()`。
+- 空白画布创建失败（API 返回非 2xx）时，保留用户已输入的名称不清空，仅弹出错误提示。
+- 创建成功但路由跳转异常时，画布已在后端持久化，用户可在项目中心列表中再次进入；在 catch 中提示“画布已创建，请从列表进入”。
 
 - [ ] **Step 4: Run both frontend test files and verify GREEN**
 
@@ -273,9 +279,11 @@ class CanvasProjectManagementServiceTest {
         var result = service.create(7L, request);
 
         assertThat(result.uuid()).startsWith("canvas_");
+        assertThat(result.purpose()).isEqualTo("experiment");
         assertThat(result.contentProjectId()).isNull();
         assertThat(result.productionUnitId()).isNull();
         assertThat(result.productionSnapshot().storyboardLocked()).isFalse();
+        assertThat(result.productionSnapshot().metadata().get("standalone")).isEqualTo(true);
         verify(projectMapper).insert(argThat(project ->
                 "draft".equals(project.getStatus())
                         && "personal_7".equals(project.getWorkspaceId())));
@@ -371,7 +379,7 @@ private void validateBinding(CreateCanvasProjectRequest request) {
 }
 ```
 
-Call `validateBinding(request)` at the top of `create`. Only execute official admission when the binding is complete. Persist workspace scope with:
+Call `validateBinding(request)` at the top of `create`. Only execute official admission when the binding is complete. Persist workspace scope with（`WorkspaceContext` 为项目已有类，`getWorkspaceContext()` 为当前线程上下文静态方法）：
 
 ```java
 WorkspaceContext context = getWorkspaceContext();

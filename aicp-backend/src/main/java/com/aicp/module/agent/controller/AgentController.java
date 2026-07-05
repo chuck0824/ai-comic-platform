@@ -31,6 +31,18 @@ public class AgentController {
         return ApiResponse.success(session);
     }
 
+    @GetMapping("/sessions")
+    public ApiResponse<List<Map<String, Object>>> listSessions() {
+        List<Map<String, Object>> list = new ArrayList<>();
+        for (Map.Entry<String, Map<String, Object>> entry : sessions.entrySet()) {
+            Map<String, Object> s = new LinkedHashMap<>(entry.getValue());
+            s.put("id", entry.getKey());
+            s.put("message_count", messagesStore.getOrDefault(entry.getKey(), List.of()).size());
+            list.add(s);
+        }
+        return ApiResponse.success(list);
+    }
+
     @GetMapping("/sessions/{sessionId}")
     public ApiResponse<Map<String, Object>> getSession(@PathVariable String sessionId) {
         Map<String, Object> session = sessions.get(sessionId);

@@ -1,0 +1,50 @@
+<h2>第一部分：总体架构与边界</h2>
+<p class="subtitle">统一观察和处置，不把不同业务强行塞进同一个状态机。</p>
+
+<div class="mockup">
+  <div class="mockup-header">任务事件中心</div>
+  <div class="mockup-body" style="padding:22px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+      <div class="placeholder" style="text-align:center">
+        <strong>生成域</strong><br>排队 / 执行 / 资产入库<br>积分预扣 / 结算 / 退款
+      </div>
+      <div class="placeholder" style="text-align:center">
+        <strong>交易域</strong><br>订单 / 支付 / 交付<br>退款 / 争议 / 卖家结算
+      </div>
+      <div class="placeholder" style="text-align:center">
+        <strong>钱包域（3001）</strong><br>冻结 / 转账 / 冲正<br>账本 / 余额 / 对账结果
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:14px">↓ 领域事件 + Outbox + 定时拉取兜底 ↓</div>
+
+    <div style="display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px">
+      <div class="placeholder" style="text-align:center">
+        <strong>统一任务投影</strong><br>Task Case、阶段、时间线、费用、关联对象
+      </div>
+      <div class="placeholder" style="text-align:center">
+        <strong>操作路由</strong><br>鉴权、幂等、回源业务服务
+      </div>
+      <div class="placeholder" style="text-align:center">
+        <strong>治理引擎</strong><br>SLA、告警、对账、工单、补偿
+      </div>
+    </div>
+
+    <div style="text-align:center;padding:14px">↓ 同源数据，不同权限与信息密度 ↓</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="mock-nav" style="text-align:center">用户任务中心：我的生成 / 我的交易 / 我的费用</div>
+      <div class="mock-nav" style="text-align:center">运营控制台：全局态势 / 异常队列 / 对账 / 工单</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>边界原则</h3>
+  <ul>
+    <li>生成、订单、钱包仍是各自事实源；任务中心只保存可重建的查询投影和治理记录。</li>
+    <li>取消、重试、支付、退款、补偿都经操作路由回源执行，不允许直接改业务表状态。</li>
+    <li>资产工作台继续管理成功产物；任务中心管理过程与费用，两者按 task_uuid / asset_uuid 互跳。</li>
+    <li>普通用户只能看到当前 Workspace 内有权访问的数据；运营端按独立权限开放敏感财务和补偿操作。</li>
+  </ul>
+</div>

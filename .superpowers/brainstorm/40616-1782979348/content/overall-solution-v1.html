@@ -1,0 +1,162 @@
+<h2>剧本创作模块完善整体方案 V1</h2>
+<p class="subtitle">方案目标：补齐创作圣经、总体生态、动态关系网、三级写作口径和跨模块版本契约，同时保留现有平台主结构</p>
+
+<div class="mockup">
+  <div class="mockup-header">01 产品定位与核心原则</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:1.2fr 1fr;gap:18px">
+    <div><h3>从“阶段生成器”升级为“可持续创作系统”</h3><p>现有创作台保留梗概、大纲、正文、审核、分镜流程；新增“创作圣经”作为统一事实源，使 AI 生成、人工修订、质量审核和下游生产使用同一套可追溯上下文。</p></div>
+    <div style="background:#f5f3ff;border-left:4px solid #6366f1;padding:14px"><strong>五项不可破坏原则</strong><p>用户确认优先；各层独立版本；下游不被静默覆盖；失败不得伪成功；所有生成可复现。</p></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">02 完整信息架构</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+    <div style="padding:12px;border:1px solid #cbd5e1;border-radius:10px"><strong>剧本创作首页</strong><p>新建、上传、最近项目、待办</p></div>
+    <div style="padding:12px;border:2px solid #3b82f6;border-radius:10px;background:#eff6ff"><strong>创作工作台</strong><p>结构、正文、审核、锁稿</p></div>
+    <div style="padding:12px;border:2px solid #6366f1;border-radius:10px;background:#f5f3ff"><strong>创作圣经</strong><p>生态、设定、关系、口径、连续性</p></div>
+    <div style="padding:12px;border:1px solid #22c55e;border-radius:10px"><strong>项目详情</strong><p>版本、审核、分镜、生产、商业</p></div>
+    <div style="padding:12px;border:1px solid #64748b;border-radius:10px"><strong>剧本仓库</strong><p>筛选、归档、恢复、生命周期</p></div>
+  </div>
+  <div class="mockup-body" style="padding-top:0"><p><strong>入口关系：</strong>创作工作台顶部提供“创作圣经”入口及健康状态；项目详情可只读查看当前锁定圣经快照；仓库不直接编辑事实，只负责定位项目和状态管理。</p></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">03 创作圣经功能体系</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+    <div style="padding:12px;background:#f0f9ff;border-radius:10px"><strong>总体生态</strong><p>时代、规则、社会结构、制度禁忌、势力组织、资源/能力、地点、关键历史。</p></div>
+    <div style="padding:12px;background:#fdf2f8;border-radius:10px"><strong>实体设定</strong><p>人物、背景、势力、地点、物品；别名、状态、引用、版本、来源。</p></div>
+    <div style="padding:12px;background:#fffbeb;border-radius:10px"><strong>动态关系网</strong><p>方向、性质、强度、状态、证据、起止集章、可编辑图谱和时间轴。</p></div>
+    <div style="padding:12px;background:#faf5ff;border-radius:10px"><strong>写作口径</strong><p>项目基线、角色口吻、单元覆盖；继承、优先级、禁用表达和冲突提示。</p></div>
+    <div style="padding:12px;background:#f0fdf4;border-radius:10px"><strong>连续性台账</strong><p>人物位置/状态、知识、关系、道具、伏笔、事件、场景和引用单元。</p></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">04 模式适配</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+    <div style="padding:14px;border:1px solid #6366f1;border-radius:10px"><strong>长篇</strong><p>完整开放生态、分卷/章节、关系时间轴、伏笔、关键历史和连续性台账。</p></div>
+    <div style="padding:14px;border:1px solid #3b82f6;border-radius:10px"><strong>短剧</strong><p>精简展示人物、势力、核心规则、关键地点、集级关系变化和台词口径。</p></div>
+    <div style="padding:14px;border:1px solid #f59e0b;border-radius:10px"><strong>TVC</strong><p>映射为品牌、产品、受众、竞品、卖点、禁区、使用场景和角色表达口径。</p></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">05 创作工作台交互结构</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:190px 1fr 270px;gap:12px;min-height:260px">
+      <div style="background:#f8fafc;border:1px solid #cbd5e1;border-radius:10px;padding:12px"><strong>左：阶段轨道</strong><p>故事种子<br>人物与生态<br>梗概<br>大纲<br>正文<br>审核<br>锁稿/去向</p><small>按模式自适应展开</small></div>
+      <div style="border:2px solid #3b82f6;border-radius:10px;padding:14px"><strong>中：当前创作画布</strong><p>结构化编辑器 + 正文编辑器 + AI 操作 + 版本采用 + 问题定位。</p><p>生成前展示“本次使用的圣经版本、上游版本和预计费用”；生成后保留结果对比，不直接覆盖当前稿。</p></div>
+      <div style="background:#f5f3ff;border:1px solid #8b5cf6;border-radius:10px;padding:12px"><strong>右：上下文与质量</strong><p>当前圣经版本<br>相关人物/关系<br>本单元口径<br>连续性警告<br>影响范围<br>版本历史</p></div>
+    </div>
+    <p><strong>顶部状态：</strong>项目模式、内容状态、圣经健康度、未确认候选、保存状态、AI 任务状态和主操作。</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">06 动态关系网详细规则</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div><h3>图谱编辑</h3><p>支持人物、势力、地点、物品节点；新增、编辑、结束关系；关系包含类型、方向、强度、公开/秘密、当前状态、证据与备注。</p><p>删除采用“结束关系”或归档；已被内容版本引用的节点和边不物理删除。</p></div>
+    <div><h3>时间轴与校验</h3><p>所有变化绑定集/章、内容版本和事件；可拖动时间轴回放任意时点关系。</p><p>系统检测无起因跳变、互斥关系冲突、角色未出场却建立关系、已终止关系仍被正文使用等问题。</p></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">07 三级写作口径</div>
+  <div class="mockup-body">
+    <div style="display:grid;grid-template-columns:1fr 70px 1fr 70px 1fr;gap:10px;align-items:center">
+      <div style="padding:12px;background:#f5f3ff;border-radius:10px"><strong>L1 项目级</strong><p>叙事视角、时态、语言密度、节奏、尺度、平台规则、禁区、术语。</p></div><div style="text-align:center">继承<br>→</div>
+      <div style="padding:12px;background:#fdf2f8;border-radius:10px"><strong>L2 角色级</strong><p>语气、句长、词汇、口头禅、知识边界、情绪变化、禁用表达。</p></div><div style="text-align:center">指定覆盖<br>→</div>
+      <div style="padding:12px;background:#eff6ff;border-radius:10px"><strong>L3 单元级</strong><p>本集/章视角、节奏、特殊文体、对白限制和临时表达目标。</p></div>
+    </div>
+    <p><strong>解析规则：</strong>L3 只覆盖明确字段，其余继承 L2/L1；角色口吻不覆盖项目合规禁区；冲突时系统给出来源和优先级，不静默选择。</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">08 AI 候选与生成闭环</div>
+  <div class="mockup-body">
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span style="padding:8px;background:#f1f5f9;border-radius:8px">选择来源</span><b>→</b><span style="padding:8px;background:#fffbeb;border-radius:8px">AI 提取/生成</span><b>→</b><span style="padding:8px;background:#fff7ed;border-radius:8px">候选 + 证据 + 置信度</span><b>→</b><span style="padding:8px;background:#f5f3ff;border-radius:8px">逐字段确认/合并</span><b>→</b><span style="padding:8px;background:#f0fdf4;border-radius:8px">正式新版本</span><b>→</b><span style="padding:8px;background:#eff6ff;border-radius:8px">刷新上下文快照</span></div>
+    <p>AI 未经确认不得写入正式事实；生成正文必须使用当前采用的上游内容和圣经快照；失败、超时和解析错误进入明确失败状态，不回退示例数据。</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">09 版本与影响分析</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div><strong>独立版本</strong><p>圣经、结构、正文、改编/TVC、分镜、画布分别版本化。</p></div>
+    <div><strong>派生追踪</strong><p>记录来源版本、参数、Prompt、模型、规则与操作者。</p></div>
+    <div><strong>影响图</strong><p>事实变更定位受影响集章、关系、伏笔、分镜和画布。</p></div>
+    <div><strong>同步策略</strong><p>只提示差异；用户决定重生成、局部修订、忽略或创建新快照。</p></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">10 审核与质量闸门</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">
+    <div style="padding:12px;background:#f8fafc"><strong>创作质量</strong><p>事实一致性、关系连续性、角色知识边界、伏笔、时间线和写作口径。</p></div>
+    <div style="padding:12px;background:#f8fafc"><strong>专业审校</strong><p>钩子 Agent、编导 Agent、导演 Agent，给出定位、严重级别和修改建议。</p></div>
+    <div style="padding:12px;background:#f8fafc"><strong>闸门等级</strong><p>硬阻断、软警告、可放行；审核、锁稿、分镜、画布和上架使用不同规则集。</p></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">11 分镜与独立画布契约</div>
+  <div class="mockup-body">
+    <p><strong>正向：</strong>锁稿内容版本 → 分镜 Master 版本 → 生产准入 → 画布导入快照 → 独立画布生产。</p>
+    <p><strong>导入快照必须包含：</strong>内容版本、分镜版本、圣经版本、关系时间点、角色/地点/物品引用、写作/视觉规则、平台参数、风险和资产成熟度。</p>
+    <p><strong>反向：</strong>画布仅回传生产状态、采用资产和质量结果；不得直接修改剧本事实。剧本变化生成差异报告，用户确认后新建快照，旧生产结果保留。</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">12 业务域与控制能力</div>
+  <div class="mockup-body">
+    <p><strong>12 个业务域：</strong>内容项目、创作圣经、故事结构、正文创作、连续性与质量、审核锁稿、改编/TVC、分镜协同、画布交付契约、仓库恢复、素材引用、商业导出边界。</p>
+    <p><strong>16 项横向控制：</strong>权限、工作流、版本、上下文、AI 编排、人工确认、影响分析、质量准入、合规、成本、事件投影、审计观测、配置字典、迁移兼容、性能、保留恢复。</p>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">13 建议数据对象与接口边界</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div><h3>核心数据对象</h3><p><code>creative_bible_versions</code>、<code>ecosystem_rules</code>、<code>setting_entities</code>、<code>entity_relations</code>、<code>relation_events</code>、<code>writing_guides</code>、<code>writing_guide_overrides</code>、<code>continuity_snapshots</code>、<code>context_snapshots</code>、<code>impact_reports</code>。</p></div>
+    <div><h3>接口分组</h3><p><code>/creative-bible</code>、<code>/ecosystem</code>、<code>/entities</code>、<code>/relations</code>、<code>/writing-guides</code>、<code>/continuity</code>、<code>/context-snapshots</code>、<code>/impact-reports</code>、<code>/canvas-import-snapshots</code>。</p></div>
+  </div>
+  <div class="mockup-body" style="padding-top:0"><p>接口必须统一携带项目权限上下文、修订号或幂等键；正式版本不可原地修改；删除默认归档；跨域通过版本 ID 和事件交互，不共享可变 JSON。</p></div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">14 分期落地</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+    <div style="padding:12px;border-top:4px solid #ef4444;background:#fef2f2"><strong>P0 基础闭环</strong><p>圣经壳层、生态表单、三级口径、事实版本、上下文快照、现有生成链路接入。</p></div>
+    <div style="padding:12px;border-top:4px solid #f59e0b;background:#fffbeb"><strong>P1 关系与质量</strong><p>可编辑关系图、时间轴、连续性台账、冲突检查、影响分析。</p></div>
+    <div style="padding:12px;border-top:4px solid #3b82f6;background:#eff6ff"><strong>P2 下游契约</strong><p>分镜引用、生产准入、画布导入快照、差异同步和状态投影。</p></div>
+    <div style="padding:12px;border-top:4px solid #22c55e;background:#f0fdf4"><strong>P3 深化治理</strong><p>模板市场化、复杂协作、性能优化、商业/导出准入和高级指标。</p></div>
+  </div>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">15 核心验收标准</div>
+  <div class="mockup-body">
+    <ul>
+      <li>任何 AI 正文版本都能追溯到明确的上游内容版本和创作圣经快照。</li>
+      <li>未经确认的 AI 候选不会进入正式事实、生成上下文或下游快照。</li>
+      <li>关系网可编辑并按集/章回放，关系变化可定位证据和内容版本。</li>
+      <li>三级写作口径按继承规则生效，冲突和偏离能够定位到具体文本。</li>
+      <li>剧本或圣经更新不会自动覆盖分镜和画布；差异可预览并由用户确认。</li>
+      <li>刷新、重新进入、失败重试、并发保存和旧项目迁移均不丢草稿、不伪成功。</li>
+      <li>权限、审计、费用、规则版本、异常状态和关键埋点均可验证。</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <h3>明确非目标</h3>
+  <p>不把画布并入剧本模块；不做多人实时共编；不构建经济/人口等超细世界模拟；不允许 AI 自动改写正式事实；不自动覆盖分镜、画布或市场版本；不在一个发布批次一次交付全部 P0–P3。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="overall-solution-approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>整体方案确认</h3><p>按此内容写入正式设计规格并进入实施计划阶段</p></div></div>
+  <div class="option" data-choice="overall-solution-revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要修订</h3><p>请指出需修改的章节、范围或优先级</p></div></div>
+</div>

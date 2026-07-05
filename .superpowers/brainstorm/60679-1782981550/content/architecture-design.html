@@ -1,0 +1,45 @@
+<h2>设计 1/4：Agent 会话垂直架构</h2>
+<p class="subtitle">保持单体部署，但用清晰接口隔离会话、规划、审批、执行与业务工具。</p>
+
+<div class="mockup">
+  <div class="mockup-header">一次用户指令的完整链路</div>
+  <div class="mockup-body" style="padding:20px;background:#0b1020;color:#e5e7eb">
+    <div style="display:grid;grid-template-columns:1.1fr 40px 1.5fr 40px 1.25fr;gap:10px;align-items:center;font-size:12px">
+      <div style="border:1px solid #6366f1;border-radius:10px;padding:14px">
+        <b>Vue Agent 工作台</b><br><span style="color:#9ca3af">会话 / 消息 / 计划 / 执行时间线</span><br><span style="color:#93c5fd">SSE 接收事件</span>
+      </div>
+      <div style="text-align:center">→</div>
+      <div style="border:1px solid #10b981;border-radius:10px;padding:14px">
+        <b>Agent 应用层</b><br><span style="color:#9ca3af">SessionService · ContextAssembler</span><br><span style="color:#9ca3af">Planner · ApprovalPolicy</span><br><span style="color:#9ca3af">ExecutionOrchestrator · EventPublisher</span>
+      </div>
+      <div style="text-align:center">→</div>
+      <div style="border:1px solid #f59e0b;border-radius:10px;padding:14px">
+        <b>AI Router / new-api</b><br><span style="color:#9ca3af">结构化计划、对话生成</span><br><span style="color:#9ca3af">不直接修改业务数据</span>
+      </div>
+
+      <div style="grid-column:3;text-align:center;color:#6b7280">↓ 审批通过后</div>
+
+      <div style="grid-column:1;border:1px solid #334155;border-radius:10px;padding:14px">
+        <b>Agent 持久化</b><br><span style="color:#9ca3af">sessions · messages · plans</span><br><span style="color:#9ca3af">steps · executions · events</span>
+      </div>
+      <div style="text-align:center">←</div>
+      <div style="border:1px solid #ec4899;border-radius:10px;padding:14px">
+        <b>受控 Tool Registry</b><br><span style="color:#9ca3af">READ：查询项目/画布/资产</span><br><span style="color:#9ca3af">WRITE：更新节点/创建任务/回写资产</span>
+      </div>
+      <div style="text-align:center">→</div>
+      <div style="border:1px solid #38bdf8;border-radius:10px;padding:14px">
+        <b>现有业务域</b><br><span style="color:#9ca3af">项目权限 · 画布 · 生成任务</span><br><span style="color:#9ca3af">资产 · 积分 · 审计通知</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>关键边界</h3>
+  <div class="options" data-multiselect>
+    <div class="option"><div class="letter">1</div><div class="content"><h3>模型只做决策</h3><p>AI 输出结构化 plan/tool call；真正的数据读写只能经过平台 Tool Adapter。</p></div></div>
+    <div class="option"><div class="letter">2</div><div class="content"><h3>审批是服务端规则</h3><p>查询可直接执行；项目修改、AI 生成、扣费动作必须具有有效 approval。</p></div></div>
+    <div class="option"><div class="letter">3</div><div class="content"><h3>执行异步且可恢复</h3><p>步骤具备幂等键、状态机、重试策略和检查点，刷新页面不会丢失。</p></div></div>
+    <div class="option"><div class="letter">4</div><div class="content"><h3>事件可观测</h3><p>SSE 仅传业务事件和摘要，不展示模型隐藏思维链。</p></div></div>
+  </div>
+</div>

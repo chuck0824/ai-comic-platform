@@ -1,0 +1,75 @@
+<h2>设计确认 3B/4：接口级详细契约</h2>
+<p class="subtitle">统一前缀 <code>/api/v1</code>；所有接口要求 JWT 和 <code>X-Workspace-Id</code>。API 边界使用 project_uuid / canvas_uuid / asset_uuid，数据库内部 ID 不暴露给页面。</p>
+
+<div class="section">
+  <h3>1. 工作台查询接口</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="background:#eef2ff"><th style="padding:6px;text-align:left">方法与路径</th><th style="padding:6px;text-align:left">输入</th><th style="padding:6px;text-align:left">响应 data</th></tr>
+    <tr><td style="padding:6px"><code>GET /assets/workbench/projects</code></td><td style="padding:6px"><code>scope=mine|workspace</code>、<code>keyword?</code>、<code>include_archived=false</code></td><td style="padding:6px"><code>scope</code>、<code>projects[]</code>、<code>special_collections</code>、<code>totals</code></td></tr>
+    <tr><td style="padding:6px"><code>GET /assets/history/records</code></td><td style="padding:6px"><code>scope</code>、<code>project_uuid?</code>、<code>collection?</code>、<code>category?</code>、<code>status?</code>、<code>media_type?</code>、<code>model_id?</code>、<code>created_by?</code>、<code>created_from/to?</code>、<code>tags?</code>、<code>keyword?</code>、<code>sort</code>、<code>page</code>、<code>page_size</code></td><td style="padding:6px"><code>items[]</code>、<code>pagination</code>、<code>facets</code></td></tr>
+    <tr><td style="padding:6px"><code>GET /assets/history/records/{recordId}</code></td><td style="padding:6px"><code>recordId=task:{uuid}|asset:{uuid}</code></td><td style="padding:6px"><code>summary</code>、<code>task?</code>、<code>asset?</code>、<code>source</code>、<code>references[]</code>、<code>activities[]</code>、<code>allowed_actions</code></td></tr>
+  </table>
+  <p><b>collection 枚举：</b><code>unfiled</code>、<code>favorites</code>、<code>published</code>、<code>trash</code>。<b>status 枚举：</b><code>pending</code>、<code>running</code>、<code>succeeded</code>、<code>failed</code>、<code>canceled</code>。</p>
+</div>
+
+<div class="section">
+  <h3>2. 列表记录响应字段 RecordSummary</h3>
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:12px">
+    <div style="padding:9px;background:#f8fafc"><b>身份与归属</b><br><code>record_id</code>、<code>record_kind</code>、<code>asset_uuid?</code>、<code>task_uuid?</code>、<code>project_uuid?</code>、<code>project_name?</code>、<code>scope</code>、<code>category</code>、<code>media_type</code></div>
+    <div style="padding:9px;background:#f8fafc"><b>展示</b><br><code>name</code>、<code>thumbnail_url?</code>、<code>preview_kind</code>、<code>width?</code>、<code>height?</code>、<code>duration_ms?</code>、<code>file_size?</code>、<code>tags[]</code></div>
+    <div style="padding:9px;background:#f8fafc"><b>任务</b><br><code>status</code>、<code>progress?</code>、<code>queue_position?</code>、<code>provider?</code>、<code>model_id?</code>、<code>credit_cost?</code>、<code>error_code?</code>、<code>error_summary?</code></div>
+    <div style="padding:9px;background:#f8fafc"><b>操作者与状态</b><br><code>created_by{id,name,avatar_url}</code>、<code>created_at</code>、<code>updated_at</code>、<code>favorited</code>、<code>publish_status</code>、<code>deleted_at?</code>、<code>purge_at?</code>、<code>allowed_actions[]</code></div>
+  </div>
+  <p>字段不存在时返回 <code>null</code> 或省略，不用空字符串伪造。<code>facets</code> 返回各 category/status/media_type 的计数，驱动项目树和筛选栏数字。</p>
+</div>
+
+<div class="section">
+  <h3>3. 资产编辑与组织</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="background:#eef2ff"><th style="padding:6px;text-align:left">接口</th><th style="padding:6px;text-align:left">请求体</th><th style="padding:6px;text-align:left">响应/规则</th></tr>
+    <tr><td style="padding:6px"><code>PATCH /assets/{assetUuid}</code></td><td style="padding:6px"><code>name?</code>、<code>category?</code>、<code>tags?</code>、<code>row_version</code></td><td style="padding:6px">返回更新后的 asset + row_version；乐观锁冲突返回 46109</td></tr>
+    <tr><td style="padding:6px"><code>PUT /assets/{assetUuid}/favorite</code></td><td style="padding:6px">无</td><td style="padding:6px">幂等；返回 <code>favorited=true</code></td></tr>
+    <tr><td style="padding:6px"><code>DELETE /assets/{assetUuid}/favorite</code></td><td style="padding:6px">无</td><td style="padding:6px">幂等；返回 <code>favorited=false</code></td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{assetUuid}/move</code></td><td style="padding:6px"><code>target_project_uuid?</code>、<code>target_category</code>、<code>row_version</code></td><td style="padding:6px">project 为空表示移入未归档；返回新归属与计数变化</td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/batch</code></td><td style="padding:6px"><code>asset_uuids[1..100]</code>、<code>operation</code>、<code>payload</code></td><td style="padding:6px">返回 <code>succeeded[]</code>、<code>failed[{asset_uuid,code,message}]</code></td></tr>
+  </table>
+  <p><b>operation：</b><code>move</code>、<code>set_category</code>、<code>add_tags</code>、<code>remove_tags</code>、<code>trash</code>、<code>restore</code>。</p>
+</div>
+
+<div class="section">
+  <h3>4. 生产复用与生命周期</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:12px">
+    <tr style="background:#eef2ff"><th style="padding:6px;text-align:left">接口</th><th style="padding:6px;text-align:left">请求体/参数</th><th style="padding:6px;text-align:left">成功响应</th></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{assetUuid}/send-to-canvas</code></td><td style="padding:6px"><code>target_project_uuid</code>、<code>target_canvas_uuid</code>、<code>placement=viewport_center|auto</code>、<code>x?</code>、<code>y?</code>、<code>idempotency_key</code></td><td style="padding:6px"><code>placement_id</code>、<code>node_uuid</code>、<code>redirect_url</code>、<code>replayed</code></td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{assetUuid}/regenerate</code></td><td style="padding:6px"><code>model_id?</code>、<code>prompt?</code>、<code>parameters_patch?</code>、<code>idempotency_key</code></td><td style="padding:6px"><code>task_uuid</code>、<code>status=pending</code>、<code>retry_of_task_uuid</code></td></tr>
+    <tr><td style="padding:6px"><code>GET /assets/{assetUuid}/download-url</code></td><td style="padding:6px"><code>disposition=inline|attachment</code></td><td style="padding:6px"><code>url</code>、<code>expires_at</code>、<code>file_name</code>；默认 5 分钟</td></tr>
+    <tr><td style="padding:6px"><code>DELETE /assets/{assetUuid}</code></td><td style="padding:6px"><code>row_version</code></td><td style="padding:6px"><code>lifecycle_status=trashed</code>、<code>purge_at</code>、<code>reference_count</code></td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{assetUuid}/restore</code></td><td style="padding:6px"><code>row_version</code></td><td style="padding:6px">恢复原项目；原项目不可用则进入未归档</td></tr>
+    <tr><td style="padding:6px"><code>POST /assets/{assetUuid}/publish</code></td><td style="padding:6px"><code>title</code>、<code>description</code>、<code>tags[]</code>、<code>license_code</code>、<code>preview_asset_uuid?</code>、<code>idempotency_key</code></td><td style="padding:6px"><code>mode=direct|approval</code>、<code>listing_id?</code>、<code>request_id?</code>、<code>status</code></td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h3>5. 任务命令：保留并收紧</h3>
+  <p><code>POST /generation/tasks/{taskUuid}/cancel</code>：仅 pending/running 且有项目权限；返回最终状态。<br><code>POST /generation/tasks/{taskUuid}/retry</code>：仅 failed/canceled；请求体含 <code>parameters_patch?</code> 与 <code>idempotency_key</code>；返回新 task_uuid 和 retry_of_task_uuid。<br><code>GET /generation/tasks/{taskUuid}</code>：补充 Workspace 校验，不再只凭 UUID 查询。</p>
+</div>
+
+<div class="section">
+  <h3>6. 错误码与 HTTP 状态</h3>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:12px">
+    <div style="padding:7px;background:#fff1f2"><code>46101</code> 资产不存在或不可见<br><code>46102</code> 资产状态不允许操作<br><code>46103</code> 资产文件缺失</div>
+    <div style="padding:7px;background:#fff1f2"><code>46104</code> 目标项目/画布不可用<br><code>46105</code> 分类不合法<br><code>46106</code> 发布流程冲突</div>
+    <div style="padding:7px;background:#fff1f2"><code>46107</code> 批量数量超限<br><code>46108</code> 幂等键冲突<br><code>46109</code> 数据版本冲突</div>
+  </div>
+  <p>HTTP 使用 400/403/404/409/422；<code>ApiResponse.code</code> 保留业务码。越权查询统一表现为 404，防止枚举其他 Workspace 资产。</p>
+</div>
+
+<div class="section">
+  <h3>7. 兼容策略</h3>
+  <p>旧 <code>GET /assets/history</code> 保留一个版本周期，内部转调新 records 查询并返回旧列表格式，同时记录弃用日志；旧 <code>POST /assets/{id}/send-to-canvas</code> 若缺少目标画布则返回 422，不再假成功。前端全部切新 UUID 契约后再移除旧接口。</p>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="approved" onclick="toggleSelect(this)"><div class="letter">✓</div><div class="content"><h3>确认接口契约</h3><p>下一步展开数据库字段、索引和迁移。</p></div></div>
+  <div class="option" data-choice="revise" onclick="toggleSelect(this)"><div class="letter">↺</div><div class="content"><h3>需要调整接口</h3><p>请指出路径、字段、状态码或兼容规则。</p></div></div>
+</div>

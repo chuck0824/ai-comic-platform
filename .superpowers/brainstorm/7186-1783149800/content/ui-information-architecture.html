@@ -1,0 +1,79 @@
+<h2>设计二：SOP 控制台与画布质检交互</h2>
+<p class="subtitle">业务根对象是“内容项目”，集与画布作为筛选范围；全局菜单不再写死 /sop/1。</p>
+
+<div class="mockup">
+  <div class="mockup-header">项目级 SOP 控制台 · /content-projects/:projectId/sop</div>
+  <div class="mockup-body">
+    <div class="mock-nav" style="display:flex;justify-content:space-between;gap:10px">
+      <span>项目：替身新娘　｜　集：EP01　｜　画布：生产画布 A</span>
+      <span><strong style="color:#dc2626">红灯 · 2 个阻断项</strong>　<button class="mock-button">重新检查</button></span>
+    </div>
+    <div style="display:grid;grid-template-columns:190px 1fr;gap:12px;margin-top:12px">
+      <div class="mock-sidebar" style="min-height:300px;line-height:2.15">
+        <strong>总览</strong><br>
+        生产准入（13）<br>
+        返工工单（6）<br>
+        生产版本<br>
+        失败恢复<br>
+        产能估算<br>
+        检查历史
+      </div>
+      <div class="mock-content">
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+          <div class="placeholder"><strong>9</strong><br>通过</div>
+          <div class="placeholder" style="background:#fffbeb"><strong>2</strong><br>告警</div>
+          <div class="placeholder" style="background:#fef2f2"><strong>2</strong><br>阻断</div>
+          <div class="placeholder" style="background:#f8fafc"><strong>1</strong><br>待配置</div>
+        </div>
+        <div style="margin-top:10px;padding:12px;border:1px solid #fecaca;border-radius:8px;background:#fff7f7">
+          <strong>当前必须处理</strong>
+          <div style="display:grid;grid-template-columns:1.6fr .7fr .7fr .8fr;gap:8px;margin-top:8px;font-size:13px">
+            <span>SH008 场景连续性断裂</span><span>P0</span><span>导演</span><span>定位到画布 →</span>
+            <span>SH003 Prompt 超限且冲突</span><span>P1</span><span>AI抽卡师</span><span>创建返工单 →</span>
+          </div>
+        </div>
+        <div style="margin-top:10px;padding:12px;border:1px solid #e2e8f0;border-radius:8px">
+          <strong>生产阶段 Gate</strong>
+          <div style="margin-top:8px;font-size:13px">批量生图 ✅　→　图生视频 ⛔　→　采用版本 ⛔　→　素材导出 ⛔</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mockup" style="margin-top:18px">
+  <div class="mockup-header">画布工作台 · SOP 质检侧栏</div>
+  <div class="mockup-body" style="display:grid;grid-template-columns:2fr 1fr;gap:12px">
+    <div style="position:relative;min-height:270px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px">
+      <div style="display:flex;justify-content:space-between"><strong>生产画布 A</strong><button class="mock-button">SOP 质检 · 2</button></div>
+      <div style="display:flex;gap:16px;margin-top:45px;align-items:center;justify-content:center">
+        <div style="padding:18px;border:3px solid #22c55e;border-radius:10px;background:white">SH001<br><small>通过</small></div>
+        <div>→</div>
+        <div style="padding:18px;border:3px solid #f59e0b;border-radius:10px;background:white">SH003<br><small>告警</small></div>
+        <div>→</div>
+        <div style="padding:18px;border:3px solid #ef4444;border-radius:10px;background:white">SH008<br><small>P0 阻断</small></div>
+      </div>
+    </div>
+    <div style="border:1px solid #cbd5e1;border-radius:8px;padding:14px;background:white">
+      <div style="display:flex;justify-content:space-between"><strong>质检详情</strong><span>×</span></div>
+      <div style="margin-top:12px;padding:10px;background:#fef2f2;border-radius:8px"><strong>SH008 · P0</strong><br><small>场景连续性断裂</small></div>
+      <p style="font-size:13px">上一镜在室内，当前镜无转场进入街道。</p>
+      <div style="font-size:13px;padding:10px;background:#f8fafc;border-radius:8px">建议：增加转场镜，或补充明确的时空变化标记。</div>
+      <div style="display:grid;gap:7px;margin-top:12px">
+        <button class="mock-button">定位节点</button>
+        <button class="mock-button">创建返工单</button>
+        <button class="mock-button">修复后重新检查</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:18px">
+  <h3>关键交互规则</h3>
+  <ul>
+    <li>点击检查项必须能定位到具体项目、集、画布、节点或镜头，不能只有文字说明。</li>
+    <li>触发批量生图、图生视频、采用版本、导出时自动执行对应 Gate，不依赖用户先打开 SOP 页面。</li>
+    <li>P0/P1 阻断弹窗直接展示责任人、修复入口和最新报告；修复后必须重检，不允许手动改成“通过”。</li>
+    <li>全局“生产 SOP”入口先展示有权限的项目列表与最近风险项目，再进入项目控制台。</li>
+  </ul>
+</div>

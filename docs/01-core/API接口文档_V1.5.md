@@ -1,20 +1,27 @@
 # AI漫剧与视频内容工业化生产工作台 · API接口文档
 
 > 基于《用户端产品功能设计.md》v0.6+《后端产品功能设计_V1.5.md》+《流程图文档.md》+《AI漫剧与视频内容工业化生产工作台 PRD V1.5》  
-> 文档版本：v1.5  
+> 文档版本：v1.7 `[superpowers 更新 V1.7]`  
 > API版本：v1  
-> 接口总数：210+ 个
+> 接口总数：350+ 个
 > 文档格式：OpenAPI 3.0 风格 Markdown  
 > **V1.5 更新**：以 AI 视频工业化生产工作台为口径，补强画布节点、素材拖入、分镜解析、批量生图/视频、全能参考、多副本并行、资产历史、镜头采用版本、素材包导出、算力预估、Agent 会话与 Skill 执行接口。平台不提供视频剪辑、视频拼接、转场特效、音视频混合或多轨编辑接口。
 
 ---
 
-## 基于 superpowers 的更新记录（2026-07-02）
+## 基于 superpowers 的更新记录（2026-07-04）
 
-本文档基于 `docs/superpowers/` 下的最新设计文档进行了增量更新，V1.5 → V1.6。主要变更：
+本文档基于 `docs/superpowers/` 下的最新设计文档进行了增量更新，V1.5 → V1.6 → V1.7。主要变更：
 
 | 更新项 | 说明 | 依据 superpowers |
 |---|---|---|
+| 新增域 | `/api/v1/task-center/**`、`/api/v1/ops/task-center/**` — 统一任务事件中心；SSE 事件流；SLA 告警；对账；命令路由 | `2026-07-04-unified-task-event-center-design.md` |
+| 新增域 | `/api/v1/assets/workbench/**`、`/api/v1/assets/history/**` — 资产工作台；合并 AssetHistory + TaskMonitor；workspace_assets 扩展 | `2026-07-04-asset-generation-history-workbench-design.md` |
+| 新增域 | `/api/v1/agent/blueprints`、`/api/v1/agent/definitions`、`/api/v1/agent/versions`、`/api/v1/agent/user-bindings`、`/api/v1/agent/resolve-preview` — Agent 配置中心 | `2026-07-04-user-configurable-agent-center-design.md` |
+| 扩展域 | `/api/v1/enterprise/**` — 企业工作台：3001 BFF 代理；采购预算；统一审批；跨域审计 | `2026-07-04-enterprise-workbench-completion-design.md` |
+| 扩展域 | `/api/v1/sop/**` — 生产 SOP：双界面；6 生产 Gate；返工工单；规则引擎 | `2026-07-04-production-sop-completion-design.md` |
+| 扩展域 | `/api/v1/canvas/projects` — 独立空白画布：POST canvas/projects 放行 nullable 字段 | `2026-07-04-standalone-blank-canvas-design.md` |
+| 跨域规范 | 幂等键 Header 强制；乐观锁 ETag/If-Match；故障关闭 503；不可变快照 | 全部 07-04 superpowers |
 | 新增 API 域 | `/api/v1/creative-bible` — 创作圣经版本、生态系统规则、写作指南、上下文快照 | `script-creation-creative-bible-design.md` |
 | 新增 API 域 | `/api/v1/agent` — Agent 会话持久化、计划审批、SSE 事件流、步骤重试 | `agent-session-completion-design.md` |
 | 新增 API 域 | `/api/v1/trade` — 脚本交易市场、四种许可证、订单/支付、权益/退款 | `script-trading-market-completion-design.md` |
@@ -24,11 +31,11 @@
 | 扩展 API 域 | `/api/v1/content-projects` — 仓库生命周期操作（三轴状态过滤、提交审核/锁定/归档） | `script-creation-warehouse-flow-design.md` |
 | 扩展 API 域 | `/api/v1/content-projects/{id}/settings` — 五类设定 CRUD + AI 提取确认 | `work-editor-evolution-design.md` |
 | 认证更新 | 明确 3001 为账户中心唯一数据源，JWT 声明映射规则，`X-Workspace-Id` header | `unified-account-model-billing-design.md` |
-| 错误码补充 | 新增 45xxx（分镜）、46xxx（创作圣经）、47xxx（交易）、48xxx（资产市场）、49xxx（Agent） | 对应 superpowers specs |
+| 错误码补充 | 新增 45xxx（分镜）、46xxx（创作圣经）、47xxx（交易）、48xxx（资产市场）、49xxx（Agent）、50xxx（任务事件）、51xxx（资产工作台）、52xxx（Agent 配置）、53xxx（企业扩展）、503xx（故障关闭） | 对应 superpowers specs |
 | PATCH 修正 | 2.5 节“暂不使用 PATCH”→“PATCH 用于部分更新”，与 V1.5 大量 PATCH 端点保持一致 | 文档内部一致性 |
 | 画布节点更新 | 反映浮动编辑器改造后的新交互模型 | `canvas-node-floating-editor-design.md` |
 
-> **注意**：本文档中标注 `[superpowers 更新]` 的段落为本次新增或修改内容。
+> **注意**：标注 `[superpowers 更新 V1.7]` 为 07-04 新增。标注 `[superpowers 更新]` 为 07-02 之前的更新。
 
 ---
 
@@ -48,10 +55,17 @@
 - [12. 生产SOP接口（sop）](#12-生产sop接口sop)
 - [13. 通知消息接口（notify）](#13-通知消息接口notify)
 - [14. 支付回调接口（webhook）](#14-支付回调接口webhook)
+- [🔥 14-A. 创作圣经接口（creative-bible）](#-14-a-创作圣经接口creative-bible)
+- [🔥 14-B. 专业分镜接口（storyboards）](#-14-b-专业分镜接口storyboards)
+- [🔥 14-C. 工作编辑器设定接口（settings）](#-14-c-工作编辑器设定接口settings)
 - [15. Open API接口（openapi）](#15-open-api接口openapi)
-- [16. 通用数据模型](#16-通用数据模型)
-- [17. 枚举字典](#17-枚举字典)
-- [18. 错误码参考](#18-错误码参考)
+- [🆕 16. 统一任务事件接口（task-center）`[superpowers 更新 V1.7]`](#-16-统一任务事件接口task-center)
+- [🆕 17. 资产工作台接口（asset-workbench）`[superpowers 更新 V1.7]`](#-17-资产工作台接口asset-workbench)
+- [🆕 18. Agent配置中心接口（agent-config）`[superpowers 更新 V1.7]`](#-18-agent配置中心接口agent-config)
+- [🆕 19. 企业工作台接口扩展（enterprise-ext）`[superpowers 更新 V1.7]`](#-19-企业工作台接口扩展enterprise-ext)
+- [20. 通用数据模型](#20-通用数据模型)
+- [21. 枚举字典](#21-枚举字典)
+- [22. 错误码参考](#22-错误码参考)
 - [附录A：接口版本矩阵](#附录a接口版本矩阵)
 
 ---
@@ -108,6 +122,16 @@
 | `/api/v1/skills/*` | agent-svc | JWT |
 | `/api/v1/sop/*` | sop-svc | JWT |
 | `/api/v1/notify/*` | notify-svc | JWT |
+| `/api/v1/task-center/**` `[superpowers 更新 V1.7]` | task-event-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/ops/task-center/**` `[superpowers 更新 V1.7]` | task-event-svc (admin only) | JWT + 运营角色 |
+| `/api/v1/assets/workbench/**` `[superpowers 更新 V1.7]` | asset-workbench-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/assets/history/**` `[superpowers 更新 V1.7]` | asset-workbench-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/agent/blueprints/**` `[superpowers 更新 V1.7]` | agent-config-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/agent/definitions/**` `[superpowers 更新 V1.7]` | agent-config-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/agent/versions/**` `[superpowers 更新 V1.7]` | agent-config-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/agent/user-bindings/**` `[superpowers 更新 V1.7]` | agent-config-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/agent/resolve-preview` `[superpowers 更新 V1.7]` | agent-config-svc | JWT + `X-Workspace-Id` |
+| `/api/v1/enterprise/**` (扩展) `[superpowers 更新 V1.7]` | enterprise-svc (BFF→3001) | JWT + `X-Workspace-Id` + WorkspaceContext 权限码 |
 | `/api/v1/callback/*` | trade-svc | 签名验证 |
 | `/openapi/v1/*` | Open API BFF | API Key + HMAC签名 |
 
@@ -865,6 +889,33 @@ GET /api/v1/canvas/projects/{projectId}/events?cursor={cursor}
 | `PUT` | 完整更新资源 | ✅ |
 | `PATCH` | 部分更新资源（支持，用于只更新传入字段而不覆盖其他已有数据） | ✅ |
 | `DELETE` | 删除资源 | ✅ |
+
+### 2.6 幂等键规范 `[superpowers 更新 V1.7]`
+
+- 所有 POST/PATCH/PUT/DELETE 操作强制要求 `Idempotency-Key` header
+- 相同 key + 相同 request hash → 返回原始结果（幂等成功）
+- 相同 key + 不同 request hash → 返回 409 Conflict
+- 幂等键存储为 `(workspace_id, user_id, idempotency_key)` 唯一
+
+### 2.7 乐观锁规范 `[superpowers 更新 V1.7]`
+
+- 状态变更接口返回 `ETag`（值为 `row_version`）
+- 客户端在 PATCH/PUT 时必须带 `If-Match` header
+- 版本不匹配返回 409 Conflict，客户端需刷新后重试
+- 缺失 `If-Match` 返回 428 Precondition Required
+
+### 2.8 故障关闭规范 `[superpowers 更新 V1.7]`
+
+- 3001（new-api）不可用时，所有依赖 3001 的操作必须失败（fail-closed）
+- 返回 HTTP 503 + `Retry-After` header
+- 禁止返回 mock 数据或降级为假成功
+- 公开市场只读操作可继续
+
+### 2.9 不可变快照规范 `[superpowers 更新 V1.7]`
+
+- 关键里程碑生成不可变快照（JSON）：创作圣经版本、内容版本、分镜版本、画布生产快照、Agent 执行快照、交易交付快照
+- 快照创建后不可修改；上游变更产生 diff，用户主动选择是否创建新快照
+- 快照用于审计、回溯和问题定位
 
 ---
 
@@ -3913,9 +3964,201 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 
 ---
 
-## 16. 通用数据模型
+## 🆕 16. 统一任务事件接口（task-center）`[superpowers 更新 V1.7]`
 
-### 16.1 用户对象
+> 路由前缀：`/api/v1/task-center`、`/api/v1/ops/task-center` | 认证要求：JWT + `X-Workspace-Id`（运营端点需运营角色）
+
+统一任务事件中心提供跨域的案例统一视图、SSE 事件流、命令路由、SLA 告警和对账能力。
+
+### 16.1 用户任务中心 `/api/v1/task-center/`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/overview` | 用户任务概览（分状态计数/最近任务/待处理项） |
+| GET | `/cases` | 分页列表（支持 status/type/project/model/channel 筛选） |
+| GET | `/cases/{caseUuid}` | 案例详情含 `allowed_actions` 和时间线 |
+| GET | `/cases/{caseUuid}/events` | 光标分页事件时间线 |
+| GET | `/stream` | SSE 增量事件流（cursor-based 重连，Last-Event-ID） |
+
+### 16.2 命令（统一动作端点）
+
+`POST /api/v1/task-center/cases/{caseUuid}/commands/{action}`
+
+支持动作：`cancel`、`retry`、`continue_payment`、`cancel_order`、`submit_refund`、`add_evidence`、`claim`、`assign`、`requery_payment`、`redeliver`、`retry_asset_registration`、`request_compensation`、`ack_alert`、`close_alert`
+
+所有命令需 `Idempotency-Key` header；危险操作需 `reason` 字段。命令路由回源业务域执行。
+
+### 16.3 运营控制台 `/api/v1/ops/task-center/`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/overview` | 全局态势与趋势 |
+| GET | `/exceptions` | 异常处理队列 |
+| GET | `/reconciliation` | 对账差异列表 |
+| GET | `/alerts` | 告警列表 |
+| GET | `/work-orders` | 工单与分派人 |
+
+所有运营端点需运营角色权限。
+
+---
+
+## 🆕 17. 资产工作台接口（asset-workbench）`[superpowers 更新 V1.7]`
+
+> 路由前缀：`/api/v1/assets/workbench`、`/api/v1/assets/history` | 认证要求：JWT + `X-Workspace-Id`
+
+资产工作台合并 AssetHistory 与 TaskMonitor，提供统一的资产生成历史查询与工作台操作。
+
+### 17.1 查询
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/assets/workbench/projects` | 项目树 + 特殊集合（未归档/收藏/回收站）计数 |
+| GET | `/api/v1/assets/history/records` | 统一任务+资产分页查询（支持 scope/project_uuid/collection/record_kind/asset_type/status/media_type/model_id/created_by/日期范围/标签/关键词/排序/分页） |
+| GET | `/api/v1/assets/history/records/{recordKind}/{recordUuid}` | 任务或资产详情 |
+
+### 17.2 资产命令
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| PATCH | `/api/v1/assets/{assetUuid}` | 编辑名称/asset_type/标签（需 `If-Match`） |
+| PUT/DELETE | `/api/v1/assets/{assetUuid}/favorite` | 幂等收藏/取消收藏 |
+| POST | `/api/v1/assets/{assetUuid}/move` | 移动到目标项目/类型（需 `If-Match`） |
+| POST | `/api/v1/assets/batch` | 批量操作（1-100 UUID，operation: archive/trash/restore/tag） |
+| DELETE | `/api/v1/assets/{assetUuid}` | 软删除→30天回收站（需 `If-Match`） |
+| POST | `/api/v1/assets/{assetUuid}/restore` | 恢复（需 `If-Match`） |
+| GET | `/api/v1/assets/{assetUuid}/download-url` | 生成短期签名下载 URL |
+| POST | `/api/v1/assets/{assetUuid}/regenerate` | 重新生成（保留原始参数，允许修改） |
+| POST | `/api/v1/assets/{assetUuid}/publish` | 发布到市场 |
+| POST | `/api/v1/assets/{assetUuid}/send-to-canvas` | 发送到画布（需 `Idempotency-Key`，支持 viewport_center/auto/absolute 放置模式） |
+
+### 17.3 任务命令
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/generation/tasks/{taskUuid}/cancel` | 取消（仅 pending/running） |
+| POST | `/api/v1/generation/tasks/{taskUuid}/retry` | 重试（仅 failed/canceled，写 `retry_of_task_id`） |
+| GET | `/api/v1/generation/tasks/{taskUuid}` | 查询（需验证 Workspace 和项目权限） |
+
+> 所有写操作需 `X-Workspace-Id` header。所有状态变更需 `Idempotency-Key`。`media_type`（image/video/audio/data/other）与 `asset_type`（CHARACTER/SCENE/PROP/STORYBOARD/VOICE/MUSIC/OTHER）为不同维度。
+
+---
+
+## 🆕 18. Agent配置中心接口（agent-config）`[superpowers 更新 V1.7]`
+
+> 路由前缀：`/api/v1/agent` | 认证要求：JWT + `X-Workspace-Id`
+
+Agent 配置中心提供用户可配置的 Agent Blueprint/定义/版本/绑定体系。
+
+### 18.1 Blueprint `/api/v1/agent/blueprints`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 列出所有 ACTIVE 蓝图（HOOK/SCREENWRITER/STORYBOARD/DIRECTOR） |
+| GET | `/{id}` | 蓝图详情（完整 parameter_schema_json + 锁定 prompt 模板） |
+
+### 18.2 用户 Agent 定义 `/api/v1/agent/definitions`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/` | 创建 Agent（选 Blueprint + name + description） |
+| GET | `/` | 列出当前用户 Agent 列表 |
+| GET | `/{id}` | Agent 详情 |
+| PATCH | `/{id}` | 更新名称/描述/icon 等元数据 |
+| POST | `/{id}/copies` | 复制 Agent（新定义 + 初始 DRAFT） |
+| POST | `/{id}/archive` | 归档 Agent |
+
+### 18.3 版本管理 `/api/v1/agent/versions`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/definitions/{id}/versions` | 列出某 Agent 所有版本 |
+| POST | `/definitions/{id}/drafts` | 从当前 PUBLISHED 版本创建新 DRAFT |
+| GET | `/{versionId}` | 版本详情（含完整 prompt） |
+| PUT | `/{versionId}` | 更新 DRAFT（需 `rowVersion`） |
+| POST | `/{versionId}/validate` | 校验参数/变量/Prompt |
+| POST | `/{versionId}/test-runs` | 执行试跑（返回输出+token/费用数据） |
+| POST | `/{versionId}/publish` | 发布（需至少一次成功试跑） |
+| POST | `/{versionId}/activate` | 回滚激活历史 PUBLISHED 版本 |
+
+### 18.4 绑定 `/api/v1/agent/`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| PUT | `/user-bindings/{roleType}` | 设置用户默认绑定 |
+| DELETE | `/user-bindings/{roleType}` | 移除用户默认绑定 |
+| GET | `/projects/{projectId}/agent-bindings` | 列出项目所有角色绑定 |
+| PUT | `/projects/{projectId}/agent-bindings/{roleType}` | 设置项目默认绑定（需项目管理员权限） |
+| DELETE | `/projects/{projectId}/agent-bindings/{roleType}` | 移除项目默认绑定 |
+
+### 18.5 解析预览
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/agent/resolve-preview` | 预览配置解析（不创建快照）；输入 `projectId`、`roleType`、可选 `temporaryOverrides`；返回 `bindingSource`、`userAgentId`、`versionId`、`resolvedParameters`、`compiledPrompt`、`promptHash` |
+
+### 18.6 执行快照
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/agent/execution-snapshots/{id}` | 查看历史执行快照 |
+
+---
+
+## 🆕 19. 企业工作台接口扩展（enterprise-ext）`[superpowers 更新 V1.7]`
+
+> 路由前缀：`/api/v1/enterprise` | 认证要求：JWT + `X-Workspace-Id` + WorkspaceContext 权限码
+
+企业工作台在已有企业管理接口基础上扩展 3001 BFF 代理、统一审批、采购预算和跨域审计能力。
+
+### 19.1 企业上下文与仪表盘
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/context` | 当前企业上下文、菜单、能力列表 |
+| GET | `/dashboard` | 角色化企业概览（管理员/部门负责人/成员不同视图） |
+
+### 19.2 统一审批 `/api/v1/enterprise/approvals`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 统一审批分页查询（支持 type/status/部门/日期 筛选） |
+| GET | `/{type}/{id}` | 回源审批详情 |
+| POST | `/{type}/{id}/decisions` | 幂等审批/拒绝（需 `Idempotency-Key`） |
+
+### 19.3 采购预算 `/api/v1/enterprise/budgets`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/` | 查询当前 workspace 预算（支持部门/成员维度） |
+| PUT | `/` | 设置/更新预算（`amount_cents`、`single_limit_cents`） |
+| GET | `/entries` | 预算流水（RESERVE/RELEASE/CONSUME/REVERSE） |
+
+### 19.4 组织管理 BFF（→3001）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/departments` | 部门列表 |
+| POST | `/departments` | 创建部门 |
+| PATCH | `/departments/{deptId}` | 更新部门 |
+| DELETE | `/departments/{deptId}` | 停用部门 |
+| GET | `/members` | 成员分页列表 |
+| POST | `/invitations` | 邀请成员（手机/邮箱） |
+| PATCH | `/members/{memberId}` | 变更部门/角色/状态 |
+| GET/POST/PATCH | `/roles/**` | 角色 CRUD |
+
+### 19.5 跨域审计
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/audit-events` | 跨域审计索引查询（支持 domain/action/operator/日期 筛选） |
+
+> 所有企业写操作需 `Idempotency-Key` header。组织/成员/角色写操作全部由 8080 BFF 转发至 3001，禁止 8080 本地写入。
+
+---
+
+## 20. 通用数据模型
+
+### 20.1 用户对象
 
 ```json
 {
@@ -3928,7 +4171,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 }
 ```
 
-### 16.2 4轴标签对象
+### 20.2 4轴标签对象
 
 ```json
 {
@@ -3939,7 +4182,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 }
 ```
 
-### 16.3 分镜卡片对象
+### 20.3 分镜卡片对象
 
 ```json
 {
@@ -3968,7 +4211,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 }
 ```
 
-### 16.4 交付素材清单对象
+### 20.4 交付素材清单对象
 
 ```json
 {
@@ -3992,16 +4235,16 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 
 ---
 
-## 17. 枚举字典
+## 21. 枚举字典
 
-### 17.1 账户类型
+### 21.1 账户类型
 
 | 值 | 说明 |
 |------|------|
 | `personal` | 个人创作者 |
 | `enterprise` | 企业用户 |
 
-### 17.2 会员等级
+### 21.2 会员等级
 
 | 值 | 说明 |
 |------|------|
@@ -4009,7 +4252,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `creator` | 创作者会员 |
 | `enterprise` | 企业版 |
 
-### 17.3 剧本状态
+### 21.3 剧本状态
 
 | 值 | 说明 |
 |------|------|
@@ -4019,7 +4262,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `sold` | 已售出 |
 | `delisted` | 已下架 |
 
-### 17.4 授权类型
+### 21.4 授权类型
 
 | 值 | 说明 | 价格区间 |
 |------|------|------|
@@ -4027,7 +4270,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `exclusive` | 独家授权 | ¥99.9-499.9 |
 | `buyout` | 买断授权 | ¥499.9-2999.9 |
 
-### 17.5 分镜档位
+### 21.5 分镜档位
 
 | 值 | 说明 | 版本号 |
 |------|------|------|
@@ -4035,7 +4278,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `B` | 导演确认档 | V0.8 |
 | `C` | 生产交付档 | V1.0 |
 
-### 17.6 资产成熟度
+### 21.6 资产成熟度
 
 | 值 | 说明 |
 |------|------|
@@ -4045,7 +4288,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `L3` | 已审核（可批量生产） |
 | `L4` | 已锁定（不可随意修改） |
 
-### 17.7 资产类型
+### 21.7 资产类型
 
 | 值 | 说明 |
 |------|------|
@@ -4061,7 +4304,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `bgm` | 背景音乐 |
 | `sfx` | 音效 |
 
-### 17.8 AI任务状态
+### 21.8 AI任务状态
 
 | 值 | 说明 |
 |------|------|
@@ -4071,7 +4314,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `failed` | 失败 |
 | `cancelled` | 已取消 |
 
-### 17.9 审计严重等级
+### 21.9 审计严重等级
 
 | 值 | 说明 |
 |------|------|
@@ -4080,7 +4323,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `P2` | 可优化问题，可进入生产但需记录 |
 | `P3` | 轻微表达问题，后期优化 |
 
-### 17.10 质量等级
+### 21.10 质量等级
 
 | 值 | 标准 |
 |------|------|
@@ -4090,7 +4333,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `C` | 不建议生产 |
 | `D` | 需要重写 |
 
-### 17.11 视频生成模式
+### 21.11 视频生成模式
 
 | 值 | 说明 |
 |------|------|
@@ -4099,7 +4342,7 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `keyframe_video` | 首尾帧AI插值视频 |
 | `omni_reference_video` | 多图/视频/音频/文本作为生成参考 |
 
-### 17.12 导出画幅
+### 21.12 导出画幅
 
 | 值 | 分辨率 | 适用平台 |
 |------|------|------|
@@ -4107,25 +4350,25 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 | `16:9` | 1280×720 / 1920×1080 | B站/YouTube |
 | `1:1` | 1080×1080 | 小红书/Instagram |
 
-### 17.13 4轴标签 — 题材
+### 21.13 4轴标签 — 题材
 
 | 值 |
 |------|
 | `言情` `现实情感` `悬疑` `惊悚` `科幻` `武侠` `脑洞` `太空歌剧` `赛博朋克` `游戏` `仙侠` `历史` |
 
-### 17.14 4轴标签 — 情节（部分）
+### 21.14 4轴标签 — 情节（部分）
 
 | 值 |
 |------|
 | `权谋` `重生` `穿越` `系统` `校园` `职场` `娱乐圈` `宫斗宅斗` `犯罪` `探险` `丧尸` `克苏鲁` `规则怪谈` `团宠` `囤物资` `先婚后爱` `追妻火葬场` `破镜重圆` `争霸` `听心声` `读心术` `倒计时文学` `日久生情` `一见钟情` `强取豪夺` `欢喜冤家` `出轨` `婚姻` `家庭` `无系统` |
 
-### 17.15 4轴标签 — 情绪
+### 21.15 4轴标签 — 情绪
 
 | 值 |
 |------|
 | `纯爱` `HE` `BE` `甜宠` `虐恋` `暗恋` `先虐后甜` `沙雕` `爽文` `复仇` `反转` `逆袭` `励志` `烧脑` `热血` `求生` `打脸` `多视角反转` `治愈` `迪化` |
 
-### 17.16 4轴标签 — 时空
+### 21.16 4轴标签 — 时空
 
 | 值 |
 |------|
@@ -4133,9 +4376,9 @@ GET  /openapi/v1/canvas/export/:task_id        # 查询导出
 
 ---
 
-## 18. 错误码参考
+## 22. 错误码参考
 
-### 18.1 错误码结构
+### 22.1 错误码结构
 
 ```
 A B C D E
@@ -4148,7 +4391,7 @@ A B C D E
 └────────── 错误级别: 4=客户端错误, 5=服务端错误
 ```
 
-### 18.2 通用错误码
+### 22.2 通用错误码
 
 | 错误码 | HTTP状态 | 说明 |
 |--------|:---:|------|
@@ -4163,7 +4406,7 @@ A B C D E
 | `50002` | 503 | 服务不可用 |
 | `50003` | 504 | 上游服务超时 |
 
-### 18.3 user-svc 错误码 (1xxxx)
+### 22.3 user-svc 错误码 (1xxxx)
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4179,7 +4422,7 @@ A B C D E
 | `41010` | 成员数已达上限 |
 | `41011` | 企业预算不足 |
 
-### 18.4 script-gen-svc 错误码 (2xxxx)
+### 22.4 script-gen-svc 错误码 (2xxxx)
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4190,7 +4433,7 @@ A B C D E
 | `42005` | 生成内容被安全拦截 |
 | `42006` | Token预算不足 |
 
-### 18.5 canvas-svc 错误码 (6xxxx)
+### 22.5 canvas-svc 错误码 (6xxxx)
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4200,7 +4443,7 @@ A B C D E
 | `46004` | 导出队列已满 |
 | `46005` | 无水印导出需要会员 |
 
-### 18.6 trade-svc 错误码 (4xxxx)
+### 22.6 trade-svc 错误码 (4xxxx)
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4211,7 +4454,7 @@ A B C D E
 | `44005` | 余额不足 |
 | `44006` | 提现金额低于最低限额 |
 
-### 18.7 sop-svc 错误码 (7xxxx)
+### 22.7 sop-svc 错误码 (7xxxx)
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4220,7 +4463,7 @@ A B C D E
 | `47003` | 版本冲突 |
 | `47004` | AI失败次数超限 |
 
-### 18.8 内容项目错误码 (43xxx) `[superpowers 更新]`
+### 22.8 内容项目错误码 (43xxx) `[superpowers 更新]`
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4235,7 +4478,7 @@ A B C D E
 | `43009` | 画布导入冲突（`CANVAS_IMPORT_CONFLICT`，409） |
 | `43010` | 幂等冲突（`IDEMPOTENCY_CONFLICT`，409） |
 
-### 18.9 分镜错误码 (45xxx) `[superpowers 更新]`
+### 22.9 分镜错误码 (45xxx) `[superpowers 更新]`
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4249,7 +4492,7 @@ A B C D E
 | `45008` | XLSX 模板不支持（`XLSX_TEMPLATE_UNSUPPORTED`） |
 | `45009` | XLSX 校验失败（`XLSX_VALIDATION_FAILED`） |
 
-### 18.10 创作圣经错误码 (46xxx) `[superpowers 更新]`
+### 22.10 创作圣经错误码 (46xxx) `[superpowers 更新]`
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4260,7 +4503,7 @@ A B C D E
 | `46005` | AI 提取失败（`EXTRACTION_FAILED`） |
 | `46006` | 配额超限（`QUOTA_EXCEEDED`，规则/关系/快照容量上限） |
 
-### 18.11 交易错误码 (47xxx) `[superpowers 更新]`
+### 22.11 交易错误码 (47xxx) `[superpowers 更新]`
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4277,7 +4520,7 @@ A B C D E
 | `47011` | 支付结果未知（`PAYMENT_RESULT_UNKNOWN`） |
 | `47012` | 退款不允许（`REFUND_NOT_ALLOWED`） |
 
-### 18.12 资产市场错误码 (48xxx) `[superpowers 更新]`
+### 22.12 资产市场错误码 (48xxx) `[superpowers 更新]`
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4289,7 +4532,7 @@ A B C D E
 | `48006` | 发布冲突（`PUBLISH_CONFLICT`） |
 | `48007` | 项目应用不可撤消（Token 无效/过期） |
 
-### 18.13 Agent 错误码 (49xxx) `[superpowers 更新]`
+### 22.13 Agent 错误码 (49xxx) `[superpowers 更新]`
 
 | 错误码 | 说明 |
 |--------|------|
@@ -4305,6 +4548,46 @@ A B C D E
 | `49010` | Tool 执行失败（`AGENT_TOOL_EXECUTION_FAILED`） |
 | `49011` | 幂等冲突（`AGENT_IDEMPOTENCY_CONFLICT`） |
 
+### 22.14 任务事件中心错误码 (50xxx) `[superpowers 更新 V1.7]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `50001` | 任务不存在（`TASK_NOT_FOUND`） |
+| `50002` | 任务不可取消（`TASK_NOT_CANCELABLE`） |
+| `50003` | 命令不支持（`COMMAND_NOT_SUPPORTED`） |
+
+### 22.15 资产工作台错误码 (51xxx) `[superpowers 更新 V1.7]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `51001` | 资产不存在（`ASSET_WB_NOT_FOUND`） |
+| `51002` | 资产不可编辑（`ASSET_WB_NOT_EDITABLE`） |
+| `51003` | 画布放置失败（`CANVAS_PLACEMENT_FAILED`） |
+
+### 22.16 Agent 配置中心错误码 (52xxx) `[superpowers 更新 V1.7]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `52001` | 蓝图不存在（`BLUEPRINT_NOT_FOUND`） |
+| `52002` | 版本不可编辑（`VERSION_NOT_EDITABLE`） |
+| `52003` | 试跑失败（`TEST_RUN_FAILED`） |
+| `52004` | 发布前置条件不满足（`PUBLISH_PREREQUISITE_NOT_MET`） |
+
+### 22.17 企业工作台扩展错误码 (53xxx) `[superpowers 更新 V1.7]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `53001` | 预算不存在（`BUDGET_NOT_FOUND`） |
+| `53002` | 预算额度不足（`BUDGET_INSUFFICIENT`） |
+| `53003` | 审批不存在（`APPROVAL_NOT_FOUND`） |
+
+### 22.18 故障关闭错误码 (503xx) `[superpowers 更新 V1.7]`
+
+| 错误码 | 说明 |
+|--------|------|
+| `50301` | 3001 不可用（`SERVICE_3001_UNAVAILABLE`） |
+| `50302` | 钱包服务不可用（`WALLET_SERVICE_UNAVAILABLE`） |
+
 ---
 
 ## 附录A：接口版本矩阵
@@ -4317,13 +4600,14 @@ A B C D E
 | **V1.3** | 40+ | 210+ | 🆕 独立Agent服务(7) + 画布增强API + 画布质量巡检 + node engine/downstream/duplicates/adopted-assets/delivery-manifest/asset-package/image node ops/video generation ops/audio asset ops |
 | **V1.5** | 范围调整 | 210+ | 取消视频剪辑、视频合成、多轨时间轴接口；统一为 adopted-assets、delivery-manifest、asset-package export 契约 |
 | **V1.6** `[superpowers 更新]` | +80+ | 290+ | 创作圣经 API(14-A)、专业分镜 API(14-B)、工作编辑器设定 API(14-C)、交易市场完整 API(47xxx)、资产市场完整 API(48xxx)、Agent 持久化会话/计划审批/SSE(49xxx)、画布项目中心、3001 账户中心集成 |
+| **V1.7** `[superpowers 更新 V1.7]` | +60+ | 350+ | 统一任务事件中心(50xxx)、资产工作台(51xxx)、Agent 配置中心(52xxx)、企业工作台扩展(53xxx/503xx)、幂等/乐观锁/故障关闭/不可变快照跨域规范 |
 
 > **总计**：V1.0 = 58 | V1.1 = +42 | V1.2 = +76 | V1.3 = +40+ = **210+个有效 API 端点**。已取消的视频剪辑、视频合成和多轨编辑接口不计入有效接口。
 
 ---
 
-> **文档状态**：v1.6 修订版（基于 superpowers 增量更新）
-> **最后修订**：2026-07-02
-> **更新依据**：`docs/superpowers/specs/` 下 11 份设计文档
+> **文档状态**：v1.7 修订版（基于 superpowers 增量更新）
+> **最后修订**：2026-07-04
+> **更新依据**：`docs/superpowers/specs/` 下 18 份设计文档
 > **文档用途**：供前端开发、后端开发、测试工程师、第三方集成使用  
 > **后续步骤**：生成 OpenAPI 3.0 YAML 文件 → 导入 Swagger/Apifox → Mock Server → 联调
