@@ -6,8 +6,9 @@ import com.aicp.module.canvas.dto.CanvasMigrationViews;
 import com.aicp.module.canvas.entity.CanvasShotUnit;
 import com.aicp.module.canvas.entity.ShotAdoption;
 import com.aicp.module.canvas.service.*;
+import com.aicp.module.generation.capability.CapabilityCompiler;
 import com.aicp.module.generation.entity.GenerationCandidate;
-import com.aicp.module.generation.entity.GenerationRequestSnapshot;
+import com.aicp.module.generation.service.ModelRequestService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -29,14 +30,14 @@ public class CanvasKernelController {
     private final ShotAdoptionService adoptionService;
     private final CanvasUpgradeService upgradeService;
     private final CanvasLegacyAuditService auditService;
+    private final ModelRequestService modelRequestService;
 
     // ===== ShotWorkUnit =====
 
     /** 获取项目的所有 ShotWorkUnit */
     @GetMapping("/projects/{projectId}/shot-units")
     public ApiResponse<List<CanvasShotUnit>> listShotUnits(@PathVariable Long projectId) {
-        // TODO: R1 — 通过 kernelService.listByProject(projectId)
-        return ApiResponse.success(java.util.Collections.emptyList());
+        return ApiResponse.success(kernelService.listByProject(projectId));
     }
 
     /** 创建 ShotWorkUnit */
@@ -73,20 +74,41 @@ public class CanvasKernelController {
     public record PortValidateRequest(String sourceType, String sourcePort,
                                        String targetType, String targetPort, String role) {}
 
+    // ===== Model Requests (R3) =====
+
+    /** 模型请求预览 */
+    @PostMapping("/nodes/{nodeId}/model-requests/preview")
+    public ApiResponse<?> previewModelRequest(@PathVariable Long nodeId,
+                                               @RequestBody CapabilityCompiler.CompileInput input) {
+        return ApiResponse.success(modelRequestService.preview(nodeId, input));
+    }
+
+    /** 模型请求提交 */
+    @PostMapping("/nodes/{nodeId}/model-requests")
+    public ApiResponse<ModelRequestService.SubmitResult> submitModelRequest(
+            @PathVariable Long nodeId,
+            @RequestBody ModelSubmitRequest request) {
+        return ApiResponse.success(modelRequestService.submit(
+                nodeId, request.input(), request.confirmedFingerprint(),
+                request.idempotencyKey(), SecurityUtil.requireCurrentUserId()));
+    }
+
+    public record ModelSubmitRequest(CapabilityCompiler.CompileInput input,
+                                      String confirmedFingerprint, String idempotencyKey) {}
+
     // ===== Candidates & Adoption =====
 
     /** 节点候选列表 */
     @GetMapping("/nodes/{nodeId}/candidates")
     public ApiResponse<List<GenerationCandidate>> listCandidates(@PathVariable Long nodeId) {
-        // TODO: R1 — 查询 generation_candidates where node_id via snapshot
-        return ApiResponse.success(java.util.Collections.emptyList());
+        return ApiResponse.success(modelRequestService.listCandidates(nodeId));
     }
 
     /** 更新节点局部候选选择 */
     @PutMapping("/nodes/{nodeId}/candidate-selection")
     public ApiResponse<Void> selectCandidate(@PathVariable Long nodeId,
                                               @RequestBody SelectCandidateRequest request) {
-        // TODO: R1 — 设置 is_selected=true 并取消其他候选的选中
+        modelRequestService.selectCandidate(nodeId, request.candidateId());
         return ApiResponse.success();
     }
 

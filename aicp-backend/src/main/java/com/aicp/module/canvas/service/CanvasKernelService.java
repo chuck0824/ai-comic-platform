@@ -14,6 +14,7 @@ import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.UUID;
 
 /**
@@ -107,6 +108,12 @@ public class CanvasKernelService {
 
     public CanvasShotUnit getUnit(Long unitId) {
         return shotUnitMapper.selectById(unitId);
+    }
+
+    /** 列出项目下所有 ShotWorkUnit */
+    public List<CanvasShotUnit> listByProject(Long projectId) {
+        return shotUnitMapper.selectList(
+                new LambdaQueryWrapper<CanvasShotUnit>().eq(CanvasShotUnit::getProjectId, projectId));
     }
 
     /** 不可变记录 */

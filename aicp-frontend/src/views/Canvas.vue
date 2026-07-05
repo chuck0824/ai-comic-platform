@@ -597,6 +597,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, FolderOpened } from '@element-plus/icons-vue'
 import { canvasApi } from '@/api/canvas'
 import { generationApi } from '@/api/generation'
+import { canvasFeatures } from '@/config/canvasFeatures'
+import { useCanvasUIState } from './canvas/composables/useCanvasUIState'
 import { useCanvasState } from './canvas/composables/useCanvasState'
 import { useCanvasNodes } from './canvas/composables/useCanvasNodes'
 import NodeCreateMenu from './canvas/components/NodeCreateMenu.vue'
@@ -1386,7 +1388,17 @@ function loadDirectorDeskFromNode(node) {
   directorActiveMenu.value = ''
 }
 
+const features = canvasFeatures()
+
 function openDirectorDesk(node) {
+  // R2: 当 DIRECTOR_V2 开启时，导航到独立 Three.js 导演台路由
+  if (features.directorV2) {
+    const ui = useCanvasUIState()
+    ui.write({ activeShotUnitId: node.shotUnitId, activeNodeId: nodeKey(node), activeTab: 'director' })
+    router.push(`/canvas/${state.projectId.value}/shot-units/${node.shotUnitId || 'draft'}/director`)
+    return
+  }
+  // 旧 DOM 导演台（R2 前保持兼容）
   loadDirectorDeskFromNode(node)
   directorDeskVisible.value = true
 }
