@@ -1,5 +1,7 @@
 # 剧本与 TVC 钩子 Agent 完整落地方案
 
+> **[superpowers 更新 V1.8]（2026-07-05）**：Canvas 域已按 `canvas-production-kernel-completion-design.md` 进行生产内核重构。导演 Agent 现在与 Three.js 导演台（非 DOM 原型）交互——DirectorScene Draft/Revision 版本流。导演 Agent 通过统一 AgentSessionService facade 调用画布 Tool。
+>
 > **[superpowers 更新 V1.7]（2026-07-04）**：
 > - **Agent 配置中心**：钩子 Agent 已纳入 4 系统蓝图（HOOK）之一。钩子策略模板纳入创作圣经写作指南 L1 层。用户可通过 Agent 配置中心自定义钩子 Agent 参数/Prompt 并发布版本。详见 `docs/superpowers/specs/2026-07-04-user-configurable-agent-center-design.md`
 > - **执行快照冻结**：钩子 Agent 每次正式执行时冻结 `agent_execution_snapshots`（blueprint_id/version、resolved_prompt、prompt_hash、context_refs），确保生成可回溯。详见 `docs/superpowers/specs/2026-07-04-user-configurable-agent-center-design.md`

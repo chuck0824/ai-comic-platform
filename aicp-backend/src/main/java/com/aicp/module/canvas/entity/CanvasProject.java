@@ -52,6 +52,11 @@ public class CanvasProject {
     private String idempotencyKey;
     private LocalDateTime archivedAt;
 
+    // ===== V12 Canvas 生产内核 =====
+    private String canvasMode;   // EXPLORATION | PRODUCTION
+    private Integer schemaVersion; // 1=旧, 2=V2 内核
+    private Integer storyboardRevision; // 绑定的分镜版本
+
     @Version
     private Integer revision;
 

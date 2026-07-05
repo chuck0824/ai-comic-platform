@@ -1,5 +1,12 @@
 # 导演台功能开发 PRD
 
+> **[superpowers 更新 V1.8]（2026-07-05）**：
+> - **Three.js 重构**：导演台已从 DOM/CSS 原型升级为基于 Three.js 的真实 3D 工作区。使用 WebGLRenderer、OrbitControls、TransformControls、GLTFLoader、AnimationMixer。详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md` Section 7 和 `docs/superpowers/plans/2026-07-05-canvas-production-kernel-r2-director.md`
+> - **Draft/Revision 版本流**：导演状态从节点 JSON 迁移到独立 `director_drafts`（可变，`row_version` 乐观锁）+ `director_revisions`（不可变，规范化 JSON + SHA-256 哈希）。详见 completion-design Section 4.4
+> - **坐标与时间协议**：领域协议 RH_Y_UP_METERS（右手坐标、Y-up、米制）；半开区间 `[0, duration_ms)`；归一化 Quaternion 持久化。详见 completion-design Section 7.2-7.3
+> - **实用增强包**：机位/镜头运动预设、角色动作片段预设、灯光/材质预设、冻结前自动检查（资产缺失/动作重叠/时间越界/越轴风险/相机穿模/参考职责冲突/模型能力超限）。详见 completion-design Section 7.5
+> - **独立路由**：导演台通过独立路由 `/canvas/:projectId/shot-units/:unitId/director` 访问，由 `DIRECTOR_V2` flag 控制
+>
 > **[superpowers 更新 V1.7]（2026-07-04）**：
 > - **浮动编辑器入口**：画布浮动编辑器改造后，导演节点显示摘要卡片 +「打开导演台」按钮。导演台本身作为独立编辑器打开，不再嵌入右侧属性栏。详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
 > - **乐观锁 + 版本快照**：导演台状态保存补充 `row_version` 乐观锁（409 Conflict 冲突检测）和不可变快照（`capture screenshot` 时创建 `director_desk_snapshot` 记录）。详见跨域规范
@@ -23,9 +30,17 @@
 
 ## 2. 产品定位
 
-导演台是画布内的轻量级 3D 构图节点。用户通过“摆积木”的方式搭建故事空间，控制角色站位、物体位置、相机机位和截图比例，快速获得 AI 图像/视频模型可理解的构图参考。
+> **[superpowers 更新 V1.8]**：导演台已从 DOM/CSS 原型升级为基于 Three.js 的真实单镜头 3D 工作区。以下为更新后的定位。原有 DOM 原型定位 `[已废弃]`。
 
-导演台不替代专业 3D 建模软件，也不承担最终渲染生产。它的核心价值是降低创作者对构图、站位、景别、机位、角色相对关系的描述成本，让后续 AI 生图、生视频更稳定。
+导演台是画布内基于 **Three.js** 的真实 3D 构图工作区，作为 ShotWorkUnit 的可选组成部分。用户通过 GLB 模型、TransformControls、关键帧动画和摄影机控制，精确搭建故事空间并输出导演包（冻结 DirectorRevision + 资产引用），作为 AI 视频模型（如 Seedance）的构图参考。
+
+导演台不替代专业 3D 建模软件（不开放骨骼关节编辑、完整材质节点图、Blender 工程同步），也不承担最终渲染生产。核心价值是：降低多角色站位/机位/景别的描述成本，通过冻结 revision 保证生成一致性，让 AI 视频模型产出更稳定、可追溯。
+
+**V1.8 架构要点**：
+- Three.js（WebGLRenderer + OrbitControls + TransformControls + GLTFLoader + AnimationMixer）
+- 领域协议 RH_Y_UP_METERS（右手坐标、Y-up、米制），Three.js 直接消费
+- Draft（可变，乐观锁自动保存）+ Revision（不可变，冻结产生）版本流
+- Blender Worker 在 R3 做 Y-up→Z-up 坐标转换后输出预演
 
 ## 3. 背景与问题
 

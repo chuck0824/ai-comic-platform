@@ -2,10 +2,10 @@
 
 > 产品需求文档（Product Requirements Document）  
 > 基于：[用户端产品功能设计 v0.6] + [后端产品功能设计 v0.1] + [流程图文档 v1.0] + [API接口文档 v1.0] + [AI漫剧与视频内容工业化生产工作台 PRD V1.5]  
-> 版本：v1.7（superpowers 持续修订版）  
-> 日期：2026-07-04  
+> 版本：v1.8（superpowers 持续修订版）  
+> 日期：2026-07-05  
 > 状态：评审中  
-> 🆕 V1.7修订：基于 superpowers 设计文档持续补强，新增 Agent 配置中心、统一任务事件中心、资产工作台、企业工作台完成、独立空白画布、生产 SOP 完成六大模块。产品定位保持为面向 AI 漫剧、短剧、广告片、短视频创作者的 **AI 漫剧与视频内容工业化生产工作台**。核心能力以无限画布、节点系统、资产库、分镜生产、批量生成、工作流模板、Agent / Skill 自动执行共同构成生产闭环。平台不提供视频合成、视频剪辑或多轨时间轴编辑，交付物为可下载的镜头视频与配套素材包。
+> 🆕 V1.8修订：基于 Canvas 生产内核设计文档，新增 EXPLORATION/PRODUCTION 双模式、ShotWorkUnit 镜头生产容器、6 类标准节点类型（text/image/video/audio/script/director）、类型化端口（12 类载荷）、Three.js 导演台 Draft/Revision 版本流、模型请求预览与确认管线、质量报告与分级采用策略、交付清单与 EDL/FCPXML 交换文件、绞杀迁移策略、R0-R5 五阶段交付。平台不提供视频合成、视频剪辑或多轨时间轴编辑，交付物为镜头素材包 + EDL/FCPXML 交换文件。
 
 ---
 
@@ -746,6 +746,30 @@ V1.5 的 PRD 不只定义“页面有什么”，还必须定义“用户怎么�
 | 🔥 F-186 `[V1.7]` | 画布 | 独立空白画布：无内容项目绑定创建；purpose=experiment；浮动编辑器交互 | M |
 | F-187 `[V1.7]` | Agent | Agent配置中心 P1：试跑 A/B 对比；高级参数模板库；TEAM 可见性共享 | S |
 | F-188 `[V1.7]` | SOP | 生产SOP P1：故障恢复策略推荐；产能估算仪表板；质量趋势报告 | S |
+
+### 5.7 V1.8 新增功能（Canvas 生产内核，10项）`[superpowers 更新 V1.8]`
+
+> 详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md`
+
+| ID | 模块 | 功能点 | 优先级 |
+|------|------|------|:---:|
+| 🔥 F-189 `[V1.8]` | 画布 | Canvas 生产内核 V2：节点类型 11→6 收缩；EXPLORATION/PRODUCTION 双模式切换；ShotWorkUnit 镜头生产容器+5 Gate；12 类类型化端口校验；浮动编辑器统一四页签（内容/参数、参考素材、候选结果、任务记录） | M |
+| 🔥 F-190 `[V1.8]` | 画布 | 模型请求预览与确认：能力编译预览（推荐模型/费用/素材职责/警告）；用户确认后冻结请求快照；确认后模型不可用须重新预览 | M |
+| 🔥 F-191 `[V1.8]` | 导演台 | Three.js 导演台：WebGLRenderer+OrbitControls+TransformControls；Draft（乐观锁自动保存）+Revision（冻结不可变）版本流；六轨时间线（变换/动作/摄影机/镜头/节拍/连续性）；机位/动作/灯光/材质预设 | M |
+| 🔥 F-192 `[V1.8]` | 画布 | 质量报告与分级采用：候选质量维度（身份/构图/动作/摄影机/物理/音画同步/连续性）；PASS/WARN/BLOCK 分级策略；BLOCK 强制采用需权限+原因+审计 | M |
+| 🔥 F-193 `[V1.8]` | 画布 | 交付清单与外部交换：DeliveryManifest 固化（锁定采用版本+资产版本）；ZIP 素材包（manifest.json+checksums.txt）；EDL（CMX3600）和 FCPXML 1.9 交换文件生成 | M |
+| 🔥 F-194 `[V1.8]` | 画布 | 项目中心降级：骨架屏 8 秒超时→错误/重试/诊断 ID；账户中心不可用→最近项目缓存只读；Feature Flag 五开关按 Workspace/Canvas 灰度 | M |
+| F-195 `[V1.8]` | 画布 | 绞杀迁移：旧画布审计报告（AUTO_CLASSIFIED/NEEDS_CONFIRMATION）；影子读对比；单画布事务升级；回滚依靠备份 | S |
+| F-196 `[V1.8]` | 导演台 | 冻结前自动检查：资产缺失/动作重叠/时间越界/越轴风险/相机穿模/参考职责冲突/模型能力超限；错误阻止冻结，警告需确认 | S |
+| F-197 `[V1.8]` | 生成 | Seedance 供应商 Gate：8 项验证（API/鉴权/模型ID/输入限制/异步语义/计费/内容安全/限流）；Gate 未通过只能使用 Provider Sandbox | S |
+| F-198 `[V1.8]` | 生成 | Blender 预演 Worker：不可变 DirectorRevision→Blender Y-up/Z-up 转换→Eevee 预演→FFmpeg 输出；6 黄金场景一致性回归 | C |
+
+> **废弃功能 `[已废弃-superpowers V1.8]`**：
+> - F-119（无限画布节点系统）：节点类型从 11 种收敛为 6 种，角色/场景/道具/prompt/参考/工作流/Agent 不再作为画布节点类型 `[已废弃]`
+> - F-130（11种节点类型全支持）：`[已废弃]`，替换为 F-189
+> - 音频截取/变速：不在 Canvas 产品边界内 `[已废弃]`
+> - 音色克隆：移交音频资产域 `[已废弃]`
+> - compose/export API：已由 DeliveryManifest + EDL/FCPXML 替代 `[已废弃]`
 
 ---
 

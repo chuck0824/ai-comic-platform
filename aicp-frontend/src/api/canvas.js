@@ -61,7 +61,29 @@ export const canvasApi = {
   // === V1.5 新增 ===
   updateNodePositions: (id, data) => request.patch(`/canvas/projects/${id}/nodes/positions`, data),
   dropMaterial: (id, data) => request.post(`/canvas/projects/${id}/assets/drop`, data),
-  createGroup: (id, data) => request.post(`/canvas/projects/${id}/groups`, data)
+  createGroup: (id, data) => request.post(`/canvas/projects/${id}/groups`, data),
+
+  // ===== R1: Canvas 生产内核 =====
+  /** 获取迁移报告 */
+  getMigrationReport: (id) => request.get(`/canvas/projects/${id}/migration-report`),
+  /** 执行升级 */
+  upgradeProject: (id, idempotencyKey) =>
+    request.post(`/canvas/projects/${id}/upgrade`, null, { headers: { 'Idempotency-Key': idempotencyKey } }),
+  /** 创建 ShotWorkUnit */
+  createShotUnit: (projectId, data) => request.post(`/canvas/projects/${projectId}/shot-units`, data),
+  /** 更新 ShotWorkUnit（乐观锁） */
+  updateShotUnit: (projectId, unitId, expectedVersion, data) =>
+    request.patch(`/canvas/projects/${projectId}/shot-units/${unitId}`, data, { headers: { 'If-Match': expectedVersion } }),
+  /** 端口连接校验 */
+  validatePort: (data) => request.post('/canvas/ports/validate', data),
+  /** 节点候选列表 */
+  listCandidates: (nodeId) => request.get(`/canvas/nodes/${nodeId}/candidates`),
+  /** 选择候选 */
+  selectCandidate: (nodeId, candidateId) =>
+    request.put(`/canvas/nodes/${nodeId}/candidate-selection`, { candidateId }),
+  /** 创建正式采用 */
+  adoptShot: (projectId, unitId, data) =>
+    request.post(`/canvas/projects/${projectId}/shot-units/${unitId}/adoptions`, data)
 }
 
 export const canvasAgentApi = {

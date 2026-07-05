@@ -4,7 +4,9 @@
 
 **Goal:** 在供应商 Gate 通过后交付模型无关能力请求、版本化适配预览、真实 Seedance 任务和隔离 Blender 预演 Worker，使普通与导演两条链路都产生真实可追溯候选。
 
-**Architecture:** Canvas 编译创作意图，现有 AiRouter/new-api 选择并调用供应商，版本化 Adapter 负责协议翻译。Blender Worker 只消费不可变 DirectorRevision，通过任务队列运行；领域 Y-up 坐标在 Worker 边界转换为 Blender Z-up。费用和状态复用 generation/任务事件中心。
+**Architecture:** Canvas 编译创作意图，现有 AiRouter/new-api 选择并调用供应商，版本化 Adapter 负责协议翻译。Blender Worker 只消费不可变 DirectorRevision，通过任务队列运行；领域 Y-up 坐标在 Worker 边界转换为 Blender Z-up。费用和状态复用 generation/任务事件中心。所有外部回调携带 HMAC 签名；生成任务有明确的重试策略和优先级；候选在进入用户可见列表前通过内容安全审核。
+
+**Addendum:** 本计划已按 `2026-07-05-canvas-production-kernel-addendum.md` 修订：增加回调 HMAC 签名、指数退避重试、内容安全审核 Gate、Adapter 版本化注册、生成队列优先级。
 
 **Tech Stack:** Spring Boot, Java 17, MyBatis-Plus, existing AiRouter/NewApiClient, Go new-api, Blender headless Python, FFmpeg, pytest/unittest, Vue 3.
 
@@ -15,6 +17,10 @@
 - Create `aicp-backend/src/main/resources/db/migration/V14__generation_adapters_and_attempts.sql` and mirrors.
 - Create backend package `com.aicp.module.generation.capability` and `com.aicp.module.generation.adapter`.
 - Modify `AiRouter.java`, `GenerationService.java`, `GenerationExecutor.java`, `GenerationSettlementService.java`, `GenerationController.java`.
+- Create `aicp-backend/src/main/java/com/aicp/module/generation/service/RetryPolicy.java` and `GenerationPriority.java`.
+- Create `aicp-backend/src/main/java/com/aicp/module/generation/adapter/AdapterRegistry.java`.
+- Create `aicp-backend/src/main/java/com/aicp/module/safety/ContentSafetyService.java` and `SafetyStatus.java`.
+- Create `aicp-backend/src/main/java/com/aicp/module/director/filter/CallbackSignatureFilter.java`.
 - Create `aicp-backend/src/test/java/com/aicp/module/generation/capability/` and `adapter/` tests.
 - Create `workers/blender/{scene_builder.py,coordinate.py,animation_baker.py,camera_builder.py,renderer.py,manifest.py,worker.py}` and unittest tests.
 - Create backend `BlenderWorkerClient` and `DirectorPreviewService` for idempotent preview dispatch.
@@ -213,14 +219,31 @@ Run: `cd aicp-backend && mvn -Dtest=SeedanceAdapterTest test`
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement preview and submission endpoints**
+- [ ] **Step 3: Implement preview, submission, and adapter registry**
 
-Preview returns model/version, adapter version, reference roles, removed inputs, prompt, warnings and estimated credits. Submit validates the preview fingerprint, writes immutable snapshot, freezes credits through the existing settlement boundary, then creates one GenerationTask.
+Create `AdapterRegistry` managing profile ↔ adapter_version mapping:
+```java
+public interface AdapterRegistry {
+    ModelAdapter resolve(String profileId);  // always returns current non-deprecated version
+    ModelAdapter resolveVersion(String profileId, String adapterVersion);  // for historical snapshots
+    void markDeprecated(String profileId, String adapterVersion);
+    void markRetired(String profileId, String adapterVersion);
+    Set<String> activeVersions(String profileId);
+}
+```
+
+Preview returns model/version, adapter version, reference roles, removed inputs, prompt, warnings and estimated credits. Submit validates the preview fingerprint, writes immutable snapshot with the current adapter version, freezes credits through the existing settlement boundary, then creates one GenerationTask with priority derived from project mode.
 
 ```java
 public interface ModelAdapter {
     AdapterPreview preview(CapabilityRequest request, ModelCapabilityProfile profile);
     ProviderRequest compile(AdapterPreview confirmedPreview);
+}
+public enum GenerationPriority {
+    P0_HIGH,    // production re-adoption
+    P1_NORMAL,  // production first generation
+    P2_LOW,     // exploration trial generation
+    P3_BATCH    // Blender preview rendering
 }
 ```
 
@@ -349,6 +372,90 @@ git add aicp-backend/src/main/java/com/aicp/module/director aicp-backend/src/tes
 git commit -m "feat: dispatch blender preview tasks"
 ```
 
+### Task 6b: Add HMAC callback signature verification
+
+**Files:**
+- Create: `aicp-backend/src/main/java/com/aicp/module/director/filter/CallbackSignatureFilter.java`
+- Modify: `aicp-backend/src/main/java/com/aicp/module/director/service/DirectorPreviewService.java`
+- Modify: `aicp-backend/src/main/java/com/aicp/module/director/controller/DirectorRevisionController.java`
+- Modify: `aicp-backend/src/test/java/com/aicp/module/director/DirectorPreviewServiceTest.java`
+
+- [ ] **Step 1: Write failing callback security tests**
+
+```java
+@Test
+void missingSignatureHeaderReturns401() {
+    mockMvc.perform(post("/api/v1/callbacks/blender/" + taskUuid)
+            .content(validResultJson))
+            .andExpect(status().isUnauthorized());
+}
+
+@Test
+void wrongSignatureReturns401() {
+    mockMvc.perform(post("/api/v1/callbacks/blender/" + taskUuid)
+            .header("X-Callback-Signature", "t=1700000000,v1=deadbeef")
+            .content(validResultJson))
+            .andExpect(status().isUnauthorized());
+}
+
+@Test
+void validSignatureAcceptsCallback() {
+    var secret = service.create(revisionId, "preview-key", 7L).getCallbackSecret();
+    var timestamp = String.valueOf(System.currentTimeMillis() / 1000);
+    var payload = taskUuid + "\n" + manifestHash + "\n" + timestamp;
+    var signature = "t=" + timestamp + ",v1=" + hmacSha256(secret, payload);
+    mockMvc.perform(post("/api/v1/callbacks/blender/" + taskUuid)
+            .header("X-Callback-Signature", signature)
+            .content(validResultJson))
+            .andExpect(status().isOk());
+}
+
+@Test
+void callbackSecretIsNotLogged() {
+    // assert log output does not contain the raw callback_secret hex
+}
+```
+
+- [ ] **Step 2: Run RED**
+
+Run: `cd aicp-backend && mvn -Dtest=DirectorPreviewServiceTest#callbackSecurity test`
+
+Expected: FAIL.
+
+- [ ] **Step 3: Implement HMAC filter and secret generation**
+
+`DirectorPreviewService.create()` generates 32-byte random `callback_secret`, stores SHA-256 hash (not raw secret) in the task record. Raw secret returned only in the enqueue payload to the Worker.
+
+`CallbackSignatureFilter` intercepts `/api/v1/callbacks/**`, validates:
+- `X-Callback-Signature` header present
+- Format: `t=<unix_seconds>,v1=<hex_hmac>`
+- `t` within ±5 minutes of server time
+- HMAC-SHA256(callback_secret, "{taskUuid}\n{manifestHash}\n{timestamp}") constant-time match
+- Reject with 401, no task existence leak
+
+```java
+@Component
+public class CallbackSignatureFilter extends OncePerRequestFilter {
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain) {
+        // validate HMAC; on failure set 401 without revealing task existence
+    }
+}
+```
+
+- [ ] **Step 4: Run GREEN**
+
+Run: `cd aicp-backend && mvn -Dtest='DirectorPreviewServiceTest,DirectorSceneServiceTest' test`
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add aicp-backend/src/main/java/com/aicp/module/director/filter aicp-backend/src/main/java/com/aicp/module/director/service/DirectorPreviewService.java aicp-backend/src/test/java/com/aicp/module/director/DirectorPreviewServiceTest.java
+git commit -m "feat: enforce hmac callback signatures"
+```
+
 ### Task 7: Integrate attempts, partial candidates and settlement
 
 **Files:**
@@ -406,6 +513,148 @@ Expected: PASS.
 ```bash
 git add aicp-backend/src/main/java/com/aicp/common/ai/AiRouter.java aicp-backend/src/main/java/com/aicp/module/generation aicp-backend/src/test/java/com/aicp/module/generation
 git commit -m "feat: settle generation attempts and candidates"
+```
+
+### Task 7b: Implement retry policy and queue priority
+
+**Files:**
+- Create: `aicp-backend/src/main/java/com/aicp/module/generation/service/RetryPolicy.java`
+- Create: `aicp-backend/src/main/java/com/aicp/module/generation/service/GenerationPriority.java`
+- Modify: `aicp-backend/src/main/java/com/aicp/module/generation/service/GenerationExecutor.java`
+- Modify: `aicp-backend/src/test/java/com/aicp/module/generation/GenerationAttemptServiceTest.java`
+
+- [ ] **Step 1: Write failing retry and priority tests**
+
+```java
+@Test
+void timeoutErrorRetriesWithBackoff() {
+    var policy = RetryPolicy.defaultPolicy();
+    assertThat(policy.isRetryable("PROVIDER_TIMEOUT")).isTrue();
+    assertThat(policy.nextDelayMs(0)).isEqualTo(2000);
+    assertThat(policy.nextDelayMs(1)).isEqualTo(4000);
+    assertThat(policy.nextDelayMs(4)).isEqualTo(60000);  // clamped
+}
+
+@Test
+void contentSafetyRejectionIsNotRetried() {
+    var policy = RetryPolicy.defaultPolicy();
+    assertThat(policy.isRetryable("CONTENT_SAFETY_REJECT")).isFalse();
+}
+
+@Test
+void productionAdoptionTaskHasHigherPriority() {
+    var task1 = createTask(mode="PRODUCTION", isAdoptionRetry=true);  // P0_HIGH
+    var task2 = createTask(mode="PRODUCTION", isFirstGen=true);       // P1_NORMAL
+    var task3 = createTask(mode="EXPLORATION");                        // P2_LOW
+    assertThat(queue.dequeue().getPriority()).isEqualTo("P0_HIGH");
+}
+```
+
+- [ ] **Step 2: Run RED**
+
+Run: `cd aicp-backend && mvn -Dtest=GenerationAttemptServiceTest#retryPolicy test`
+
+Expected: FAIL.
+
+- [ ] **Step 3: Implement retry policy and priority enqueue**
+
+```java
+public enum GenerationPriority { P0_HIGH, P1_NORMAL, P2_LOW, P3_BATCH }
+
+public record RetryPolicy(Set<String> retryableErrors, int maxAutoRetries, long baseDelayMs, long maxDelayMs, long totalTimeoutMs) {
+    public static RetryPolicy defaultPolicy() {
+        return new RetryPolicy(
+            Set.of("PROVIDER_TIMEOUT", "PROVIDER_500", "RATE_LIMITED", "NETWORK_ERROR", "WORKER_OOM", "WORKER_TIMEOUT", "ASSET_DOWNLOAD_FAILURE"),
+            3, 2000, 60000, 900000  // 3 retries, 2s base, 60s cap, 15min total
+        );
+    }
+    public boolean isRetryable(String errorCode) { return retryableErrors.contains(errorCode); }
+    public long nextDelayMs(int attemptNo) { return Math.min(baseDelayMs * (1L << attemptNo), maxDelayMs); }
+}
+```
+
+On enqueue: formal production adoption retries → P0_HIGH; first production generation → P1_NORMAL; exploration → P2_LOW; Blender preview → P3_BATCH. Same-user P0/P1 limited to 2 concurrent. P3 can be preempted.
+
+- [ ] **Step 4: Run GREEN**
+
+Run: `cd aicp-backend && mvn -Dtest='GenerationAttemptServiceTest,GenerationSettlementServiceTest' test`
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add aicp-backend/src/main/java/com/aicp/module/generation/service/RetryPolicy.java aicp-backend/src/main/java/com/aicp/module/generation/service/GenerationPriority.java aicp-backend/src/main/java/com/aicp/module/generation/service/GenerationExecutor.java aicp-backend/src/test/java/com/aicp/module/generation/GenerationAttemptServiceTest.java
+git commit -m "feat: add generation retry policy and queue priority"
+```
+
+### Task 7c: Add content safety review gate
+
+**Files:**
+- Create: `aicp-backend/src/main/java/com/aicp/module/safety/ContentSafetyService.java`
+- Create: `aicp-backend/src/main/java/com/aicp/module/safety/SafetyStatus.java`
+- Modify: `aicp-backend/src/main/java/com/aicp/module/generation/service/GenerationService.java`
+- Modify: `aicp-backend/src/test/java/com/aicp/module/generation/GenerationAttemptServiceTest.java`
+
+- [ ] **Step 1: Write failing safety gate tests**
+
+```java
+@Test
+void candidateIsFlaggedBeforeUserVisibility() {
+    var candidate = createCandidate(task, assetVersion);
+    assertThat(candidate.getSafetyStatus()).isEqualTo("PENDING");
+}
+
+@Test
+void rejectedCandidateNotListedForUser() {
+    service.markSafetyStatus(candidateId, "REJECTED", "真人肖像未授权");
+    var visible = service.listVisibleCandidates(nodeId, userId);
+    assertThat(visible).noneMatch(c -> c.getId().equals(candidateId));
+}
+
+@Test
+void safetyRejectDoesNotRefundCredits() {
+    var result = service.completeAttempt(task, providerResult(candidate));
+    service.markSafetyStatus(result.candidateId(), "REJECTED", "violence");
+    var settlement = settlementService.calculate(task);
+    assertThat(settlement.refund()).isZero();
+}
+```
+
+- [ ] **Step 2: Run RED**
+
+Run: `cd aicp-backend && mvn -Dtest=GenerationAttemptServiceTest#safetyGate test`
+
+Expected: FAIL.
+
+- [ ] **Step 3: Implement safety service**
+
+```java
+public enum SafetyStatus { PENDING, PASS, FLAGGED, REJECTED }
+
+public interface ContentSafetyService {
+    void submitReview(Long candidateId, Long assetVersionId);
+    void onReviewComplete(Long candidateId, SafetyStatus status, String reason);
+}
+
+// Hook: GenerationService.completeAttempt → after asset settlement
+// → ContentSafetyService.submitReview → async review → callback →
+// onReviewComplete → set candidate.safety_status
+```
+
+Safety review timeout: 60s. Timeout → FLAGGED (visible with "审核中" label). REJECTED candidates filtered from user-facing lists; audit log preserved.
+
+- [ ] **Step 4: Run GREEN**
+
+Run: `cd aicp-backend && mvn -Dtest='GenerationAttemptServiceTest,GenerationSettlementServiceTest' test`
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add aicp-backend/src/main/java/com/aicp/module/safety aicp-backend/src/main/java/com/aicp/module/generation/service/GenerationService.java aicp-backend/src/test/java/com/aicp/module/generation/GenerationAttemptServiceTest.java
+git commit -m "feat: gate generation candidates with content safety"
 ```
 
 ### Task 8: Add frontend preview and confirmation

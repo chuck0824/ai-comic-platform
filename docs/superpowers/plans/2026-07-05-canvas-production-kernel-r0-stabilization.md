@@ -13,7 +13,7 @@
 ## File map
 
 - Create `aicp-backend/src/main/java/com/aicp/module/canvas/service/CanvasLegacyAuditService.java`: classify legacy node and connection shapes without mutation.
-- Create `aicp-backend/src/main/java/com/aicp/module/canvas/dto/CanvasMigrationViews.java`: migration report response.
+- Create `aicp-backend/src/main/java/com/aicp/module/canvas/dto/CanvasMigrationViews.java`: migration audit view (read-only, renamed from MigrationReport to MigrationAuditView to avoid conflict with R1 persistent entity).
 - Modify `aicp-backend/src/main/java/com/aicp/module/canvas/controller/CanvasController.java`: expose read-only migration report.
 - Modify `aicp-backend/src/main/java/com/aicp/common/exception/ErrorCode.java`: add explicit upstream-unavailable code.
 - Modify `aicp-backend/src/main/java/com/aicp/common/workspace/WorkspaceAccessService.java`: return fail-closed, distinguishable upstream failure.
@@ -211,6 +211,14 @@ void ambiguousReferenceRequiresConfirmation() {
     var issue = service.classifyNode(node("reference", "{}"));
     assertThat(issue.status()).isEqualTo("NEEDS_CONFIRMATION");
 }
+
+@Test
+void legacyEdgesAreNotModifiedDuringAudit() {
+    // legacy edges stay untouched during read-only audit;
+    // R1 upgrade will set port_contract_version='legacy', status='NEEDS_CONFIRMATION'
+    var report = service.report("canvas_1");
+    assertThat(report.edges().stream().allMatch(e -> e.status().equals("LEGACY_UNMODIFIED"))).isTrue();
+}
 ```
 
 - [ ] **Step 2: Run and verify RED**
@@ -224,13 +232,15 @@ Expected: FAIL because audit types do not exist.
 Define:
 
 ```java
-public record MigrationIssue(String objectId, String objectType, String currentType,
+public record MigrationAuditIssue(String objectId, String objectType, String currentType,
                              String suggestedType, String status, String reason) {}
-public record MigrationReport(String projectUuid, int nodeCount, int edgeCount,
-                              List<MigrationIssue> issues) {}
+public record MigrationAuditReport(String projectUuid, int nodeCount, int edgeCount,
+                              List<MigrationAuditIssue> issues) {}
 ```
 
 Expose `GET /api/v1/canvas/projects/{id}/migration-report`. The service may read nodes and edges but must not call any mapper update method.
+
+Note: R1's persistent entity is `CanvasMigrationRecord`, distinct from these read-only audit views. Legacy edges are NOT modified during audit; R1 upgrade sets `port_contract_version = 'legacy'` and `status = 'NEEDS_CONFIRMATION'` in bulk.
 
 - [ ] **Step 4: Run backend canvas tests**
 

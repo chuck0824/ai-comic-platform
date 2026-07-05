@@ -17,6 +17,12 @@ public class CanvasEdge {
     private String targetPort;
     private String edgeType;
     private String metadata;
+
+    // V12: 类型化端口扩展
+    private String portContractVersion;
+    private String status;
+    private String role;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

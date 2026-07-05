@@ -1,13 +1,21 @@
-# new-api 对接技术规划 V1.7
+# new-api 对接技术规划 V1.8
 
 > 基于《后端产品功能设计_V1.5.md》与《AI漫剧与视频内容工业化生产工作台 PRD V1.5》  
 > 对接目标：[new-api](https://github.com/QuantumNous/new-api) — 新一代 AI 模型聚合管理与分发系统  
 > 文档性质：技术规划说明书（Tech Planning Spec）  
-> 适用对象：后端、架构、算法、项目管理
+> 适用对象：后端、架构、算法、项目管理  
+> `[superpowers 更新 V1.8]`：新增 Canvas 生产内核模型适配器管线、CapabilityCompiler、Seedance 供应商 Gate、Blender Worker 集成
 
 ---
 
-## 基于 superpowers 的更新记录（2026-07-04）
+## 基于 superpowers 的更新记录（2026-07-04 → 2026-07-05）
+
+| 更新项 | 说明 | 依据 superpowers |
+|---|---|---|
+| **Canvas 生产内核模型管线** `[superpowers 更新 V1.8]` | CapabilityCompiler（Canvas 侧编译模型无关 CapabilityRequest）→ ModelAdapter 版本化预览（推荐模型/费用/素材职责/警告）→ 用户确认→ GenerationRequestSnapshot（不可变）→ AiRouter/new-api 路由→ TaskAttempt→ Candidate；GenerationVariant 写路径废弃 | `canvas-production-kernel-completion-design.md` |
+| **Seedance 供应商 Gate** `[superpowers 更新 V1.8]` | 8 项验证（真实 API/鉴权/模型ID/输入限制/异步语义/计费/内容安全/限流）；Gate 未通过只能使用 Provider Sandbox；`model-capabilities/seedance-2.0.json` 版本化能力 profile | `canvas-production-kernel-r3-model-blender.md` |
+| **Blender Worker 集成** `[superpowers 更新 V1.8]` | DirectorRevision→Blender Y-up/Z-up 坐标转换→Eevee 预演→FFmpeg 输出；隔离临时目录+镜像固定版本+HMAC 回调签名；幂等重试结构一致 | `canvas-production-kernel-r3-model-blender.md` |
+| **generation_tasks 扩展** `[superpowers 更新 V1.8]` | 新增 `request_snapshot_id`、`adapter_version`、`actual_credit_cost`；新增 `generation_task_attempts` 表（task_id/attempt_no/provider_request_id/status） | `canvas-production-kernel-r1-core.md` |
 
 | 更新项 | 说明 | 依据 superpowers |
 |---|---|---|

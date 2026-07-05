@@ -37,6 +37,10 @@ public class CanvasNode {
     private Long groupId;
     private Long lockedBy;
 
+    // V12: 生产内核扩展
+    private Long shotUnitId;
+    private String nodeSchemaVersion;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

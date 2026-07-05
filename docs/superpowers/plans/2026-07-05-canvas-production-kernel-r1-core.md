@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 建立探索/正式生产双模式、ShotWorkUnit、类型化端口、不可变请求快照、候选和正式采用，并以单画布事务将旧数据迁移到新生产内核。
+**Goal:** 建立探索/正式生产双模式、ShotWorkUnit、类型化端口（含方向和角色约束）、不可变请求快照、候选和正式采用，并以单画布事务将旧数据迁移到新生产内核。
 
-**Architecture:** 扩展现有 Canvas 与 generation 域，不建立第二套任务中心。新链路写 V2 事实表；旧数据通过 `legacy-adapter` 影子读取，确认后单向升级。`ShotAdoption` 是正式采用唯一事实源，`GenerationVariant` 只保留兼容读取。
+**Architecture:** 扩展现有 Canvas 与 generation 域，不建立第二套任务中心。新链路写 V2 事实表；旧数据通过 `legacy-adapter` 影子读取，确认后单向升级。`ShotAdoption` 是正式采用唯一事实源，`GenerationVariant` 只保留兼容读取。端口方向（INPUT/OUTPUT）和角色（role）在服务端权威校验。
+
+**Addendum:** 本计划已按 `2026-07-05-canvas-production-kernel-addendum.md` 修订：端口增加方向/角色、增加 ShotWorkUnit PATCH API、旧连线迁移默认值。
 
 **Tech Stack:** Vue 3, Node test runner, Spring Boot 3, MyBatis-Plus, MySQL/H2, JUnit 5, Jackson, existing generation task/event infrastructure.
 
@@ -20,6 +22,8 @@
 - Create `aicp-backend/src/main/java/com/aicp/module/canvas/service/CanvasPortRegistry.java`.
 - Create `aicp-backend/src/main/java/com/aicp/module/canvas/service/CanvasUpgradeService.java`.
 - Create `aicp-backend/src/main/java/com/aicp/module/canvas/controller/CanvasKernelController.java`.
+- Modify `aicp-backend/src/main/java/com/aicp/module/canvas/service/CanvasKernelService.java`: add `updateUnit` with `If-Match` optimistic lock.
+- Modify `aicp-backend/src/main/java/com/aicp/module/canvas/controller/CanvasKernelController.java`: add `PATCH /api/v1/canvas/projects/{projectId}/shot-units/{unitId}`.
 - Create backend schema, service and API tests under `aicp-backend/src/test/java/com/aicp/module/canvas/kernel/`.
 - Create `aicp-frontend/src/views/canvas/ports/portRegistry.js`.
 - Create `aicp-frontend/src/views/canvas/shot-units/shotUnitState.js`.
@@ -27,6 +31,11 @@
 - Create `aicp-frontend/src/views/canvas/legacy-adapter/legacyCanvasAdapter.js`.
 - Modify `aicp-frontend/src/api/canvas.js`, `useCanvasNodes.js`, `Canvas.vue`.
 - Create `aicp-frontend/tests/canvas-kernel-r1.test.js`.
+
+**GenerationVariant deprecation timeline:**
+- R1: Mark `GenerationVariant` write paths deprecated; new code writes only `GenerationCandidate`.
+- R3: Provide read-only projection view over `GenerationVariant` for legacy consumers.
+- R4+1 release: Remove old compose/export API; archive `GenerationVariant` table.
 
 ### Task 1: Add V12 schema with immutable and unique constraints
 
@@ -146,7 +155,78 @@ git add aicp-backend/src/main/java/com/aicp/module/canvas aicp-backend/src/test/
 git commit -m "feat: add canvas shot work units"
 ```
 
-### Task 3: Add one authoritative typed-port registry
+### Task 2b: Add ShotWorkUnit update API with optimistic locking
+
+**Files:**
+- Modify: `aicp-backend/src/main/java/com/aicp/module/canvas/service/CanvasKernelService.java`
+- Modify: `aicp-backend/src/main/java/com/aicp/module/canvas/controller/CanvasKernelController.java`
+- Modify: `aicp-backend/src/test/java/com/aicp/module/canvas/kernel/CanvasKernelServiceTest.java`
+
+- [ ] **Step 1: Write failing update tests**
+
+```java
+@Test
+void updateRejectsWhenGenerationInProgress() {
+    var unit = service.createUnit(project("PRODUCTION"), request(1L, 3));
+    fixture.createRunningTask(unit.getId());
+    assertThatThrownBy(() -> service.updateUnit(unit.getId(), patch().fps(30), 0, 7L))
+            .hasMessageContaining("进行中的生成任务");
+}
+
+@Test
+void staleRowVersionReturns409() {
+    var unit = service.createUnit(project("EXPLORATION"), request(null, null));
+    assertThatThrownBy(() -> service.updateUnit(unit.getId(), patch().fps(30), 99, 7L))
+            .isInstanceOf(OptimisticLockingFailureException.class);
+}
+
+@Test
+void validUpdateSucceedsAndIncrementsVersion() {
+    var unit = service.createUnit(project("PRODUCTION"), request(1L, 3));
+    var updated = service.updateUnit(unit.getId(), patch().fps(30).aspectRatio("21:9"), unit.getRowVersion(), 7L);
+    assertThat(updated.getFps()).isEqualTo(30);
+    assertThat(updated.getAspectRatio()).isEqualTo("21:9");
+    assertThat(updated.getRowVersion()).isEqualTo(unit.getRowVersion() + 1);
+}
+```
+
+- [ ] **Step 2: Run RED**
+
+Run: `cd aicp-backend && mvn -Dtest=CanvasKernelServiceTest#updateUnit test`
+
+Expected: FAIL.
+
+- [ ] **Step 3: Implement PATCH endpoint**
+
+```java
+PATCH /api/v1/canvas/projects/{projectId}/shot-units/{unitId}
+Headers: If-Match: <row_version>
+
+@PatchMapping("/projects/{projectId}/shot-units/{unitId}")
+public ShotUnitView updateUnit(
+    @PathVariable Long projectId, @PathVariable Long unitId,
+    @RequestHeader("If-Match") int expectedVersion,
+    @RequestBody ShotUnitPatch patch, @RequestAttribute Long currentUserId) {
+    return kernelService.updateUnit(projectId, unitId, patch, expectedVersion, currentUserId);
+}
+```
+
+Updatable fields: `target_duration_ms`, `fps`, `aspect_ratio` (only when no running generation task exists); `source_shot_id`, `source_shot_revision` (only PRODUCTION mode); `sort_order` (always). Mode and project_id are immutable post-creation.
+
+- [ ] **Step 4: Run GREEN**
+
+Run: `cd aicp-backend && mvn -Dtest=CanvasKernelServiceTest test`
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add aicp-backend/src/main/java/com/aicp/module/canvas/service/CanvasKernelService.java aicp-backend/src/main/java/com/aicp/module/canvas/controller/CanvasKernelController.java aicp-backend/src/test/java/com/aicp/module/canvas/kernel/CanvasKernelServiceTest.java
+git commit -m "feat: add shot unit update with optimistic lock"
+```
+
+### Task 3: Add one authoritative typed-port registry with direction and role constraints
 
 **Files:**
 - Create: `aicp-backend/src/main/java/com/aicp/module/canvas/service/CanvasPortRegistry.java`
@@ -158,13 +238,18 @@ git commit -m "feat: add canvas shot work units"
 - [ ] **Step 1: Write failing compatibility tests in both runtimes**
 
 ```java
-assertThat(registry.canConnect("image", "image_ref", "video", "image_ref")).isTrue();
-assertThat(registry.canConnect("audio", "audio_ref", "image", "image_ref")).isFalse();
+assertThat(registry.canConnect("image", "image_ref", "video", "image_ref", "scene")).isTrue();
+assertThat(registry.canConnect("audio", "audio_ref", "image", "image_ref", null)).isFalse();
+assertThat(registry.canConnect("video", "video_candidate", "text", "text_out", null)).isFalse();
+// direction mismatch: both are OUTPUT
+assertThat(registry.canConnect("image", "image_ref", "image", "image_ref", "identity")).isFalse();
+// duplicate role on same target port
+assertThat(registry.isRoleAvailable(targetNodeId, "image_ref", "identity")).isTrue();
 ```
 
 ```js
-assert.equal(canConnect({ nodeType: 'director', port: 'director_package' }, { nodeType: 'video', port: 'director_package' }), true)
-assert.equal(canConnect({ nodeType: 'audio', port: 'audio_ref' }, { nodeType: 'image', port: 'image_ref' }), false)
+assert.equal(canConnect({ nodeType: 'director', port: 'director_package' }, { nodeType: 'video', port: 'director_package' }, 'director_input'), true)
+assert.equal(canConnect({ nodeType: 'audio', port: 'audio_ref' }, { nodeType: 'image', port: 'image_ref' }, null), false)
 ```
 
 - [ ] **Step 2: Run and verify RED**
@@ -175,13 +260,16 @@ Expected: both fail because registries are absent.
 
 - [ ] **Step 3: Implement registry version `canvas-ports-v1`**
 
-Define exactly the twelve payload types from the design. Backend `connectNodes` resolves source and target definitions, rejects mismatches with code `46031`, and persists `port_contract_version='canvas-ports-v1'`. Frontend mirrors the registry only for immediate drag feedback; backend remains authoritative.
+Define the 14 payload types with direction and allowed roles per the addendum. Backend `connectNodes` resolves source and target definitions, validates direction (OUTPUT→INPUT), checks role availability on target port, rejects mismatches with code `46031`, and persists `port_contract_version='canvas-ports-v1'`. Frontend mirrors the registry for immediate drag feedback; backend remains authoritative.
 
 ```java
-public record PortDefinition(String key, String payloadType, Direction direction) {}
+public enum PortDirection { INPUT, OUTPUT }
+public record PortDefinition(String key, String payloadType, PortDirection direction, Set<String> allowedRoles) {}
 public record ConnectionDecision(boolean allowed, String contractVersion, String reason) {}
-public ConnectionDecision validate(CanvasNode source, String sourcePort, CanvasNode target, String targetPort);
+public ConnectionDecision validate(CanvasNode source, String sourcePort, CanvasNode target, String targetPort, String role);
 ```
+
+Add unique constraint on `canvas_edges`: `UNIQUE (target_node_id, target_port, role)` where role is non-null.
 
 - [ ] **Step 4: Run both tests**
 
@@ -193,7 +281,7 @@ Expected: PASS.
 
 ```bash
 git add aicp-backend/src/main/java/com/aicp/module/canvas aicp-backend/src/test/java/com/aicp/module/canvas/kernel aicp-frontend/src/views/canvas/ports aicp-frontend/tests/canvas-kernel-r1.test.js
-git commit -m "feat: enforce typed canvas ports"
+git commit -m "feat: enforce typed canvas ports with direction and roles"
 ```
 
 ### Task 4: Add immutable request snapshots, candidates and adoption
@@ -288,10 +376,12 @@ Expected: FAIL because upgrade service is absent.
 
 Within one transaction: lock project, store canonical backup JSON and checksum in `canvas_migration_reports`, create shot units, update node/edge contract fields, classify director nodes, then set project schema version to 2. Never update `GenerationVariant` or old compose tasks.
 
+Legacy edge migration: all existing edges get `port_contract_version = 'legacy'` and `status = 'NEEDS_CONFIRMATION'` in bulk during upgrade. User confirms each edge to generate `port_contract_version = 'canvas-ports-v1'` and `status = 'ACTIVE'`.
+
 ```java
 @Transactional
 public UpgradeResult upgrade(String projectUuid, String idempotencyKey, Long actorId) {
-    MigrationReport report = auditService.report(projectUuid);
+    MigrationAuditReport report = auditService.report(projectUuid);
     report.requireNoAmbiguity();
     return executeOnce(projectUuid, idempotencyKey, actorId, report);
 }

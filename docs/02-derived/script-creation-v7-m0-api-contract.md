@@ -2,6 +2,8 @@
 
 > **更新（2026-07-04）**：后续 M2-M5 API 规划详见 `docs/superpowers/plans/`。
 > 
+> **更新（2026-07-05）** `[superpowers 更新 V1.8]`：Canvas 生产内核 API 详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md` Section 11。本文件为脚本创作 API 契约，Canvas 域 API 以该设计为准。
+> 
 > **已关联 API 域**：
 > - 创作圣经（`/api/v1/creative-bible`）→ `docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`
 > - Agent 会话（`/api/v1/agent/sessions`）→ `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`

@@ -32,10 +32,11 @@
 | 扩展 API 域 | `/api/v1/content-projects/{id}/settings` — 五类设定 CRUD + AI 提取确认 | `work-editor-evolution-design.md` |
 | 认证更新 | 明确 3001 为账户中心唯一数据源，JWT 声明映射规则，`X-Workspace-Id` header | `unified-account-model-billing-design.md` |
 | 错误码补充 | 新增 45xxx（分镜）、46xxx（创作圣经）、47xxx（交易）、48xxx（资产市场）、49xxx（Agent）、50xxx（任务事件）、51xxx（资产工作台）、52xxx（Agent 配置）、53xxx（企业扩展）、503xx（故障关闭） | 对应 superpowers specs |
-| PATCH 修正 | 2.5 节“暂不使用 PATCH”→“PATCH 用于部分更新”，与 V1.5 大量 PATCH 端点保持一致 | 文档内部一致性 |
+| PATCH 修正 | 2.5 节”暂不使用 PATCH”→”PATCH 用于部分更新”，与 V1.5 大量 PATCH 端点保持一致 | 文档内部一致性 |
 | 画布节点更新 | 反映浮动编辑器改造后的新交互模型 | `canvas-node-floating-editor-design.md` |
+| **Canvas 生产内核 V1.8** `[superpowers 更新 V1.8]` | 新增 16 个 Canvas 生产内核端点（model-requests/preview、candidates、director-scene/draft/validate/revisions、adoptions、delivery-manifests/packages、migration-report、upgrade）；节点类型参数 11→6 收缩；废弃 compose/export/音频截取/变速端点；强制 Idempotency-Key + If-Match/ETag | `canvas-production-kernel-completion-design.md` + R0-R4 实施计划 |
 
-> **注意**：标注 `[superpowers 更新 V1.7]` 为 07-04 新增。标注 `[superpowers 更新]` 为 07-02 之前的更新。
+> **注意**：标注 `[superpowers 更新 V1.8]` 为 2026-07-05 新增（Canvas 生产内核）。标注 `[superpowers 更新 V1.7]` 为 07-04 新增。标注 `[superpowers 更新]` 为 07-02 之前的更新。
 
 ---
 
@@ -2560,11 +2561,13 @@ POST /api/v1/canvas/projects/:id/shots/:shot_id/outpaint      # Outpaint扩图(V
 
 ---
 
-### 10.5 镜头采用版本与配套素材
+### 10.5 镜头采用版本与配套素材 `[已废弃-superpowers V1.8 — 由 Section 10.19.3-10.19.4 替代]`
+
+> **[superpowers 更新 V1.8]**：旧 `/adopted-assets` 端点已被 `POST /api/v1/canvas/projects/{projectId}/shot-units/{unitId}/adoptions` 替代（ShotAdoption 唯一事实源）。旧 `/delivery-manifest` 端点已被 `POST /api/v1/canvas/projects/{projectId}/delivery-manifests` + `POST /api/v1/delivery-manifests/{manifestId}/packages` 替代（ZIP/EDL/FCPXML）。旧端点保留兼容读取。原始定义保留如下。
 
 ```text
-PUT  /api/v1/canvas/projects/:id/shots/:shot_id/adopted-assets # 设置镜头采用版本
-GET  /api/v1/canvas/projects/:id/delivery-manifest             # 获取交付素材清单
+PUT  /api/v1/canvas/projects/:id/shots/:shot_id/adopted-assets # [已废弃] 设置镜头采用版本
+GET  /api/v1/canvas/projects/:id/delivery-manifest             # [已废弃] 获取交付素材清单
 POST /api/v1/canvas/projects/:id/audio/dub                      # 批量生成镜头配音素材
 POST /api/v1/canvas/projects/:id/subtitles                      # 批量生成 SRT/VTT 字幕素材
 ```
@@ -2585,10 +2588,12 @@ POST /api/v1/canvas/projects/:id/subtitles                      # 批量生成 S
 
 ---
 
-### 10.6 项目素材包导出
+### 10.6 项目素材包导出 `[已废弃-superpowers V1.8 — 由 Section 10.19.4 替代]`
+
+> **[superpowers 更新 V1.8]**：旧导出端点已被 DeliveryManifest + ZIP/EDL/FCPXML 打包任务替代。不再提供视频合成或成片导出。旧端点保留审计读取。
 
 ```text
-POST /api/v1/canvas/projects/:id/export                      # 创建 ZIP 素材包任务
+POST /api/v1/canvas/projects/:id/export                      # [已废弃] 创建 ZIP 素材包任务
 GET  /api/v1/canvas/export/:task_id                          # 查询打包进度
 GET  /api/v1/canvas/export/:task_id/download                 # 下载素材包
 ```
@@ -2774,7 +2779,9 @@ PUT  /api/v1/canvas/projects/:id/nodes/:nodeId/script/cell                  # �
 POST /api/v1/canvas/projects/:id/slash/:command                  # 执行Slash命令
 ```
 
-**支持的命令**：`nine-grid` / `four-grid` / `25-grid` / `character-3view` / `lighting-fix` / `director-desk` / `video-clip` / `split` / `stitch-2k` / `panorama-720` / `push-forward-3s` / `push-back-5s`
+**支持的命令**：`nine-grid` / `four-grid` / `25-grid` / `character-3view` / `lighting-fix` / `director-desk` / `split` / `stitch-2k` / `panorama-720` / `push-forward-3s` / `push-back-5s`
+
+> `[superpowers 更新 V1.8]`：`video-clip`（视频剪辑）已从产品边界移除。`director-desk` 命令现在打开 Three.js 导演台（DIRECTOR_V2 flag 控制）。
 
 **九宫格请求体**：
 ```json
@@ -2797,7 +2804,9 @@ POST /api/v1/canvas/projects/:id/slash/:command                  # 执行Slash�
 }
 ```
 
-### 10.11 🆕 导演台·3D构图 `V1.2`
+### 10.11 🆕 导演台·3D构图 `V1.2` → `[已废弃-superpowers V1.8]`
+
+> **[superpowers 更新 V1.8]**：以下 DOM/CSS 导演台 API 已被 Three.js DirectorScene Draft/Revision API 替代（见新增 Section 10.19.2）。旧端点保留兼容读取，新链路使用 DirectorScene 版本流。原始 API 定义保留如下作为历史参考。
 
 ```
 POST /api/v1/canvas/projects/:id/director-desk                                      # 创建导演台节点
@@ -3156,6 +3165,155 @@ GET  /api/v1/script/event-graph/:projectId/export   # 导出图谱(PNG/SVG)
   }
 }
 ```
+
+---
+
+### 10.19 🆕 Canvas 生产内核 V1.8 `[superpowers 更新 V1.8]`
+
+> 本节新增端点基于 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md` Section 11。所有写接口携带 `Idempotency-Key`；草稿更新携带 `If-Match`。
+
+#### 10.19.1 模型请求与候选
+
+```text
+POST /api/v1/canvas/nodes/{nodeId}/model-requests/preview    # 能力编译、路由预览、素材职责和费用预览
+POST /api/v1/canvas/nodes/{nodeId}/model-requests            # 冻结不可变请求快照并创建生成任务
+GET  /api/v1/canvas/nodes/{nodeId}/candidates                # 节点候选列表和当前选择
+PUT  /api/v1/canvas/nodes/{nodeId}/candidate-selection       # 更新节点局部候选选择
+```
+
+**模型请求预览响应**：
+```json
+{
+  "code": 0,
+  "data": {
+    "preview_fingerprint": "sha256:abc123",
+    "recommended_model": { "id": "seedance-2.0", "version": "20260701", "adapter_version": "seedance-v1" },
+    "quality_tier": "standard",
+    "cost_tier": "standard",
+    "references": [
+      { "role": "identity", "asset_id": "ast_001", "version_id": "v3", "status": "included" },
+      { "role": "scene", "asset_id": "ast_002", "version_id": "v1", "status": "included" },
+      { "role": "composition", "asset_id": "ast_003", "version_id": "v2", "status": "trimmed", "reason": "exceeds max image count" }
+    ],
+    "warnings": ["duplicate identity reference removed"],
+    "estimated_credits": 50,
+    "alternatives": [{ "model_id": "kling-2.0", "estimated_credits": 80, "quality_tier": "high" }],
+    "model_limits_notice": "最大输入 9 图 / 3 视频 / 3 音频，最长 15 秒"
+  }
+}
+```
+
+**创建模型请求体**：
+```json
+{
+  "preview_fingerprint": "sha256:abc123",
+  "confirmed_model_id": "seedance-2.0",
+  "confirmed_credits": 50,
+  "idempotency_key": "req-ck-20260705-001"
+}
+```
+
+响应返回 `generation_task` 引用和 `request_snapshot_id`，任务状态通过任务事件中心 SSE 推送。
+
+#### 10.19.2 导演台 Draft/Revision API
+
+```text
+GET  /api/v1/canvas/projects/{projectId}/shot-units/{unitId}/director-scene         # 读取导演草稿和版本摘要
+PUT  /api/v1/canvas/projects/{projectId}/shot-units/{unitId}/director-scene/draft    # 乐观锁保存导演草稿（If-Match）
+POST /api/v1/canvas/projects/{projectId}/shot-units/{unitId}/director-scene/validate # 校验草稿（冻结前检查）
+POST /api/v1/canvas/projects/{projectId}/shot-units/{unitId}/director-scene/revisions # 冻结不可变 revision
+POST /api/v1/director-revisions/{revisionId}/preview-renders                         # 创建 Blender 预演任务
+POST /api/v1/director-revisions/{revisionId}/model-requests/preview                  # 预览导演包的模型适配与费用
+POST /api/v1/director-revisions/{revisionId}/model-requests                          # 创建导演包生成任务
+```
+
+**PUT draft 请求头**：`If-Match: "etag-v3"`。冲突时返回 `409 Conflict` + 差异摘要。
+
+**POST revisions 请求体**：
+```json
+{
+  "idempotency_key": "freeze-ck-20260705-001",
+  "acknowledged_warnings": ["ACTION_OVERLAP: 角色A 和 角色B 在第 3 秒存在动作时间重叠"]
+}
+```
+
+冻结校验覆盖：资产缺失、动作重叠、时间越界、越轴风险、相机穿模、参考职责冲突、模型能力超限。错误阻止冻结，警告需确认后冻结。
+
+#### 10.19.3 正式采用 API
+
+```text
+POST /api/v1/canvas/projects/{projectId}/shot-units/{unitId}/adoptions  # 创建正式采用 revision
+```
+
+**请求体**：
+```json
+{
+  "candidate_id": "cand_001",
+  "override_reason": null,
+  "idempotency_key": "adopt-ck-20260705-001"
+}
+```
+
+- 正常采用（PASS/WARN 候选）：不需要 `override_reason`
+- 强制采用（BLOCK 候选）：需要 `canvas:quality:override` 权限 + 非空 `override_reason`
+- 正式采用只允许 ShotWorkUnit API；节点 API 不能改变正式采用
+
+#### 10.19.4 交付清单与打包 API
+
+```text
+POST /api/v1/canvas/projects/{projectId}/delivery-manifests              # 固化交付清单
+POST /api/v1/delivery-manifests/{manifestId}/packages                    # 创建 ZIP/EDL/FCPXML 异步打包任务
+```
+
+**POST delivery-manifests 请求体**：
+```json
+{
+  "idempotency_key": "dm-ck-20260705-001"
+}
+```
+
+固化条件：项目为 PRODUCTION 模式，所有 ShotWorkUnit 均已正式采用。返回 `manifest_hash`（SHA-256）。
+
+**POST packages 请求体**：
+```json
+{
+  "formats": ["zip", "edl", "fcpxml"],
+  "idempotency_key": "pkg-ck-20260705-001"
+}
+```
+
+异步任务返回统一任务引用，打包完成后输出：
+- ZIP：版本化素材 + `manifest.json` + `checksums.txt`
+- EDL（CMX3600）：按采用镜头顺序的编辑决策列表
+- FCPXML 1.9：Final Cut Pro 交换格式，含素材相对路径映射
+
+#### 10.19.5 迁移与升级 API
+
+```text
+GET  /api/v1/canvas/projects/{projectId}/migration-report  # 读取旧画布迁移审计报告
+POST /api/v1/canvas/projects/{projectId}/upgrade             # 确认后执行单画布事务升级
+```
+
+**迁移报告响应**：
+```json
+{
+  "code": 0,
+  "data": {
+    "project_uuid": "canvas_001",
+    "node_count": 45,
+    "edge_count": 62,
+    "issues": [
+      { "object_id": "node_12", "object_type": "node", "current_type": "reference",
+        "suggested_type": "director", "status": "AUTO_CLASSIFIED", "reason": "director JSON detected" },
+      { "object_id": "node_15", "object_type": "node", "current_type": "reference",
+        "suggested_type": null, "status": "NEEDS_CONFIRMATION", "reason": "empty reference data" }
+    ],
+    "upgrade_ready": false
+  }
+}
+```
+
+`NEEDS_CONFIRMATION` 的歧义数据必须人工确认后才可升级。
 
 ---
 

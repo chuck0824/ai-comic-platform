@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 将 DOM/CSS 导演台替换为基于 Three.js 的真实单镜头 3D 工作区，并提供可变草稿、不可变 revision、时间线、预设和冻结前检查。
+**Goal:** 将 DOM/CSS 导演台替换为基于 Three.js 的真实单镜头 3D 工作区，并提供可变草稿、不可变 revision、时间线、预设、冻结前检查、撤销/重做、多机位和键盘快捷键。
 
 **Architecture:** 导演台使用独立路由和独立状态模块；后端 `director` 域拥有草稿和冻结 revision。领域协议固定为 RH/Y-up/米制和 Quaternion，Three.js 直接消费；Blender 坐标转换留给 R3 Worker。所有预演和生成状态保持在 Task 域。
+
+**Addendum:** 本计划已按 `2026-07-05-canvas-production-kernel-addendum.md` 修订：增加命令模式 Undo/Redo 栈、快捷键体系、多机位模型、GLB 预算阈值、导航状态保持。
 
 **Tech Stack:** Vue 3, Three.js, Element Plus, Node test runner, Spring Boot, MyBatis-Plus, Jackson, JUnit 5, H2/MySQL.
 
@@ -17,7 +19,8 @@
 - Create backend package `aicp-backend/src/main/java/com/aicp/module/director/{domain,entity,mapper,dto,service,controller}`.
 - Create backend tests under `aicp-backend/src/test/java/com/aicp/module/director/`.
 - Create `aicp-frontend/src/views/canvas/director/DirectorWorkspace.vue`.
-- Create `director/state/directorDocument.js`, `viewport/DirectorViewport.vue`, `viewport/threeSceneController.js`, `timeline/DirectorTimeline.vue`, `timeline/timelineMath.js`, `presets/directorPresets.js`, `validation/directorValidation.js`.
+- Create `director/state/directorDocument.js`, `director/state/undoStack.js`, `director/state/useDirectorHotkeys.js`, `viewport/DirectorViewport.vue`, `viewport/threeSceneController.js`, `timeline/DirectorTimeline.vue`, `timeline/timelineMath.js`, `presets/directorPresets.js`, `validation/directorValidation.js`.
+- Create `aicp-frontend/src/views/canvas/composables/useCanvasUIState.js`: persist/resume Canvas UI state across director navigation.
 - Modify `aicp-frontend/src/router/index.js`, `aicp-frontend/src/api/canvas.js`, and `Canvas.vue`.
 - Create `aicp-frontend/tests/director-r2.test.js`.
 
@@ -101,10 +104,15 @@ Expected: both fail because protocol modules do not exist.
 
 Persist positions as three-number metre vectors and rotations as `{x,y,z,w}` normalized quaternions. Every keyframe stores `time_ms`; frame index is derived. Reject unknown asset versions, negative times, keyframes at `duration_ms`, and action clips with `out_ms <= in_ms`.
 
+Multi-camera support: `cameras` array (1–8 entries) with `active_camera_id`. Each camera has independent transforms and lens parameters. All camera definitions are included in frozen revisions.
+
 ```java
+public record CameraDefinition(String id, String name, double focalLengthMm, double sensorWidthMm,
+                               double aperture, double nearClip, double farClip, String aspectRatioOverride) {}
 public record Quaternion(double x, double y, double z, double w) {}
 public record TimedTransform(int timeMs, Vector3 position, Quaternion rotation, Vector3 scale) {}
 public record DirectorDocument(String coordinateSystem, int durationMs, int fps,
+                               List<CameraDefinition> cameras, String activeCameraId,
                                List<SceneObject> objects, Timeline timeline) {}
 ```
 
@@ -257,13 +265,21 @@ Expected: FAIL because Three.js/controller are absent.
 
 - [ ] **Step 3: Add Three.js and implement the viewport**
 
-Run: `cd aicp-frontend && npm install three@0.166.1`
+Run: `cd aicp-frontend && npm install three` (verify exact version with `npm view three versions`, target ≥0.166.0).
 
-Use `WebGLRenderer`, `OrbitControls`, `TransformControls`, `GLTFLoader`, `AnimationMixer`, helpers and one render loop. Dispose all GPU resources on route leave. Enforce object and triangle budgets before adding GLB content.
+Use `WebGLRenderer`, `OrbitControls`, `TransformControls`, `GLTFLoader`, `AnimationMixer`, helpers and one render loop. Dispose all GPU resources on route leave.
+
+GLB asset budget thresholds (desktop):
+- Max triangles per GLB: 500,000
+- Max triangles scene total: 2,000,000
+- Max objects scene total: 500
+- Max texture resolution: 4096×4096
+- Max GLB file size: 200 MB
+- Violations: warn and block before loading
 
 ```js
 export function createSceneController({ canvas, document, onChange }) {
-  return { loadAsset, selectObject, setTransformMode, renderFrame, dispose }
+  return { loadAsset, selectObject, setTransformMode, renderFrame, dispose, checkBudget }
 }
 ```
 
@@ -278,6 +294,175 @@ Expected: PASS; Vite creates a separate director/three chunk and exits 0.
 ```bash
 git add aicp-frontend/package.json aicp-frontend/package-lock.json aicp-frontend/src/views/canvas/director/viewport aicp-frontend/tests/director-r2.test.js
 git commit -m "feat: render director scenes with threejs"
+```
+
+### Task 5b: Implement command-pattern undo/redo stack
+
+**Files:**
+- Create: `aicp-frontend/src/views/canvas/director/state/undoStack.js`
+- Modify: `aicp-frontend/src/views/canvas/director/DirectorWorkspace.vue`
+- Modify: `aicp-frontend/tests/director-r2.test.js`
+
+- [ ] **Step 1: Write failing undo/redo tests**
+
+```js
+test('undo restores previous transform', () => {
+  const stack = createUndoStack(100)
+  stack.push({ type: 'TRANSFORM', objectId: 'obj1', before: { x: 0 }, after: { x: 10 } })
+  const cmd = stack.undo()
+  assert.equal(cmd.after.x, 10)
+  assert.equal(cmd.before.x, 0)
+})
+
+test('redo restores undone command', () => {
+  const stack = createUndoStack(100)
+  stack.push({ type: 'TRANSFORM', objectId: 'obj1', before: { x: 0 }, after: { x: 10 } })
+  stack.undo()
+  const cmd = stack.redo()
+  assert.equal(cmd.after.x, 10)
+})
+
+test('consecutive TRANSFORM within 500ms merges', () => {
+  const stack = createUndoStack(100)
+  stack.push({ type: 'TRANSFORM', objectId: 'obj1', before: { x: 0 }, after: { x: 5 }, timestamp: 1000 })
+  stack.push({ type: 'TRANSFORM', objectId: 'obj1', before: { x: 5 }, after: { x: 10 }, timestamp: 1200 })
+  assert.equal(stack.depth(), 1)
+  assert.equal(stack.peek().before.x, 0)
+  assert.equal(stack.peek().after.x, 10)
+})
+
+test('maxDepth 100 evicts oldest', () => {
+  const stack = createUndoStack(5)
+  for (let i = 0; i < 6; i++) stack.push({ type: 'TRANSFORM', objectId: 'obj1', before: {}, after: {} })
+  assert.equal(stack.depth(), 5)
+})
+```
+
+- [ ] **Step 2: Run RED**
+
+Run: `cd aicp-frontend && node --test tests/director-r2.test.js`
+
+Expected: FAIL.
+
+- [ ] **Step 3: Implement command-pattern stack**
+
+```js
+const COMMAND_TYPES = ['ADD_OBJECT', 'REMOVE_OBJECT', 'TRANSFORM', 'CHANGE_KEYFRAME', 'CHANGE_PROPERTY', 'ADD_TRACK', 'REMOVE_TRACK', 'APPLY_PRESET']
+
+export function createUndoStack(maxDepth = 100) {
+  let undo = [], redo = []
+  return {
+    push(command) {
+      if (command.type === 'TRANSFORM' && undo.length > 0) {
+        const last = undo[undo.length - 1]
+        if (last.type === 'TRANSFORM' && last.objectId === command.objectId && (command.timestamp - last.timestamp) < 500) {
+          undo[undo.length - 1] = { ...last, after: command.after, timestamp: command.timestamp }
+          return
+        }
+      }
+      undo.push(command)
+      if (undo.length > maxDepth) undo.shift()
+      redo = []
+    },
+    undo() {
+      if (undo.length === 0) return null
+      const cmd = undo.pop()
+      redo.push(cmd)
+      return cmd
+    },
+    redo() {
+      if (redo.length === 0) return null
+      const cmd = redo.pop()
+      undo.push(cmd)
+      return cmd
+    },
+    clear() { undo = []; redo = [] },
+    depth: () => undo.length,
+    canUndo: () => undo.length > 0,
+    canRedo: () => redo.length > 0,
+    peek: () => undo[undo.length - 1]
+  }
+}
+```
+
+- [ ] **Step 4: Run GREEN**
+
+Run: `cd aicp-frontend && node --test tests/director-r2.test.js`
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add aicp-frontend/src/views/canvas/director/state/undoStack.js aicp-frontend/src/views/canvas/director/DirectorWorkspace.vue aicp-frontend/tests/director-r2.test.js
+git commit -m "feat: add director undo/redo stack"
+```
+
+### Task 5c: Add keyboard shortcuts and Canvas UI state persistence
+
+**Files:**
+- Create: `aicp-frontend/src/views/canvas/director/state/useDirectorHotkeys.js`
+- Create: `aicp-frontend/src/views/canvas/composables/useCanvasUIState.js`
+- Modify: `aicp-frontend/src/views/canvas/director/DirectorWorkspace.vue`
+- Modify: `aicp-frontend/src/views/Canvas.vue`
+- Modify: `aicp-frontend/tests/director-r2.test.js`
+
+- [ ] **Step 1: Write failing hotkey and navigation state tests**
+
+```js
+// Hotkeys
+test('W key activates translate mode', () => {
+  const handler = createHotkeyHandler({ setTransformMode: spy() })
+  handler.dispatch('KeyW')
+  assert.equal(spy.calls[0][0], 'translate')
+})
+
+test('Ctrl+Z dispatches undo', () => {
+  const handler = createHotkeyHandler({ undo: spy(), redo: spy() })
+  handler.dispatch('KeyZ', { ctrlKey: true })
+  assert.equal(spy.undo.calls.length, 1)
+})
+
+// Navigation state
+test('canvas UI state persists across director navigation', () => {
+  writeUIState({ activeShotUnitId: 'u1', activeNodeId: 'n2', activeTab: 'candidates' })
+  assert.deepEqual(readUIState(), { activeShotUnitId: 'u1', activeNodeId: 'n2', activeTab: 'candidates', scrollPosition: 0 })
+})
+```
+
+- [ ] **Step 2: Run RED**
+
+Run: `cd aicp-frontend && node --test tests/director-r2.test.js`
+
+Expected: FAIL.
+
+- [ ] **Step 3: Implement hotkeys and UI state**
+
+Define the full hotkey map per addendum section 5.1 (W/E/R for transform tools, Ctrl+Z/Shift for undo/redo, Space for play, Delete for remove, etc.). Register in `DirectorWorkspace.vue` through `useDirectorHotkeys` composable.
+
+Canvas UI state saved to `sessionStorage['canvas_ui_state']` before navigating to director route. Director "back" button uses `router.back()` to preserve browser history. Canvas `onActivated` reads `canvas_ui_state` to restore: expanded ShotWorkUnit, selected node, floating editor tab.
+
+```js
+export function useCanvasUIState() {
+  return {
+    write(state) { sessionStorage.setItem('canvas_ui_state', JSON.stringify(state)) },
+    read() { return JSON.parse(sessionStorage.getItem('canvas_ui_state') || '{}') },
+    clear() { sessionStorage.removeItem('canvas_ui_state') }
+  }
+}
+```
+
+- [ ] **Step 4: Run tests and build**
+
+Run: `cd aicp-frontend && node --test tests/director-r2.test.js && npm run build`
+
+Expected: PASS and build exits 0.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add aicp-frontend/src/views/canvas/director/state/useDirectorHotkeys.js aicp-frontend/src/views/canvas/composables/useCanvasUIState.js aicp-frontend/tests/director-r2.test.js
+git commit -m "feat: add director hotkeys and canvas state persistence"
 ```
 
 ### Task 6: Add timeline, presets and freeze checks

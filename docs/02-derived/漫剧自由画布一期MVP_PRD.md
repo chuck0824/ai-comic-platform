@@ -1,5 +1,9 @@
 # 漫剧自由画布一期 MVP PRD
 
+> **[superpowers 更新 V1.8]（2026-07-05）**：
+> - **Canvas 生产内核重构**：节点类型从 5 种调整为 6 种标准类型（text/image/video/audio/script/director）。导演台节点作为第 6 种节点类型。角色/场景/道具不再作为节点类型——转为领域资源通过类型化端口引用。详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md`
+> - **EXPLORATION/PRODUCTION 双模式**：空白画布默认 EXPLORATION 模式；正式采用/质检/交付前须绑定内容项目和分镜 revision 切换 PRODUCTION 模式
+>
 > **[superpowers 更新 V1.7]（2026-07-04）**：
 > - **浮动编辑器改造**：画布交互模型已升级——右侧属性面板和底部生成栏已由浮动编辑器替代。本文档中涉及"右侧属性面板"、"底部生成栏"、"属性抽屉"的交互描述标注为 `[已废弃-superpowers V1.6]`。新交互模型详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
 > - **Agent 会话统一**：各节点独立 Agent 面板（如"文本节点 Agent"、"分镜 Agent panel"）已由统一 AgentSessionService facade 替代。Agent 交互通过 `/api/v1/agent/sessions` 统一入口。详见 `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
