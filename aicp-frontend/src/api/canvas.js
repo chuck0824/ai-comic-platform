@@ -105,7 +105,21 @@ export const canvasApi = {
       { headers: { 'Idempotency-Key': idempotencyKey } }),
   /** 获取导演 revision */
   getDirectorRevision: (projectId, unitId, revisionId) =>
-    request.get(`/canvas/projects/${projectId}/shot-units/${unitId}/director-scene/revisions/${revisionId}`)
+    request.get(`/canvas/projects/${projectId}/shot-units/${unitId}/director-scene/revisions/${revisionId}`),
+
+  // ===== R4: 质量与交付 =====
+  /** 获取候选质量报告 */
+  getQualityReport: (candidateId) =>
+    request.get(`/canvas/candidates/${candidateId}/quality-report`),
+  /** 创建交付清单 */
+  createDeliveryManifest: (projectId, data) =>
+    request.post(`/canvas/projects/${projectId}/delivery-manifests`, data),
+  /** 获取交付清单 */
+  getDeliveryManifest: (projectId, manifestId) =>
+    request.get(`/canvas/projects/${projectId}/delivery-manifests/${manifestId}`),
+  /** 打包交付 */
+  packageDelivery: (manifestId, format) =>
+    request.post(`/delivery-manifests/${manifestId}/packages`, { format })
 }
 
 export const canvasAgentApi = {
