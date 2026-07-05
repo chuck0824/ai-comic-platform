@@ -26,8 +26,7 @@ export function useCanvasNodes(projectId) {
   const SLASH_COMMANDS = [
     '图像编辑', '多图参考融合', '全景模式', '智能打光',
     '宫格拆分', '镜像翻转', '旋转', '分镜组',
-    '视频高清', '视频解析', '视频剪辑', '视频合成',
-    '人声分离', '分离音视频', '音频截取', '音频变速'
+    '视频高清', '视频解析', '分离音视频'
   ]
 
   // 按类型分组
@@ -55,8 +54,9 @@ export function useCanvasNodes(projectId) {
       localMode.value = false
     } catch (e) {
       console.error('加载节点失败', e)
-      localMode.value = true
-      loadLocalCanvas()
+      localMode.value = false
+      nodes.value = []
+      connections.value = []
     } finally {
       loading.value = false
     }

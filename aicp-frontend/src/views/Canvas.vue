@@ -18,18 +18,12 @@
         <span class="text-sm text-muted">自动保存于 {{ state.lastSaved.value }}</span>
       </div>
       <div class="flex gap-sm">
-        <el-button size="small" @click="ElMessage.info('分享当前画布入口待接入')">发布&分享</el-button>
-        <el-button size="small" @click="ElMessage.info('通知中心入口待接入')">通知</el-button>
-        <el-button size="small" @click="ElMessage.info('会员中心入口待接入')">会员中心</el-button>
         <span class="zoom-label">缩放: {{ state.zoomLevel.value }}%</span>
         <el-button size="small" circle @click="state.zoomIn()">+</el-button>
         <el-button size="small" circle @click="state.zoomOut()">−</el-button>
         <el-button size="small" @click="state.resetZoom()">1:1</el-button>
         <el-button size="small" @click="showAssetPicker = true">
           <el-icon><FolderOpened /></el-icon> Workspace资产
-        </el-button>
-        <el-button type="primary" size="small" @click="openTimeline">
-          <el-icon><VideoPlay /></el-icon> 合成导出
         </el-button>
       </div>
     </div>
@@ -109,7 +103,6 @@
             <button @click="ElMessage.info('教程：双击空白画布新建节点')">新建节点</button>
             <button @click="ElMessage.info('教程：从节点右侧端口拖线到输入点建立连接')">节点连线</button>
             <button @click="ElMessage.info('教程：脚本节点按确认镜头、整理资产、合成提示词、批量生成执行')">脚本节点</button>
-            <button @click="ElMessage.info('教程：视频合成需要连接两个以上视频/音频节点')">视频合成</button>
           </div>
         </div>
       </div>
@@ -310,13 +303,6 @@
                      @updateShot="(shot, data) => handleShotUpdate(shot, data)"
                      @batchGenerateImages="handleBatchFromEditor"
                      @batchGenerateVideos="handleBatchFromEditor" />
-
-    <!-- Video Timeline -->
-    <VideoComposeTimeline v-if="timelineVisible"
-                          :visible="timelineVisible"
-                          :timeline="canvas.timeline.value || {}"
-                          @close="timelineVisible = false"
-                          @export="handleExport" />
 
     <!-- Director Desk -->
     <div v-if="directorDeskVisible" class="director-overlay">
@@ -608,7 +594,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, VideoPlay, FolderOpened } from '@element-plus/icons-vue'
+import { Plus, FolderOpened } from '@element-plus/icons-vue'
 import { canvasApi } from '@/api/canvas'
 import { generationApi } from '@/api/generation'
 import { useCanvasState } from './canvas/composables/useCanvasState'
@@ -616,7 +602,6 @@ import { useCanvasNodes } from './canvas/composables/useCanvasNodes'
 import NodeCreateMenu from './canvas/components/NodeCreateMenu.vue'
 import NodeFloatingEditor from './canvas/components/NodeFloatingEditor.vue'
 import ShotTableEditor from './canvas/components/ShotTableEditor.vue'
-import VideoComposeTimeline from './canvas/components/VideoComposeTimeline.vue'
 import WorkspaceAssetPicker from './canvas/components/WorkspaceAssetPicker.vue'
 import { computeFloatingEditorPosition } from './canvas/utils/floatingEditorPosition'
 import { shouldSelectNode } from './canvas/utils/nodeEditorData'
@@ -633,7 +618,6 @@ const selectedNodeForPanel = ref(null)
 const leftPanelCollapsed = ref(false)
 const shotEditorVisible = ref(false)
 const shotEditorNode = ref(null)
-const timelineVisible = ref(false)
 const directorDeskVisible = ref(false)
 const directorDeskNode = ref(null)
 const directorMode = ref('move')
@@ -2642,24 +2626,7 @@ async function handleSlash(cmd) {
   }
 }
 
-// ===== Timeline / Export =====
-function openTimeline() {
-  canvas.loadTimeline().then(() => { timelineVisible.value = true })
-}
-
-async function handleExport() {
-  try {
-    const confirmed = await confirmTaskCost('export', {
-      resolution: '1080p',
-      fps: 25,
-      format: 'mp4'
-    }, '导出 MP4')
-    if (!confirmed) return
-    const res = await canvas.exportVideo({ format: 'mp4', resolution: '1080p', fps: 25 })
-    ElMessage.success('导出任务已创建: ' + (res.data?.task_id || res.data?.uuid || ''))
-  } catch (e) { ElMessage.error('导出失败') }
-}
-
+// ===== Generate downstream =====
 async function createDownstreamNode(sourceNode, type) {
   const x = (sourceNode.x || 0) + nodeW(sourceNode) + 120
   const y = sourceNode.y || 80

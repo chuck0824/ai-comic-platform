@@ -25,8 +25,6 @@ export const canvasApi = {
   inpaint: (id, shotId, data) => request.post(`/canvas/projects/${id}/shots/${shotId}/inpaint`, data),
   updateTimeline: (id, data) => request.put(`/canvas/projects/${id}/timeline/full`, data),
   generateDub: (id, data) => request.post(`/canvas/projects/${id}/timeline/dub`, data),
-  compose: (id) => request.post(`/canvas/projects/${id}/compose`),
-  getComposeStatus: (id, taskId) => request.get(`/canvas/projects/${id}/compose/${taskId}`),
   exportVideo: (id, data) => request.post(`/canvas/projects/${id}/export`, data),
   getExportStatus: (taskId) => request.get(`/canvas/export/${taskId}`),
   getDownloadUrl: (taskId) => request.get(`/canvas/export/${taskId}/download`),
@@ -58,8 +56,6 @@ export const canvasApi = {
   aiImportDirectorDesk: (id, deskId, data) => request.post(`/canvas/projects/${id}/director-desk/${deskId}/ai-import`, data),
   getFullTimeline: (id) => request.get(`/canvas/projects/${id}/timeline/full`),
   updateFullTimeline: (id, data) => request.put(`/canvas/projects/${id}/timeline/full`, data),
-  clipTimeline: (id, data) => request.post(`/canvas/projects/${id}/timeline/clip`, data),
-  spliceTimeline: (id, data) => request.post(`/canvas/projects/${id}/timeline/splice`, data),
   generateMultimodalVideo: (id, shotId, data) => request.post(`/canvas/projects/${id}/shots/${shotId}/generate-multimodal`, data),
 
   // === V1.5 新增 ===

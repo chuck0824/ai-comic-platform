@@ -2,7 +2,7 @@
   <div class="canvas-center">
     <div class="center-header">
       <h2>画布项目中心</h2>
-      <el-button type="primary" @click="showCreateDialog = true">新建画布</el-button>
+      <el-button type="primary" :disabled="centerState.readOnly" @click="showCreateDialog = true">新建画布</el-button>
     </div>
 
     <div class="center-toolbar">
@@ -20,13 +20,26 @@
       </el-select>
     </div>
 
-    <!-- Loading -->
-    <div v-if="loading" class="center-grid">
+    <!-- Loading (有限骨架屏，最多 8 秒) -->
+    <div v-if="centerState.kind === 'loading'" class="center-grid">
       <div v-for="i in 8" :key="i" class="canvas-card-skeleton"><el-skeleton :rows="2" animated /></div>
     </div>
 
+    <!-- Degraded: 账户中心不可用，仅展示最近缓存 -->
+    <el-alert v-else-if="centerState.kind === 'degraded'" type="warning" :closable="false"
+      title="账户中心暂不可用，当前仅可查看最近项目" style="margin-bottom:16px" />
+    <div v-if="centerState.kind === 'degraded'" class="center-grid">
+      <CanvasProjectCard
+        v-for="canvas in centerState.items"
+        :key="canvas.uuid"
+        :canvas="canvas"
+        @edit="goToEditor"
+        @command="onCanvasCommand"
+      />
+    </div>
+
     <!-- Empty -->
-    <div v-else-if="items.length === 0 && !error" class="empty-state">
+    <div v-else-if="centerState.kind === 'empty'" class="empty-state">
       <el-empty :description="keyword ? `未找到匹配 '${keyword}' 的画布` : '暂无画布项目'">
         <el-button v-if="keyword" @click="keyword = ''; search()">清除搜索条件</el-button>
         <el-button v-else type="primary" @click="showCreateDialog = true">新建画布</el-button>
@@ -34,14 +47,14 @@
     </div>
 
     <!-- Error -->
-    <div v-else-if="error" class="error-state">
-      <el-result icon="error" title="加载失败" :sub-title="error">
+    <div v-else-if="centerState.kind === 'error'" class="error-state">
+      <el-result icon="error" title="画布项目加载失败" :sub-title="errorMessage">
         <template #extra><el-button type="primary" @click="search">重试</el-button></template>
       </el-result>
     </div>
 
     <!-- Grid -->
-    <div v-else class="center-grid">
+    <div v-else-if="centerState.kind === 'ready'" class="center-grid">
       <CanvasProjectCard
         v-for="canvas in items"
         :key="canvas.uuid"
@@ -67,18 +80,20 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { canvasApi } from '@/api/canvas.js'
 import { buildQueryParams } from './canvasProjectViewModel.js'
+import { resolveCanvasCenterState, fetchWithTimeoutGuard, cacheRecentProjects, getCachedProjects } from './canvasCenterState.js'
 import CanvasProjectCard from './CanvasProjectCard.vue'
 import CreateCanvasDialog from './CreateCanvasDialog.vue'
 
 const router = useRouter()
 
 const loading = ref(true)
-const error = ref(null)
+const errorCode = ref(null)
+const errorMessage = ref('')
 const items = ref([])
 const keyword = ref('')
 const statusFilter = ref('')
@@ -87,6 +102,15 @@ const currentPage = ref(1)
 const pageSize = 20
 const total = ref(0)
 const showCreateDialog = ref(false)
+
+const centerState = computed(() =>
+  resolveCanvasCenterState({
+    loading: loading.value,
+    items: items.value,
+    code: errorCode.value,
+    cachedItems: getCachedProjects()
+  })
+)
 
 let searchTimer = null
 onUnmounted(() => clearTimeout(searchTimer))
@@ -98,18 +122,25 @@ function onSearchInput() {
 
 async function search() {
   loading.value = true
-  error.value = null
+  errorCode.value = null
+  errorMessage.value = ''
   try {
-    const params = buildQueryParams({
-      page: currentPage.value, pageSize, keyword: keyword.value,
-      status: statusFilter.value, mode: modeFilter.value
-    })
-    const res = await canvasApi.listProjects(params)
-    const data = res?.data
+    const raw = await fetchWithTimeoutGuard(() => canvasApi.listProjects(
+      buildQueryParams({ page: currentPage.value, pageSize, keyword: keyword.value, status: statusFilter.value, mode: modeFilter.value })
+    ))
+    if (raw?.code === 41012) {
+      errorCode.value = 41012
+      errorMessage.value = raw.message || '请求超时'
+      items.value = []
+      return
+    }
+    const data = raw?.data
     items.value = data?.items || []
     total.value = data?.pagination?.total || 0
+    cacheRecentProjects(items.value)
   } catch (e) {
-    error.value = e?.response?.data?.message || '加载画布列表失败'
+    errorCode.value = e?.response?.status || 500
+    errorMessage.value = e?.response?.data?.message || '加载画布列表失败'
   } finally {
     loading.value = false
   }
