@@ -83,7 +83,29 @@ export const canvasApi = {
     request.put(`/canvas/nodes/${nodeId}/candidate-selection`, { candidateId }),
   /** 创建正式采用 */
   adoptShot: (projectId, unitId, data) =>
-    request.post(`/canvas/projects/${projectId}/shot-units/${unitId}/adoptions`, data)
+    request.post(`/canvas/projects/${projectId}/shot-units/${unitId}/adoptions`, data),
+
+  // ===== R2: Director =====
+  /** 获取导演场景 */
+  getDirectorScene: (projectId, unitId) =>
+    request.get(`/canvas/projects/${projectId}/shot-units/${unitId}/director-scene`),
+  /** 获取导演草稿 */
+  getDirectorDraft: (projectId, unitId) =>
+    request.get(`/canvas/projects/${projectId}/shot-units/${unitId}/director-scene/draft`),
+  /** 保存导演草稿（乐观锁） */
+  saveDirectorDraft: (projectId, unitId, expectedVersion, document) =>
+    request.put(`/canvas/projects/${projectId}/shot-units/${unitId}/director-scene/draft`, document,
+      { headers: { 'If-Match': expectedVersion } }),
+  /** 校验导演草稿 */
+  validateDirectorScene: (projectId, unitId) =>
+    request.post(`/canvas/projects/${projectId}/shot-units/${unitId}/director-scene/validate`),
+  /** 冻结导演 revision */
+  freezeDirectorRevision: (projectId, unitId, idempotencyKey) =>
+    request.post(`/canvas/projects/${projectId}/shot-units/${unitId}/director-scene/revisions`, null,
+      { headers: { 'Idempotency-Key': idempotencyKey } }),
+  /** 获取导演 revision */
+  getDirectorRevision: (projectId, unitId, revisionId) =>
+    request.get(`/canvas/projects/${projectId}/shot-units/${unitId}/director-scene/revisions/${revisionId}`)
 }
 
 export const canvasAgentApi = {

@@ -77,6 +77,12 @@ const routes = [
         meta: { title: '画布编辑器', canvasWorkspace: true }
       },
       {
+        path: 'canvas/:projectId/shot-units/:shotUnitId/director',
+        name: 'DirectorWorkspace',
+        component: () => import('@/views/canvas/director/DirectorWorkspace.vue'),
+        meta: { title: '导演台', directorV2: true }
+      },
+      {
         path: '画布工作台/:projectId?',
         redirect: to => `/canvas-projects`
       },
