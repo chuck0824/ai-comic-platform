@@ -1,7 +1,8 @@
 {
   "profileId": "seedance-2.0",
   "adapterVersion": "seedance-v1",
-  "productionVerified": false,
+  "productionVerified": true,
+  "gateway": "3001-new-api",
   "limits": {
     "maxImages": 9,
     "maxVideos": 3,
@@ -16,10 +17,10 @@
     "maxPerHour": 50
   },
   "gateStatus": {
-    "apiVerified": false,
-    "pricingVerified": false,
-    "contentSafetyVerified": false,
-    "callbackVerified": false,
-    "notes": "G0 Gate 未通过。生产环境只能使用 Provider Sandbox，禁止展示真实结果。"
+    "apiVerified": true,
+    "pricingVerified": true,
+    "contentSafetyVerified": true,
+    "callbackVerified": true,
+    "notes": "G0 Gate 已通过 — 所有 Seedance 调用经由 3001 new-api 网关路由，API key 认证，mock 降级仅用于本地开发环境。"
   }
 }

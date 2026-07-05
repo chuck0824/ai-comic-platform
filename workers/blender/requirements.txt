@@ -1,0 +1,4 @@
+# Blender 4.2 LTS Worker Python 依赖
+# Blender 自带 bpy 模块，不在此安装
+Pillow>=10.0.0
+requests>=2.31.0

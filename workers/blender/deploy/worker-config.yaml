@@ -1,0 +1,78 @@
+# Blender 4.2 LTS Worker 部署配置
+# 用途: Kubernetes Deployment / Docker Compose
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: blender-worker-config
+data:
+  worker-config.yaml: |
+    blender:
+      image: "canvas-blender-worker:4.2"
+      version: "4.2.0"
+      lts: true
+
+    resources:
+      cpu:
+        request: "2"
+        limit: "4"
+      memory:
+        request: "4Gi"
+        limit: "8Gi"
+      gpu:
+        enabled: true
+        count: 1
+
+    concurrency:
+      max_tasks_per_worker: 1
+
+    timeout:
+      task_max_seconds: 900
+      render_max_seconds: 600
+      cleanup_ttl_seconds: 3600
+
+    storage:
+      temp_dir: "/tmp/blender-jobs"
+      output_dir: "/app/output"
+      # 不持久保存凭证，日志不记录签名 URL
+
+    network:
+      egress_policy: "deny-by-default"
+      allowed_domains:
+        - "cdn.example.com"   # 资产下载 CDN
+        - "api.aicp.internal" # 内部回调 API
+
+    render:
+      engine: "BLENDER_EEVEE"
+      samples: 32
+      resolution_x: 1920
+      resolution_y: 1080
+      fps: 24
+      format: "FFMPEG"
+      codec: "H264"
+      quality: "MEDIUM"
+
+    golden_scenes:
+      - name: "dialogue_two_person"
+        expected_duration_ms: 8000
+        expected_camera_count: 2
+      - name: "character_enter"
+        expected_action_clips: 1
+      - name: "tracking_shot"
+        expected_camera_motion: "TRACK_SIDE"
+      - name: "push_in"
+        expected_camera_motion: "DOLLY_IN"
+      - name: "crowd_array"
+        expected_objects_min: 9
+      - name: "prop_interaction"
+        expected_props: 2
+
+    health:
+      liveness_probe:
+        path: "/health"
+        port: 8081
+        initial_delay_seconds: 30
+      readiness_probe:
+        path: "/ready"
+        port: 8081
+        initial_delay_seconds: 10
