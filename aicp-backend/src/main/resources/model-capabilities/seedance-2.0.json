@@ -1,0 +1,25 @@
+{
+  "profileId": "seedance-2.0",
+  "adapterVersion": "seedance-v1",
+  "productionVerified": false,
+  "limits": {
+    "maxImages": 9,
+    "maxVideos": 3,
+    "maxAudio": 3,
+    "maxDurationSeconds": 15,
+    "allowedAspectRatios": ["16:9", "9:16", "1:1", "4:3"]
+  },
+  "supportedFormats": ["mp4", "mov", "png", "jpg", "wav", "mp3"],
+  "rateLimits": {
+    "maxConcurrent": 2,
+    "maxPerMinute": 5,
+    "maxPerHour": 50
+  },
+  "gateStatus": {
+    "apiVerified": false,
+    "pricingVerified": false,
+    "contentSafetyVerified": false,
+    "callbackVerified": false,
+    "notes": "G0 Gate 未通过。生产环境只能使用 Provider Sandbox，禁止展示真实结果。"
+  }
+}
