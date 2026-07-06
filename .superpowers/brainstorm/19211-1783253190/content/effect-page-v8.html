@@ -1,0 +1,2020 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>AI 漫剧平台 — 从模型到作品</title>
+
+  <!-- Fonts: Fredoka (headings) + Nunito (body) — playful creative -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Nunito:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    /* ========================================================================
+       DESIGN SYSTEM — 漫剧特效平台
+       Style: Vibrant & Block-based + Aurora UI gradients
+       Colors: Pink primary #EC4899 / Blue accent #2563EB / Dark bg #0F172A
+       Typography: Fredoka (heading) + Nunito (body)
+       Spacing: 4px base → 4, 8, 12, 16, 24, 32, 48, 64, 96, 128
+       ======================================================================== */
+
+    /* ── Design Tokens ─────────────────────────────────────────────── */
+    :root {
+      /* === Dark Theme (default) === */
+      --color-primary:        #EC4899;
+      --color-primary-hover:  #F472B6;
+      --color-primary-muted:  rgba(236, 72, 153, 0.14);
+      --color-accent:         #2563EB;
+      --color-accent-hover:   #3B82F6;
+      --color-accent-muted:   rgba(37, 99, 235, 0.15);
+
+      --color-bg:             #0F172A;
+      --color-bg-elevated:    #1E293B;
+      --color-bg-overlay:     #162032;
+      --color-surface:        rgba(30, 41, 59, 0.82);
+      --color-surface-hover:  rgba(40, 52, 72, 0.88);
+
+      --color-ink:            #F1F5F9;
+      --color-ink-secondary:  rgba(241, 245, 249, 0.72);
+      --color-ink-muted:      rgba(241, 245, 249, 0.48);
+      --color-ink-on-primary: #FFFFFF;
+
+      --color-border:         rgba(255, 255, 255, 0.08);
+      --color-border-light:   rgba(255, 255, 255, 0.12);
+      --color-divider:        rgba(255, 255, 255, 0.06);
+
+      --color-success:        #34D399;
+      --color-warning:        #FBBF24;
+      --color-error:          #F87171;
+
+      /* Shadows — dark mode */
+      --shadow-sm:            0 1px 3px rgba(0,0,0,0.3);
+      --shadow-md:            0 8px 30px rgba(0,0,0,0.35);
+      --shadow-lg:            0 24px 64px rgba(0,0,0,0.45);
+      --shadow-glow-primary:  0 0 40px rgba(236, 72, 153, 0.18);
+      --shadow-glow-accent:   0 0 32px rgba(37, 99, 235, 0.16);
+
+      /* Radius scale */
+      --radius-sm:            8px;
+      --radius-md:            14px;
+      --radius-lg:            22px;
+      --radius-xl:            32px;
+      --radius-full:          9999px;
+
+      /* Typography scale */
+      --font-heading:         'Fredoka', 'PingFang SC', system-ui, sans-serif;
+      --font-body:            'Nunito', 'PingFang SC', system-ui, sans-serif;
+      --font-mono:            'SF Mono', 'Fira Code', monospace;
+
+      --text-xs:              0.75rem;    /* 12px */
+      --text-sm:              0.875rem;   /* 14px */
+      --text-base:            1rem;       /* 16px */
+      --text-lg:              1.125rem;   /* 18px */
+      --text-xl:              1.25rem;    /* 20px */
+      --text-2xl:             1.5rem;     /* 24px */
+      --text-3xl:             2rem;       /* 32px */
+      --text-4xl:             2.75rem;    /* 44px */
+
+      /* Spacing scale (4px base) */
+      --space-1:              4px;
+      --space-2:              8px;
+      --space-3:              12px;
+      --space-4:              16px;
+      --space-5:              20px;
+      --space-6:              24px;
+      --space-8:              32px;
+      --space-10:             40px;
+      --space-12:             48px;
+      --space-16:             64px;
+      --space-20:             80px;
+      --space-24:             96px;
+
+      /* Animation tokens */
+      --ease-out:             cubic-bezier(0.16, 1, 0.3, 1);
+      --ease-in-out:          cubic-bezier(0.65, 0, 0.35, 1);
+      --ease-spring:          cubic-bezier(0.34, 1.56, 0.64, 1);
+      --duration-fast:        150ms;
+      --duration-normal:      250ms;
+      --duration-slow:        400ms;
+      --duration-glacial:     800ms;
+
+      /* Layout */
+      --nav-height:           64px;
+      --content-max:          1280px;
+      --content-narrow:       820px;
+    }
+
+    /* === Light Theme === */
+    [data-theme="light"] {
+      --color-bg:             #F8FAFC;
+      --color-bg-elevated:    #FFFFFF;
+      --color-bg-overlay:     #F1F5F9;
+      --color-surface:        rgba(255, 255, 255, 0.9);
+      --color-surface-hover:  rgba(255, 255, 255, 0.98);
+
+      --color-ink:            #0F172A;
+      --color-ink-secondary:  rgba(15, 23, 42, 0.68);
+      --color-ink-muted:      rgba(15, 23, 42, 0.45);
+      --color-ink-on-primary: #FFFFFF;
+
+      --color-border:         rgba(15, 23, 42, 0.08);
+      --color-border-light:   rgba(15, 23, 42, 0.12);
+      --color-divider:        rgba(15, 23, 42, 0.05);
+
+      --shadow-sm:            0 1px 3px rgba(0,0,0,0.06);
+      --shadow-md:            0 8px 30px rgba(0,0,0,0.08);
+      --shadow-lg:            0 24px 64px rgba(0,0,0,0.12);
+      --shadow-glow-primary:  0 0 40px rgba(236, 72, 153, 0.1);
+      --shadow-glow-accent:   0 0 32px rgba(37, 99, 235, 0.1);
+    }
+
+    /* ===================================================================
+       RESET & BASE
+       =================================================================== */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html {
+      scroll-behavior: smooth;
+      background: var(--color-bg);
+      color: var(--color-ink);
+      font-family: var(--font-body);
+      font-size: var(--text-base);
+      line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      overflow-x: hidden;
+    }
+    body {
+      min-height: 100svh;
+      overflow-x: hidden;
+      background: var(--color-bg);
+      transition: background var(--duration-slow) var(--ease-out);
+      overscroll-behavior-y: contain;
+    }
+    body.menu-open { overflow: hidden; }
+
+    /* ── Focus Styles ──────────────────────────────────────────────── */
+    :focus-visible {
+      outline: 2px solid var(--color-accent);
+      outline-offset: 3px;
+      border-radius: var(--radius-sm);
+    }
+    :focus:not(:focus-visible) { outline: none; }
+
+    /* ── Typography ────────────────────────────────────────────────── */
+    h1, h2, h3, h4, h5, h6 {
+      font-family: var(--font-heading);
+      font-weight: 600;
+      line-height: 1.12;
+      letter-spacing: -0.025em;
+    }
+    h1 { font-size: clamp(3rem, 7vw, 5.75rem); letter-spacing: -0.04em; }
+    h2 { font-size: clamp(2.25rem, 5.1vw, 4.25rem); letter-spacing: -0.035em; }
+    h3 { font-size: clamp(1.5rem, 3vw, 2.75rem); letter-spacing: -0.025em; }
+    p  { margin: 0; }
+
+    /* ── Links ─────────────────────────────────────────────────────── */
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Selection ─────────────────────────────────────────────────── */
+    ::selection {
+      background: rgba(236, 72, 153, 0.3);
+      color: var(--color-ink);
+    }
+
+    /* ===================================================================
+       UTILITY CLASSES
+       =================================================================== */
+    .sr-only {
+      position: absolute; width: 1px; height: 1px;
+      padding: 0; margin: -1px; overflow: hidden;
+      clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+    }
+    .skip-link {
+      position: fixed; top: -100px; left: var(--space-4); z-index: 999;
+      padding: var(--space-3) var(--space-5);
+      border-radius: var(--radius-md);
+      background: var(--color-accent); color: #fff;
+      font-weight: 700; font-size: var(--text-sm);
+      transition: top var(--duration-fast);
+    }
+    .skip-link:focus { top: var(--space-4); }
+    .content-wrap {
+      width: min(var(--content-max), calc(100% - var(--space-8)));
+      margin-inline: auto;
+    }
+    .content-narrow {
+      width: min(var(--content-narrow), calc(100% - var(--space-8)));
+      margin-inline: auto;
+    }
+
+    /* ===================================================================
+       SCROLL PROGRESS
+       =================================================================== */
+    .scroll-progress {
+      position: fixed; inset: 0 auto auto 0;
+      z-index: 200; width: 0; height: 3px;
+      background: linear-gradient(90deg, var(--color-primary), var(--color-accent), #6366F1);
+      border-radius: 0 2px 2px 0;
+      transform-origin: left;
+      transition: width 80ms linear;
+      pointer-events: none;
+    }
+
+    /* ===================================================================
+       NAVIGATION — Glass morphism
+       =================================================================== */
+    .nav {
+      position: fixed; inset: 0 0 auto;
+      z-index: 100; height: var(--nav-height);
+      display: flex; align-items: center;
+      background: rgba(15, 23, 42, 0.78);
+      backdrop-filter: blur(20px) saturate(160%);
+      -webkit-backdrop-filter: blur(20px) saturate(160%);
+      border-bottom: 1px solid var(--color-border);
+      transition: background var(--duration-normal) var(--ease-out),
+                  box-shadow var(--duration-normal) var(--ease-out),
+                  border-color var(--duration-normal) var(--ease-out);
+    }
+    [data-theme="light"] .nav {
+      background: rgba(255, 255, 255, 0.78);
+    }
+    .nav.scrolled {
+      background: rgba(15, 23, 42, 0.92);
+      box-shadow: var(--shadow-md);
+      border-bottom-color: transparent;
+    }
+    [data-theme="light"] .nav.scrolled {
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .nav-inner {
+      width: min(1440px, calc(100% - var(--space-12)));
+      margin-inline: auto;
+      display: flex; align-items: center; gap: var(--space-6);
+    }
+    .nav-brand {
+      display: flex; align-items: center; gap: var(--space-2);
+      font-family: var(--font-heading);
+      font-size: var(--text-xl);
+      font-weight: 700;
+      color: var(--color-ink);
+      white-space: nowrap;
+      transition: color var(--duration-fast);
+    }
+    .nav-brand:hover { color: var(--color-primary); }
+    .nav-brand-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: var(--color-primary);
+      box-shadow: 0 0 12px var(--color-primary);
+      animation: brand-pulse 2s ease-in-out infinite;
+    }
+    @keyframes brand-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+
+    .nav-links {
+      display: flex; align-items: center; gap: var(--space-1);
+      font-size: var(--text-sm);
+      font-weight: 500;
+      color: var(--color-ink-secondary);
+    }
+    .nav-link {
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      transition: color var(--duration-fast), background var(--duration-fast);
+      position: relative;
+    }
+    .nav-link:hover,
+    .nav-link:focus-visible {
+      color: var(--color-primary);
+      background: var(--color-primary-muted);
+    }
+    .nav-link.active {
+      color: var(--color-primary);
+      font-weight: 700;
+    }
+
+    .nav-actions {
+      margin-left: auto;
+      display: flex; align-items: center; gap: var(--space-2);
+    }
+
+    /* Nav icon buttons */
+    .nav-btn {
+      width: 40px; height: 40px;
+      display: grid; place-items: center;
+      border: 0; border-radius: var(--radius-md);
+      color: var(--color-ink-secondary);
+      background: transparent;
+      font: inherit; cursor: pointer;
+      transition: color var(--duration-fast), background var(--duration-fast);
+      -webkit-tap-highlight-color: transparent;
+      position: relative;
+    }
+    .nav-btn:hover { color: var(--color-ink); background: var(--color-border); }
+    .nav-btn:active { transform: scale(0.94); }
+    .nav-btn svg { width: 20px; height: 20px; stroke-width: 1.8; }
+
+    /* Theme toggle */
+    .theme-toggle .icon-sun,
+    .theme-toggle .icon-moon { transition: transform var(--duration-normal) var(--ease-spring), opacity var(--duration-normal); }
+    [data-theme="dark"] .theme-toggle .icon-sun { opacity: 1; transform: rotate(0deg) scale(1); }
+    [data-theme="dark"] .theme-toggle .icon-moon { opacity: 0; transform: rotate(90deg) scale(0.5); position: absolute; }
+    [data-theme="light"] .theme-toggle .icon-moon { opacity: 1; transform: rotate(0deg) scale(1); }
+    [data-theme="light"] .theme-toggle .icon-sun { opacity: 0; transform: rotate(-90deg) scale(0.5); position: absolute; }
+
+    /* Login button */
+    .nav-login {
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm); font-weight: 600;
+      color: var(--color-ink-secondary);
+      transition: color var(--duration-fast), background var(--duration-fast);
+    }
+    .nav-login:hover { color: var(--color-ink); background: var(--color-border); }
+
+    /* Mobile menu button */
+    .nav-menu-btn { display: none; }
+
+    /* Mobile menu panel */
+    .mobile-menu {
+      display: none;
+      position: fixed; inset: var(--nav-height) 0 auto 0; z-index: 99;
+      padding: var(--space-4);
+      background: rgba(15, 23, 42, 0.94);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      border-bottom: 1px solid var(--color-border);
+      flex-direction: column; gap: var(--space-1);
+    }
+    [data-theme="light"] .mobile-menu {
+      background: rgba(255, 255, 255, 0.94);
+    }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu .nav-link {
+      display: block; padding: var(--space-3) var(--space-4);
+      font-size: var(--text-base);
+    }
+
+    /* ===================================================================
+       BUTTONS — Primary Pill, Secondary, Ghost
+       =================================================================== */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 48px; padding: 0 var(--space-6);
+      border: 0; border-radius: var(--radius-full);
+      font-family: var(--font-body); font-size: var(--text-base); font-weight: 650;
+      cursor: pointer;
+      transition: transform var(--duration-fast) var(--ease-spring),
+                  background var(--duration-normal),
+                  box-shadow var(--duration-normal);
+      -webkit-tap-highlight-color: transparent;
+      text-decoration: none;
+      white-space: nowrap;
+      user-select: none;
+    }
+    .btn:active { transform: scale(0.96); }
+
+    .btn-primary {
+      background: var(--color-primary);
+      color: var(--color-ink-on-primary);
+      box-shadow: 0 4px 20px rgba(236, 72, 153, 0.3);
+    }
+    .btn-primary:hover {
+      background: var(--color-primary-hover);
+      box-shadow: var(--shadow-glow-primary), 0 8px 28px rgba(236, 72, 153, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .btn-accent {
+      background: var(--color-accent);
+      color: var(--color-ink-on-primary);
+      box-shadow: 0 4px 20px rgba(37, 99, 235, 0.3);
+    }
+    .btn-accent:hover {
+      background: var(--color-accent-hover);
+      box-shadow: var(--shadow-glow-accent), 0 8px 28px rgba(37, 99, 235, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .btn-outline {
+      background: transparent;
+      color: var(--color-ink);
+      border: 1.5px solid var(--color-border-light);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+    }
+    .btn-outline:hover {
+      background: var(--color-border);
+      border-color: var(--color-ink-muted);
+      transform: translateY(-2px);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-ink-secondary);
+    }
+    .btn-ghost:hover {
+      background: var(--color-border);
+      color: var(--color-ink);
+    }
+
+    /* ===================================================================
+       SECTIONS
+       =================================================================== */
+    section { position: relative; overflow: hidden; }
+
+    /* ── Eyebrow ───────────────────────────────────────────────────── */
+    .eyebrow {
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      font-family: var(--font-body);
+      font-size: var(--text-xs); font-weight: 700;
+      letter-spacing: 0.14em; text-transform: uppercase;
+      color: var(--color-primary);
+      padding: var(--space-1) var(--space-3);
+      border-radius: var(--radius-full);
+      background: var(--color-primary-muted);
+      border: 1px solid rgba(236, 72, 153, 0.2);
+      margin-bottom: var(--space-4);
+    }
+
+    /* ── Section Header Copy ──────────────────────────────────────── */
+    .section-header {
+      text-align: center;
+      width: min(var(--content-narrow), 100%);
+      margin: 0 auto var(--space-12);
+    }
+    .section-header p {
+      color: var(--color-ink-secondary);
+      font-size: var(--text-lg);
+      line-height: 1.7;
+      margin-top: var(--space-4);
+    }
+
+    /* ===================================================================
+       HERO SECTION — Aurora gradient + parallax
+       =================================================================== */
+    .hero {
+      min-height: 100svh;
+      display: grid; place-items: center;
+      position: relative;
+      background: var(--color-bg);
+      overflow: hidden;
+    }
+
+    /* Aurora gradient background */
+    .hero-bg {
+      position: absolute; inset: -20%;
+      background:
+        radial-gradient(ellipse 80% 60% at 30% 20%, rgba(236, 72, 153, 0.16), transparent 50%),
+        radial-gradient(ellipse 60% 70% at 70% 40%, rgba(37, 99, 235, 0.15), transparent 50%),
+        radial-gradient(ellipse 50% 50% at 50% 60%, rgba(99, 102, 241, 0.1), transparent 50%),
+        radial-gradient(ellipse 40% 40% at 20% 80%, rgba(236, 72, 153, 0.08), transparent 50%);
+      animation: aurora-drift 18s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes aurora-drift {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      25% { transform: translate(2%, -1%) scale(1.03); }
+      50% { transform: translate(-1%, 1%) scale(1.02); }
+      75% { transform: translate(1%, -0.5%) scale(1.04); }
+    }
+
+    .hero-media-wrap {
+      position: absolute; inset: 0;
+      opacity: 0.38;
+      overflow: hidden;
+    }
+    .hero-media-wrap img {
+      width: 100%; height: 100%;
+      object-fit: cover; object-position: center;
+      transform: scale(1.05);
+      will-change: transform;
+    }
+
+    /* Hero overlay gradient */
+    .hero::after {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        linear-gradient(180deg,
+          rgba(15, 23, 42, 0.85) 0%,
+          rgba(15, 23, 42, 0.25) 35%,
+          rgba(15, 23, 42, 0.15) 55%,
+          rgba(15, 23, 42, 0.55) 85%,
+          var(--color-bg) 100%);
+      pointer-events: none;
+    }
+
+    .hero-content {
+      position: relative; z-index: 2;
+      width: min(960px, calc(100% - var(--space-8)));
+      text-align: center;
+      padding: var(--space-20) 0 var(--space-8);
+    }
+    .hero-content h1 {
+      margin: var(--space-6) 0;
+      line-height: 0.95;
+    }
+    .hero-content h1 .highlight {
+      background: linear-gradient(135deg, var(--color-primary), #6366F1, var(--color-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-lead {
+      max-width: 660px; margin: 0 auto var(--space-8);
+      font-size: clamp(1.05rem, 2vw, 1.35rem);
+      line-height: 1.6;
+      color: var(--color-ink-secondary);
+    }
+    .hero-actions {
+      display: flex; justify-content: center; gap: var(--space-4);
+      flex-wrap: wrap;
+    }
+    .hero-scroll-hint {
+      position: absolute; z-index: 2; bottom: var(--space-8);
+      left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+      color: var(--color-ink-muted);
+      font-size: var(--text-xs);
+      animation: float 3s ease-in-out infinite;
+    }
+    .hero-scroll-hint svg {
+      width: 20px; height: 20px;
+      stroke: var(--color-ink-muted);
+      animation: bounce-down 1.6s ease-in-out infinite;
+    }
+    @keyframes float {
+      0%, 100% { opacity: 0.5; }
+      50% { opacity: 0.9; }
+    }
+    @keyframes bounce-down {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(6px); }
+    }
+
+    /* ===================================================================
+       PLATFORM BRIDGE — Dual product cards
+       =================================================================== */
+    .platform-section {
+      padding: var(--space-24) 0 var(--space-16);
+      background: var(--color-bg);
+    }
+    .platform-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: var(--space-5);
+    }
+
+    .platform-card {
+      --mx: 50%; --my: 50%;
+      position: relative;
+      min-height: 480px;
+      padding: var(--space-10);
+      border-radius: var(--radius-xl);
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      cursor: pointer;
+      overflow: hidden;
+      transition: transform var(--duration-normal) var(--ease-out),
+                  box-shadow var(--duration-normal) var(--ease-out),
+                  border-color var(--duration-normal) var(--ease-out);
+    }
+    .platform-card:hover,
+    .platform-card:focus-within {
+      transform: translateY(-4px);
+      border-color: var(--color-border-light);
+      box-shadow: var(--shadow-lg);
+    }
+    /* Spotlight effect on hover */
+    .platform-card::before {
+      content: '';
+      position: absolute; inset: 0; pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(420px circle at var(--mx) var(--my),
+        rgba(236, 72, 153, 0.08), transparent 60%);
+      transition: opacity var(--duration-normal);
+    }
+    .platform-card:hover::before,
+    .platform-card:focus-within::before { opacity: 1; }
+    .platform-card > * { position: relative; z-index: 1; }
+
+    /* 3001 Console card */
+    .platform-card.console-card {
+      background: linear-gradient(145deg, #1a2744 0%, #162032 40%, #0f1a2e 100%);
+      border-color: rgba(37, 99, 235, 0.15);
+      color: var(--color-ink);
+    }
+    [data-theme="light"] .platform-card.console-card {
+      background: linear-gradient(145deg, #1e3a5f 0%, #1a3355 40%, #152d4a 100%);
+      border-color: rgba(37, 99, 235, 0.2);
+    }
+
+    /* 8080 Studio card */
+    .platform-card.studio-card {
+      background: linear-gradient(145deg, #1e1b38 0%, #1a1930 40%, #14132a 100%);
+      border-color: rgba(236, 72, 153, 0.12);
+    }
+    [data-theme="light"] .platform-card.studio-card {
+      background: linear-gradient(145deg, #2d1a3a 0%, #281835 40%, #20142d 100%);
+      border-color: rgba(236, 72, 153, 0.18);
+    }
+
+    .platform-badge {
+      display: inline-flex; align-items: center; gap: var(--space-2);
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs); font-weight: 700;
+      letter-spacing: 0.02em;
+    }
+    .console-card .platform-badge {
+      color: #93B5F7;
+      background: rgba(37, 99, 235, 0.14);
+      border: 1px solid rgba(37, 99, 235, 0.18);
+    }
+    .studio-card .platform-badge {
+      color: #F5A8C8;
+      background: rgba(236, 72, 153, 0.12);
+      border: 1px solid rgba(236, 72, 153, 0.16);
+    }
+
+    .platform-card h3 {
+      margin: var(--space-5) 0 var(--space-3);
+      line-height: 1.1;
+    }
+    .platform-card > p {
+      color: var(--color-ink-secondary);
+      line-height: 1.7;
+      max-width: 560px;
+    }
+    .platform-card-link {
+      display: inline-flex; align-items: center; gap: var(--space-1);
+      margin-top: var(--space-3);
+      color: var(--color-accent);
+      font-size: var(--text-sm); font-weight: 600;
+      transition: gap var(--duration-fast);
+    }
+    .platform-card-link:hover { gap: var(--space-2); }
+    .platform-card-link svg { width: 16px; height: 16px; }
+
+    /* Console mini-window */
+    .console-window {
+      margin-top: var(--space-8);
+      display: grid; grid-template-columns: 100px 1fr;
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(0,0,0,0.25);
+      box-shadow: 0 20px 48px rgba(0,0,0,0.3);
+    }
+    [data-theme="light"] .console-window {
+      border-color: rgba(255,255,255,0.15);
+      background: rgba(0,0,0,0.35);
+    }
+    .console-sidebar {
+      padding: var(--space-4) var(--space-3);
+      border-right: 1px solid rgba(255,255,255,0.07);
+      display: flex; flex-direction: column; gap: var(--space-3);
+    }
+    .console-dot {
+      width: 100%; height: 7px;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.1);
+      transition: width var(--duration-normal), background var(--duration-normal);
+    }
+    .console-dot.active { background: var(--color-accent); width: 110%; }
+
+    .console-main { padding: var(--space-5); }
+    .console-kpis {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-2);
+    }
+    .console-kpi {
+      padding: var(--space-3) var(--space-3);
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.06);
+      transition: background var(--duration-fast);
+    }
+    .console-kpi:hover { background: rgba(255,255,255,0.1); }
+    .console-kpi strong {
+      display: block;
+      color: var(--color-ink);
+      font-size: var(--text-base);
+      font-family: var(--font-heading);
+      font-weight: 600;
+    }
+    .console-kpi span {
+      font-size: var(--text-xs);
+      color: var(--color-ink-muted);
+      display: block; margin-top: 2px;
+    }
+    .console-chart {
+      height: 64px; margin-top: var(--space-3);
+      border-radius: var(--radius-md);
+      position: relative; overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(37, 99, 235, 0.18), rgba(37, 99, 235, 0.03)),
+        linear-gradient(135deg,
+          transparent 0% 18%,
+          rgba(147, 181, 247, 0.5) 19% 21%,
+          transparent 22% 38%,
+          rgba(147, 181, 247, 0.5) 39% 41%,
+          transparent 42% 58%,
+          rgba(147, 181, 247, 0.5) 59% 61%,
+          transparent 62% 78%,
+          rgba(147, 181, 247, 0.5) 79% 81%,
+          transparent 82%);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .console-chart::after {
+      content: ''; position: absolute; inset: 0;
+      width: 40%;
+      transform: translateX(-140%) skewX(-16deg);
+      background: linear-gradient(90deg, transparent, rgba(147,181,247,0.2), transparent);
+      animation: scan-line 3.5s ease-in-out infinite;
+    }
+    @keyframes scan-line {
+      60%, 100% { transform: translateX(360%) skewX(-16deg); }
+    }
+
+    /* Studio flow mini */
+    .studio-flow {
+      margin-top: var(--space-8);
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-2);
+    }
+    .studio-item {
+      min-height: 80px; padding: var(--space-4);
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.06);
+      font-family: var(--font-heading);
+      font-weight: 600; font-size: var(--text-sm);
+      color: var(--color-ink);
+      transition: transform var(--duration-normal) var(--ease-spring),
+                  background var(--duration-normal),
+                  box-shadow var(--duration-normal),
+                  border-color var(--duration-normal);
+    }
+    .studio-item.active {
+      transform: translateY(-4px);
+      background: rgba(236, 72, 153, 0.12);
+      border-color: rgba(236, 72, 153, 0.25);
+      box-shadow: 0 12px 32px rgba(236, 72, 153, 0.12);
+    }
+    .studio-item span {
+      display: block; margin-top: var(--space-1);
+      color: var(--color-ink-muted);
+      font-family: var(--font-body);
+      font-size: var(--text-xs); font-weight: 500;
+    }
+    .interaction-hint {
+      margin-top: var(--space-4); text-align: center;
+      color: var(--color-ink-muted); font-size: var(--text-xs);
+      display: flex; align-items: center; justify-content: center; gap: var(--space-2);
+    }
+    .interaction-hint::before {
+      content: ''; width: 6px; height: 6px;
+      border-radius: 50%; background: var(--color-primary);
+      animation: hint-pulse 2s ease-in-out infinite;
+    }
+    @keyframes hint-pulse {
+      0%, 100% { opacity: 0.3; }
+      50% { opacity: 1; }
+    }
+
+    /* ===================================================================
+       MODEL STAGE — Orbit animation
+       =================================================================== */
+    .story-section {
+      min-height: 90svh;
+      padding: var(--space-24) 0 var(--space-16);
+      display: grid; align-items: center;
+    }
+    .story-section.dark-bg {
+      background: linear-gradient(180deg, #0b1120 0%, var(--color-bg) 100%);
+    }
+    [data-theme="light"] .story-section.dark-bg {
+      background: linear-gradient(180deg, #1a1a2e 0%, #16213e 40%, var(--color-bg) 100%);
+      color: #F1F5F9;
+    }
+    [data-theme="light"] .story-section.dark-bg .section-header p,
+    [data-theme="light"] .story-section.dark-bg a { color: rgba(241,245,249,0.72); }
+    [data-theme="light"] .story-section.dark-bg .eyebrow { color: var(--color-primary); }
+    .story-section.soft-bg {
+      background: linear-gradient(180deg,
+        rgba(37, 99, 235, 0.04) 0%,
+        var(--color-bg) 60%);
+    }
+
+    .model-stage {
+      min-height: 500px;
+      display: grid; place-items: center;
+      position: relative;
+      border-radius: var(--radius-xl);
+      background:
+        radial-gradient(ellipse at center, rgba(37, 99, 235, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 30% 40%, rgba(236, 72, 153, 0.04) 0%, transparent 40%);
+      border: 1px solid var(--color-border);
+      overflow: hidden;
+    }
+    [data-theme="light"] .model-stage {
+      background:
+        radial-gradient(ellipse at center, rgba(37, 99, 235, 0.04) 0%, transparent 50%),
+        radial-gradient(ellipse at 30% 40%, rgba(236, 72, 153, 0.03) 0%, transparent 40%);
+      border-color: var(--color-border-light);
+    }
+    .model-stage::before {
+      content: '';
+      position: absolute; inset: 0;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(99, 102, 241, 0.04) 0%, transparent 60%);
+      animation: stage-breathe 6s ease-in-out infinite;
+    }
+    @keyframes stage-breathe {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 0.8; }
+    }
+
+    .model-core {
+      width: 130px; height: 130px;
+      display: grid; place-items: center;
+      border-radius: 34px;
+      color: white;
+      font-family: var(--font-heading);
+      font-weight: 700; font-size: var(--text-base);
+      background: linear-gradient(145deg, #312E81, #2563EB, #6366F1);
+      box-shadow: 0 30px 80px rgba(37, 99, 235, 0.35),
+                  0 0 60px rgba(99, 102, 241, 0.2);
+      z-index: 2;
+      transition: transform var(--duration-normal) var(--ease-spring);
+    }
+    .model-core:hover { transform: scale(1.06); }
+
+    .orbit {
+      position: absolute;
+      inset: 50% auto auto 50%;
+      border: 1px solid var(--color-border);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    .orbit.one { width: 330px; height: 330px; animation: spin 22s linear infinite; }
+    .orbit.two { width: 510px; height: 310px; animation: spin-reverse 30s linear infinite; }
+
+    .orbit-chip {
+      position: absolute;
+      display: grid; place-items: center;
+      min-width: 100px; height: 44px; padding: 0 var(--space-4);
+      border-radius: var(--radius-md);
+      font-family: var(--font-body);
+      font-size: var(--text-sm); font-weight: 650;
+      color: var(--color-ink);
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border-light);
+      box-shadow: var(--shadow-md);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      transition: transform var(--duration-fast), box-shadow var(--duration-fast);
+    }
+    .orbit-chip:hover {
+      transform: scale(1.08);
+      box-shadow: var(--shadow-lg);
+      border-color: var(--color-primary);
+    }
+    .orbit .orbit-chip:nth-child(1) { left: 50%; top: -22px; transform: translateX(-50%); }
+    .orbit .orbit-chip:nth-child(2) { right: -42px; top: 50%; transform: translateY(-50%); }
+    .orbit .orbit-chip:nth-child(3) { left: 50%; bottom: -22px; transform: translateX(-50%); }
+    .orbit .orbit-chip:nth-child(4) { left: -42px; top: 50%; transform: translateY(-50%); }
+
+    .orbit .orbit-chip { animation: inherit; animation-direction: reverse; }
+    .orbit.two .orbit-chip { animation-direction: reverse; }
+
+    @keyframes spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
+    @keyframes spin-reverse { to { transform: translate(-50%, -50%) rotate(-360deg); } }
+
+    /* ===================================================================
+       CAPABILITY EXPLORER
+       =================================================================== */
+    .capability-explorer {
+      margin-top: var(--space-16);
+      border-radius: var(--radius-xl);
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+    }
+    .capability-shell {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 520px;
+    }
+    .capability-nav {
+      padding: var(--space-6);
+      border-right: 1px solid var(--color-border);
+      background: rgba(0,0,0,0.12);
+    }
+    [data-theme="light"] .capability-nav {
+      background: rgba(0,0,0,0.03);
+    }
+    .capability-nav-label {
+      padding: 0 var(--space-3);
+      margin-bottom: var(--space-5);
+      color: var(--color-ink-muted);
+      font-size: var(--text-xs); font-weight: 700;
+      letter-spacing: 0.12em; text-transform: uppercase;
+    }
+    .capability-tab {
+      width: 100%; min-height: 64px;
+      margin-bottom: var(--space-2);
+      padding: 0 var(--space-4);
+      display: flex; align-items: center; gap: var(--space-3);
+      border: 0; border-radius: var(--radius-lg);
+      color: var(--color-ink-secondary);
+      background: transparent;
+      text-align: left; font: inherit;
+      cursor: pointer;
+      transition: color var(--duration-fast),
+                  background var(--duration-fast),
+                  box-shadow var(--duration-fast);
+      -webkit-tap-highlight-color: transparent;
+    }
+    .capability-tab:hover {
+      color: var(--color-ink);
+      background: rgba(128,128,128,0.12);
+    }
+    .capability-tab.active {
+      color: var(--color-ink);
+      background: linear-gradient(135deg,
+        rgba(37, 99, 235, 0.2),
+        rgba(37, 99, 235, 0.08));
+      box-shadow: inset 0 0 0 1px rgba(37, 99, 235, 0.2);
+    }
+    .capability-tab .tab-no {
+      width: 32px; height: 32px;
+      display: grid; place-items: center;
+      border-radius: var(--radius-sm);
+      background: rgba(255,255,255,0.06);
+      color: var(--color-ink-muted);
+      font-size: var(--text-xs); font-weight: 700;
+      transition: background var(--duration-fast), color var(--duration-fast);
+      flex-shrink: 0;
+    }
+    .capability-tab.active .tab-no {
+      background: var(--color-accent);
+      color: white;
+    }
+    .capability-tab strong {
+      font-size: var(--text-sm);
+      font-weight: 600;
+    }
+
+    .capability-panel {
+      padding: var(--space-12);
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: var(--space-10);
+      align-items: center;
+    }
+    .capability-copy { transition: opacity 0.2s, transform 0.2s var(--ease-out); }
+    .capability-copy.changing { opacity: 0; transform: translateY(10px); }
+    .capability-kicker {
+      color: #93B5F7;
+      font-size: var(--text-xs); font-weight: 700;
+      letter-spacing: 0.1em; text-transform: uppercase;
+      margin-bottom: var(--space-4);
+    }
+    .capability-panel h3 {
+      margin-bottom: var(--space-4);
+      line-height: 1.1;
+    }
+    .capability-panel p {
+      color: var(--color-ink-secondary);
+      line-height: 1.75;
+      font-size: var(--text-base);
+    }
+    .capability-tags {
+      display: flex; flex-wrap: wrap; gap: var(--space-2);
+      margin-top: var(--space-6);
+    }
+    .capability-tag {
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius-full);
+      font-size: var(--text-xs); font-weight: 600;
+      color: #B9D0FF;
+      background: rgba(37, 99, 235, 0.1);
+      border: 1px solid rgba(37, 99, 235, 0.15);
+    }
+
+    .capability-visual {
+      min-height: 300px; padding: var(--space-6);
+      border-radius: var(--radius-lg);
+      background: rgba(0,0,0,0.18);
+      border: 1px solid var(--color-border);
+      position: relative; overflow: hidden;
+    }
+    [data-theme="light"] .capability-visual {
+      background: rgba(0,0,0,0.04);
+    }
+    .capability-visual::before {
+      content: ''; position: absolute;
+      inset: -30% auto auto -5%;
+      width: 240px; height: 240px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(37, 99, 235, 0.14), transparent 65%);
+    }
+    .visual-title {
+      position: relative; margin-bottom: var(--space-5);
+      color: var(--color-ink-muted);
+      font-size: var(--text-xs); letter-spacing: 0.1em; text-transform: uppercase;
+      font-weight: 700;
+    }
+    .visual-row {
+      position: relative;
+      display: grid; grid-template-columns: 90px 1fr;
+      align-items: center; gap: var(--space-3);
+      min-height: 48px; margin-bottom: var(--space-2);
+      padding: 0 var(--space-3);
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.04);
+    }
+    .visual-row span {
+      color: var(--color-ink-muted);
+      font-size: var(--text-xs);
+      font-weight: 500;
+    }
+    .visual-line {
+      height: 6px; border-radius: 10px;
+      background: linear-gradient(90deg, #60A5FA 0% 68%, rgba(255,255,255,0.06) 68%);
+      transform-origin: left;
+      animation: line-grow 0.55s var(--ease-out);
+    }
+    @keyframes line-grow { from { transform: scaleX(0); } }
+
+    /* ===================================================================
+       ACCESS FLOW
+       =================================================================== */
+    .access-flow {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: var(--space-4);
+      margin-top: var(--space-12);
+    }
+    .access-step {
+      padding: var(--space-6);
+      border-radius: var(--radius-lg);
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      transition: transform var(--duration-normal) var(--ease-out),
+                  box-shadow var(--duration-normal) var(--ease-out);
+    }
+    .access-step:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-md);
+    }
+    .access-step .step-num {
+      font-size: var(--text-xs); font-weight: 700;
+      color: var(--color-accent);
+      letter-spacing: 0.06em;
+    }
+    .access-step h4 {
+      margin: var(--space-6) 0 var(--space-2);
+      font-size: var(--text-xl);
+      font-family: var(--font-heading);
+    }
+    .access-step p {
+      color: var(--color-ink-secondary);
+      font-size: var(--text-sm);
+      line-height: 1.65;
+    }
+
+    /* ===================================================================
+       VISUAL SHOWCASE (Story sections)
+       =================================================================== */
+    .visual-showcase {
+      width: min(1180px, 100%);
+      margin-inline: auto;
+      border-radius: var(--radius-xl);
+      overflow: hidden;
+      border: 1px solid var(--color-border);
+      box-shadow: var(--shadow-lg);
+      transition: transform var(--duration-slow) var(--ease-out);
+    }
+    .visual-showcase:hover { transform: scale(1.01); }
+    .visual-showcase img {
+      display: block; width: 100%; height: auto;
+      transition: transform 1.2s var(--ease-out);
+    }
+    .visual-showcase:hover img { transform: scale(1.025); }
+
+    /* ===================================================================
+       BENTO GRID
+       =================================================================== */
+    .bento-section {
+      padding: var(--space-24) 0;
+      background: var(--color-bg);
+    }
+    .bento-grid {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: var(--space-5);
+    }
+    .bento-card {
+      min-height: 440px; padding: var(--space-12);
+      border-radius: var(--radius-xl);
+      background: var(--color-bg-elevated);
+      border: 1px solid var(--color-border);
+      position: relative; overflow: hidden;
+      transition: transform var(--duration-normal) var(--ease-out),
+                  box-shadow var(--duration-normal) var(--ease-out);
+    }
+    .bento-card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow-lg);
+    }
+    .bento-card.dark-card {
+      background: linear-gradient(145deg, #1a1f35 0%, #141b2e 50%, #0f1627 100%);
+      border-color: rgba(99, 102, 241, 0.15);
+    }
+    .bento-card h3 {
+      margin: var(--space-3) 0 var(--space-3);
+      line-height: 1.1;
+    }
+    .bento-card p {
+      color: var(--color-ink-secondary);
+      line-height: 1.7;
+      max-width: 520px;
+      font-size: var(--text-base);
+    }
+
+    /* SOP Flow */
+    .sop-flow {
+      display: flex; gap: var(--space-2);
+      align-items: center; margin-top: var(--space-10);
+    }
+    .sop-node {
+      flex: 1; min-height: 80px;
+      display: grid; place-items: center;
+      border-radius: var(--radius-lg);
+      background: rgba(37, 99, 235, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.12);
+      font-family: var(--font-heading);
+      font-weight: 650; font-size: var(--text-sm);
+      color: var(--color-ink);
+      transition: transform var(--duration-normal) var(--ease-spring),
+                  background var(--duration-normal),
+                  box-shadow var(--duration-normal);
+    }
+    .sop-node:hover {
+      transform: translateY(-5px);
+      background: rgba(37, 99, 235, 0.15);
+      box-shadow: 0 12px 32px rgba(37, 99, 235, 0.12);
+    }
+
+    /* Dashboard mini */
+    .dashboard-mini {
+      margin-top: var(--space-8);
+      display: grid; grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-3);
+    }
+    .metric-card {
+      padding: var(--space-5);
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.05);
+      border: 1px solid rgba(255,255,255,0.08);
+      transition: background var(--duration-fast),
+                  transform var(--duration-fast);
+    }
+    .metric-card:hover {
+      background: rgba(255,255,255,0.09);
+      transform: translateY(-2px);
+    }
+    .metric-card strong {
+      display: block;
+      font-family: var(--font-heading);
+      font-size: var(--text-2xl);
+      font-weight: 600;
+      margin-bottom: var(--space-1);
+    }
+    .metric-card span {
+      color: var(--color-ink-muted);
+      font-size: var(--text-xs);
+    }
+
+    /* ===================================================================
+       ENTERPRISE SECTION
+       =================================================================== */
+    .enterprise-section {
+      padding: var(--space-24) 0;
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(37, 99, 235, 0.1), transparent 60%),
+        linear-gradient(180deg, #0b1326 0%, var(--color-bg) 100%);
+      border-top: 1px solid var(--color-border);
+    }
+    [data-theme="light"] .enterprise-section {
+      background:
+        radial-gradient(ellipse 60% 50% at 50% 0%, rgba(37, 99, 235, 0.08), transparent 60%),
+        linear-gradient(180deg, #1a2744 0%, #1e293b 40%, var(--color-bg) 100%);
+      color: #F1F5F9;
+    }
+    [data-theme="light"] .enterprise-section .section-header p,
+    [data-theme="light"] .enterprise-section a { color: rgba(241,245,249,0.72); }
+    .enterprise-panel {
+      display: grid; grid-template-columns: repeat(5, 1fr);
+      gap: var(--space-3);
+      margin-top: var(--space-12);
+    }
+    .enterprise-item {
+      min-height: 160px; padding: var(--space-6);
+      border-radius: var(--radius-lg);
+      background: rgba(255,255,255,0.04);
+      border: 1px solid var(--color-border);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      transition: transform var(--duration-normal) var(--ease-spring),
+                  background var(--duration-normal),
+                  box-shadow var(--duration-normal),
+                  border-color var(--duration-normal);
+    }
+    .enterprise-item:hover {
+      transform: translateY(-6px);
+      background: rgba(255,255,255,0.08);
+      border-color: var(--color-border-light);
+      box-shadow: var(--shadow-md);
+    }
+    .enterprise-item .item-num {
+      font-size: var(--text-xs); font-weight: 700;
+      color: var(--color-accent);
+    }
+    .enterprise-item h3 {
+      font-size: var(--text-lg);
+      margin: var(--space-8) 0 var(--space-2);
+      font-family: var(--font-heading);
+    }
+    .enterprise-item p {
+      color: var(--color-ink-muted);
+      font-size: var(--text-sm);
+      line-height: 1.6;
+    }
+
+    /* ===================================================================
+       CTA SECTION
+       =================================================================== */
+    .cta-section {
+      min-height: 60svh;
+      display: grid; place-items: center; text-align: center;
+      padding: var(--space-24) var(--space-5);
+      background: var(--color-bg-elevated);
+    }
+    .cta-section p {
+      color: var(--color-ink-secondary);
+      font-size: var(--text-lg);
+      margin-bottom: var(--space-8);
+    }
+
+    /* ===================================================================
+       FOOTER
+       =================================================================== */
+    .site-footer {
+      padding: var(--space-10) var(--space-5);
+      background: var(--color-bg);
+      border-top: 1px solid var(--color-divider);
+      color: var(--color-ink-muted);
+      font-size: var(--text-xs);
+    }
+    .footer-inner {
+      width: min(var(--content-max), 100%);
+      margin-inline: auto;
+      display: flex; justify-content: space-between;
+      gap: var(--space-5); flex-wrap: wrap;
+      align-items: center;
+    }
+
+    /* ===================================================================
+       REVEAL ANIMATIONS
+       =================================================================== */
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.7s var(--ease-out),
+                  transform 0.7s var(--ease-out);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    /* Stagger delay for children */
+    .reveal-stagger > *:nth-child(1) { transition-delay: 0ms; }
+    .reveal-stagger > *:nth-child(2) { transition-delay: 80ms; }
+    .reveal-stagger > *:nth-child(3) { transition-delay: 160ms; }
+    .reveal-stagger > *:nth-child(4) { transition-delay: 240ms; }
+    .reveal-stagger > *:nth-child(5) { transition-delay: 320ms; }
+
+    /* ===================================================================
+       REDUCED MOTION
+       =================================================================== */
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .reveal { opacity: 1; transform: none; }
+      .hero-bg { animation: none; }
+      .hero-scroll-hint { animation: none; opacity: 0.6; }
+      .hero-scroll-hint svg { animation: none; }
+      .console-chart::after { animation: none; display: none; }
+      .model-stage::before { animation: none; }
+      .orbit.one, .orbit.two { animation: none; }
+      .orbit .orbit-chip { animation: none; }
+    }
+
+    /* ===================================================================
+       RESPONSIVE
+       =================================================================== */
+    @media (max-width: 960px) {
+      .nav-links { display: none; }
+      .nav-actions .nav-login { display: none; }
+      .nav-menu-btn { display: grid; }
+      .nav-inner { width: calc(100% - var(--space-6)); }
+
+      .platform-grid { grid-template-columns: 1fr; }
+      .platform-card { min-height: 400px; }
+
+      .capability-shell { grid-template-columns: 220px 1fr; }
+      .capability-panel {
+        padding: var(--space-8);
+        grid-template-columns: 1fr;
+      }
+      .capability-visual { min-height: 240px; }
+
+      .bento-grid { grid-template-columns: 1fr; }
+      .bento-card { min-height: 360px; padding: var(--space-8); }
+
+      .enterprise-panel { grid-template-columns: 1fr 1fr; }
+      .enterprise-item:last-child { grid-column: 1 / -1; }
+
+      .story-section { min-height: auto; padding: var(--space-16) 0; }
+    }
+
+    @media (max-width: 600px) {
+      :root { --nav-height: 56px; }
+
+      .hero-content { padding-top: var(--space-16); }
+      .hero-actions { flex-direction: column; align-items: stretch; width: min(300px, 100%); margin-inline: auto; }
+      .hero-actions .btn { width: 100%; }
+
+      .platform-card { min-height: auto; padding: var(--space-6); }
+
+      .capability-shell { grid-template-columns: 1fr; }
+      .capability-nav {
+        display: grid; grid-template-columns: 1fr 1fr;
+        gap: var(--space-2);
+        border-right: 0;
+        border-bottom: 1px solid var(--color-border);
+        padding: var(--space-4);
+      }
+      .capability-nav-label { grid-column: 1 / -1; margin-bottom: var(--space-2); }
+      .capability-tab { min-height: 52px; margin: 0; }
+      .capability-panel { padding: var(--space-6) var(--space-4); }
+
+      .model-stage { min-height: 360px; transform: scale(0.88); }
+      .orbit.one { width: 250px; height: 250px; }
+      .orbit.two { width: 340px; height: 230px; }
+      .orbit-chip { min-width: 80px; height: 38px; font-size: var(--text-xs); }
+
+      .access-flow { grid-template-columns: 1fr; }
+      .sop-flow { display: grid; grid-template-columns: 1fr 1fr; }
+      .console-window { grid-template-columns: 64px 1fr; }
+      .console-kpis { grid-template-columns: 1fr; }
+      .console-kpi:nth-child(3) { display: none; }
+      .dashboard-mini { grid-template-columns: 1fr; }
+
+      .enterprise-panel { grid-template-columns: 1fr; }
+      .enterprise-item:last-child { grid-column: auto; }
+
+      .visual-showcase { border-radius: var(--radius-lg); }
+      .bento-card { min-height: auto; padding: var(--space-6); }
+
+      .section-header { margin-bottom: var(--space-8); }
+    }
+  </style>
+</head>
+<body>
+  <!-- ── Skip to content ────────────────────────────────────────── -->
+  <a class="skip-link" href="#top">跳转到主要内容</a>
+
+  <!-- ── Scroll Progress ────────────────────────────────────────── -->
+  <div class="scroll-progress" aria-hidden="true"></div>
+
+  <!-- ── Navigation ──────────────────────────────────────────────── -->
+  <nav class="nav" aria-label="主导航" role="navigation">
+    <div class="nav-inner">
+      <a class="nav-brand" href="http://localhost:3001/" aria-label="New API 首页">
+        <span class="nav-brand-dot" aria-hidden="true"></span>
+        New API
+      </a>
+      <div class="nav-links" role="menubar">
+        <a class="nav-link" href="http://localhost:3001/" role="menuitem">主页</a>
+        <a class="nav-link" href="http://localhost:3001/dashboard" role="menuitem">控制台</a>
+        <a class="nav-link" href="http://localhost:3001/pricing" role="menuitem">模型广场</a>
+        <a class="nav-link active" href="http://localhost:8080/home" role="menuitem">漫剧</a>
+        <a class="nav-link" href="http://localhost:3001/rankings" role="menuitem">排行榜</a>
+        <a class="nav-link" href="https://docs.newapi.pro" role="menuitem">文档</a>
+        <a class="nav-link" href="http://localhost:3001/about" role="menuitem">关于</a>
+      </div>
+      <div class="nav-actions">
+        <button class="nav-btn theme-toggle" type="button" aria-label="切换深浅色主题" title="切换主题">
+          <!-- Sun icon -->
+          <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+          </svg>
+          <!-- Moon icon -->
+          <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+          </svg>
+        </button>
+        <a class="nav-login" href="http://localhost:3001/sign-in">登录</a>
+        <button class="nav-btn nav-menu-btn" type="button" aria-label="打开导航菜单">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" width="22" height="22">
+            <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Mobile Menu -->
+  <div class="mobile-menu" id="mobileMenu" role="menu" aria-label="移动端导航">
+    <a class="nav-link" href="http://localhost:3001/" role="menuitem">主页</a>
+    <a class="nav-link" href="http://localhost:3001/dashboard" role="menuitem">控制台</a>
+    <a class="nav-link" href="http://localhost:3001/pricing" role="menuitem">模型广场</a>
+    <a class="nav-link active" href="http://localhost:8080/home" role="menuitem">漫剧</a>
+    <a class="nav-link" href="http://localhost:3001/rankings" role="menuitem">排行榜</a>
+    <a class="nav-link" href="https://docs.newapi.pro" role="menuitem">文档</a>
+    <a class="nav-link" href="http://localhost:3001/about" role="menuitem">关于</a>
+    <a class="nav-link" href="http://localhost:3001/sign-in" role="menuitem">登录</a>
+  </div>
+
+  <main id="top">
+    <!-- ═══════════════════════════════════════════════════════════════
+         HERO — Aurora gradient + parallax
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="hero" aria-labelledby="hero-heading">
+      <div class="hero-bg" aria-hidden="true"></div>
+      <div class="hero-media-wrap" aria-hidden="true">
+        <img src="assets/hero-production-flow.png" alt="">
+      </div>
+      <div class="hero-content reveal">
+        <span class="eyebrow">AI Model Service × Comic Production</span>
+        <h1 id="hero-heading">把想象，<br><span class="highlight">生产成作品。</span></h1>
+        <p class="hero-lead">统一模型服务与漫剧工业化创作平台。从一个故事开始，到可交付的完整内容。</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="http://localhost:8080/home">
+            进入创作工作台
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </a>
+          <a class="btn btn-outline" href="#platforms">了解产品能力</a>
+        </div>
+      </div>
+      <div class="hero-scroll-hint" aria-hidden="true">
+        <span>向下浏览</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         PLATFORM BRIDGE — Dual products
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="platform-section" id="platforms" aria-labelledby="platforms-heading">
+      <div class="content-wrap">
+        <div class="section-header reveal">
+          <span class="eyebrow">双产品平台</span>
+          <h2 id="platforms-heading">一个模型底座，<br>两种产品体验。</h2>
+          <p>3001 为模型接入、治理与运营提供统一控制面；8080 把模型能力组织成完整的漫剧创作与企业生产流程。</p>
+        </div>
+
+        <div class="platform-grid reveal-stagger">
+          <!-- 3001 Console -->
+          <article class="platform-card console-card reveal" data-product-card="3001" tabindex="0" aria-labelledby="card-3001-title">
+            <span class="platform-badge">3001 · 模型服务平台</span>
+            <h3 id="card-3001-title">连接模型。<br>管理每一次调用。</h3>
+            <p>面向开发者、平台管理员与运维团队，提供模型广场、API 网关、渠道路由、密钥额度、成本计费和运行监控。</p>
+            <a class="platform-card-link" href="http://localhost:3001/dashboard">
+              进入 3001 控制台
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <div class="console-window" aria-label="3001 模型服务控制台示意">
+              <div class="console-sidebar">
+                <div class="console-dot active"></div>
+                <div class="console-dot"></div>
+                <div class="console-dot"></div>
+                <div class="console-dot"></div>
+                <div class="console-dot"></div>
+              </div>
+              <div class="console-main">
+                <div class="console-kpis">
+                  <div class="console-kpi"><strong>模型</strong><span>统一目录与定价</span></div>
+                  <div class="console-kpi"><strong>路由</strong><span>渠道与失败重试</span></div>
+                  <div class="console-kpi"><strong>用量</strong><span>额度与成本分析</span></div>
+                </div>
+                <div class="console-chart" aria-hidden="true"></div>
+              </div>
+            </div>
+          </article>
+
+          <!-- 8080 Studio -->
+          <article class="platform-card studio-card reveal" data-product-card="8080" tabindex="0" aria-labelledby="card-8080-title">
+            <span class="platform-badge">8080 · 创作生产工作台</span>
+            <h3 id="card-8080-title">组织创意。<br>完成规模化生产。</h3>
+            <p>面向创作者与企业团队，将剧本、分镜、画布、资产、Agent、SOP、质检与交付串成完整工作流。</p>
+            <a class="platform-card-link" href="http://localhost:8080/home">
+              进入 8080 工作台
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+            </a>
+            <div class="studio-flow">
+              <div class="studio-item">剧本创作<span>故事、角色、大纲、分镜</span></div>
+              <div class="studio-item">画布漫剧<span>导演、节点、批量生成</span></div>
+              <div class="studio-item">Agent + SOP<span>智能协作与标准生产</span></div>
+              <div class="studio-item">企业治理<span>审批、预算、权限、审计</span></div>
+            </div>
+          </article>
+        </div>
+
+        <p class="interaction-hint">移动鼠标聚焦产品卡片，8080 能力模块会自动轮播</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         3001 MODEL SERVICE
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="story-section soft-bg" id="models" aria-labelledby="models-heading">
+      <div class="content-wrap">
+        <div class="section-header reveal">
+          <span class="eyebrow">3001 · 模型服务平台</span>
+          <h2 id="models-heading">所有模型，<br>一个入口。</h2>
+          <p>文本、图像、视频模型统一接入；通过智能路由与失败重试保证调用稳定，通过密钥、额度、计费与监控建立运营闭环。</p>
+          <div style="display:flex;justify-content:center;gap:var(--space-6);margin-top:var(--space-5);font-size:var(--text-base);font-weight:600;flex-wrap:wrap">
+            <a href="http://localhost:3001/pricing" style="color:var(--color-accent);transition:color .15s">查看模型广场 ›</a>
+            <a href="http://localhost:3001/docs" style="color:var(--color-accent);transition:color .15s">阅读 API 文档 ›</a>
+            <a href="http://localhost:3001/dashboard" style="color:var(--color-accent);transition:color .15s">进入控制台 ›</a>
+          </div>
+        </div>
+
+        <!-- Orbit animation -->
+        <div class="model-stage reveal" aria-label="模型能力汇聚示意" role="img">
+          <div class="orbit one">
+            <span class="orbit-chip">文本生成</span>
+            <span class="orbit-chip">图像生成</span>
+            <span class="orbit-chip">视频生成</span>
+            <span class="orbit-chip">智能路由</span>
+          </div>
+          <div class="orbit two">
+            <span class="orbit-chip">配额管理</span>
+            <span class="orbit-chip">成本计费</span>
+            <span class="orbit-chip">失败重试</span>
+            <span class="orbit-chip">运行监控</span>
+          </div>
+          <div class="model-core">统一 API</div>
+        </div>
+
+        <!-- Capability Explorer -->
+        <div class="capability-explorer reveal" aria-label="3001 产品能力交互展示">
+          <div class="capability-shell">
+            <div class="capability-nav" role="tablist" aria-label="3001 产品能力">
+              <div class="capability-nav-label">Product Capabilities</div>
+              <button class="capability-tab active" type="button" role="tab" aria-selected="true" data-capability="access">
+                <span class="tab-no">01</span><strong>统一接入</strong>
+              </button>
+              <button class="capability-tab" type="button" role="tab" aria-selected="false" data-capability="routing">
+                <span class="tab-no">02</span><strong>智能路由</strong>
+              </button>
+              <button class="capability-tab" type="button" role="tab" aria-selected="false" data-capability="billing">
+                <span class="tab-no">03</span><strong>用量计费</strong>
+              </button>
+              <button class="capability-tab" type="button" role="tab" aria-selected="false" data-capability="governance">
+                <span class="tab-no">04</span><strong>团队治理</strong>
+              </button>
+            </div>
+            <div class="capability-panel" role="tabpanel" aria-label="能力详情">
+              <div class="capability-copy">
+                <div class="capability-kicker">Multi-protocol gateway</div>
+                <h3>一套接口，<br>接入不同模型能力。</h3>
+                <p>兼容常见 AI 应用工作流和主流协议，让上层业务不必为每个模型重复建设接入逻辑。</p>
+                <div class="capability-tags">
+                  <span class="capability-tag">Chat</span>
+                  <span class="capability-tag">Responses</span>
+                  <span class="capability-tag">Claude</span>
+                  <span class="capability-tag">Gemini</span>
+                </div>
+              </div>
+              <div class="capability-visual">
+                <div class="visual-title">统一能力视图</div>
+                <div class="visual-row"><span>Chat</span><div class="visual-line"></div></div>
+                <div class="visual-row"><span>Responses</span><div class="visual-line"></div></div>
+                <div class="visual-row"><span>Claude</span><div class="visual-line"></div></div>
+                <div class="visual-row"><span>Gemini</span><div class="visual-line"></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Access Flow -->
+        <div class="access-flow reveal-stagger" aria-label="模型接入流程">
+          <article class="access-step reveal">
+            <span class="step-num">STEP 01</span>
+            <h4>配置上游</h4>
+            <p>添加密钥、渠道、模型目录和访问规则。</p>
+          </article>
+          <article class="access-step reveal">
+            <span class="step-num">STEP 02</span>
+            <h4>发起调用</h4>
+            <p>使用兼容协议连接应用与创作业务。</p>
+          </article>
+          <article class="access-step reveal">
+            <span class="step-num">STEP 03</span>
+            <h4>观察优化</h4>
+            <p>持续查看用量、成本、性能与异常状态。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         SCRIPT CREATION
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="story-section dark-bg" id="script" aria-labelledby="script-heading">
+      <div class="content-wrap">
+        <div class="section-header reveal">
+          <span class="eyebrow">剧本创作</span>
+          <h2 id="script-heading">一个想法，<br>长成完整故事。</h2>
+          <p>短剧、长篇与 TVC，从故事种子、角色、世界观到分镜脚本，沿专业流程持续推进。</p>
+          <div style="display:flex;justify-content:center;gap:var(--space-6);margin-top:var(--space-5);font-size:var(--text-base);font-weight:600;flex-wrap:wrap">
+            <a href="http://localhost:8080/script-gen" style="color:var(--color-accent)">了解剧本创作 ›</a>
+            <a href="http://localhost:8080/script-gen/new" style="color:var(--color-accent)">开始创作 ›</a>
+          </div>
+        </div>
+        <div class="visual-showcase reveal">
+          <img src="assets/script-story-flow.png" loading="lazy" alt="从故事灵感、角色设定、场景设计到分镜脚本的创作流程">
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         CANVAS PRODUCTION
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="story-section" aria-labelledby="canvas-heading">
+      <div class="content-wrap">
+        <div class="section-header reveal">
+          <span class="eyebrow">画布漫剧生产</span>
+          <h2 id="canvas-heading">每一个镜头，<br>都在画布上发生。</h2>
+          <p>分镜、角色、场景、动作与生成任务在同一画布协作，导演台把创意转成可执行镜头。</p>
+          <div style="display:flex;justify-content:center;gap:var(--space-6);margin-top:var(--space-5);font-size:var(--text-base);font-weight:600;flex-wrap:wrap">
+            <a href="http://localhost:8080/canvas-projects" style="color:var(--color-accent)">了解画布工作台 ›</a>
+            <a href="http://localhost:8080/sop" style="color:var(--color-accent)">查看生产流程 ›</a>
+          </div>
+        </div>
+        <div class="visual-showcase reveal">
+          <img src="assets/canvas-production-flow.png" loading="lazy" alt="由分镜、角色、场景、动作和视频输出节点组成的漫剧生产画布">
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         BENTO — Agent + SOP / Assets & Delivery
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="bento-section" aria-labelledby="bento-heading">
+      <div class="content-wrap bento-grid reveal-stagger">
+        <article class="bento-card reveal" aria-labelledby="bento-sop-title">
+          <span class="eyebrow">Agent + SOP</span>
+          <h3 id="bento-sop-title">聪明地协作。<br>稳定地生产。</h3>
+          <p>Agent 会话、可配置能力与工业化 SOP，把团队经验沉淀为可以重复执行的生产流程。</p>
+          <div class="sop-flow">
+            <div class="sop-node">任务理解</div>
+            <div class="sop-node">智能执行</div>
+            <div class="sop-node">阶段审核</div>
+            <div class="sop-node">结果采用</div>
+          </div>
+        </article>
+
+        <article class="bento-card dark-card reveal" aria-labelledby="bento-assets-title">
+          <span class="eyebrow">资产与交付</span>
+          <h3 id="bento-assets-title">不止生成，<br>更能交付。</h3>
+          <p>统一管理生成资产、采用版本、质检报告和交付清单，让生产过程始终可追溯。</p>
+          <div class="dashboard-mini">
+            <div class="metric-card"><strong>版本</strong><span>生成与采用记录</span></div>
+            <div class="metric-card"><strong>质检</strong><span>规则与问题定位</span></div>
+            <div class="metric-card"><strong>资产</strong><span>角色、场景、视频</span></div>
+            <div class="metric-card"><strong>交付</strong><span>清单与导出记录</span></div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         ENTERPRISE
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="enterprise-section" id="enterprise" aria-labelledby="enterprise-heading">
+      <div class="content-wrap">
+        <div class="section-header reveal">
+          <span class="eyebrow">企业级管理</span>
+          <h2 id="enterprise-heading">让一支团队，<br>像一个系统。</h2>
+          <p>把创作项目、企业治理与模型用量汇入统一控制面，支撑规模化内容生产。</p>
+          <div style="display:flex;justify-content:center;gap:var(--space-6);margin-top:var(--space-5);font-size:var(--text-base);font-weight:600;flex-wrap:wrap">
+            <a href="http://localhost:8080/enterprise" style="color:var(--color-accent)">了解企业方案 ›</a>
+            <a href="#cta" style="color:var(--color-accent)">联系合作 ›</a>
+          </div>
+        </div>
+        <div class="enterprise-panel reveal-stagger">
+          <article class="enterprise-item reveal">
+            <span class="item-num">01</span>
+            <h3>组织与成员</h3>
+            <p>团队、空间与角色分工</p>
+          </article>
+          <article class="enterprise-item reveal">
+            <span class="item-num">02</span>
+            <h3>统一审批</h3>
+            <p>关键生产动作留痕</p>
+          </article>
+          <article class="enterprise-item reveal">
+            <span class="item-num">03</span>
+            <h3>预算用量</h3>
+            <p>项目与模型成本可见</p>
+          </article>
+          <article class="enterprise-item reveal">
+            <span class="item-num">04</span>
+            <h3>权限隔离</h3>
+            <p>资产与数据边界清晰</p>
+          </article>
+          <article class="enterprise-item reveal">
+            <span class="item-num">05</span>
+            <h3>审计追溯</h3>
+            <p>操作、版本与交付可查</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+         CTA
+         ═══════════════════════════════════════════════════════════════ -->
+    <section class="cta-section" id="cta" aria-labelledby="cta-heading">
+      <div class="reveal">
+        <span class="eyebrow">现在开始</span>
+        <h2 id="cta-heading">从模型，到作品。</h2>
+        <p>选择适合你的入口。</p>
+        <div class="hero-actions">
+          <a class="btn btn-primary" href="http://localhost:8080/home">
+            进入 8080 创作工作台
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="margin-left:6px">
+              <path d="M5 12h14M12 5l7 7-7 7"/>
+            </svg>
+          </a>
+          <a class="btn btn-accent" href="http://localhost:3001/pricing">使用 3001 模型服务</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────────────── -->
+  <footer class="site-footer" role="contentinfo">
+    <div class="footer-inner">
+      <span>AI 漫剧平台 · 产品宣导效果稿</span>
+      <span>产品 · 开发者 · 企业服务 · 服务状态 · 隐私与协议</span>
+    </div>
+  </footer>
+
+  <!-- ═══════════════════════════════════════════════════════════════
+       SCRIPTS
+       ═══════════════════════════════════════════════════════════════ -->
+  <script>
+    (function() {
+      const html = document.documentElement;
+      const nav = document.querySelector('.nav');
+      const progress = document.querySelector('.scroll-progress');
+      const hero = document.querySelector('.hero');
+      const heroImg = document.querySelector('.hero-media-wrap img');
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // ── Theme Toggle ──────────────────────────────────────────
+      const themeToggle = document.querySelector('.theme-toggle');
+      const storedTheme = localStorage.getItem('theme');
+      if (storedTheme) {
+        html.setAttribute('data-theme', storedTheme);
+      }
+      themeToggle.addEventListener('click', () => {
+        const current = html.getAttribute('data-theme');
+        const next = current === 'dark' ? 'light' : 'dark';
+        html.setAttribute('data-theme', next);
+        localStorage.setItem('theme', next);
+      });
+
+      // ── Mobile Menu Toggle ───────────────────────────────────
+      const menuBtn = document.querySelector('.nav-menu-btn');
+      const mobileMenu = document.getElementById('mobileMenu');
+      menuBtn.addEventListener('click', () => {
+        const isOpen = mobileMenu.classList.toggle('open');
+        document.body.classList.toggle('menu-open', isOpen);
+        menuBtn.setAttribute('aria-label', isOpen ? '关闭导航菜单' : '打开导航菜单');
+        menuBtn.setAttribute('aria-expanded', String(isOpen));
+      });
+      // Close mobile menu on link click
+      mobileMenu.querySelectorAll('a').forEach(link => {
+        link.addEventListener('click', () => {
+          mobileMenu.classList.remove('open');
+          document.body.classList.remove('menu-open');
+          menuBtn.setAttribute('aria-label', '打开导航菜单');
+          menuBtn.setAttribute('aria-expanded', 'false');
+        });
+      });
+
+      // ── Reveal Observer ───────────────────────────────────────
+      const revealObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            revealObserver.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.12, rootMargin: '0px 0px -30px 0px' });
+      document.querySelectorAll('.reveal').forEach(node => revealObserver.observe(node));
+
+      // ── Capability Explorer ───────────────────────────────────
+      const capabilityData = {
+        access: {
+          kicker: 'Multi-protocol gateway',
+          title: '一套接口，<br>接入不同模型能力。',
+          desc: '兼容常见 AI 应用工作流和主流协议，让上层业务不必为每个模型重复建设接入逻辑。',
+          tags: ['Chat', 'Responses', 'Claude', 'Gemini']
+        },
+        routing: {
+          kicker: 'Intelligent routing',
+          title: '每次请求，<br>都走更合适的路径。',
+          desc: '通过渠道选择、负载分配、会话亲和与失败重试，提高模型服务的稳定性和可用性。',
+          tags: ['渠道选择', '负载均衡', '失败重试', '会话亲和']
+        },
+        billing: {
+          kicker: 'Usage & billing',
+          title: '每一次调用，<br>都清楚花在哪里。',
+          desc: '从请求明细到分组额度，持续追踪模型用量、成本结构和缓存命中情况。',
+          tags: ['请求明细', '额度管理', '成本分析', '缓存计费']
+        },
+        governance: {
+          kicker: 'Team governance',
+          title: '让模型服务，<br>按团队规则运行。',
+          desc: '用用户、分组、令牌与权限构建清晰边界，让平台运营和企业协作保持一致。',
+          tags: ['用户管理', '分组策略', '令牌权限', '审计追踪']
+        }
+      };
+
+      const capTabs = document.querySelectorAll('.capability-tab');
+      const capCopy = document.querySelector('.capability-copy');
+      const capKicker = document.querySelector('.capability-kicker');
+      const capTitle = document.querySelector('.capability-panel h3');
+      const capDesc = document.querySelector('.capability-panel p');
+      const capTags = document.querySelector('.capability-tags');
+      const capRows = document.querySelector('.visual-rows');
+      const capExplorer = document.querySelector('.capability-explorer');
+      let capTimer = null;
+      let capPaused = false;
+
+      function activateCapability(key) {
+        const data = capabilityData[key];
+        capTabs.forEach(tab => {
+          const active = tab.dataset.capability === key;
+          tab.classList.toggle('active', active);
+          tab.setAttribute('aria-selected', String(active));
+        });
+        capCopy.classList.add('changing');
+        setTimeout(() => {
+          capKicker.textContent = data.kicker;
+          capTitle.innerHTML = data.title;
+          capDesc.textContent = data.desc;
+          capTags.innerHTML = data.tags.map(tag =>
+            `<span class="capability-tag">${tag}</span>`
+          ).join('');
+          capRows.innerHTML = data.tags.map(tag =>
+            `<div class="visual-row"><span>${tag}</span><div class="visual-line"></div></div>`
+          ).join('');
+          capCopy.classList.remove('changing');
+        }, 200);
+      }
+
+      capTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+          activateCapability(tab.dataset.capability);
+          resetCapTimer();
+        });
+      });
+
+      // Pause auto-rotate on hover/focus for accessibility
+      capExplorer.addEventListener('pointerenter', () => { capPaused = true; });
+      capExplorer.addEventListener('pointerleave', () => { capPaused = false; });
+      capExplorer.addEventListener('focusin', () => { capPaused = true; });
+      capExplorer.addEventListener('focusout', (e) => {
+        if (!capExplorer.contains(e.relatedTarget)) capPaused = false;
+      });
+
+      function resetCapTimer() {
+        if (capTimer) clearInterval(capTimer);
+        if (reduceMotion) return;
+        capTimer = setInterval(() => {
+          if (capPaused) return;
+          const activeTab = document.querySelector('.capability-tab.active');
+          const allTabs = [...capTabs];
+          const idx = allTabs.indexOf(activeTab);
+          const next = allTabs[(idx + 1) % allTabs.length];
+          activateCapability(next.dataset.capability);
+        }, 5000);
+      }
+      resetCapTimer();
+
+      // ── Platform Cards Interaction ─────────────────────────────
+      const platformGrid = document.querySelector('.platform-grid');
+      const productCards = document.querySelectorAll('[data-product-card]');
+      const studioItems = document.querySelectorAll('.studio-item');
+      let studioIndex = 0;
+      let studioTimer = null;
+
+      function setActiveCard(card) {
+        platformGrid.classList.add('is-interacting');
+        productCards.forEach(c => c.classList.toggle('active', c === card));
+      }
+
+      function resetCards() {
+        platformGrid.classList.remove('is-interacting');
+        productCards.forEach(c => c.classList.remove('active'));
+      }
+
+      productCards.forEach(card => {
+        card.addEventListener('pointerenter', () => setActiveCard(card));
+        card.addEventListener('focusin', () => setActiveCard(card));
+        card.addEventListener('pointermove', (e) => {
+          const rect = card.getBoundingClientRect();
+          card.style.setProperty('--mx', `${e.clientX - rect.left}px`);
+          card.style.setProperty('--my', `${e.clientY - rect.top}px`);
+        });
+        card.addEventListener('pointerleave', resetCards);
+        card.addEventListener('focusout', (e) => {
+          if (!card.contains(e.relatedTarget)) resetCards();
+        });
+      });
+
+      // Studio items cycle
+      function activateStudioItem(idx) {
+        studioItems.forEach((item, i) => item.classList.toggle('active', i === idx));
+      }
+      activateStudioItem(0);
+      if (!reduceMotion) {
+        studioTimer = setInterval(() => {
+          studioIndex = (studioIndex + 1) % studioItems.length;
+          activateStudioItem(studioIndex);
+        }, 1800);
+      }
+
+      // ── Scroll Handler ────────────────────────────────────────
+      function onScroll() {
+        const y = window.scrollY;
+        nav.classList.toggle('scrolled', y > 20);
+
+        const docH = document.documentElement.scrollHeight - window.innerHeight;
+        progress.style.width = docH > 0 ? `${(y / docH) * 100}%` : '0%';
+
+        // Parallax hero image
+        if (heroImg && !reduceMotion) {
+          const heroRect = hero.getBoundingClientRect();
+          const heroLocalY = heroRect.top;
+          if (heroLocalY < window.innerHeight && heroLocalY > -window.innerHeight) {
+            const parallax = Math.max(0, -heroLocalY) * 0.05;
+            heroImg.style.transform = `scale(1.05) translateY(${parallax}px)`;
+          }
+        }
+      }
+
+      window.addEventListener('scroll', onScroll, { passive: true });
+      onScroll();
+
+      // ── Keyboard Navigation for Platform Cards ─────────────────
+      productCards.forEach(card => {
+        card.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            const link = card.querySelector('.platform-card-link');
+            if (link) link.click();
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

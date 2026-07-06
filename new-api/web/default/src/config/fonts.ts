@@ -34,4 +34,4 @@ For commercial licensing, please contact support@quantumnous.com
  *      --font-roboto: 'Roboto', var(--font-sans);
  *   }
  */
-export const fonts = ['inter', 'manrope', 'system'] as const
+export const fonts = ['inter', 'manrope', 'system', 'fredoka'] as const

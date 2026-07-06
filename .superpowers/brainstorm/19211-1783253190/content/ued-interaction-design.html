@@ -1,0 +1,74 @@
+<h2>3001 公开首页｜UED 交互与视觉方案</h2>
+<p class="subtitle">产品宣导型长页：以作品结果吸引用户，以滚动叙事解释能力，以双入口完成转化。</p>
+
+<div class="mockup">
+  <div class="mockup-header">交互故事板</div>
+  <div class="mockup-body">
+    <div style="padding:18px;background:#0b0d12;color:white">
+      <div class="label">全局导航</div>
+      <p><strong>初始透明 → 下滚 24px 后磨砂白；当前章节高亮；“进入创作工作台”始终可见。</strong></p>
+      <p><small>导航只保留：产品、模型服务、企业服务、开发文档。登录为文字按钮，主 CTA 为实心按钮。</small></p>
+    </div>
+
+    <div style="padding:26px;text-align:center;background:linear-gradient(150deg,#06070b,#15234d);color:white">
+      <div class="label">第一幕｜Hero · 0–100vh</div>
+      <h2>把想象，生产成作品。</h2>
+      <p>首屏加载：主标题 320ms 淡入上移，副标题延迟 80ms，双 CTA 延迟 160ms。</p>
+      <div class="placeholder" style="min-height:140px;background:rgba(255,255,255,.06);border-color:#334166">主视觉图：故事文本 → 分镜线稿 → 角色场景 → 漫剧成片的连续演化</div>
+      <p><small>鼠标移动仅产生 4–8px 轻微景深；不做炫技跟随。首屏图片为 LCP，禁止依赖视频才能看懂。</small></p>
+    </div>
+
+    <div style="padding:26px;text-align:center;background:white">
+      <div class="label">第二幕｜模型服务 · 100–190vh</div>
+      <h2>所有模型，一个入口。</h2>
+      <p>进入视口时模型能力标签依次聚合到中心 API 节点；悬停展示“能力 / 时延 / 计费单位”，点击进入模型广场详情。</p>
+      <div class="placeholder" style="min-height:110px">图像：抽象模型光点汇聚，不使用第三方模型 Logo 墙作为主视觉</div>
+    </div>
+
+    <div style="padding:26px;text-align:center;background:#050505;color:white">
+      <div class="label">第三幕｜剧本创作 · 190–300vh</div>
+      <h2>一个想法，长成完整故事。</h2>
+      <p>桌面端滚动推进四帧：故事种子 → 角色与世界观 → 大纲 → 分镜脚本；右侧文案随阶段切换，页面不劫持滚轮。</p>
+      <div class="placeholder" style="min-height:130px;background:#111;border-color:#333">图片：真实 8080 UI 截图为主体，叠加少量场景概念视觉；禁止伪造不可用功能</div>
+    </div>
+
+    <div style="padding:26px;text-align:center;background:linear-gradient(180deg,#eef1ff,#fff)">
+      <div class="label">第四幕｜画布漫剧 · 300–420vh</div>
+      <h2>每一个镜头，都在画布上发生。</h2>
+      <p>画布随滚动从全景缓慢推近，依次高亮分镜、角色、场景、动作、视频生成节点；点击热点打开轻量说明，不跳离当前叙事。</p>
+      <div class="placeholder" style="min-height:145px">图片：节点画布与电影级漫剧画面融合的宽幅视觉</div>
+    </div>
+
+    <div style="padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px;background:#f5f5f7">
+      <div style="padding:24px;text-align:center;background:white">
+        <div class="label">第五幕 A｜Agent + SOP</div><h3>聪明地协作。稳定地生产。</h3>
+        <p>卡片进入视口时状态流自动演示一次；用户可点击“重新演示”。</p>
+      </div>
+      <div style="padding:24px;text-align:center;background:#111827;color:white">
+        <div class="label">第五幕 B｜质检交付</div><h3>不止生成，更能交付。</h3>
+        <p>用前后对照滑杆呈现生成版本、采用版本与质检结果。</p>
+      </div>
+    </div>
+
+    <div style="padding:28px;text-align:center;background:linear-gradient(135deg,#132039,#284b80);color:white">
+      <div class="label">第六幕｜企业级管理</div>
+      <h2>让一支团队，像一个系统。</h2>
+      <p>组织、审批、预算、用量、审计五个能力以真实界面局部轮播；停止滚动后 4 秒自动切换，用户操作后停止自动播放。</p>
+      <div class="placeholder" style="min-height:110px;background:rgba(255,255,255,.06);border-color:#516487">图像：创作项目、企业治理、模型用量汇成统一控制面</div>
+    </div>
+
+    <div style="padding:30px;text-align:center;background:white">
+      <div class="label">最终转化</div><h2>从模型，到作品。现在开始。</h2>
+      <p><button class="mock-button">进入 8080 创作工作台</button> <button class="mock-button">使用 3001 模型服务</button></p>
+    </div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="section"><h3>动效规范</h3><p>进入：200–400ms；悬停：120–180ms；章节转场：500–700ms。统一使用 ease-out，位移不超过 24px，缩放不超过 1.04。避免弹跳、磁吸和强烈 3D 翻转。</p></div>
+  <div class="section"><h3>移动端策略</h3><p>取消滚动绑定和视差，改为静态主图 + 横滑步骤；双 CTA 纵向排列；图片按焦点裁切；不自动播放高码率视频。</p></div>
+</div>
+<div class="split">
+  <div class="section"><h3>无障碍</h3><p>支持 reduced-motion；焦点可见；热点可键盘操作；图片提供说明性 alt；对比度达到 WCAG AA；轮播具暂停按钮。</p></div>
+  <div class="section"><h3>性能红线</h3><p>Hero AVIF/WebP 双格式，首屏资源 ≤ 500KB；延后加载下方图片；视频必须有 poster；LCP 目标 ≤ 2.5s，CLS ≤ 0.1。</p></div>
+</div>

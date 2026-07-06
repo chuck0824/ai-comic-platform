@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>AI 漫剧平台｜产品宣导效果页</title>
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --ink: #101114;
+      --muted: #666b76;
+      --blue: #1769ff;
+      --line: rgba(16,17,20,.1);
+      --card: rgba(255,255,255,.82);
+      --ease: cubic-bezier(.22,.61,.36,1);
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--bg); }
+    body { margin: 0; font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif; color: var(--ink); background: var(--bg); overflow-x: hidden; }
+    a { color: inherit; text-decoration: none; }
+    button, a { -webkit-tap-highlight-color: transparent; }
+    .progress { position: fixed; inset: 0 auto auto 0; z-index: 100; width: 0; height: 2px; background: linear-gradient(90deg,#6a7cff,#34c6ff); }
+    .nav { position: fixed; inset: 0 0 auto; z-index: 90; height: 64px; display: flex; align-items: center; color: #18181b; background: rgba(255,255,255,.88); border-bottom: 1px solid rgba(24,24,27,.06); backdrop-filter: blur(18px) saturate(150%); transition: box-shadow .25s,background .25s; }
+    .nav.scrolled { background: rgba(255,255,255,.94); box-shadow: 0 6px 24px rgba(20,28,45,.07); }
+    .nav-inner { width: min(1440px,calc(100% - 48px)); margin: auto; display: flex; align-items: center; gap: 26px; }
+    .brand { font-size: 18px; font-weight: 760; letter-spacing: -.025em; margin-right: 10px; white-space: nowrap; }
+    .nav-links { display: flex; align-items: center; gap: 24px; font-size: 14px; color: #3f3f46; }
+    .nav-links a { transition: color .16s; }
+    .nav-links a:hover { color: #1769ff; }
+    .nav-links .comic-link { color: #1769ff; font-weight: 700; }
+    .nav-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+    .nav-icon { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 10px; color: #3f3f46; background: transparent; font: inherit; cursor: pointer; transition: background .16s; }
+    .nav-icon:hover { background: #f1f3f7; }
+    .nav-login { padding: 8px 12px; border-radius: 10px; color: #27272a; transition: background .16s; }
+    .nav-login:hover { background: #f1f3f7; }
+    .nav-menu { display: none; }
+    .pill { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 19px; border-radius: 999px; background: var(--blue); color: white; font-weight: 650; transition: transform .16s,background .16s,box-shadow .16s; }
+    .pill:hover { transform: translateY(-2px); background: #075be8; box-shadow: 0 12px 28px rgba(23,105,255,.25); }
+    .pill.secondary { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.35); color: white; }
+    .pill.secondary:hover { background: rgba(255,255,255,.18); box-shadow: none; }
+    section { position: relative; }
+    .hero { min-height: 100svh; display: grid; place-items: center; overflow: hidden; color: white; background: #03050a; }
+    .hero-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center; opacity: .72; transform: scale(1.04); will-change: transform; }
+    .hero::after { content:""; position:absolute; inset:0; background: linear-gradient(180deg,rgba(3,5,10,.72) 0%,rgba(3,5,10,.08) 42%,rgba(3,5,10,.45) 100%), radial-gradient(circle at 50% 35%,transparent 0,rgba(2,4,8,.16) 55%,rgba(2,4,8,.5) 100%); }
+    .hero-copy { position: relative; z-index: 2; width: min(900px,calc(100% - 36px)); margin-top: -38vh; text-align: center; }
+    .eyebrow { font-size: 13px; font-weight: 720; letter-spacing: .16em; text-transform: uppercase; opacity: .72; }
+    h1,h2,h3,p { margin-top: 0; }
+    h1 { font-size: clamp(46px,7vw,92px); line-height: .99; letter-spacing: -.065em; margin: 18px 0 20px; }
+    .lead { max-width: 740px; margin: 0 auto 26px; font-size: clamp(17px,2vw,23px); line-height: 1.55; color: rgba(255,255,255,.8); }
+    .actions { display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+    .scroll-note { position: absolute; z-index: 2; bottom: 24px; left: 50%; transform: translateX(-50%); font-size: 12px; color: rgba(255,255,255,.55); }
+    .section-shell { width: min(1240px,calc(100% - 32px)); margin: auto; }
+    .story { min-height: 92svh; padding: 104px 0 72px; display: grid; align-items: center; overflow: hidden; }
+    .story.dark { color: white; background: #050506; }
+    .story.light { background: #fff; }
+    .story.soft { background: linear-gradient(180deg,#eef2ff 0%,#fff 88%); }
+    .story-copy { text-align: center; width: min(820px,100%); margin: 0 auto 46px; }
+    h2 { font-size: clamp(38px,5.1vw,72px); line-height: 1.04; letter-spacing: -.055em; margin: 12px 0 18px; }
+    .story-copy p { color: var(--muted); font-size: clamp(16px,1.7vw,21px); line-height: 1.7; }
+    .dark .story-copy p { color: rgba(255,255,255,.62); }
+    .text-links { display: flex; justify-content: center; gap: 26px; margin-top: 20px; color: #3685ff; font-size: 16px; }
+    .text-links a::after { content:" ›"; }
+    .visual { width: min(1180px,100%); margin: auto; border-radius: 30px; overflow: hidden; background: #0a0b0e; box-shadow: 0 40px 100px rgba(16,26,64,.18); }
+    .visual img { display: block; width: 100%; height: auto; transition: transform 1s var(--ease); }
+    .visual:hover img { transform: scale(1.018); }
+    .platform-bridge { min-height: 100svh; padding: 92px 0 54px; display: flex; align-items: center; background: #f5f5f7; }
+    .platform-bridge .story-copy { margin-bottom: 38px; }
+    .platform-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .platform-card { min-height: 470px; padding: 38px; border-radius: 30px; overflow: hidden; position: relative; background: white; border: 1px solid rgba(20,30,55,.07); }
+    .platform-card.console { color: white; background: radial-gradient(circle at 80% 0,#264f90 0,#101b30 45%,#090f1b 100%); }
+    .platform-card.studio { background: linear-gradient(145deg,#fff 0,#edf1ff 100%); }
+    .platform-badge { display: inline-flex; align-items: center; gap: 8px; padding: 7px 11px; border-radius: 999px; background: rgba(76,118,255,.1); color: #3557b7; font-size: 12px; font-weight: 760; }
+    .platform-card.console .platform-badge { color: #b8d3ff; background: rgba(121,165,255,.13); }
+    .platform-card h3 { font-size: clamp(30px,3.4vw,48px); letter-spacing: -.045em; margin: 18px 0 12px; }
+    .platform-card > p { color: var(--muted); line-height: 1.65; max-width: 520px; }
+    .platform-card.console > p { color: rgba(255,255,255,.62); }
+    .platform-card-link { display: inline-block; margin-top: 8px; color: #4088ff; font-size: 14px; }
+    .platform-card-link::after { content: " ›"; }
+    .console-window { margin-top: 32px; min-height: 220px; display: grid; grid-template-columns: 96px 1fr; border-radius: 18px; overflow: hidden; border: 1px solid rgba(255,255,255,.13); background: rgba(0,0,0,.22); box-shadow: 0 24px 60px rgba(0,0,0,.28); }
+    .console-sidebar { padding: 18px 10px; border-right: 1px solid rgba(255,255,255,.09); }
+    .console-dot { width: 55px; height: 8px; margin: 0 0 14px; border-radius: 9px; background: rgba(255,255,255,.13); }
+    .console-dot.active { width: 70px; background: #5c97ff; }
+    .console-main { padding: 18px; }
+    .console-kpis { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; }
+    .console-kpi { padding: 13px 10px; border-radius: 10px; background: rgba(255,255,255,.07); }
+    .console-kpi strong { display: block; color: #fff; font-size: 17px; }
+    .console-kpi span { font-size: 10px; color: rgba(255,255,255,.45); }
+    .console-chart { height: 74px; margin-top: 10px; border-radius: 10px; background: linear-gradient(180deg,rgba(84,141,255,.22),rgba(84,141,255,.02)), linear-gradient(135deg,transparent 0 22%,#6a9fff 23% 25%,transparent 26% 42%,#6a9fff 43% 45%,transparent 46% 62%,#6a9fff 63% 65%,transparent 66%); border: 1px solid rgba(255,255,255,.08); }
+    .studio-flow { margin-top: 38px; display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; }
+    .studio-item { min-height: 82px; padding: 18px; border-radius: 16px; background: rgba(255,255,255,.74); border: 1px solid rgba(52,85,160,.1); color: #2b3c69; font-weight: 700; box-shadow: 0 12px 30px rgba(50,75,130,.08); }
+    .studio-item span { display: block; margin-top: 7px; color: #7a8397; font-size: 11px; font-weight: 500; }
+    .model-stage { min-height: 460px; display: grid; place-items: center; position: relative; border-radius: 32px; overflow: hidden; background: radial-gradient(circle at center,#e9f0ff 0,#f7f9ff 35%,#fff 67%); border: 1px solid rgba(54,91,170,.09); }
+    .model-core { width: 126px; height: 126px; display: grid; place-items: center; border-radius: 36px; color: white; background: linear-gradient(145deg,#283b95,#2f7dff); box-shadow: 0 30px 90px rgba(47,105,255,.32); font-weight: 760; z-index: 2; }
+    .orbit { position: absolute; inset: 50% auto auto 50%; border: 1px solid rgba(48,91,190,.16); border-radius: 50%; transform: translate(-50%,-50%); }
+    .orbit.one { width: 300px; height: 300px; animation: spin 19s linear infinite; }
+    .orbit.two { width: 470px; height: 280px; animation: spin-reverse 26s linear infinite; }
+    .chip { position: absolute; display: grid; place-items: center; min-width: 96px; height: 42px; padding: 0 14px; border-radius: 14px; color: #23315b; background: rgba(255,255,255,.9); border: 1px solid rgba(64,94,160,.12); box-shadow: 0 12px 30px rgba(29,52,105,.12); font-size: 13px; font-weight: 680; }
+    .orbit .chip:nth-child(1){left:50%;top:-21px;transform:translateX(-50%)} .orbit .chip:nth-child(2){right:-38px;top:50%;transform:translateY(-50%)} .orbit .chip:nth-child(3){left:50%;bottom:-21px;transform:translateX(-50%)} .orbit .chip:nth-child(4){left:-38px;top:50%;transform:translateY(-50%)}
+    @keyframes spin { to { transform:translate(-50%,-50%) rotate(360deg); } }
+    @keyframes spin-reverse { to { transform:translate(-50%,-50%) rotate(-360deg); } }
+    .orbit .chip { animation: inherit; animation-direction: reverse; }
+    .orbit.two .chip { animation-direction: reverse; }
+    .bento { background:#f5f5f7; padding: 92px 0; }
+    .bento-grid { display:grid; grid-template-columns:1.05fr .95fr; gap:16px; }
+    .bento-card { min-height: 430px; padding: 44px; border-radius: 30px; overflow:hidden; background:white; position:relative; }
+    .bento-card.dark { background:linear-gradient(145deg,#111827,#17294e); color:white; }
+    .bento-card h3 { font-size: clamp(28px,3vw,44px); letter-spacing:-.04em; margin:10px 0 14px; }
+    .bento-card p { color:var(--muted); line-height:1.7; max-width:520px; }
+    .bento-card.dark p { color:rgba(255,255,255,.62); }
+    .sop-flow { display:flex; gap:8px; align-items:center; margin-top:46px; }
+    .sop-node { flex:1; min-height:82px; display:grid; place-items:center; border-radius:18px; background:#f2f5ff; color:#3a4b80; font-weight:680; font-size:13px; border:1px solid #e1e7ff; transition:.25s var(--ease); }
+    .sop-node:hover { transform:translateY(-5px); background:#e9efff; }
+    .dashboard-mini { margin-top:32px; display:grid; grid-template-columns:repeat(2,1fr); gap:10px; }
+    .metric { padding:20px; border-radius:18px; background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.12); }
+    .metric strong { display:block; font-size:26px; margin-bottom:4px; }
+    .metric span { color:rgba(255,255,255,.55); font-size:12px; }
+    .enterprise { padding: 110px 0; color:white; background:radial-gradient(circle at 50% 0,#294b85 0,#15243e 44%,#0c1423 100%); overflow:hidden; }
+    .enterprise .story-copy p { color:rgba(255,255,255,.65); }
+    .enterprise-panel { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-top:44px; }
+    .enterprise-item { min-height:150px; padding:24px 18px; border-radius:22px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); backdrop-filter:blur(14px); transition:.25s var(--ease); }
+    .enterprise-item:hover { transform:translateY(-7px); background:rgba(255,255,255,.12); }
+    .enterprise-item .num { color:#8fb9ff; font-size:13px; font-weight:750; }
+    .enterprise-item h3 { font-size:18px; margin:34px 0 8px; }
+    .enterprise-item p { color:rgba(255,255,255,.5); font-size:12px; line-height:1.6; }
+    .final { min-height:68svh; display:grid; place-items:center; text-align:center; padding:80px 20px; background:#fff; }
+    .final p { color:var(--muted); font-size:18px; }
+    footer { padding:42px 20px; background:#f5f5f7; color:#737780; font-size:12px; border-top:1px solid var(--line); }
+    .footer-inner { width:min(1120px,100%); margin:auto; display:flex; justify-content:space-between; gap:20px; flex-wrap:wrap; }
+    .reveal { opacity:0; transform:translateY(24px); transition:opacity .7s var(--ease),transform .7s var(--ease); }
+    .reveal.visible { opacity:1; transform:none; }
+    @media (max-width: 820px) {
+      .nav-links { display:none; }
+      .nav-inner { width:calc(100% - 24px); }
+      .nav-actions .language, .nav-login { display:none; }
+      .nav-menu { display:grid; }
+      .hero-copy { margin-top:-44vh; }
+      .hero-media { object-position:center bottom; }
+      .story { min-height:auto; padding:84px 0 52px; }
+      .section-shell { width:min(100% - 20px,1240px); }
+      .visual { border-radius:20px; }
+      .platform-grid { grid-template-columns: 1fr; }
+      .platform-card { min-height: 420px; }
+      .model-stage { min-height:390px; }
+      .orbit.two { width:370px; }
+      .bento-grid { grid-template-columns:1fr; }
+      .bento-card { min-height:360px; padding:30px 24px; }
+      .enterprise-panel { grid-template-columns:1fr 1fr; }
+      .enterprise-item:last-child { grid-column:1 / -1; }
+    }
+    @media (max-width: 520px) {
+      .brand { font-size:17px; }
+      .hero-copy { margin-top:-49vh; }
+      .lead { font-size:15px; }
+      .actions { flex-direction:column; align-items:stretch; width:min(280px,100%); margin:auto; }
+      .pill { width:100%; }
+      .text-links { flex-direction:column; gap:8px; }
+      .model-stage { min-height:330px; transform:scale(.92); }
+      .orbit.one { width:230px; height:230px; }
+      .orbit.two { width:315px; height:220px; }
+      .chip { min-width:78px; height:36px; font-size:11px; }
+      .sop-flow { display:grid; grid-template-columns:1fr 1fr; }
+      .platform-card { padding: 28px 22px; }
+      .console-window { grid-template-columns: 70px 1fr; }
+      .console-kpis { grid-template-columns: 1fr; }
+      .console-kpi:nth-child(3) { display:none; }
+      .enterprise-panel { grid-template-columns:1fr; }
+      .enterprise-item:last-child { grid-column:auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior:auto; }
+      *,*::before,*::after { animation:none!important; transition-duration:.01ms!important; }
+      .reveal { opacity:1; transform:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress" aria-hidden="true"></div>
+  <nav class="nav" aria-label="主导航">
+    <div class="nav-inner">
+      <a class="brand" href="http://localhost:3001/">New API</a>
+      <div class="nav-links"><a href="http://localhost:3001/">主页</a><a href="http://localhost:3001/dashboard">控制台</a><a href="http://localhost:3001/pricing">模型广场</a><a class="comic-link" href="http://localhost:8080/home">漫剧</a><a href="http://localhost:3001/rankings">排行榜</a><a href="https://docs.newapi.pro">文档</a><a href="http://localhost:3001/about">关于</a></div>
+      <div class="nav-actions"><button class="nav-icon language" type="button" aria-label="更改语言">文A</button><button class="nav-icon" type="button" aria-label="切换主题">◐</button><a class="nav-login" href="http://localhost:3001/sign-in">登录</a><button class="nav-icon nav-menu" type="button" aria-label="切换导航菜单">☰</button></div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <section class="platform-bridge" id="platforms">
+      <div class="section-shell">
+        <div class="story-copy reveal"><div class="eyebrow">双产品平台</div><h2>一个模型底座，<br>两种产品体验。</h2><p>3001 为模型接入、治理与运营提供统一控制面；8080 把模型能力组织成完整的漫剧创作与企业生产流程。</p></div>
+        <div class="platform-grid">
+          <article class="platform-card console reveal">
+            <span class="platform-badge">3001 · 模型服务平台</span>
+            <h3>连接模型。<br>管理每一次调用。</h3>
+            <p>面向开发者、平台管理员与运维团队，提供模型广场、API 网关、渠道路由、密钥额度、成本计费和运行监控。</p>
+            <a class="platform-card-link" href="http://localhost:3001/dashboard">进入 3001 控制台</a>
+            <div class="console-window" aria-label="3001 模型服务控制台示意">
+              <div class="console-sidebar"><div class="console-dot active"></div><div class="console-dot"></div><div class="console-dot"></div><div class="console-dot"></div><div class="console-dot"></div></div>
+              <div class="console-main"><div class="console-kpis"><div class="console-kpi"><strong>模型</strong><span>统一目录与定价</span></div><div class="console-kpi"><strong>路由</strong><span>渠道与失败重试</span></div><div class="console-kpi"><strong>用量</strong><span>额度与成本分析</span></div></div><div class="console-chart"></div></div>
+            </div>
+          </article>
+          <article class="platform-card studio reveal">
+            <span class="platform-badge">8080 · 创作生产工作台</span>
+            <h3>组织创意。<br>完成规模化生产。</h3>
+            <p>面向创作者与企业团队，将剧本、分镜、画布、资产、Agent、SOP、质检与交付串成完整工作流。</p>
+            <a class="platform-card-link" href="http://localhost:8080/home">进入 8080 工作台</a>
+            <div class="studio-flow"><div class="studio-item">剧本创作<span>故事、角色、大纲、分镜</span></div><div class="studio-item">画布漫剧<span>导演、节点、批量生成</span></div><div class="studio-item">Agent + SOP<span>智能协作与标准生产</span></div><div class="studio-item">企业治理<span>审批、预算、权限、审计</span></div></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="hero">
+      <img class="hero-media" src="assets/hero-production-flow.png" alt="从故事文本、分镜草图到漫剧成片的视觉演化流程">
+      <div class="hero-copy reveal">
+        <div class="eyebrow">AI Model Service × Comic Production</div>
+        <h1>把想象，<br>生产成作品。</h1>
+        <p class="lead">统一模型服务与漫剧工业化创作平台。从一个故事开始，到可交付的完整内容。</p>
+        <div class="actions"><a class="pill" href="http://localhost:8080/home">进入创作工作台</a><a class="pill secondary" href="#models">了解模型服务</a></div>
+      </div>
+      <div class="scroll-note">继续向下，查看产品能力 ↓</div>
+    </section>
+
+    <section class="story light" id="models">
+      <div class="section-shell">
+        <div class="story-copy reveal"><div class="eyebrow">3001 · 模型服务平台</div><h2>所有模型，<br>一个入口。</h2><p>文本、图像、视频模型统一接入；通过智能路由与失败重试保证调用稳定，通过密钥、额度、计费与监控建立运营闭环。</p><div class="text-links"><a href="http://localhost:3001/pricing">查看模型广场</a><a href="http://localhost:3001/docs">阅读 API 文档</a><a href="http://localhost:3001/dashboard">进入控制台</a></div></div>
+        <div class="model-stage reveal" aria-label="模型能力汇聚示意">
+          <div class="orbit one"><span class="chip">文本生成</span><span class="chip">图像生成</span><span class="chip">视频生成</span><span class="chip">智能路由</span></div>
+          <div class="orbit two"><span class="chip">配额管理</span><span class="chip">成本计费</span><span class="chip">失败重试</span><span class="chip">运行监控</span></div>
+          <div class="model-core">统一 API</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="story dark" id="product">
+      <div class="section-shell">
+        <div class="story-copy reveal"><div class="eyebrow">剧本创作</div><h2>一个想法，<br>长成完整故事。</h2><p>短剧、长篇与 TVC，从故事种子、角色、世界观到分镜脚本，沿专业流程持续推进。</p><div class="text-links"><a href="http://localhost:8080/script-gen">了解剧本创作</a><a href="http://localhost:8080/script-gen/new">开始创作</a></div></div>
+        <div class="visual reveal"><img src="assets/script-story-flow.png" loading="lazy" alt="从故事灵感、角色设定、场景设计到分镜脚本的创作流程"></div>
+      </div>
+    </section>
+
+    <section class="story soft">
+      <div class="section-shell">
+        <div class="story-copy reveal"><div class="eyebrow">画布漫剧生产</div><h2>每一个镜头，<br>都在画布上发生。</h2><p>分镜、角色、场景、动作与生成任务在同一画布协作，导演台把创意转成可执行镜头。</p><div class="text-links"><a href="http://localhost:8080/canvas-projects">了解画布工作台</a><a href="http://localhost:8080/sop">查看生产流程</a></div></div>
+        <div class="visual reveal"><img src="assets/canvas-production-flow.png" loading="lazy" alt="由分镜、角色、场景、动作和视频输出节点组成的漫剧生产画布"></div>
+      </div>
+    </section>
+
+    <section class="bento">
+      <div class="section-shell bento-grid">
+        <article class="bento-card reveal"><div class="eyebrow">Agent + SOP</div><h3>聪明地协作。<br>稳定地生产。</h3><p>Agent 会话、可配置能力与工业化 SOP，把团队经验沉淀为可以重复执行的生产流程。</p><div class="sop-flow"><div class="sop-node">任务理解</div><div class="sop-node">智能执行</div><div class="sop-node">阶段审核</div><div class="sop-node">结果采用</div></div></article>
+        <article class="bento-card dark reveal"><div class="eyebrow">资产与交付</div><h3>不止生成，<br>更能交付。</h3><p>统一管理生成资产、采用版本、质检报告和交付清单，让生产过程始终可追溯。</p><div class="dashboard-mini"><div class="metric"><strong>版本</strong><span>生成与采用记录</span></div><div class="metric"><strong>质检</strong><span>规则与问题定位</span></div><div class="metric"><strong>资产</strong><span>角色、场景、视频</span></div><div class="metric"><strong>交付</strong><span>清单与导出记录</span></div></div></article>
+      </div>
+    </section>
+
+    <section class="enterprise" id="enterprise">
+      <div class="section-shell">
+        <div class="story-copy reveal"><div class="eyebrow">企业级管理</div><h2>让一支团队，<br>像一个系统。</h2><p>把创作项目、企业治理与模型用量汇入统一控制面，支撑规模化内容生产。</p><div class="text-links"><a href="http://localhost:8080/enterprise">了解企业方案</a><a href="#final">联系合作</a></div></div>
+        <div class="enterprise-panel reveal"><article class="enterprise-item"><div class="num">01</div><h3>组织与成员</h3><p>团队、空间与角色分工</p></article><article class="enterprise-item"><div class="num">02</div><h3>统一审批</h3><p>关键生产动作留痕</p></article><article class="enterprise-item"><div class="num">03</div><h3>预算用量</h3><p>项目与模型成本可见</p></article><article class="enterprise-item"><div class="num">04</div><h3>权限隔离</h3><p>资产与数据边界清晰</p></article><article class="enterprise-item"><div class="num">05</div><h3>审计追溯</h3><p>操作、版本与交付可查</p></article></div>
+      </div>
+    </section>
+
+    <section class="final" id="final"><div class="reveal"><div class="eyebrow">现在开始</div><h2>从模型，到作品。</h2><p>选择适合你的入口。</p><div class="actions"><a class="pill" href="http://localhost:8080/home">进入 8080 创作工作台</a><a class="pill" href="http://localhost:3001/pricing">使用 3001 模型服务</a></div></div></section>
+  </main>
+  <footer><div class="footer-inner"><span>AI 漫剧平台 · 产品宣导效果稿</span><span>产品　开发者　企业服务　服务状态　隐私与协议</span></div></footer>
+  <script>
+    const nav = document.querySelector('.nav');
+    const progress = document.querySelector('.progress');
+    const heroImage = document.querySelector('.hero-media');
+    const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const hero = document.querySelector('.hero');
+    const revealObserver = new IntersectionObserver(entries => entries.forEach(entry => {
+      if (entry.isIntersecting) { entry.target.classList.add('visible'); revealObserver.unobserve(entry.target); }
+    }), { threshold: .13 });
+    document.querySelectorAll('.reveal').forEach(node => revealObserver.observe(node));
+    const updateScroll = () => {
+      const y = scrollY;
+      nav.classList.toggle('scrolled', y > 24);
+      const max = document.documentElement.scrollHeight - innerHeight;
+      progress.style.width = `${max > 0 ? y / max * 100 : 0}%`;
+      const heroLocalY = y - hero.offsetTop;
+      if (!reduceMotion && heroLocalY > -innerHeight && heroLocalY < innerHeight) heroImage.style.transform = `scale(1.04) translateY(${Math.max(0,heroLocalY) * .06}px)`;
+    };
+    addEventListener('scroll', updateScroll, { passive: true });
+    updateScroll();
+  </script>
+</body>
+</html>

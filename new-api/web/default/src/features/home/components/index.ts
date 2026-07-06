@@ -16,8 +16,12 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+export { BentoSection } from './sections/bento-section'
+export { CreationWorkflow } from './sections/creation-workflow'
 export { CTA } from './sections/cta'
+export { EnterpriseSection } from './sections/enterprise-section'
 export { Features } from './sections/features'
 export { Hero } from './sections/hero'
 export { HowItWorks } from './sections/how-it-works'
+export { PlatformBridge } from './sections/platform-bridge'
 export { Stats } from './sections/stats'
