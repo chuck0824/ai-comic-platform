@@ -15,6 +15,8 @@
 - Preserve the current dark global navigation, white workflow rail, light workspace, white cards, and purple primary-action language.
 - Do not add a framework, bundler, package dependency, backend call, persistent browser storage, or real file download.
 - Every main action must produce visible feedback: page, panel, state, validation message, task, version, notification, or result.
+- Stages 1–7 must use a shared transition footer and a visible transition-progress page before entering the next stage.
+- Stage 8 must expose lock, export, and canvas handoff actions instead of a next-stage action.
 - Stage completion must come from workflow state, never from the current navigation index.
 - Status must include text and cannot rely only on color.
 - Update `漫剧视频创作平台_PRD.md` in place; do not create a competing PRD.
@@ -93,6 +95,19 @@ test('task transitions create a new version on success', () => {
   assert.equal(state.tasks[0].status, 'SUCCEEDED');
   assert.equal(state.versions.analysis.length, 1);
 });
+
+test('stage transition requires confirmation and opens the next stage only after success', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  state.stages[0].status = 'NEEDS_CONFIRMATION';
+  const transition = model.startStageTransition(state, 0);
+  assert.equal(transition.status, 'QUEUED');
+  assert.equal(model.canEnterStage(state, 1).allowed, false);
+  model.completeStageTransition(state, transition.taskId);
+  assert.equal(state.stages[0].status, 'COMPLETED');
+  assert.equal(state.stages[1].status, 'READY');
+  assert.equal(model.canEnterStage(state, 1).allowed, true);
+});
 ```
 
 - [ ] **Step 2: Run tests and verify the model tests fail**
@@ -162,7 +177,22 @@ const WorkflowModel = (() => {
     return task;
   }
 
-  return { STAGE_STATUS, TASK_STATUS, createInitialState, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask };
+  function startStageTransition(state, fromStage) {
+    const task = createTask(state, { type:'STAGE_TRANSITION', stage:fromStage, scope:`阶段 ${fromStage + 1} → ${fromStage + 2}` });
+    state.transition = { visible:true, fromStage, toStage:fromStage + 1, status:'QUEUED', taskId:task.id, error:null };
+    return state.transition;
+  }
+
+  function completeStageTransition(state, taskId) {
+    completeTask(state, taskId);
+    const transition = state.transition;
+    transition.status = 'SUCCEEDED';
+    state.stages[transition.fromStage].status = 'COMPLETED';
+    state.stages[transition.toStage].status = 'READY';
+    return transition;
+  }
+
+  return { STAGE_STATUS, TASK_STATUS, createInitialState, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, startStageTransition, completeStageTransition };
 })();
 /* WORKFLOW_MODEL_END */
 ```
@@ -191,6 +221,7 @@ git commit -m "test: define script creation workflow state"
 **Interfaces:**
 - Consumes: `appState`, `WorkflowModel.createTask()`, and existing `showHome()`/`render()`.
 - Produces: `openOverlay(type, payload)`, `closeOverlay()`, `renderProjectList()`, `renderOverlay()`, and a document-level `dispatchAction(action, element)`.
+- Produces: shared `renderStageFooter()`, `renderTransitionPage()`, `startTransition()`, `cancelTransition()`, `retryTransition()`, and `enterTransitionTarget()` behavior.
 
 - [ ] **Step 1: Add failing global-surface contract tests**
 
@@ -203,6 +234,17 @@ test('includes every P0 global surface and delegated action dispatcher', () => {
   assert.match(html, /data-action="open-project-detail"/);
   assert.match(html, /data-action="open-task-center"/);
   assert.match(html, /data-action="open-version-history"/);
+});
+
+test('every stage has a shared confirmation footer and transition page', () => {
+  assert.match(html, /id="stage-transition-view"/);
+  assert.match(html, /function renderStageFooter\(\)/);
+  assert.match(html, /function renderTransitionPage\(\)/);
+  for (const action of ['save-stage-draft','confirm-stage-transition','cancel-stage-transition','retry-stage-transition','enter-next-stage','lock-storyboard']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+  assert.ok(html.includes('确认当前阶段并进入下一步'));
+  assert.ok(html.includes('确认并锁定文字分镜'));
 });
 ```
 
@@ -240,6 +282,8 @@ function dispatchAction(action, element) {
 ```
 
 The project list must expose search, status/type filters, sort, continue, details, copy, archive, delete, and undo feedback. The task center must show queued/running/succeeded/failed/canceled sample tasks with cancel and retry actions.
+
+Add a shared footer after every stage render. For stages 1–7 it contains previous, save draft, and confirm/next actions plus validation reasons. For stage 8 it contains lock, export, and canvas handoff. The transition page must replace the normal workspace content while active and render queued, running, succeeded, and failed states with cancel, retry, return, and enter-next-stage actions.
 
 - [ ] **Step 4: Run all tests and verify the global contract passes**
 
@@ -626,6 +670,7 @@ git commit -m "docs: upgrade script creation module PRD to eight stages"
 - Create: `artifacts/script-creation-completion-2026-08-05/08-review-revision.png`
 - Create: `artifacts/script-creation-completion-2026-08-05/09-storyboard-export.png`
 - Create: `artifacts/script-creation-completion-2026-08-05/10-task-version-stale.png`
+- Create: `artifacts/script-creation-completion-2026-08-05/11-stage-transition.png`
 - Modify: `design-qa.md`
 
 **Interfaces:**
@@ -646,13 +691,13 @@ Expected: all tests pass, JavaScript syntax passes, and `git diff --check` has n
 
 - [ ] **Step 2: Verify the complete happy path in the in-app browser**
 
-At 1280 × 720, exercise professional creation from settings through export. Before every action take a fresh DOM snapshot; after every action verify the visible state changed to the intended page, panel, task, validation, or result.
+At 1280 × 720, exercise professional creation from settings through export. Confirm stages 1–7 one by one, verify that each confirmation opens the transition-progress page, wait for success, and enter the next stage. Before every action take a fresh DOM snapshot; after every action verify the visible state changed to the intended page, panel, task, validation, or result.
 
 - [ ] **Step 3: Verify global and failure paths**
 
-Exercise project detail/list, invalid settings, upload failure/retry, partial analysis failure, locked stage, save failure, task cancel/retry, version diff/restore, stale impact choices, review blocker, storyboard continuity error, export failure/retry, and archive read-only state.
+Exercise project detail/list, invalid settings, upload failure/retry, partial analysis failure, locked stage, save failure, task cancel/retry, version diff/restore, stale impact choices, review blocker, storyboard continuity error, export failure/retry, archive read-only state, transition failure/cancel/retry, and stage-8 lock/export/canvas actions.
 
-- [ ] **Step 4: Capture and inspect ten accepted screenshots**
+- [ ] **Step 4: Capture and inspect eleven accepted screenshots**
 
 Save the exact browser screenshots to the listed artifact paths. Inspect every saved image and reject any blank, loading, cropped, wrong-state, or wrong-window capture.
 
@@ -668,4 +713,3 @@ git commit -m "docs: verify completed script creation prototype"
 ```
 
 Keep the final browser tab on the default home or creation-settings entry with deliverable status.
-
