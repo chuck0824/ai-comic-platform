@@ -1860,7 +1860,8 @@ async function captureDirectorShot(node = null, options = {}) {
   if (saved === false) return null
   // 同步到后端（异步，不阻塞用户操作）
   canvasApi.captureDirectorDesk(state.projectId.value, nodeKey(directorDeskNode.value), {
-    aspect_ratio: shot.aspect
+    aspect_ratio: shot.aspect,
+    preview_data_url: shot.preview_url
   }).catch(() => { /* 后端未就绪时静默降级 */ })
   if (!options.silent) ElMessage.success('已创建当前机位截图')
   return shot

@@ -92,11 +92,32 @@ aicp:
     service-name: ${AICP_WALLET_SERVICE_NAME:aicp-8080}
     service-secret: ${AICP_WALLET_SERVICE_SECRET:dev-wallet-secret}
 
-minio:
-  endpoint: http://localhost:9000
-  access-key: minioadmin
-  secret-key: minioadmin123
-  bucket: aicp-assets
+# 对象存储：local | minio | oss | qiniu
+storage:
+  provider: local
+  signed-url-expiry: 5m
+  local:
+    root: ./data/storage
+    bucket: aicp-assets
+    public-base-url: http://localhost:8080/api/v1/storage/local
+  minio:
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin123
+    bucket: aicp-assets
+  oss:
+    endpoint: ${OSS_ENDPOINT:https://oss-cn-hangzhou.aliyuncs.com}
+    access-key-id: ${OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+    bucket: ${OSS_BUCKET:aicp-assets}
+    public-base-url: ${OSS_PUBLIC_BASE_URL:}
+  qiniu:
+    access-key: ${QINIU_ACCESS_KEY:}
+    secret-key: ${QINIU_SECRET_KEY:}
+    bucket: ${QINIU_BUCKET:aicp-assets}
+    domain: ${QINIU_DOMAIN:}
+    upload-url: ${QINIU_UPLOAD_URL:https://upload.qiniup.com}
+    use-https: true
 
 logging:
   level:
@@ -147,11 +168,31 @@ new-api:
   api-key: ${NEW_API_KEY:}
   timeout: 120000
 
-minio:
-  endpoint: ${MINIO_ENDPOINT:http://localhost:9010}
-  access-key: ${MINIO_ACCESS_KEY:minioadmin}
-  secret-key: ${MINIO_SECRET_KEY:minioadmin123}
-  bucket: aicp-assets
+storage:
+  provider: ${STORAGE_PROVIDER:minio}
+  signed-url-expiry: 5m
+  local:
+    root: ./data/storage
+    bucket: aicp-assets
+    public-base-url: http://localhost:8080/api/v1/storage/local
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9010}
+    access-key: ${MINIO_ACCESS_KEY:minioadmin}
+    secret-key: ${MINIO_SECRET_KEY:minioadmin123}
+    bucket: aicp-assets
+  oss:
+    endpoint: ${OSS_ENDPOINT:https://oss-cn-hangzhou.aliyuncs.com}
+    access-key-id: ${OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+    bucket: ${OSS_BUCKET:aicp-assets}
+    public-base-url: ${OSS_PUBLIC_BASE_URL:}
+  qiniu:
+    access-key: ${QINIU_ACCESS_KEY:}
+    secret-key: ${QINIU_SECRET_KEY:}
+    bucket: ${QINIU_BUCKET:aicp-assets}
+    domain: ${QINIU_DOMAIN:}
+    upload-url: ${QINIU_UPLOAD_URL:https://upload.qiniup.com}
+    use-https: true
 
 logging:
   level:
@@ -198,11 +239,32 @@ new-api:
   api-key: ${NEW_API_KEY}
   timeout: 120000
 
-minio:
-  endpoint: ${MINIO_ENDPOINT}
-  access-key: ${MINIO_ACCESS_KEY}
-  secret-key: ${MINIO_SECRET_KEY}
-  bucket: aicp-assets
+storage:
+  provider: ${STORAGE_PROVIDER:oss}
+  signed-url-expiry: ${STORAGE_SIGNED_URL_EXPIRY:5m}
+  local:
+    root: ${STORAGE_LOCAL_ROOT:./data/storage}
+    bucket: ${STORAGE_LOCAL_BUCKET:aicp-assets}
+    public-base-url: ${STORAGE_LOCAL_PUBLIC_BASE_URL:}
+  minio:
+    endpoint: ${MINIO_ENDPOINT:}
+    access-key: ${MINIO_ACCESS_KEY:}
+    secret-key: ${MINIO_SECRET_KEY:}
+    bucket: ${MINIO_BUCKET:aicp-assets}
+    public-base-url: ${MINIO_PUBLIC_BASE_URL:}
+  oss:
+    endpoint: ${OSS_ENDPOINT}
+    access-key-id: ${OSS_ACCESS_KEY_ID}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET}
+    bucket: ${OSS_BUCKET:aicp-assets}
+    public-base-url: ${OSS_PUBLIC_BASE_URL:}
+  qiniu:
+    access-key: ${QINIU_ACCESS_KEY:}
+    secret-key: ${QINIU_SECRET_KEY:}
+    bucket: ${QINIU_BUCKET:aicp-assets}
+    domain: ${QINIU_DOMAIN:}
+    upload-url: ${QINIU_UPLOAD_URL:https://upload.qiniup.com}
+    use-https: true
 
 logging:
   level:

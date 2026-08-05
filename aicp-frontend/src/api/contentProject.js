@@ -39,6 +39,7 @@ export const contentProjectApi = {
   // M1: Upload
   uploadFile: (formData) => request.post('/content-projects/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getUpload: (uploadId) => request.get(`/content-projects/upload/${uploadId}`),
+  getUploadDownloadUrl: (uploadId) => request.get(`/content-projects/upload/${uploadId}/download-url`),
   aiExtractUpload: (uploadId) => request.post(`/content-projects/upload/${uploadId}/ai-extract`),
   confirmImport: (uploadId, projectId, chapters) => request.post(`/content-projects/upload/${uploadId}/confirm-import`, { project_id: projectId, chapters }),
   // M2: Batch, Hooks, Continuity

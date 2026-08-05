@@ -111,6 +111,7 @@ public class SecurityConfig {
                 auth.requestMatchers(
                     "/api/v1/auth/**",          // 登录/注册/刷新Token/短信
                     "/api/v1/callback/**",       // 第三方回调（微信/SSO）
+                    "/api/v1/storage/local/**",  // 本地对象存储下载（开发用）
                     "/api/health/**",            // 健康检查（K8s probes）
                     "/error"                      // 错误页面
                 ).permitAll();

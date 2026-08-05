@@ -2,6 +2,9 @@ package com.aicp.module.asset.service;
 
 import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
+import com.aicp.common.storage.ObjectStorageService;
+import com.aicp.common.storage.SignedUrl;
+import com.aicp.common.storage.StorageObjectRef;
 import com.aicp.common.workspace.WorkspaceContext;
 import com.aicp.module.asset.dto.AssetWorkbenchRequests.*;
 import com.aicp.module.asset.dto.AssetWorkbenchViews.BatchResult;
@@ -26,6 +29,8 @@ public class AssetCommandService {
     private final WorkspaceAssetFavoriteMapper favoriteMapper;
     private final AssetActivityLogMapper activityLogMapper;
     private final AssetCommandIdempotencyMapper idempotencyMapper;
+    private final AssetVersionMapper versionMapper;
+    private final ObjectStorageService objectStorageService;
 
     @Transactional
     public WorkspaceAsset edit(WorkspaceContext ctx, String assetUuid, EditAssetRequest req) {
@@ -83,6 +88,25 @@ public class AssetCommandService {
             }
         }
         return new BatchResult(succeeded, failed, errors);
+    }
+
+    public SignedUrl createDownloadUrl(WorkspaceContext ctx, String assetUuid) {
+        WorkspaceAsset asset = requireAsset(ctx, assetUuid);
+        if (asset.getCurrentVersionId() == null) {
+            throw new BizException(ErrorCode.ASSET_FILE_MISSING, "资产尚未入库文件版本");
+        }
+        AssetVersion version = versionMapper.selectById(asset.getCurrentVersionId());
+        if (version == null
+                || version.getStorageProvider() == null
+                || version.getStorageBucket() == null
+                || version.getStorageKey() == null) {
+            throw new BizException(ErrorCode.ASSET_FILE_MISSING);
+        }
+        StorageObjectRef ref = StorageObjectRef.of(
+                version.getStorageProvider(),
+                version.getStorageBucket(),
+                version.getStorageKey());
+        return objectStorageService.signDownloadUrl(ref);
     }
 
     private void trashOne(WorkspaceAsset asset, WorkspaceContext ctx) {

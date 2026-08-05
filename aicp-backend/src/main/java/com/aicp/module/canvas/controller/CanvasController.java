@@ -3,6 +3,10 @@ package com.aicp.module.canvas.controller;
 import com.aicp.common.dto.ApiResponse;
 import com.aicp.common.dto.PageResult;
 import com.aicp.common.exception.ErrorCode;
+import com.aicp.common.storage.ObjectStorageService;
+import com.aicp.common.storage.SignedUrl;
+import com.aicp.common.storage.StorageObjectRef;
+import com.aicp.common.storage.StorageUploadService;
 import com.aicp.common.util.SecurityUtil;
 import com.aicp.module.canvas.dto.CanvasMigrationViews;
 import com.aicp.module.canvas.dto.CanvasProjectRequests.*;
@@ -30,6 +34,8 @@ public class CanvasController {
     private final CanvasService canvasService;
     private final CanvasProjectManagementService managementService;
     private final CanvasLegacyAuditService legacyAuditService;
+    private final StorageUploadService storageUploadService;
+    private final ObjectStorageService objectStorageService;
     private final ObjectMapper objectMapper;
 
     // ===== Projects (Management) =====
@@ -362,8 +368,35 @@ public class CanvasController {
 
     @GetMapping("/export/{taskId}/download")
     public ApiResponse<Map<String, String>> download(@PathVariable String taskId) {
-        return ApiResponse.success(Map.of("download_url",
-                "https://cdn.example.com/exports/" + taskId + ".mp4?sign=mock&expires=9999999999"));
+        GenerationTask task = canvasService.getTaskStatus(taskId);
+        if (task == null) {
+            return ApiResponse.error(46020, "任务不存在");
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> output = objectMapper.readValue(
+                    task.getOutputAssets() == null ? "{}" : task.getOutputAssets(), Map.class);
+            String provider = stringVal(output.get("storage_provider"));
+            String bucket = stringVal(output.get("storage_bucket"));
+            String key = stringVal(output.get("storage_key"));
+            if (provider != null && bucket != null && key != null) {
+                SignedUrl signed = objectStorageService.signDownloadUrl(
+                        StorageObjectRef.of(provider, bucket, key));
+                return ApiResponse.success(Map.of(
+                        "download_url", signed.url(),
+                        "expires_at", signed.expiresAt().toString()));
+            }
+            String url = stringVal(output.get("url"));
+            if (url == null) {
+                url = stringVal(output.get("preview_url"));
+            }
+            if (url != null) {
+                return ApiResponse.success(Map.of("download_url", url));
+            }
+        } catch (Exception e) {
+            log.warn("export download resolve failed taskId={}: {}", taskId, e.getMessage());
+        }
+        return ApiResponse.error(48008, "导出文件尚未就绪");
     }
 
     // ===== Workflows =====
@@ -416,10 +449,15 @@ public class CanvasController {
 
     @GetMapping("/projects/{id}/director-desk/{deskId}")
     public ApiResponse<?> getDirectorDesk(@PathVariable String id, @PathVariable String deskId) {
-        return ApiResponse.success(Map.of("captures", List.of(
-                Map.of("angle", "front", "image_url", "/mock/captures/" + deskId + "_front.png"),
-                Map.of("angle", "side", "image_url", "/mock/captures/" + deskId + "_side.png"),
-                Map.of("angle", "top", "image_url", "/mock/captures/" + deskId + "_top.png"))));
+        CanvasNode node = findProjectNode(id, deskId);
+        if (node == null) return ApiResponse.error(46011, "导演台不存在");
+        Map<String, Object> data = readNodeData(node);
+        Map<String, Object> director = ensureMap(data, "director");
+        Object shots = director.getOrDefault("shots", data.getOrDefault("captures", List.of()));
+        return ApiResponse.success(Map.of(
+                "desk_id", deskId,
+                "captures", shots instanceof List<?> ? shots : List.of(),
+                "director", director));
     }
 
     @PutMapping("/projects/{id}/director-desk/{deskId}")
@@ -429,28 +467,31 @@ public class CanvasController {
         return node == null ? ApiResponse.error(46011, "导演台不存在") : ApiResponse.success(node);
     }
 
-    // TODO: 当前为 mock 实现，文件未实际存储。待接入 MinIO/OSS 后实现真实上传与模型解析。
     @PostMapping("/projects/{id}/director-desk/{deskId}/assets/model")
     public ApiResponse<?> uploadDirectorModel(@PathVariable String id,
                                               @PathVariable String deskId,
                                               @RequestParam(value = "file", required = false) MultipartFile file,
-                                              @RequestParam(value = "name", required = false) String name) {
+                                              @RequestParam(value = "name", required = false) String name,
+                                              jakarta.servlet.http.HttpServletRequest request) {
         if (findProjectNode(id, deskId) == null) return ApiResponse.error(46011, "导演台不存在");
-        String fileName = file == null ? Optional.ofNullable(name).orElse("local-model.glb") : file.getOriginalFilename();
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("asset_id", "asset_model_" + shortUuid());
-        data.put("model_url", "/mock/models/" + fileName);
-        data.put("metadata", Map.of(
-                "format", fileName != null && fileName.contains(".") ? fileName.substring(fileName.lastIndexOf('.') + 1) : "glb",
-                "size", file == null ? 0 : file.getSize(),
-                "triangle_count", 0));
-        if (file != null && !file.isEmpty()) {
-            log.warn("3D model upload is stub — file '{}' ({} bytes) not persisted to storage", fileName, file.getSize());
+        if (file == null || file.isEmpty()) {
+            return ApiResponse.error(ErrorCode.PARAM_INVALID.getCode(), "请上传模型文件");
         }
+        String fileName = file.getOriginalFilename() == null
+                ? Optional.ofNullable(name).orElse("local-model.glb")
+                : file.getOriginalFilename();
+        var uploaded = storageUploadService.uploadAndRegisterAsset(
+                request, file, fileName, "OTHER", "canvas/" + id + "/director-models");
+        Map<String, Object> data = new LinkedHashMap<>(uploaded.toMap());
+        data.put("asset_id", uploaded.assetUuid());
+        data.put("model_url", uploaded.downloadUrl().url());
+        data.put("metadata", Map.of(
+                "format", fileName.contains(".") ? fileName.substring(fileName.lastIndexOf('.') + 1) : "glb",
+                "size", uploaded.size(),
+                "triangle_count", 0));
         return ApiResponse.success(data);
     }
 
-    // TODO: 当前返回 mock 截图 URL。待接入服务端 3D 渲染管线后替换为真实截图。
     @PostMapping("/projects/{id}/director-desk/{deskId}/capture")
     public ApiResponse<?> captureDirectorDesk(@PathVariable String id,
                                               @PathVariable String deskId,
@@ -459,7 +500,6 @@ public class CanvasController {
         if (node == null) return ApiResponse.error(46011, "导演台不存在");
 
         Map<String, Object> data = readNodeData(node);
-        // 防止 JSON 解析失败导致的静默数据覆盖
         if (data.isEmpty() && node.getInputData() != null && !node.getInputData().isBlank()) {
             return ApiResponse.error(46030, "节点数据解析失败，请检查数据格式");
         }
@@ -468,7 +508,8 @@ public class CanvasController {
         List<Map<String, Object>> screenshots = (List<Map<String, Object>>) director.computeIfAbsent("shots", k -> new ArrayList<>());
 
         String shotId = "shot_" + shortUuid();
-        String aspect = String.valueOf((body == null ? Map.of() : body).getOrDefault("aspect_ratio",
+        Map<String, Object> safeBody = body == null ? Map.of() : body;
+        String aspect = String.valueOf(safeBody.getOrDefault("aspect_ratio",
                 director.getOrDefault("aspect", data.getOrDefault("aspect_ratio", "16:9"))));
         Map<String, Object> shot = new LinkedHashMap<>();
         shot.put("id", shotId);
@@ -478,8 +519,20 @@ public class CanvasController {
         shot.put("aspect_ratio", aspect);
         shot.put("view", "服务端截图");
         shot.put("fov", 50);
-        shot.put("image_url", "/mock/captures/" + deskId + "_" + shotId + ".png");
-        shot.put("preview_url", shot.get("image_url"));
+
+        Object previewDataUrl = safeBody.get("preview_data_url");
+        if (previewDataUrl instanceof String dataUrl && dataUrl.startsWith("data:")) {
+            var uploaded = storageUploadService.uploadDataUrl(
+                    dataUrl, shotId + ".svg", "canvas/" + id + "/director-captures");
+            shot.put("image_url", uploaded.downloadUrl().url());
+            shot.put("preview_url", uploaded.downloadUrl().url());
+            shot.put("storage_provider", uploaded.ref().provider().code());
+            shot.put("storage_bucket", uploaded.ref().bucket());
+            shot.put("storage_key", uploaded.ref().key());
+        } else {
+            shot.put("image_url", safeBody.getOrDefault("preview_url", ""));
+            shot.put("preview_url", safeBody.getOrDefault("preview_url", shot.get("image_url")));
+        }
         shot.put("created_at", new Date().toString());
         screenshots.add(shot);
         canvasService.updateNode(id, deskId, Map.of("data", data, "status", "ready"));
@@ -561,7 +614,43 @@ public class CanvasController {
     }
 
     // ===== Material Drop =====
-    @PostMapping("/projects/{id}/assets/drop")
+    @PostMapping(value = "/projects/{id}/assets/drop", consumes = {"multipart/form-data"})
+    public ApiResponse<?> dropMaterialMultipart(@PathVariable String id,
+                                                @RequestParam("file") MultipartFile file,
+                                                @RequestParam(value = "asset_type", required = false) String assetType,
+                                                @RequestParam(value = "name", required = false) String name,
+                                                @RequestParam(value = "x", required = false) Integer x,
+                                                @RequestParam(value = "y", required = false) Integer y,
+                                                jakarta.servlet.http.HttpServletRequest request) {
+        String type = switch (Optional.ofNullable(assetType).orElse("image")) {
+            case "video" -> "video";
+            case "audio" -> "audio";
+            case "text" -> "text";
+            default -> "image";
+        };
+        String mediaType = switch (type) {
+            case "video" -> "VIDEO";
+            case "audio" -> "AUDIO";
+            default -> "IMAGE";
+        };
+        var uploaded = storageUploadService.uploadAndRegisterAsset(
+                request, file,
+                name == null || name.isBlank() ? file.getOriginalFilename() : name,
+                mediaType,
+                "canvas/" + id + "/materials");
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("label", "素材 · " + uploaded.originalFilename());
+        data.put("file_url", uploaded.downloadUrl().url());
+        data.putAll(uploaded.toMap());
+        CanvasNode node = canvasService.createNode(id, Map.of(
+                "type", type,
+                "x", x == null ? 200 : x,
+                "y", y == null ? 200 : y,
+                "data", data));
+        return node == null ? ApiResponse.error(ErrorCode.CANVAS_NOT_FOUND) : ApiResponse.success(node);
+    }
+
+    @PostMapping(value = "/projects/{id}/assets/drop", consumes = {"application/json"})
     public ApiResponse<?> dropMaterial(@PathVariable String id, @RequestBody Map<String, Object> body) {
         String assetType = (String) body.getOrDefault("asset_type", "image");
         String type = switch (assetType) {
@@ -571,6 +660,12 @@ public class CanvasController {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("label", "素材 · " + body.getOrDefault("name", "拖入素材"));
         data.put("file_url", body.get("file_url"));
+        if (body.get("storage_provider") != null) {
+            data.put("storage_provider", body.get("storage_provider"));
+            data.put("storage_bucket", body.get("storage_bucket"));
+            data.put("storage_key", body.get("storage_key"));
+            data.put("asset_uuid", body.get("asset_uuid"));
+        }
         CanvasNode node = canvasService.createNode(id, Map.of(
                 "type", type, "x", body.getOrDefault("x", 200),
                 "y", body.getOrDefault("y", 200), "data", data));
@@ -660,6 +755,11 @@ public class CanvasController {
 
     private String shortUuid() {
         return UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+    }
+
+    private static String stringVal(Object value) {
+        if (value instanceof String s && !s.isBlank()) return s;
+        return null;
     }
 
     // ===== Migration Audit (R0) =====
