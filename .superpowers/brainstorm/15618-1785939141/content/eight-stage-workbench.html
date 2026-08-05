@@ -1,0 +1,1085 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>八阶段剧本创作工作台 · 静态原型</title>
+  <style>
+    :root {
+      --accent: #625bf6;
+      --accent-soft: #efefff;
+      --accent-border: #d9d7ff;
+      --success: #20a162;
+      --warning: #d97706;
+      --danger: #dc4c4c;
+      --ink: #202124;
+      --muted: #747985;
+      --line: #e7e9ef;
+      --canvas: #f6f7fa;
+      --panel: #ffffff;
+      --nav: #17181c;
+      --nav-2: #24262c;
+      --shadow: 0 8px 28px rgba(22, 28, 45, .07);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 1180px; height: 100%; font-family: Inter, "PingFang SC", "Microsoft YaHei", sans-serif; color: var(--ink); background: var(--canvas); }
+    button, textarea, input { font: inherit; }
+    button { cursor: pointer; }
+    .app { display: grid; grid-template-columns: 212px 1fr; min-height: 100vh; }
+    .global-nav { background: var(--nav); color: #d9dbe2; padding: 24px 14px; }
+    .brand { font-size: 15px; font-weight: 700; padding: 0 8px 22px; color: #fff; }
+    .brand small { display: block; margin-top: 8px; color: #8c9099; font-size: 11px; font-weight: 500; }
+    .nav-group { margin: 12px 0 6px; padding: 0 8px; color: #858a94; font-size: 11px; letter-spacing: .08em; }
+    .nav-item { width: 100%; border: 0; color: #aeb2bc; background: transparent; padding: 11px 12px; border-radius: 7px; text-align: left; margin: 2px 0; font-size: 13px; }
+    .nav-item.active { color: #fff; background: #3a3c44; box-shadow: inset 3px 0 0 var(--accent); }
+    .shell { display: grid; grid-template-rows: 56px 1fr; min-width: 0; }
+    .topbar { background: #fff; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; }
+    .top-title { font-size: 16px; font-weight: 700; }
+    .top-actions { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+    .prototype-badge { color: var(--accent); background: var(--accent-soft); border: 1px solid var(--accent-border); padding: 5px 9px; border-radius: 999px; }
+    .workspace { display: grid; grid-template-columns: 210px minmax(560px, 1fr) 270px; min-height: 0; height: calc(100vh - 56px); }
+    .workspace.analysis-focus { grid-template-columns: 210px minmax(0, 1fr); }
+    .workspace.analysis-focus .context { display: none; }
+    .hidden { display: none !important; }
+    .workspace.hidden, .home-view.hidden { display: none; }
+    .home-view { height: calc(100vh - 56px); overflow: auto; padding: 28px 36px 48px; background: var(--canvas); }
+    .home-inner { max-width: 980px; margin: 0 auto; }
+    .home-head { margin-bottom: 22px; }
+    .home-head h1 { margin: 0 0 6px; font-size: 23px; }
+    .home-head p { margin: 0; color: var(--muted); font-size: 13px; }
+    .method-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .method-card { border: 1px solid #ebeef3; border-radius: 12px; background: #fff; padding: 18px; display: grid; grid-template-columns: 48px 1fr auto; gap: 14px; align-items: center; text-align: left; box-shadow: 0 5px 18px rgba(25,31,48,.04); transition: border-color .16s ease, transform .16s ease; }
+    .method-card:hover { border-color: var(--accent-border); transform: translateY(-1px); }
+    .method-mark { width: 48px; height: 48px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; font-size: 12px; font-weight: 800; letter-spacing: .03em; }
+    .method-card h2 { margin: 0 0 5px; font-size: 15px; }
+    .method-card p { margin: 0; color: var(--muted); font-size: 12px; }
+    .method-card .arrow { color: #9a9faa; font-size: 18px; }
+    .home-section { margin-top: 28px; }
+    .home-section-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 11px; }
+    .home-section-head h2 { margin: 0; font-size: 15px; }
+    .home-section-head button { border: 0; background: transparent; color: var(--accent); font-size: 11px; }
+    .todo-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .todo-card { background: #fff; border: 1px solid var(--line); border-radius: 9px; padding: 12px 14px; display: flex; align-items: center; gap: 10px; }
+    .todo-card strong { font-size: 12px; flex: 1; }
+    .todo-card small { color: var(--muted); font-size: 11px; }
+    .todo-badge { border-radius: 4px; padding: 3px 7px; background: #fff7e9; color: #b96800; font-size: 11px; }
+    .todo-badge.danger { background: #fff0f0; color: var(--danger); }
+    .recent-list-home { display: grid; gap: 9px; }
+    .recent-card-home { background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 13px 15px; display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; }
+    .recent-card-home h3 { margin: 0 0 7px; font-size: 13px; }
+    .recent-meta-home { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; color: var(--muted); font-size: 11px; }
+    .recent-actions-home { display: flex; gap: 7px; }
+    .workflow { background: #fff; border-right: 1px solid var(--line); padding: 18px 14px; overflow: auto; }
+    .eyebrow { color: #7d828d; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin: 0 8px 10px; }
+    .stage { position: relative; width: 100%; border: 0; background: transparent; border-radius: 8px; text-align: left; padding: 10px 10px 10px 38px; min-height: 52px; color: #535762; }
+    .stage:not(:last-child)::after { content: ""; position: absolute; left: 19px; top: 36px; height: 34px; border-left: 1px solid #dddfe6; }
+    .stage-num { position: absolute; left: 8px; top: 11px; width: 22px; height: 22px; border: 1px solid #d9dce4; border-radius: 50%; display: grid; place-items: center; font-size: 11px; color: #777d88; background: #fff; z-index: 1; }
+    .stage strong { display: block; font-size: 13px; line-height: 20px; }
+    .stage small { display: block; color: #7f8490; font-size: 11px; line-height: 16px; }
+    .stage.done .stage-num { background: #e8f7ef; border-color: #bfe7d0; color: var(--success); }
+    .stage.active { background: var(--accent-soft); color: #35307f; }
+    .stage.active .stage-num { color: #fff; border-color: var(--accent); background: var(--accent); }
+    .stage[aria-disabled="true"] { opacity: .56; cursor: not-allowed; }
+    .progress-box { border-top: 1px solid var(--line); margin: 14px 8px 0; padding-top: 16px; }
+    .progress-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+    .progress-track { margin-top: 8px; height: 5px; background: #eceef3; border-radius: 99px; overflow: hidden; }
+    .progress-fill { height: 100%; width: 12.5%; background: var(--accent); transition: width .25s ease; }
+    .main { min-width: 0; overflow: auto; padding: 18px 24px 40px; }
+    .project-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+    .project-head h1 { font-size: 21px; line-height: 1.4; margin: 0 0 8px; max-width: 720px; }
+    .project-actions { display: flex; gap: 8px; }
+    .meta { color: var(--muted); font-size: 11px; display: flex; gap: 8px; align-items: center; }
+    .tag { display: inline-flex; padding: 3px 7px; border-radius: 4px; background: #f0f1f5; color: #686d77; font-size: 11px; }
+    .ghost { border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; color: #60646e; padding: 7px 12px; }
+    .card { background: var(--panel); border: 1px solid #eceef3; border-radius: 12px; box-shadow: var(--shadow); padding: 18px; }
+    .card + .card { margin-top: 14px; }
+    .card-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 15px; }
+    .card-head h2 { margin: 0 0 5px; font-size: 17px; }
+    .card-head p { margin: 0; font-size: 12px; color: var(--muted); }
+    .stage-status { padding: 4px 8px; border-radius: 4px; color: var(--accent); background: var(--accent-soft); font-size: 11px; white-space: nowrap; }
+    .source-switch, .segmented { display: flex; align-items: center; gap: 4px; padding: 3px; border: 1px solid var(--line); border-radius: 7px; background: #f7f8fa; width: fit-content; }
+    .source-switch button, .segmented button { border: 0; background: transparent; border-radius: 5px; padding: 6px 10px; color: #747985; font-size: 11px; }
+    .source-switch button.active, .segmented button.active { background: #fff; color: var(--accent); box-shadow: 0 1px 5px rgba(20,24,38,.08); }
+    .config-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .config-chip { border: 1px solid var(--line); background: #fafbfc; border-radius: 8px; padding: 10px; }
+    .config-chip span { display: block; color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+    .config-chip strong { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    textarea { width: 100%; min-height: 150px; resize: vertical; padding: 12px; border: 1px solid #dfe2e8; border-radius: 8px; outline: none; line-height: 1.7; color: #343741; }
+    textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(98,91,246,.1); }
+    .dropzone { border: 1px dashed #bfc3cf; border-radius: 10px; min-height: 185px; background: #fafafe; display: grid; place-items: center; text-align: center; color: var(--muted); }
+    .dropzone strong { display: block; color: #444954; margin-bottom: 6px; }
+    .dropzone p { font-size: 11px; margin: 0 0 12px; }
+    .btn { border: 1px solid transparent; border-radius: 6px; padding: 8px 14px; font-size: 12px; font-weight: 600; background: #fff; color: #5f6470; }
+    .btn.primary { background: var(--accent); color: #fff; }
+    .btn.secondary { border-color: #dcdfe6; }
+    .btn.warn { background: #fff7e9; color: #b96800; border-color: #f3d29e; }
+    .actions { display: flex; gap: 8px; margin-top: 14px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .mini-card { border: 1px solid var(--line); border-radius: 9px; padding: 13px; background: #fff; }
+    .mini-card h3 { font-size: 13px; margin: 0 0 7px; }
+    .mini-card p { font-size: 11px; color: var(--muted); line-height: 1.65; margin: 0; }
+    .character { display: grid; grid-template-columns: 42px 1fr; gap: 11px; }
+    .avatar { width: 42px; height: 42px; border-radius: 10px; background: #eeefff; color: var(--accent); display: grid; place-items: center; font-weight: 800; }
+    .relation-row { margin-top: 12px; padding: 10px 12px; background: #f7f8fb; border-radius: 8px; font-size: 11px; color: #656a75; }
+    .analysis-shell { display: grid; gap: 12px; }
+    .analysis-tabs, .analysis-subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+    .analysis-tabs button, .analysis-subtabs button { border: 0; background: transparent; padding: 9px 12px; color: #6d727d; font-size: 12px; border-bottom: 2px solid transparent; }
+    .analysis-tabs button.active, .analysis-subtabs button.active { color: var(--ink); border-bottom-color: var(--accent); font-weight: 700; }
+    .analysis-panel { padding-top: 4px; }
+    .summary-block { font-size: 12px; line-height: 1.85; color: #444954; }
+    .summary-block p { margin: 0; }
+    .event-list { display: grid; gap: 8px; }
+    .event-item { border: 1px solid var(--line); border-radius: 9px; padding: 12px 13px; }
+    .event-head { display: flex; gap: 8px; align-items: center; margin-bottom: 7px; }
+    .event-head strong { font-size: 12px; }
+    .pressure { color: var(--danger); background: #fff0f0; border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+    .event-item p { margin: 0 0 7px; color: #525762; font-size: 11px; line-height: 1.65; }
+    .event-meta { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; color: var(--muted); font-size: 11px; }
+    .chapter-list { display: grid; gap: 9px; }
+    .chapter-item { border-bottom: 1px solid var(--line); padding: 0 0 11px; }
+    .chapter-item:last-child { border-bottom: 0; }
+    .chapter-item h3 { margin: 0 0 5px; font-size: 12px; }
+    .chapter-item p { margin: 0; color: #565b66; font-size: 11px; line-height: 1.7; }
+    .character-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; }
+    .bio-card { border: 1px solid var(--line); border-radius: 9px; padding: 12px; background: #fff; text-align: left; }
+    .bio-card:hover { border-color: var(--accent-border); }
+    .bio-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+    .bio-head strong { font-size: 12px; }
+    .role-badge { background: #e8f7ef; color: var(--success); border-radius: 4px; padding: 2px 6px; font-size: 11px; }
+    .role-badge.antagonist { background: #fff0f0; color: var(--danger); }
+    .role-badge.support { background: #eef4ff; color: #3b6ecf; }
+    .bio-card p { margin: 4px 0; color: #666b76; font-size: 11px; line-height: 1.55; }
+    .bio-card .detail-link { display: block; margin-top: 8px; color: var(--accent); font-size: 11px; }
+    .world-overview { display: grid; gap: 10px; }
+    .definition-block { border: 1px solid var(--line); border-radius: 9px; padding: 13px; }
+    .definition-block h3 { margin: 0 0 6px; color: #494e58; font-size: 12px; }
+    .definition-block p { margin: 0; color: #606570; font-size: 11px; line-height: 1.7; }
+    .place-grid, .faction-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 9px; }
+    .entity-card { border: 1px solid var(--line); border-radius: 9px; padding: 12px; }
+    .entity-card h3 { margin: 0 0 7px; font-size: 12px; }
+    .entity-card p { margin: 4px 0; color: #666b76; font-size: 11px; line-height: 1.55; }
+    .term-card { background: #f6f7f9; border-radius: 8px; padding: 12px; margin-top: 8px; }
+    .term-card strong { font-size: 12px; }
+    .term-card p { margin: 6px 0 0; color: #5d626d; font-size: 11px; line-height: 1.6; }
+    .analysis-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 13px; }
+    .analysis-footer span { color: var(--muted); font-size: 11px; }
+    .character-detail { display: grid; gap: 18px; }
+    .character-detail-section { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+    .character-detail-section:last-child { border-bottom: 0; }
+    .character-detail-section h3 { margin: 0 0 10px; font-size: 14px; }
+    .detail-row { display: grid; grid-template-columns: 100px 1fr; gap: 10px; margin: 7px 0; font-size: 11px; line-height: 1.65; }
+    .detail-row span:first-child { color: var(--muted); }
+    .evolution-card { background: #f7f8fa; border-radius: 8px; padding: 12px; margin-top: 8px; }
+    .evolution-card h4 { margin: 0 0 8px; font-size: 12px; }
+    .detail-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+    .outline-row { display: grid; grid-template-columns: 56px 1fr 90px; gap: 12px; align-items: center; padding: 12px; border-bottom: 1px solid #eef0f4; }
+    .outline-row:last-child { border-bottom: 0; }
+    .ep { color: var(--accent); font-weight: 700; font-size: 11px; }
+    .outline-row strong { font-size: 12px; display: block; margin-bottom: 3px; }
+    .outline-row p { margin: 0; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .score { text-align: right; font-size: 11px; color: var(--success); }
+    .editor-shell { display: grid; grid-template-columns: 112px 1fr; min-height: 320px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+    .episode-nav { background: #f7f8fb; border-right: 1px solid var(--line); padding: 9px; }
+    .episode-nav button { width: 100%; text-align: left; border: 0; border-radius: 6px; padding: 8px; font-size: 11px; color: #6d727d; background: transparent; }
+    .episode-nav button.active { background: #fff; color: var(--accent); box-shadow: 0 1px 4px rgba(23,28,41,.08); }
+    .script-editor { padding: 16px 18px; background: #fff; }
+    .scene-label { font-size: 11px; font-weight: 800; color: #424650; letter-spacing: .03em; }
+    .script-line { font-size: 12px; line-height: 1.75; color: #4e535e; margin: 10px 0; }
+    .dialogue { border-left: 3px solid var(--accent-border); padding-left: 12px; }
+    .ai-tools { display: flex; gap: 6px; flex-wrap: wrap; border-top: 1px solid var(--line); padding-top: 12px; margin-top: 16px; }
+    .ai-tools button { border: 1px solid #dedfe7; background: #fff; color: #676c78; border-radius: 5px; padding: 5px 8px; font-size: 11px; }
+    .review-layout { display: grid; grid-template-columns: 160px 1fr; gap: 14px; }
+    .score-ring { width: 104px; height: 104px; border: 9px solid #e8f5ed; border-top-color: var(--success); border-radius: 50%; display: grid; place-items: center; margin: 6px auto 12px; color: var(--success); font-size: 24px; font-weight: 800; }
+    .score-note { text-align: center; color: var(--muted); font-size: 11px; }
+    .issue { display: grid; grid-template-columns: 50px 1fr auto; align-items: center; gap: 9px; padding: 10px 0; border-bottom: 1px solid #eef0f3; }
+    .issue:last-child { border-bottom: 0; }
+    .severity { font-size: 11px; padding: 3px 6px; border-radius: 4px; text-align: center; }
+    .severity.high { background: #fff0f0; color: var(--danger); }
+    .severity.mid { background: #fff7e9; color: var(--warning); }
+    .issue strong { font-size: 11px; display: block; }
+    .issue small { font-size: 11px; color: var(--muted); }
+    .issue button { border: 0; background: var(--accent-soft); color: var(--accent); border-radius: 5px; padding: 5px 8px; font-size: 11px; }
+    .destination-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; }
+    .destination { border: 1px solid var(--line); border-radius: 10px; padding: 15px; background: #fff; min-height: 132px; }
+    .destination.selected { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(98,91,246,.08); }
+    .destination h3 { margin: 0 0 7px; font-size: 13px; }
+    .destination p { color: var(--muted); font-size: 11px; line-height: 1.6; min-height: 34px; }
+    .shot-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+    .shot-table th { text-align: left; color: var(--muted); background: #f6f7fa; font-weight: 600; }
+    .shot-table th, .shot-table td { border-bottom: 1px solid var(--line); padding: 9px 8px; vertical-align: top; }
+    .shot-no { color: var(--accent); font-weight: 700; }
+    .context { background: #fff; border-left: 1px solid var(--line); padding: 18px 16px; overflow: auto; }
+    .context h3 { margin: 0 0 15px; font-size: 13px; }
+    .context-section { padding: 13px 0; border-top: 1px solid var(--line); }
+    .context-section:first-of-type { border-top: 0; padding-top: 0; }
+    .context-label { color: #7d828d; font-size: 11px; margin-bottom: 5px; }
+    .context-value { color: #4e535e; font-size: 11px; line-height: 1.6; }
+    .health { display: flex; align-items: center; justify-content: space-between; }
+    .health strong { color: var(--success); }
+    .notice { margin-top: 12px; padding: 10px; background: #fff8eb; border: 1px solid #f5deb7; border-radius: 7px; color: #9a620e; font-size: 11px; line-height: 1.55; }
+    .version { display: flex; justify-content: space-between; font-size: 11px; color: #6b707b; padding: 7px 0; }
+    .empty { display: grid; place-items: center; min-height: 240px; color: var(--muted); font-size: 12px; }
+    .drawer-mask { position: fixed; inset: 0; background: rgba(20, 22, 29, .38); z-index: 20; display: none; }
+    .drawer-mask.open { display: block; }
+    .drawer { position: absolute; top: 0; right: 0; width: min(620px, 52vw); height: 100%; background: #fff; box-shadow: -16px 0 40px rgba(18, 23, 38, .14); display: flex; flex-direction: column; }
+    #character-drawer .drawer { width: min(760px, 64vw); }
+    .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; padding: 20px 22px 16px; border-bottom: 1px solid var(--line); }
+    .drawer-head h2 { margin: 0 0 5px; font-size: 18px; }
+    .drawer-head p { margin: 0; color: var(--muted); font-size: 12px; }
+    .drawer-close { border: 0; background: #f3f4f7; color: #6c717c; border-radius: 6px; padding: 6px 9px; }
+    .drawer-body { flex: 1; overflow: auto; padding: 18px 22px; }
+    .config-section { padding-bottom: 18px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+    .config-section:last-child { border-bottom: 0; }
+    .config-section h3 { margin: 0 0 5px; font-size: 13px; }
+    .config-section > p { margin: 0 0 10px; color: var(--muted); font-size: 11px; }
+    .choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    .choice { border: 1px solid #dde0e7; background: #fff; color: #666b76; border-radius: 7px; padding: 9px 10px; text-align: left; font-size: 11px; }
+    .choice strong { display: block; color: #424650; font-size: 12px; margin-bottom: 3px; }
+    .choice.selected { border-color: var(--accent); background: var(--accent-soft); color: #514bb5; }
+    .choice.selected strong { color: #39338f; }
+    .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .field label { display: block; color: #747985; font-size: 11px; margin-bottom: 5px; }
+    .field select { width: 100%; border: 1px solid #dfe2e8; border-radius: 7px; background: #fff; padding: 8px 9px; color: #454a55; font-size: 12px; }
+    .axis + .axis { margin-top: 13px; }
+    .axis-head { display: flex; justify-content: space-between; margin-bottom: 7px; font-size: 11px; }
+    .axis-head strong { font-size: 12px; }
+    .tag-picker { display: flex; flex-wrap: wrap; gap: 6px; }
+    .tag-option { border: 1px solid #dfe2e8; background: #fff; color: #696e79; border-radius: 6px; padding: 5px 9px; font-size: 11px; }
+    .tag-option.selected { color: var(--accent); border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+    .tag-option.disabled { opacity: .4; cursor: not-allowed; }
+    .drawer-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 22px; border-top: 1px solid var(--line); background: #fff; }
+    .stage-flow-footer { position: sticky; bottom: -40px; z-index: 5; margin-top: 16px; padding: 14px 16px; border: 1px solid #e4e6ee; border-radius: 10px; background: rgba(255,255,255,.96); box-shadow: 0 -8px 26px rgba(28,34,52,.08); backdrop-filter: blur(8px); }
+    .stage-flow-info { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+    .stage-flow-info strong { font-size: 12px; }
+    .stage-flow-info span { color: var(--muted); font-size: 11px; }
+    .stage-flow-actions { display: flex; justify-content: space-between; gap: 10px; }
+    .stage-flow-actions > div { display: flex; gap: 8px; }
+    .transition-card { max-width: 760px; margin: 36px auto; padding: 28px; }
+    .transition-kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
+    .transition-card h2 { margin: 8px 0 6px; font-size: 22px; }
+    .transition-card > p { color: var(--muted); font-size: 12px; line-height: 1.7; }
+    .transition-route { display: grid; grid-template-columns: 1fr 56px 1fr; align-items: center; gap: 12px; margin: 22px 0; }
+    .transition-node { border: 1px solid var(--line); background: #fafbfc; border-radius: 10px; padding: 14px; }
+    .transition-node.done { border-color: #bfe7d0; background: #f1fbf6; }
+    .transition-node.next { border-color: var(--accent-border); background: var(--accent-soft); }
+    .transition-node small { display: block; color: var(--muted); margin-bottom: 5px; }
+    .transition-arrow { color: var(--accent); text-align: center; font-size: 20px; }
+    .transition-status { border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
+    .transition-status-head { display: flex; align-items: center; justify-content: space-between; }
+    .transition-status-head span { font-size: 11px; color: var(--muted); }
+    .transition-track { height: 6px; border-radius: 99px; background: #eceef3; overflow: hidden; margin: 12px 0; }
+    .transition-track i { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
+    .transition-steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; font-size: 11px; color: var(--muted); }
+    .transition-steps .active { color: var(--accent); font-weight: 700; }
+    .transition-error { margin-top: 12px; padding: 10px; border: 1px solid #f3c1c1; background: #fff3f3; color: #a43f3f; border-radius: 7px; font-size: 11px; }
+    .toast { position: fixed; right: 28px; bottom: 28px; z-index: 50; max-width: 360px; padding: 11px 14px; border-radius: 8px; color: #fff; background: #292c34; box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: 12px; display: none; }
+    .toast.show { display: block; }
+    .modal-mask { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; padding: 28px; background: rgba(20,22,29,.42); }
+    .modal-mask.open { display: grid; }
+    .modal-panel { width: min(760px, 76vw); max-height: 84vh; overflow: auto; background: #fff; border-radius: 13px; box-shadow: 0 24px 70px rgba(17,22,38,.2); }
+    .modal-head { position: sticky; top: 0; z-index: 1; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--line); background: #fff; }
+    .modal-head h2 { margin: 0 0 4px; font-size: 18px; }
+    .modal-head p { margin: 0; color: var(--muted); font-size: 11px; }
+    .modal-body { padding: 18px 20px; }
+    .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); }
+    .surface-list { display: grid; gap: 9px; }
+    .surface-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
+    .surface-row strong { display: block; font-size: 12px; margin-bottom: 4px; }
+    .surface-row p { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+    .project-filterbar { display: grid; grid-template-columns: 1fr 160px 160px; gap: 8px; margin-bottom: 12px; }
+    .project-filterbar input, .project-filterbar select { border: 1px solid #dfe2e8; border-radius: 7px; padding: 8px 9px; background: #fff; }
+    @media (max-width: 1280px) {
+      .workspace { grid-template-columns: 190px minmax(520px, 1fr) 240px; }
+      .workspace.analysis-focus { grid-template-columns: 190px minmax(0, 1fr); }
+      .global-nav { padding-left: 8px; padding-right: 8px; }
+      .app { grid-template-columns: 190px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="global-nav">
+      <div class="brand">AI 漫剧生产工作台<small>V8 创作链路</small></div>
+      <div class="nav-group">创作与生产</div>
+      <button class="nav-item">首页</button>
+      <button class="nav-item active" id="home-nav">剧本创作</button>
+      <button class="nav-item">画布视频工作台</button>
+      <div class="nav-group">内容与交易</div>
+      <button class="nav-item">剧本仓库</button>
+      <button class="nav-item">剧本交易市场</button>
+      <button class="nav-item">AI 资产市场</button>
+      <div class="nav-group">智能生产</div>
+      <button class="nav-item">Agent 会话</button>
+      <button class="nav-item">资产生成工作台</button>
+    </aside>
+
+    <section class="shell">
+      <header class="topbar">
+        <div class="top-title" id="top-title">剧本创作</div>
+        <div class="top-actions"><span>工作区 personal_1</span><span class="prototype-badge">八阶段增强版 · 静态原型</span></div>
+      </header>
+
+      <div class="home-view" id="home-view">
+        <div class="home-inner">
+          <div class="home-head"><h1>剧本创作</h1><p>选择创建方式，开始新的创作；专业创作将进入完整八阶段工作台。</p></div>
+          <div class="method-grid">
+            <button class="method-card" data-entry="quick"><span class="method-mark">AI</span><span><h2>AI 快速创作</h2><p>输入一句话灵感，快速生成可继续编辑的剧本</p></span><span class="arrow">›</span></button>
+            <button class="method-card" data-entry="professional"><span class="method-mark">PRO</span><span><h2>AI 专业创作</h2><p>逐步确认类型、人物、结构、正文、审核与分镜</p></span><span class="arrow">›</span></button>
+            <button class="method-card" data-entry="upload"><span class="method-mark">DOC</span><span><h2>上传已有文稿</h2><p>上传 DOCX / TXT，解析后进入八阶段修订流程</p></span><span class="arrow">›</span></button>
+            <button class="method-card" data-entry="tvc"><span class="method-mark">TVC</span><span><h2>TVC 创作</h2><p>面向品牌叙事、产品故事与商业广告脚本</p></span><span class="arrow">›</span></button>
+          </div>
+
+          <section class="home-section">
+            <div class="home-section-head"><h2>待办提醒</h2><button data-action="open-task-center">查看全部</button></div>
+            <div class="todo-list"><div class="todo-card"><span class="todo-badge">待审核</span><strong>第 1—3 集剧本修订结果</strong><small>10 分钟前</small></div><div class="todo-card"><span class="todo-badge danger">需更新</span><strong>大纲变更影响正文和分镜</strong><small>昨天</small></div></div>
+          </section>
+
+          <section class="home-section">
+            <div class="home-section-head"><h2>最近创作</h2><button data-action="open-project-list">项目列表</button></div>
+            <div class="recent-list-home">
+              <article class="recent-card-home"><div><h3>重生后，我在三集内揭开命运系统</h3><div class="recent-meta-home"><span class="tag">短剧</span><span class="tag">悬疑 · 重生</span><span>当前：审核修订</span><span>15:42 更新</span></div></div><div class="recent-actions-home"><button class="btn primary" data-entry="continue">继续创作</button><button class="btn secondary" data-action="open-project-detail">查看详情</button></div></article>
+              <article class="recent-card-home"><div><h3>她在董事会直播拆穿伪造合同</h3><div class="recent-meta-home"><span class="tag">AI 漫剧</span><span class="tag">职场 · 逆袭</span><span>当前：分集大纲</span><span>昨天更新</span></div></div><div class="recent-actions-home"><button class="btn primary" data-entry="continue">继续创作</button><button class="btn secondary" data-action="open-project-detail">查看详情</button></div></article>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="home-view hidden" id="project-list-view">
+        <div class="home-inner"><div class="home-head"><h1>全部剧本项目</h1><p>查找、筛选和管理全部创作项目。</p></div><div class="project-filterbar"><input aria-label="搜索项目" placeholder="搜索项目名称"><select aria-label="项目状态"><option>全部状态</option><option>创作中</option><option>已完成</option><option>已归档</option></select><select aria-label="更新时间排序"><option>最近更新</option><option>最早创建</option></select></div><div class="surface-list"><article class="surface-row"><div><strong>重生后，我在三集内揭开命运系统</strong><p>短剧 · 悬疑 · 当前审核修订 · 15:42 更新</p></div><div class="actions"><button class="btn primary" data-entry="continue">继续创作</button><button class="btn secondary" data-action="open-project-detail">查看详情</button></div></article><article class="surface-row"><div><strong>她在董事会直播拆穿伪造合同</strong><p>AI 漫剧 · 职场逆袭 · 当前结构化剧本 · 昨天更新</p></div><div class="actions"><button class="btn secondary" data-action="open-project-detail">查看详情</button></div></article></div><div class="actions"><button class="btn secondary" data-action="close-project-list">返回剧本创作首页</button></div></div>
+      </div>
+
+      <div class="workspace hidden" id="workspace-view">
+        <aside class="workflow">
+          <div class="eyebrow">创作流程</div>
+          <div id="stage-list"></div>
+          <div class="progress-box">
+            <div class="progress-row"><span>完成度</span><strong id="progress-text">13%</strong></div>
+            <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+          </div>
+        </aside>
+
+        <main class="main">
+          <div class="project-head">
+            <div>
+              <h1>重生后，我在三集内揭开命运系统</h1>
+              <div class="meta"><span class="tag">短剧</span><span class="tag">都市逆袭</span><span>自动保存于 15:42</span></div>
+            </div>
+            <div class="project-actions"><button class="ghost" data-action="open-task-center">任务中心</button><button class="ghost" data-action="open-version-history">历史版本</button><button class="ghost" data-action="open-regenerate">重新生成</button><button class="ghost" data-action="open-stale-impact">依赖影响</button><button class="ghost" id="open-settings">创作设置</button><button class="ghost" id="back-home">返回首页</button></div>
+          </div>
+          <div id="stage-content"></div>
+          <div id="stage-transition-view" class="hidden"></div>
+        </main>
+
+        <aside class="context">
+          <h3>项目上下文</h3>
+          <div id="context-content"></div>
+        </aside>
+      </div>
+    </section>
+  </div>
+
+  <div class="drawer-mask" id="settings-drawer">
+    <section class="drawer" role="dialog" aria-modal="true" aria-label="创作设置">
+      <div class="drawer-head"><div><h2>创作设置</h2><p>补充原有创作类型、平台、受众、集数与四轴分类能力</p></div><button class="drawer-close" id="close-settings">关闭</button></div>
+      <div class="drawer-body" id="settings-content"></div>
+      <div class="drawer-foot"><button class="btn secondary" id="cancel-settings">取消</button><button class="btn primary" id="save-settings">保存创作设置</button></div>
+    </section>
+  </div>
+
+  <div class="drawer-mask" id="character-drawer">
+    <section class="drawer" role="dialog" aria-modal="true" aria-label="人物形象描述">
+      <div class="drawer-head"><div><h2 id="character-title">人物形象描述</h2><p>人物小传、演化阶段、服装道具与漫画表现规则</p></div><button class="drawer-close" id="close-character">关闭</button></div>
+      <div class="drawer-body" id="character-content"></div>
+      <div class="drawer-foot"><button class="btn secondary" id="edit-character">编辑人物资料</button><button class="btn primary" id="confirm-character">确认人物小传</button></div>
+    </section>
+  </div>
+  <div class="toast" id="app-toast" role="status" aria-live="polite"></div>
+  <div class="modal-mask" id="workflow-overlay" aria-hidden="true"><section class="modal-panel" role="dialog" aria-modal="true" aria-label="工作流面板"><div id="overlay-content"></div></section></div>
+
+  <script>
+    const stages = [
+      { key: 'settings', name: '创作设置', sub: '类型 / 平台 / 分类' },
+      { key: 'source', name: '小说上传', sub: '导入 / 解析 / 原文确认' },
+      { key: 'analysis', name: '小说分析', sub: '基础信息 / 人物 / 世界观' },
+      { key: 'adaptation', name: '改编方案', sub: '卖点 / 开场 / 创作规则' },
+      { key: 'structure', name: '结构化文字剧本', sub: '分集 / 节拍 / 钩子' },
+      { key: 'script', name: '剧本正文', sub: '场景 / 动作 / 对白' },
+      { key: 'review', name: '审核修订', sub: '诊断 / 修订 / 版本' },
+      { key: 'storyboard', name: '文字分镜', sub: '镜头 / 提示词 / 交付' }
+    ];
+    /* WORKFLOW_MODEL_START */
+    const WorkflowModel = (() => {
+      const STAGE_STATUS = ['LOCKED','READY','RUNNING','NEEDS_CONFIRMATION','COMPLETED','STALE','FAILED'];
+      const TASK_STATUS = ['QUEUED','RUNNING','SUCCEEDED','FAILED','CANCELED'];
+      const versionKeys = ['settings','source','analysis','adaptation','structure','script','review','storyboard'];
+
+      function createInitialState() {
+        return {
+          screen: 'home',
+          project: { id:'demo-project-1', name:'重生后，我在三集内揭开命运系统', activeStage:0, status:'IN_PROGRESS', archived:false },
+          source: { mode:'text', state:'EMPTY', file:null, chapters:[], selectedRange:[1,50], warnings:[] },
+          stages: Array.from({ length:8 }, (_, index) => ({ status:index === 0 ? 'READY' : 'LOCKED' })),
+          tasks: [],
+          versions: Object.fromEntries(versionKeys.map(key => [key, []])),
+          staleImpacts: [],
+          transition: { visible:false, fromStage:null, toStage:null, status:null, taskId:null, error:null },
+          notifications: []
+        };
+      }
+
+      function canEnterStage(state, index) {
+        const checks = [
+          () => true,
+          () => state.stages[0].status === 'COMPLETED',
+          () => state.source.state === 'CONFIRMED',
+          () => state.stages[2].status === 'COMPLETED',
+          () => state.stages[3].status === 'COMPLETED',
+          () => state.stages[4].status === 'COMPLETED',
+          () => state.stages[5].status === 'COMPLETED',
+          () => state.stages[6].status === 'COMPLETED'
+        ];
+        const allowed = checks[index]();
+        return { allowed, reason: allowed ? '' : '请先完成前置阶段并确认有效产物' };
+      }
+
+      function computeProgress(state) {
+        return Math.round(state.stages.filter(stage => stage.status === 'COMPLETED').length / state.stages.length * 100);
+      }
+
+      function markDownstreamStale(state, sourceStage, episodeNo = null) {
+        for (let index = sourceStage + 1; index < state.stages.length; index += 1) state.stages[index].status = 'STALE';
+        state.staleImpacts.push({ sourceStage, episodeNo, affectedStages:[sourceStage + 1, state.stages.length - 1] });
+      }
+
+      function createTask(state, spec) {
+        const task = { id:`task-${state.tasks.length + 1}`, status:'QUEUED', createdAt:Date.now(), ...spec };
+        state.tasks.unshift(task);
+        return task;
+      }
+
+      function completeTask(state, taskId) {
+        const task = state.tasks.find(item => item.id === taskId);
+        if (!task) return null;
+        task.status = 'SUCCEEDED';
+        const key = versionKeys[task.stage];
+        state.versions[key].push({ version:`V${state.versions[key].length + 1}`, source:task.type === 'STAGE_TRANSITION' ? '阶段确认' : 'AI 生成', createdAt:Date.now() });
+        return task;
+      }
+
+      function startStageTransition(state, fromStage) {
+        const task = createTask(state, { type:'STAGE_TRANSITION', stage:fromStage, scope:`阶段 ${fromStage + 1} → ${fromStage + 2}` });
+        state.transition = { visible:true, fromStage, toStage:fromStage + 1, status:'QUEUED', taskId:task.id, error:null };
+        return state.transition;
+      }
+
+      function completeStageTransition(state, taskId) {
+        completeTask(state, taskId);
+        const transition = state.transition;
+        transition.status = 'SUCCEEDED';
+        state.stages[transition.fromStage].status = 'COMPLETED';
+        state.stages[transition.toStage].status = 'READY';
+        return transition;
+      }
+
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, startStageTransition, completeStageTransition };
+    })();
+    /* WORKFLOW_MODEL_END */
+    const appState = WorkflowModel.createInitialState();
+    let activeIndex = 0;
+    let sourceMode = 'text';
+    let screenMode = 'home';
+    let analysisModule = 'basic';
+    let basicTab = 'summary';
+    let worldTab = 'overview';
+    const config = {
+      projectName: '重生后我在三集内揭开命运系统', episodeDuration: '90 秒', language: '简体中文', aspectRatio: '9:16', safetyLevel: '平台标准',
+      creationType: '短剧', generationMode: '专业创作', sourceType: '小说/故事文本', targetType: 'AI 漫剧',
+      platform: '抖音', audience: '女频', episodes: '40 集', goal: 'IP 改编',
+      genre: '悬疑', plots: ['重生', '系统'], tones: ['复仇', '逆袭'], setting: '现代'
+    };
+    const axes = {
+      genre: ['言情','现实情感','悬疑','惊悚','科幻','武侠','脑洞','仙侠','历史'],
+      plots: ['权谋','重生','穿越','系统','规则怪谈','先婚后爱','职场','犯罪','探险','倒计时文学'],
+      tones: ['甜宠','虐恋','爽文','复仇','反转','逆袭','励志','热血','烧脑','治愈'],
+      setting: ['古代','现代','未来','架空','民国','八零年代','兽世']
+    };
+
+    const contextByStage = [
+      ['创作类型', '短剧 · AI 漫剧', '目标配置', '抖音 · 女频 · 40 集'],
+      ['文件范围', '前 50 章 / 12.8 万字', '解析状态', '原文已确认'],
+      ['分析模块', '基础信息、6 人、4 类世界观', '分析版本', 'V2 已确认'],
+      ['改编范围', '小说前 50 章 → 前 3 集', '方案状态', '待确认开场方案'],
+      ['计划集数', '前 3 集结构化剧本', '结构完整度', '92%'],
+      ['当前集数', '第 1 集 / 共 24 集', '正文版本', 'V3 草稿'],
+      ['综合评分', '82 / 100', '待修订问题', '3 项'],
+      ['镜头进度', '第 1 集 · 8 / 12 镜', '分镜版本', 'V1 编辑中']
+    ];
+
+    function renderNav() {
+      document.getElementById('stage-list').innerHTML = stages.map((stage, index) => `
+        <button class="stage ${appState.stages[index].status === 'COMPLETED' ? 'done' : ''} ${index === activeIndex ? 'active' : ''}" data-index="${index}" aria-disabled="${appState.stages[index].status === 'LOCKED'}">
+          <span class="stage-num">${index + 1}</span>
+          <strong>${stage.name}</strong><small>${stage.sub} · ${stageStatusLabel(appState.stages[index].status)}</small>
+        </button>`).join('');
+      document.querySelectorAll('.stage').forEach(button => button.addEventListener('click', () => {
+        const targetIndex = Number(button.dataset.index);
+        if (appState.stages[targetIndex].status === 'LOCKED') return notify(`暂不可进入“${stages[targetIndex].name}”，请先确认前置阶段。`);
+        activeIndex = targetIndex;
+        appState.project.activeStage = targetIndex;
+        appState.transition.visible = false;
+        render();
+      }));
+      const percent = WorkflowModel.computeProgress(appState);
+      document.getElementById('progress-text').textContent = `${percent}%`;
+      document.getElementById('progress-fill').style.width = `${percent}%`;
+    }
+
+    function stageStatusLabel(status) {
+      return ({ LOCKED:'未开放', READY:'可开始', RUNNING:'处理中', NEEDS_CONFIRMATION:'待确认', COMPLETED:'已完成', STALE:'需更新', FAILED:'失败' })[status] || status;
+    }
+
+    let toastTimer = null;
+    function notify(message) {
+      const toast = document.getElementById('app-toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    function renderContext() {
+      const items = contextByStage[activeIndex];
+      document.getElementById('context-content').innerHTML = `
+        <div class="context-section"><div class="health"><div><div class="context-label">创作链路健康度</div><div class="context-value">上游依赖已同步</div></div><strong>${activeIndex < 5 ? 86 : 94}%</strong></div></div>
+        <div class="context-section"><div class="context-label">${items[0]}</div><div class="context-value">${items[1]}</div></div>
+        <div class="context-section"><div class="context-label">${items[2]}</div><div class="context-value">${items[3]}</div></div>
+        <div class="context-section"><div class="context-label">创作分类</div><div class="context-value">${config.creationType} · ${config.genre}<br>${config.plots.join(' / ')} · ${config.tones.join(' / ')}<br>${config.platform} · ${config.audience} · ${config.episodes}</div></div>
+        <div class="context-section"><div class="context-label">版本记录</div><div class="version"><span>当前版本 V${activeIndex + 1}</span><span>刚刚</span></div><div class="version"><span>上一版本 V${Math.max(1, activeIndex)}</span><span>昨天</span></div></div>
+        ${activeIndex > 2 ? '<div class="notice">修改本阶段已确认内容后，系统会标记受影响的下游阶段，并允许选择重新生成或保留旧版本。</div>' : ''}
+      `;
+    }
+
+    function cardHead(title, desc, status = '当前阶段') {
+      return `<div class="card-head"><div><h2>${title}</h2><p>${desc}</p></div><span class="stage-status">${status}</span></div>`;
+    }
+
+    function creationSettingsView() {
+      const desc = { '快速创作':'一句话快速生成', '专业创作':'完整八阶段逐步确认', '短剧':'1—3 分钟/集', '长篇':'长篇故事与小说', 'TVC':'广告与品牌脚本' };
+      return `<section class="card">${cardHead('创作设置', '先确定创作类型、生产目标和内容分类，再进入小说上传', '第 1 步')}
+        <div class="config-section"><h3>创作类型</h3><p>决定内容结构、生成策略和最终交付方式。</p>${choiceButtons('creationType',['短剧','长篇','TVC'],desc)}</div>
+        <div class="config-section"><h3>创作模式</h3><p>专业创作将按八阶段逐步确认全部产物。</p>${choiceButtons('generationMode',['快速创作','专业创作'],desc)}</div>
+        <div class="config-section"><h3>生产目标</h3><div class="field-grid">
+          <div class="field"><label>项目名称</label><input data-model="config.projectName" value="${config.projectName}" aria-label="项目名称"></div>
+          <div class="field"><label>单集时长</label><select data-model="config.episodeDuration" aria-label="单集时长"><option>60 秒</option><option>90 秒</option><option>120 秒</option><option>180 秒</option></select></div>
+          <div class="field"><label>创作语言</label><select data-model="config.language" aria-label="创作语言"><option>简体中文</option><option>繁体中文</option><option>英文</option></select></div>
+          <div class="field"><label>画面比例</label><select data-model="config.aspectRatio" aria-label="画面比例"><option>9:16</option><option>16:9</option><option>1:1</option></select></div>
+          <div class="field"><label>内容安全级别</label><select data-model="config.safetyLevel" aria-label="内容安全级别"><option>平台标准</option><option>青少年友好</option><option>品牌安全</option></select></div>
+          <div class="field"><label>源头内容类型</label><select aria-label="源头内容类型" data-inline-select-key="sourceType"><option>小说/故事文本</option><option>产品故事</option><option>品牌叙事</option></select></div>
+          <div class="field"><label>目标成片类型</label><select aria-label="目标成片类型" data-inline-select-key="targetType"><option>AI 漫剧</option><option>真人短剧</option><option>网剧</option><option>TVC</option></select></div>
+          <div class="field"><label>目标平台</label><select aria-label="目标平台" data-inline-select-key="platform"><option>抖音</option><option>快手</option><option>视频号</option><option>TikTok</option></select></div>
+          <div class="field"><label>目标受众</label><select aria-label="目标受众" data-inline-select-key="audience"><option>女频</option><option>男频</option><option>全年龄</option></select></div>
+          <div class="field"><label>计划集数</label><select aria-label="计划集数" data-inline-select-key="episodes"><option>20 集</option><option>40 集</option><option>60 集</option><option>80 集</option></select></div>
+          <div class="field"><label>内容目标</label><select aria-label="内容目标" data-inline-select-key="goal"><option>追更</option><option>完本</option><option>IP 改编</option></select></div>
+        </div></div>
+        <div class="config-section"><h3>四轴分类</h3><p>题材、情节、情绪和时空将持续影响小说分析、改编策略与剧本生成。</p>${axisPicker('genre','题材（单选）',1)}${axisPicker('plots','情节（最多 3 个）',3)}${axisPicker('tones','情绪 / 基调（最多 3 个）',3)}${axisPicker('setting','时空背景（单选）',1)}</div>
+        <div class="actions"><button class="btn secondary" data-action="save-stage-draft">保存当前设置</button><button class="btn secondary" id="open-settings-inline">更多创作参数</button></div>
+      </section>`;
+    }
+
+    function seedView() {
+      return `<section class="card">${cardHead('小说上传与原文确认', '导入小说、识别章节并确认有效原文，作为后续分析的唯一事实源')}
+        <div class="config-summary" style="margin-bottom:14px">
+          <div class="config-chip"><span>创作类型</span><strong>${config.creationType} · ${config.targetType}</strong></div>
+          <div class="config-chip"><span>平台与受众</span><strong>${config.platform} · ${config.audience}</strong></div>
+          <div class="config-chip"><span>内容规模</span><strong>${config.episodes} · ${config.goal}</strong></div>
+          <div class="config-chip"><span>题材分类</span><strong>${config.genre} · ${config.setting}</strong></div>
+        </div>
+        <div class="source-switch"><button data-mode="text" class="${sourceMode === 'text' ? 'active' : ''}">粘贴小说文本</button><button data-mode="upload" class="${sourceMode === 'upload' ? 'active' : ''}">上传小说</button></div>
+        <div style="margin-top:14px">${sourceMode === 'text' ? `
+          <textarea>林野在前世被兄弟赵承宇推下天台，重生回到两年前，并绑定逆天改命系统。他必须在三集内确认重生、获得技能，并找到第一条账本线索。</textarea>
+          <div class="actions"><button class="btn primary" data-action="confirm-source">保存、解析并确认原文</button><button class="btn secondary" data-action="preview-chapter">预览章节切分</button></div>` : `
+          <div class="dropzone"><div><strong>拖拽剧本文件到这里，或点击选择文件</strong><p>支持 DOCX、TXT，单文件不超过 50MB</p><button class="btn primary">选择文件</button></div></div>
+          <div class="actions"><button class="btn primary" data-action="select-demo-file">选择文件并解析</button><button class="btn secondary" data-action="retry-upload">重新上传</button><button class="btn secondary" data-action="preview-chapter">预览章节</button><button class="btn primary" data-action="confirm-source">确认原文</button></div>`}</div>
+      </section>
+      <section class="card"><div class="grid-2"><div class="mini-card"><h3>解析结果 · PARSED</h3><p>文件：重生后我靠嘴炮把全世界整破防了.docx<br>识别 126 章 · 有效字数 128,640 · 当前取前 50 章</p></div><div class="mini-card"><h3>任务状态机</h3><p>EMPTY → UPLOADING → PARSING → PARSED → CONFIRMED<br>异常终态：FAILED / CANCELED</p></div></div>
+        <div class="notice" style="margin-top:12px">可恢复错误：FILE_TYPE_INVALID · FILE_TOO_LARGE · FILE_CORRUPTED · CONTENT_TOO_SHORT · PARSE_FAILED。错误不会覆盖已确认原文。</div>
+      </section>`;
+    }
+
+    const characterProfiles = [
+      { id:'linye', name:'林野', role:'主角', roleClass:'', relation:'本人', appearance:'22 岁男性，身形清瘦，指骨清瘦，眼神锋利', identity:'前世被出卖的棋子 → 重生后绑定系统、主动掌控命运', archetype:'扮猪吃虎的复仇者', traits:'记仇、嘴硬、会演，外冷静内里狠辣', contrast:'预知未来却主动示弱，把敌人的轻视变成筹码', boundary:'复仇优先，但不伤害无辜者与母亲', interaction:'对敌人信息差压制，对顾清寒在试探中建立信任' },
+      { id:'guxq', name:'顾清寒', role:'重要配角', roleClass:'support', relation:'审查官 / 潜在博弈对象', appearance:'年轻女性，黑发马尾，气质冰冷如刃', identity:'A级潜力审查官 → 异常事件共同调查者', archetype:'冰山执法者', traits:'冷静、理智、控制欲强，规则边界清晰', contrast:'无法容忍失控，却被林野的不可控吸引', boundary:'不接受任何“不受控”的人或事物', interaction:'用审讯和测试逼近真相，逐步成为可靠盟友' },
+      { id:'zhaocy', name:'赵承宇', role:'主要反派', roleClass:'antagonist', relation:'前世兄弟 / 今世复仇对象', appearance:'男性，衣着光鲜，笑容温和却目光傲慢', identity:'世家少爷 → 前世推林野下天台的直接凶手', archetype:'虚伪的纨绔子弟', traits:'虚伪、自大、嫉妒心强，习惯把成功建立在他人付出上', contrast:'看似掌控全局，实际极度惧怕失去主角的价值', boundary:'绝不容忍林野拥有不受控地位', interaction:'公开羞辱与暗线追杀并行，持续低估主角' },
+      { id:'suya', name:'苏雅', role:'重要配角', roleClass:'support', relation:'前女友', appearance:'年轻女性，妆容精致，努力融入上流圈层', identity:'摇摆的依附者 → 真相链条中的关键证人', archetype:'攀附权贵的依附者', traits:'现实、慕强、趋利避害', contrast:'享受赵承宇资源，也对被抛弃怀有恐惧', boundary:'选择能带来最大利益的男性作为依靠', interaction:'在林野与赵承宇之间反复摇摆' },
+      { id:'shen', name:'沈知微', role:'重要配角', roleClass:'support', relation:'拍卖会主持人 / 黑市势力代表', appearance:'成熟女性，身着丝绒旗袍，气质优雅神秘', identity:'拍卖会主持人 → 黑市规则执行者', archetype:'中立的掌控者', traits:'优雅、精明、逐利，擅长控制混乱', contrast:'越是混乱越冷静，享受观察有趣的变量', boundary:'维护夜渡规则和生意', interaction:'对林野保持好奇，以规则和交易提供帮助' },
+      { id:'wangshen', name:'王婶', role:'龙套', roleClass:'support', relation:'房东', appearance:'中年女性，微胖，声音洪亮，生活气息强', identity:'出租屋房东 → 私房钱线索提供者', archetype:'市井小民', traits:'爱钱、现实、脾气火爆', contrast:'表面尖刻，内心保留朴素善意', boundary:'保护自己的钱不被损失', interaction:'以催租和争执推动第一条现实线索' }
+    ];
+
+    function analysisBasicContent() {
+      if (basicTab === 'events') return `<div class="event-list">
+        ${[
+          ['E1','前世背叛与天台坠亡','林野被视为兄弟的赵承宇从天台推下，背叛与死亡成为重生后复仇行动的起点。','林野、赵承宇、管理局异常封锁部','人 vs 人','压迫'],
+          ['E2','重生绑定改命系统','林野回到两年前的出租屋，确认重生并绑定逆天改命系统，获得改变命运的起点。','林野、系统','人 vs 自我','其他'],
+          ['E3','获得“嘲讽即变强”技能','林野选择特殊新手礼包，通过嘲讽系统验证能力并获得第一次奖励。','林野、系统','人 vs 其他','爽感'],
+          ['E4','预判能力初显威，反制房东','林野首次活用低阶预判，指出房东私房钱事实，完成第一次实战。','林野、王婶','人 vs 人','爽感']
+        ].map(event => `<article class="event-item"><div class="event-head"><strong>${event[0]}　${event[1]}</strong><span class="pressure">高压</span></div><p>${event[2]}</p><div class="event-meta"><span>人物：${event[3]}</span><span>冲突：${event[4]}</span><span>情绪：${event[5]}</span></div></article>`).join('')}
+      </div>`;
+      if (basicTab === 'chapters') return `<div class="chapter-list">
+        <article class="chapter-item"><h3>第一章　重生后，我先把系统骂卡顿了</h3><p>林野回忆前世死亡、确认重生、绑定系统并选择“嘲讽即变强”，随后利用预判能力反制房东，获得拍卖会线索。</p></article>
+        <article class="chapter-item"><h3>第二章　地下拍卖会，我先让一个世家少爷当场社死</h3><p>林野抵达旧港区夜渡拍卖会，发现赵承宇提前布局，并借规则与信息差完成第一次公开反击。</p></article>
+        <article class="chapter-item"><h3>第三章　审查官上门，谁才是真正的异常</h3><p>顾清寒调查系统波动，林野通过语言博弈隐藏能力来源，却暴露了与管理局封锁案有关的关键线索。</p></article>
+      </div>`;
+      return `<div class="summary-block"><p>主角林野在前世被兄弟赵承宇背叛，从天台推下身亡，并被“管理局”漠视。带着强烈复仇执念，他重生回到灵潮爆发前两年，并意外绑定“逆天改命系统”。系统赋予他“嘲讽即变强”和预判能力，使他能够利用信息差与心理技术反击敌人。林野先从现实困境切入，逐步进入由灵能、异常和规则构成的里世界；他一边追查自己的死亡真相，一边与审查官顾清寒、黑市主持人沈知微形成复杂同盟，最终发现赵承宇只是更大阴谋的一枚棋子。</p></div>`;
+    }
+
+    function analysisWorldContent() {
+      if (worldTab === 'places') return `<div class="place-grid">
+        <article class="entity-card"><h3>临渊市 · 表世界</h3><p>类型：现代都市</p><p>视觉：高楼、雨夜、霓虹与被封锁的异常现场。</p><p>功能：主角现实身份和复仇行动的主要舞台。</p></article>
+        <article class="entity-card"><h3>旧港区夜渡拍卖会</h3><p>类型：地下黑市</p><p>视觉：废弃船坞、暗红灯带、规则告示牌。</p><p>功能：连接世家、异能者与管理局的情报中心。</p></article>
+        <article class="entity-card"><h3>管理局异常封锁部</h3><p>类型：官方组织设施</p><p>视觉：冷灰色审讯室、透明信息屏、封锁标记。</p><p>功能：调查规则波动和主角前世死亡的关键场所。</p></article>
+        <article class="entity-card"><h3>青桥城中村</h3><p>类型：现实生活区</p><p>视觉：狭窄楼道、廉价出租屋、密集电线。</p><p>功能：主角重生起点与现实反差场景。</p></article>
+      </div>`;
+      if (worldTab === 'power') return `<div class="world-overview">
+        <div class="definition-block"><h3>系统概述</h3><p>世界存在“逆天改命系统”，会绑定有强烈执念的宿主，通过发布任务、提供技能与奖励，帮助其偏离原有命运线。</p></div>
+        <div class="definition-block"><h3>成功标准</h3><p>核心是掌握“信息差”和“心理博弈”，灵能强弱只是次级指标；能够反控节奏、令他人破防者才是真正强者。</p></div>
+        <div class="definition-block"><h3>禁忌与惩罚</h3><p>普通人过度接触规则波动会被管理局认定为异常并监控、收容甚至清除；失控和暴露底牌是里世界最大禁忌。</p></div>
+        <div><strong style="font-size:12px">特定术语</strong><div class="term-card"><strong>逆天改命系统</strong><p>检测宿主执念并量化“命运偏移度”的超自然系统。相关事件：E2。</p></div><div class="term-card"><strong>嘲讽即变强</strong><p>主角通过语言嘲讽或使他人情绪失控获取收益的核心技能。相关事件：E3、E4。</p></div></div>
+      </div>`;
+      if (worldTab === 'factions') return `<div class="faction-grid">
+        <article class="entity-card"><h3>管理局</h3><p>目标：控制异常、维持表世界稳定。</p><p>资源：审查官、封锁部、异常数据库。</p><p>代表人物：顾清寒。</p><p>关系：监控主角，与世家既合作又制衡。</p></article>
+        <article class="entity-card"><h3>赵氏世家</h3><p>目标：垄断灵能资源并掩盖前世真相。</p><p>资源：资本、拍卖渠道、管理局内部关系。</p><p>代表人物：赵承宇。</p><p>关系：主角的主要敌对阵营。</p></article>
+        <article class="entity-card"><h3>夜渡黑市</h3><p>目标：维持交易秩序并从信息差中获利。</p><p>资源：拍卖会、情报网、灰色中立规则。</p><p>代表人物：沈知微。</p><p>关系：暂时中立，可被主角争取。</p></article>
+        <article class="entity-card"><h3>系统意志</h3><p>目标：推动宿主偏离既定命运线。</p><p>资源：任务、技能、命运偏移奖励。</p><p>代表：逆天改命系统。</p><p>关系：帮助主角，但真实动机未知。</p></article>
+      </div>`;
+      return `<div class="world-overview"><div class="definition-block"><h3>整体世界描述</h3><p>一个现代都市“临渊市”的表象之下，潜藏由灵能、异常和规则构成的里世界。主角林野重生回灵潮爆发前两年，绑定逆天改命系统，在信息差即力量的环境中展开复仇并追查死亡真相。</p></div><div class="definition-block"><h3>类型与基调</h3><p>都市异能 / 重生复仇 / 系统流 / 爽文；高压开场、快速反转、冷色悬疑视觉。</p></div><div class="definition-block"><h3>时间设定</h3><p>架空现代都市，灵气复苏与超凡力量公开化事件发生前两年零七个月。</p></div><div class="definition-block"><h3>核心冲突</h3><p>个人与管理局、既得利益世家之间的对抗，以及对隐藏在异常背后的世界真相的探索。</p></div></div>`;
+    }
+
+    function analysisView() {
+      let content = '';
+      if (analysisModule === 'basic') content = `<div class="analysis-subtabs"><button data-basic-tab="summary" class="${basicTab === 'summary' ? 'active' : ''}">故事梗概</button><button data-basic-tab="events" class="${basicTab === 'events' ? 'active' : ''}">主要事件列表</button><button data-basic-tab="chapters" class="${basicTab === 'chapters' ? 'active' : ''}">章节大纲</button></div><div class="analysis-panel">${analysisBasicContent()}</div>`;
+      if (analysisModule === 'characters') content = `<div class="character-grid">${characterProfiles.map(person => `<button class="bio-card" data-character-id="${person.id}"><div class="bio-head"><strong>${person.name}</strong><span class="role-badge ${person.roleClass}">${person.role}</span></div><p>与主角关系：${person.relation}</p><p>身份演变：${person.identity}</p><p>原型标签：${person.archetype}</p><p>核心特质：${person.traits}</p><span class="detail-link">查看人物形象描述</span></button>`).join('')}</div>`;
+      if (analysisModule === 'world') content = `<div class="analysis-subtabs"><button data-world-tab="overview" class="${worldTab === 'overview' ? 'active' : ''}">整体世界类型与时间</button><button data-world-tab="places" class="${worldTab === 'places' ? 'active' : ''}">主要地点</button><button data-world-tab="power" class="${worldTab === 'power' ? 'active' : ''}">力量体系 / 规则</button><button data-world-tab="factions" class="${worldTab === 'factions' ? 'active' : ''}">势力阵营</button></div><div class="analysis-panel">${analysisWorldContent()}</div>`;
+      return `<section class="card">${cardHead('小说分析', '把原文转化为故事、人物、事件、章节和世界观结构化资产', '分析完成 · V2')}
+        <div class="analysis-shell"><div class="analysis-tabs"><button data-analysis-module="basic" class="${analysisModule === 'basic' ? 'active' : ''}">基础信息</button><button data-analysis-module="characters" class="${analysisModule === 'characters' ? 'active' : ''}">人物小传</button><button data-analysis-module="world" class="${analysisModule === 'world' ? 'active' : ''}">世界观</button></div>${content}</div>
+        <div class="analysis-footer"><span>已分析前 50 章 · 6 位主要人物 · 12 个关键事件</span><div class="actions" style="margin-top:0"><button class="btn secondary" data-action="edit-summary">编辑梗概</button><button class="btn secondary" data-action="add-event">新增事件</button><button class="btn secondary" data-action="open-all-characters">人物详情</button><button class="btn secondary" data-action="edit-world">编辑世界观</button><button class="btn primary" data-action="confirm-analysis">确认分析</button></div></div>
+      </section>`;
+    }
+
+    function adaptationView() {
+      return `<section class="card">${cardHead('改编方案', '依据小说分析生成卖点、高压开场候选和可执行的剧本创作策略')}
+        <div class="grid-2">
+          <div class="mini-card"><h3>核心机制卖点</h3><p>主角绑定逆天改命系统，通过“嘲讽即变强”制造信息差、心理压迫和视觉化破防反馈。</p></div>
+          <div class="mini-card"><h3>人物与情绪卖点</h3><p>前世背叛、审查官博弈、黑市交易三线交织；以重生复仇为驱动，持续制造压迫—反杀—爽点。</p></div>
+          <div class="mini-card"><h3>高压开场 HP1</h3><p>以“前世背叛与天台坠亡”开场，强化死亡冲击，并在 30 秒内完成重生与系统绑定。</p></div>
+          <div class="mini-card"><h3>剧本创作策略</h3><p>前三集完成死亡钩子、能力演示和拍卖会冲突；机制必须视觉化，主角胜利依赖谋略而非纯运气。</p></div>
+        </div>
+        <div class="actions"><button class="btn primary" data-action="confirm-adaptation">确认改编方案</button><button class="btn secondary" data-action="select-hook">选择高压开场</button><button class="btn secondary" data-action="add-adaptation-rule">新增改编规则</button><button class="btn secondary" data-action="open-version-history">历史版本</button></div>
+      </section>`;
+    }
+
+    function structureView() {
+      return `<section class="card">${cardHead('结构化文字剧本', '按集确定开场方案、故事梗概、核心内容、结尾钩子和节拍结构')}
+        ${[
+          ['第 01 集','天台重生','林野确认时间回溯，并看见系统倒计时。','钩子 92'],
+          ['第 02 集','账本疑云','林野用新技能识破第一笔假账，赵承宇开始试探。','冲突 88'],
+          ['第 03 集','证据消失','关键文件被提前销毁，苏晴留下新的入口。','钩子 95'],
+          ['第 04 集','反向试探','林野主动设局，引导赵承宇暴露内部同盟。','冲突 84']
+        ].map(row => `<div class="outline-row"><div class="ep">${row[0]}</div><div><strong>${row[1]}</strong><p>${row[2]}</p></div><div class="score">${row[3]}</div></div>`).join('')}
+        <div class="actions"><button class="btn primary" data-action="confirm-episode-structure">确认分集结构</button><button class="btn secondary" data-action="open-episode-structure">打开单集结构</button><button class="btn secondary" data-action="add-beat">新增节拍</button><button class="btn secondary" data-action="regenerate-beats">重新生成节拍</button></div>
+      </section>`;
+    }
+
+    function scriptView() {
+      return `<section class="card">${cardHead('正文编辑器', '以场景、动作、对白和旁白为最小编辑单元')}
+        <div class="editor-shell"><div class="episode-nav"><button class="active">第 01 集</button><button>第 02 集</button><button>第 03 集</button><button>第 04 集</button></div>
+          <div class="script-editor"><div class="scene-label">场景 01　天台 · 夜 · 外</div><p class="script-line">△ 风声掠过城市上空。林野从地面猛地坐起，手指仍保持着抓住栏杆的姿势。</p><p class="script-line dialogue"><strong>林野：</strong>不是已经……结束了吗？</p><p class="script-line">△ 视野中央浮现一行半透明文字：距离命运节点重启，还剩 71 小时 59 分。</p><p class="script-line dialogue"><strong>系统旁白：</strong>首次任务：找到账本的第一处异常。</p>
+          <div class="ai-tools"><button>续写选中段落</button><button>增强冲突</button><button>精简对白</button><button>改写语气</button><button>检查角色一致性</button></div></div>
+        </div><div class="notice">正文块类型：ACTION · DIALOGUE · VOICE_OVER · OFF_SCREEN · SUBTITLE · SFX · VFX · TRANSITION</div><div class="actions"><button class="btn primary" data-action="add-scene">新增场景</button><button class="btn secondary" data-action="add-script-block">新增正文块</button><button class="btn secondary" data-action="run-script-check">运行正文检查</button><button class="btn secondary" data-action="export-script">导出正文</button></div>
+      </section>`;
+    }
+
+    function reviewView() {
+      return `<section class="card">${cardHead('审核与修订中心', '问题定位、修改建议、局部修订和版本对比形成闭环')}
+        <div class="review-layout"><div><div class="score-ring">82</div><div class="score-note">综合质量 · 可进入修订</div></div><div>
+          <div class="issue"><span class="severity high">高</span><div><strong>第 2 集动机跳跃</strong><small>赵承宇缺少提前销毁账本的触发事件</small></div><button data-action="open-review-issue">定位修订</button></div>
+          <div class="issue"><span class="severity mid">中</span><div><strong>主角信息获取过快</strong><small>建议增加一次错误判断，提高悬疑感</small></div><button>查看建议</button></div>
+          <div class="issue"><span class="severity mid">中</span><div><strong>第 3 集结尾钩子偏弱</strong><small>建议把苏晴身份线索提前到最后 5 秒</small></div><button>一键强化</button></div>
+        </div></div>
+        <div class="actions"><button class="btn secondary" data-action="filter-review-issues">筛选问题</button><button class="btn primary" data-action="save-review-revision">保存局部修订</button><button class="btn secondary" data-action="open-version-diff">对比修订前后</button><button class="btn primary" data-action="approve-episode">审核通过本集</button></div>
+      </section>`;
+    }
+
+    function destinationView() {
+      return `<section class="card">${cardHead('内容交付', '正文和文字分镜通过后，选择导出、入库或送入画布生产')}
+        <div class="destination-grid"><div class="destination"><h3>完成并归档</h3><p>保存小说分析、改编方案、剧本和分镜全部版本。</p><button class="btn secondary">完成项目</button></div><div class="destination"><h3>导出创作包</h3><p>支持 DOCX、Markdown、PDF 和结构化 JSON。</p><button class="btn secondary">配置导出</button></div><div class="destination selected"><h3>送入画布工作台</h3><p>携带锁定的文字分镜、角色和世界观资产进入视频制作。</p><button class="btn primary">创建画布项目</button></div></div>
+        <div class="mini-card" style="margin-top:12px"><h3>交付检查</h3><p>小说分析已确认　｜　改编方案已确认　｜　前三集正文审核通过　｜　文字分镜已锁定</p></div>
+      </section>`;
+    }
+
+    function storyboardView() {
+      return `<section class="card">${cardHead('文字分镜脚本', '由审核通过的正文生成可编辑镜头表、画面描述和提示词')}
+        <div class="segmented"><button class="active">第 01 集</button><button>第 02 集</button><button>第 03 集</button></div>
+        <table class="shot-table" style="margin-top:12px"><thead><tr><th>镜号</th><th>景别 / 运镜</th><th>画面内容</th><th>对白 / 声音</th><th>时长</th><th>状态</th></tr></thead><tbody>
+          <tr><td class="shot-no">#01</td><td>大全景<br>缓慢推进</td><td>夜色中的城市天台，林野倒在栏杆边。</td><td>风声、远处车流声</td><td>4s</td><td><span class="tag">已确认</span></td></tr>
+          <tr><td class="shot-no">#02</td><td>近景<br>轻微晃动</td><td>林野猛地睁眼，手指抓紧地面。</td><td>急促喘息</td><td>3s</td><td><span class="tag">已确认</span></td></tr>
+          <tr><td class="shot-no">#03</td><td>主观镜头<br>定镜</td><td>半透明系统文字覆盖在夜空上方。</td><td>系统提示音</td><td>5s</td><td><span class="tag">待修改</span></td></tr>
+        </tbody></table>
+        <div class="notice">镜头字段：shot_size · camera_angle · camera_movement · composition · generation_prompt · negative_prompt · continuity_note</div>
+        <div class="actions"><button class="btn primary" data-action="add-shot">新增镜头</button><button class="btn secondary" data-action="split-shot">拆分镜头</button><button class="btn secondary" data-action="merge-shot">合并镜头</button><button class="btn secondary" data-action="toggle-storyboard-view">切换卡片/表格</button><button class="btn secondary" data-action="run-continuity-check">连续性检查</button></div>
+      </section>
+      <section class="card">${cardHead('分镜完成后的交付', '交付是八阶段完成后的动作，不占用创作阶段')}
+        <div class="destination-grid"><div class="destination"><h3>保存到剧本仓库</h3><p>归档小说分析、改编方案、剧本正文、审核记录和文字分镜。</p><button class="btn secondary">完成并归档</button></div><div class="destination"><h3>导出创作包</h3><p>支持 DOCX、Markdown、PDF 和结构化 JSON。</p><button class="btn secondary">配置导出</button></div><div class="destination selected"><h3>送入画布工作台</h3><p>携带锁定的分镜、角色与世界观资产进入视频制作。</p><button class="btn primary">创建画布项目</button></div></div>
+      </section>`;
+    }
+
+    const views = [creationSettingsView, seedView, analysisView, adaptationView, structureView, scriptView, reviewView, storyboardView];
+    function showHome() {
+      screenMode = 'home';
+      document.getElementById('home-view').classList.remove('hidden');
+      document.getElementById('project-list-view').classList.add('hidden');
+      document.getElementById('workspace-view').classList.add('hidden');
+      document.getElementById('top-title').textContent = '剧本创作';
+    }
+    function showProjectList() {
+      screenMode = 'projects';
+      document.getElementById('home-view').classList.add('hidden');
+      document.getElementById('workspace-view').classList.add('hidden');
+      document.getElementById('project-list-view').classList.remove('hidden');
+      document.getElementById('top-title').textContent = '全部剧本项目';
+    }
+    function enterWorkspace(entry) {
+      screenMode = 'workspace';
+      activeIndex = entry === 'continue' ? 6 : entry === 'upload' ? 1 : 0;
+      appState.stages.forEach((stage, index) => { stage.status = index === 0 ? 'READY' : 'LOCKED'; });
+      appState.transition.visible = false;
+      if (entry === 'quick') { config.generationMode = '快速创作'; sourceMode = 'text'; }
+      if (entry === 'professional') { config.generationMode = '专业创作'; sourceMode = 'text'; }
+      if (entry === 'upload') { config.generationMode = '专业创作'; sourceMode = 'upload'; appState.stages[0].status = 'COMPLETED'; appState.stages[1].status = 'READY'; }
+      if (entry === 'tvc') { config.creationType = 'TVC'; config.targetType = 'TVC'; config.sourceType = '品牌叙事'; sourceMode = 'text'; }
+      if (entry === 'continue') {
+        appState.source.state = 'CONFIRMED';
+        appState.stages.forEach((stage, index) => { stage.status = index < 6 ? 'COMPLETED' : index === 6 ? 'READY' : 'LOCKED'; });
+      }
+      appState.project.activeStage = activeIndex;
+      document.getElementById('home-view').classList.add('hidden');
+      document.getElementById('project-list-view').classList.add('hidden');
+      document.getElementById('workspace-view').classList.remove('hidden');
+      document.getElementById('top-title').textContent = '流程化创作台';
+      render();
+    }
+    function choiceButtons(key, values, descriptions = {}) {
+      return `<div class="choice-grid">${values.map(value => `<button class="choice ${config[key] === value ? 'selected' : ''}" aria-pressed="${config[key] === value}" data-config-key="${key}" data-config-value="${value}"><strong>${value}</strong>${descriptions[value] || ''}</button>`).join('')}</div>`;
+    }
+    function axisPicker(key, title, max) {
+      const selected = Array.isArray(config[key]) ? config[key] : [config[key]];
+      return `<div class="axis"><div class="axis-head"><strong>${title}</strong><span>${selected.length} / ${max}</span></div><div class="tag-picker">${axes[key].map(value => { const blocked = selected.length >= max && !selected.includes(value); return `<button class="tag-option ${selected.includes(value) ? 'selected' : ''} ${blocked ? 'disabled' : ''}" aria-pressed="${selected.includes(value)}" aria-label="${title}：${value}" ${blocked ? 'disabled' : ''} data-axis-key="${key}" data-axis-value="${value}" data-axis-max="${max}">${value}</button>`; }).join('')}</div></div>`;
+    }
+    function renderSettings() {
+      const desc = { '快速创作':'一句话快速生成', '专业创作':'完整八阶段逐步确认', '短剧':'1—3 分钟/集', '长篇':'长篇故事与小说', 'TVC':'广告与品牌脚本' };
+      document.getElementById('settings-content').innerHTML = `
+        <div class="config-section"><h3>创作类型</h3><p>决定内容结构、生成策略和下游交付方式。</p>${choiceButtons('creationType',['短剧','长篇','TVC'],desc)}</div>
+        <div class="config-section"><h3>创作模式</h3><p>快速模式适合验证创意，专业模式进入完整八阶段工作台。</p>${choiceButtons('generationMode',['快速创作','专业创作'],desc)}</div>
+        <div class="config-section"><h3>生产目标</h3><div class="field-grid">
+          <div class="field"><label>源头内容类型</label><select aria-label="源头内容类型" data-select-key="sourceType"><option>小说/故事文本</option><option>产品故事</option><option>品牌叙事</option></select></div>
+          <div class="field"><label>目标成片类型</label><select aria-label="目标成片类型" data-select-key="targetType"><option>AI 漫剧</option><option>真人短剧</option><option>网剧</option><option>TVC</option></select></div>
+          <div class="field"><label>目标平台</label><select aria-label="目标平台" data-select-key="platform"><option>抖音</option><option>快手</option><option>视频号</option><option>TikTok</option></select></div>
+          <div class="field"><label>目标受众</label><select aria-label="目标受众" data-select-key="audience"><option>女频</option><option>男频</option><option>全年龄</option></select></div>
+          <div class="field"><label>计划集数</label><select aria-label="计划集数" data-select-key="episodes"><option>20 集</option><option>40 集</option><option>60 集</option><option>80 集</option></select></div>
+          <div class="field"><label>内容目标</label><select aria-label="内容目标" data-select-key="goal"><option>追更</option><option>完本</option><option>IP 改编</option></select></div>
+        </div></div>
+        <div class="config-section"><h3>四轴分类</h3><p>题材、情节、情绪与时空将持续参与选题、梗概、大纲、正文和审核。</p>
+          ${axisPicker('genre','题材（单选）',1)}${axisPicker('plots','情节（最多 3 个）',3)}${axisPicker('tones','情绪 / 基调（最多 3 个）',3)}${axisPicker('setting','时空背景（单选）',1)}
+        </div>`;
+      document.querySelectorAll('[data-select-key]').forEach(select => { select.value = config[select.dataset.selectKey]; select.addEventListener('change', () => { config[select.dataset.selectKey] = select.value; }); });
+      document.querySelectorAll('[data-config-key]').forEach(button => button.addEventListener('click', () => { config[button.dataset.configKey] = button.dataset.configValue; renderSettings(); }));
+      document.querySelectorAll('[data-axis-key]').forEach(button => button.addEventListener('click', () => {
+        const key = button.dataset.axisKey, value = button.dataset.axisValue, max = Number(button.dataset.axisMax);
+        if (Array.isArray(config[key])) { const index = config[key].indexOf(value); if (index >= 0) config[key].splice(index,1); else if (config[key].length < max) config[key].push(value); }
+        else config[key] = value;
+        renderSettings();
+      }));
+    }
+    function openCharacter(id) {
+      const person = characterProfiles.find(item => item.id === id) || characterProfiles[0];
+      const detail = {
+        linye: { early:'重生蛰伏', middle:'控场布局者', anchors:'E1—E5，初遇顾清寒前', costume:'贫穷学生装', outfit:'洗到发白的旧 T 恤、磨损牛仔裤与帆布鞋；拍卖会外搭不合身廉价外套。', accessory:'左手腕暗红编织绳，贯穿前世今生的关键线索。', dirt:'25%', prop:'【真心话喇叭】与【左腕红绳】', emotion:'极大震惊 / 吐槽', trigger:'E3，发现系统模板措辞过于老套时。' },
+        guxq: { early:'冷面审查官', middle:'规则动摇者', anchors:'E5—E10，与林野连续博弈阶段', costume:'A级审查官制服', outfit:'冷灰长风衣、合体制服与黑色短靴，强调纪律和行动效率。', accessory:'管理局识别牌、异常读数终端。', dirt:'5%', prop:'【异常检测终端】与【封锁令】', emotion:'规则被打破 / 冷静崩裂', trigger:'E5，林野说出不可能知道的封锁细节时。' },
+        zhaocy: { early:'自大操盘者', middle:'失控的猎物', anchors:'E1—E9，从公开羞辱到计划失控', costume:'拍卖会炫富套装', outfit:'光泽感高定西装与奢侈腕表，在灯光下持续反光。', accessory:'名牌腕表、世家徽章。', dirt:'0%', prop:'无专属道具；奢侈品牌与金钱符号构成视觉靶子', emotion:'公开社死 / 狂怒', trigger:'E7，被真心话喇叭坑害并遭全场嘲笑时。' },
+        suya: { early:'慕强依附者', middle:'摇摆证人', anchors:'E2—E11，从依附赵承宇到掌握关键证据', costume:'精致社交套装', outfit:'强调上流感的修身连衣裙与浅色外套，细节略显用力。', accessory:'小型名牌包、精致耳饰。', dirt:'0%', prop:'【匿名转账记录】与【语音备忘录】', emotion:'秘密被揭穿 / 惊慌', trigger:'E8，发现赵承宇准备把责任推给她时。' },
+        shen: { early:'黑市观察者', middle:'规则合作者', anchors:'E6—E12，拍卖会与后续情报交易', costume:'夜渡主持套装', outfit:'暗色丝绒旗袍与短款披肩，兼具优雅和危险感。', accessory:'拍卖槌、夜渡徽记。', dirt:'0%', prop:'【夜渡拍卖槌】与【黑市名单】', emotion:'发现有趣变量 / 玩味', trigger:'E6，林野第一次利用规则反制世家时。' },
+        wangshen: { early:'脾气火爆的包租婆', middle:'现实线索提供者', anchors:'E4—E6，出租屋与私房钱事件', costume:'居家买菜服', outfit:'印花褪色棉 T 恤、宽松短裤与塑料拖鞋。', accessory:'钥匙串、零钱包。', dirt:'10%', prop:'【私房钱防水袋】', emotion:'私房钱暴露 / 震惊慌乱', trigger:'E4，被林野戳破藏钱秘密时。' }
+      }[person.id] || { early:'故事初期', middle:'关系转变期', anchors:'E1—E8', costume:'基础角色套装', outfit:person.appearance, accessory:'与身份相关的日常配饰。', dirt:'5%', prop:'与人物核心事件关联的关键道具', emotion:'核心情绪爆发', trigger:'人物立场发生重大变化时。' };
+      document.getElementById('character-title').textContent = `${person.name} · ${person.role}`;
+      document.getElementById('character-content').innerHTML = `<div class="character-detail">
+        <section class="character-detail-section"><div class="detail-tags"><span class="tag">${person.archetype}</span><span class="tag">${person.traits.split('、')[0]}</span><span class="tag">${person.role}</span></div><div class="detail-row"><span>与主角关系</span><strong>${person.relation}</strong></div><div class="detail-row"><span>外貌特征</span><div>${person.appearance}</div></div><div class="detail-row"><span>身份演变</span><div>${person.identity}</div></div><div class="detail-row"><span>反差点</span><div>${person.contrast}</div></div><div class="detail-row"><span>行为边界</span><div>${person.boundary}</div></div><div class="detail-row"><span>互动模式</span><div>${person.interaction}</div></div></section>
+        <section class="character-detail-section"><h3>演化阶段</h3><div class="evolution-card"><h4>前期｜${detail.early}</h4><div class="detail-row"><span>时间线锚点</span><div>${detail.anchors}</div></div><div class="detail-row"><span>身体参数</span><div>${person.appearance}</div></div><div class="detail-row"><span>面部特征</span><div>表情与目光随“${person.traits}”的性格状态变化，并保留稳定辨识点。</div></div><div class="detail-row"><span>气场效果</span><div>${person.contrast}</div></div></div><div class="evolution-card"><h4>中期｜${detail.middle}</h4><div class="detail-row"><span>时间线锚点</span><div>${detail.anchors}之后</div></div><div class="detail-row"><span>身体参数</span><div>姿态、重心和动作幅度随人物权力关系变化，外貌连续性保持不变。</div></div><div class="detail-row"><span>面部特征</span><div>核心情绪增强，表情由克制转为更具角色立场的外显表现。</div></div><div class="detail-row"><span>气场效果</span><div>${person.interaction}</div></div></div></section>
+        <section class="character-detail-section"><h3>服装套装</h3><div class="evolution-card"><h4>${detail.costume}</h4><div class="detail-row"><span>绑定阶段</span><div>STAGE_1、STAGE_2</div></div><div class="detail-row"><span>服装描述</span><div>${detail.outfit}</div></div><div class="detail-row"><span>配饰</span><div>${detail.accessory}</div></div><div class="detail-row"><span>脏污程度</span><div>${detail.dirt}，随剧情事件动态更新。</div></div></div></section>
+        <section class="character-detail-section"><h3>关键道具</h3><div class="detail-row"><span>道具描述</span><div>${detail.prop}</div></div></section>
+        <section class="character-detail-section"><h3>漫画模式表情</h3><div class="evolution-card"><div class="detail-row"><span>情绪</span><div>${detail.emotion}</div></div><div class="detail-row"><span>风格提示</span><div>根据人物核心特质切换夸张漫画表现，保持角色外貌锚点和主色识别。</div></div><div class="detail-row"><span>触发示例</span><div>${detail.trigger}</div></div></div><div class="evolution-card"><div class="detail-row"><span>情绪</span><div>立场反转 / 核心冲突爆发</div></div><div class="detail-row"><span>风格提示</span><div>背景切换为高对比速度线或符号化情绪场，强化人物立场与关系变化。</div></div><div class="detail-row"><span>触发示例</span><div>当人物行为边界被挑战，或身份演变进入下一阶段时。</div></div></div></section>
+      </div>`;
+      document.getElementById('character-drawer').classList.add('open');
+    }
+    function closeCharacter() { document.getElementById('character-drawer').classList.remove('open'); }
+    function openSettings() { renderSettings(); document.getElementById('settings-drawer').classList.add('open'); }
+    function closeSettings() { document.getElementById('settings-drawer').classList.remove('open'); }
+    function bindInteractions() {
+      const stageContent = document.getElementById('stage-content');
+      stageContent.querySelectorAll('[data-model]').forEach(control => {
+        const key = control.dataset.model.replace('config.','');
+        control.value = config[key];
+        control.addEventListener('change', () => { config[key] = control.value; renderContext(); });
+      });
+      stageContent.querySelectorAll('[data-config-key]').forEach(button => button.addEventListener('click', () => {
+        config[button.dataset.configKey] = button.dataset.configValue;
+        renderContent();
+      }));
+      stageContent.querySelectorAll('[data-inline-select-key]').forEach(select => {
+        select.value = config[select.dataset.inlineSelectKey];
+        select.addEventListener('change', () => { config[select.dataset.inlineSelectKey] = select.value; renderContext(); });
+      });
+      stageContent.querySelectorAll('[data-axis-key]').forEach(button => button.addEventListener('click', () => {
+        const key = button.dataset.axisKey, value = button.dataset.axisValue, max = Number(button.dataset.axisMax);
+        if (Array.isArray(config[key])) { const index = config[key].indexOf(value); if (index >= 0) config[key].splice(index, 1); else if (config[key].length < max) config[key].push(value); }
+        else config[key] = value;
+        renderContent();
+        renderContext();
+      }));
+      stageContent.querySelectorAll('[data-go-stage]').forEach(button => button.addEventListener('click', () => { activeIndex = Number(button.dataset.goStage); render(); }));
+      const inlineSettings = document.getElementById('open-settings-inline');
+      if (inlineSettings) inlineSettings.onclick = openSettings;
+      document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { sourceMode = button.dataset.mode; renderContent(); }));
+      document.querySelectorAll('[data-analysis-module]').forEach(button => button.addEventListener('click', () => { analysisModule = button.dataset.analysisModule; renderContent(); }));
+      document.querySelectorAll('[data-basic-tab]').forEach(button => button.addEventListener('click', () => { basicTab = button.dataset.basicTab; renderContent(); }));
+      document.querySelectorAll('[data-world-tab]').forEach(button => button.addEventListener('click', () => { worldTab = button.dataset.worldTab; renderContent(); }));
+      document.querySelectorAll('[data-character-id]').forEach(button => button.addEventListener('click', () => openCharacter(button.dataset.characterId)));
+      document.querySelectorAll('.episode-nav button, .segmented button').forEach(button => button.addEventListener('click', () => {
+        button.parentElement.querySelectorAll('button').forEach(item => item.classList.remove('active'));
+        button.classList.add('active');
+      }));
+    }
+
+    let overlayState = { type:null, payload:{} };
+    function openOverlay(type, payload = {}) {
+      overlayState = { type, payload };
+      renderOverlay();
+      const overlay = document.getElementById('workflow-overlay');
+      overlay.classList.add('open');
+      overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeOverlay() {
+      const overlay = document.getElementById('workflow-overlay');
+      overlay.classList.remove('open');
+      overlay.setAttribute('aria-hidden', 'true');
+    }
+
+    function overlayFrame(id, title, desc, body, foot = '') {
+      return `<div id="${id}"><div class="modal-head"><div><h2>${title}</h2><p>${desc}</p></div><button class="drawer-close" data-action="close-overlay">关闭</button></div><div class="modal-body">${body}</div>${foot ? `<div class="modal-foot">${foot}</div>` : ''}</div>`;
+    }
+
+    function renderOverlay() {
+      const versionKey = stages[activeIndex].key;
+      const versions = appState.versions[versionKey];
+      const latest = versions.at(-1)?.version || `V${activeIndex + 1}`;
+      const surfaces = {
+        'project-detail': () => overlayFrame('project-detail-dialog','项目详情','查看创作状态、版本与项目操作',`<div class="grid-2"><div class="mini-card"><h3>创作进度</h3><p>当前阶段：${stages[appState.project.activeStage].name}<br>项目状态：${appState.project.status}<br>完成度：${WorkflowModel.computeProgress(appState)}%</p></div><div class="mini-card"><h3>最近活动</h3><p>审核修订 V7 已保存<br>文字分镜等待开放<br>最近更新：刚刚</p></div></div><div class="surface-list" style="margin-top:12px"><div class="surface-row"><div><strong>版本与任务</strong><p>查看全部版本、生成任务和失败记录。</p></div><div><button class="btn secondary" data-action="open-version-history">历史版本</button> <button class="btn secondary" data-action="open-task-center">任务中心</button></div></div></div>`,`<button class="btn warn" data-action="archive-project">归档项目</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="resume-project">继续创作</button>`),
+        'task-center': () => overlayFrame('task-center','任务中心','查看阶段流转、生成、失败和重试记录',`<div class="surface-list">${(appState.tasks.length ? appState.tasks : [{id:'task-demo-1',type:'ANALYSIS',scope:'小说分析 · 全部模块',status:'SUCCEEDED'},{id:'task-demo-2',type:'STORYBOARD',scope:'第 1 集 · 场景 1',status:'FAILED'}]).map(task => `<div class="surface-row"><div><strong>${task.scope || task.type}</strong><p>任务 ${task.id} · ${task.status} · ${task.status === 'FAILED' ? '服务暂时不可用，结果未覆盖' : '状态已同步'}</p></div><div>${task.status === 'FAILED' ? '<button class="btn primary" data-action="retry-task">重试</button>' : '<span class="tag">'+task.status+'</span>'}</div></div>`).join('')}</div>`),
+        'version-history': () => overlayFrame('version-history',`${stages[activeIndex].name} · 历史版本`,'AI 生成、人工编辑和阶段确认均独立留痕',`<div class="surface-list">${[latest,`V${Math.max(1,activeIndex)}`,'V1'].map((version,index) => `<div class="surface-row"><div><strong>${version} ${index === 0 ? '· 当前版本' : ''}</strong><p>${index === 0 ? '阶段确认' : index === 1 ? '人工编辑' : 'AI 生成'} · ${index === 0 ? '刚刚' : index === 1 ? '昨天' : '3 天前'} · 输入版本已记录</p></div><button class="btn secondary" data-action="open-version-diff">对比</button></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="restore-version">恢复为新版本</button>`),
+        'version-diff': () => overlayFrame('version-diff','版本差异','当前版本与选中历史版本逐项对照',`<div class="grid-2"><div class="mini-card"><h3>历史版本 V${Math.max(1,activeIndex)}</h3><p>第 3 集结尾：苏雅收到匿名短信，画面结束。</p></div><div class="mini-card"><h3>当前版本 ${latest}</h3><p>第 3 集结尾：苏雅收到匿名短信，抬头发现顾清寒站在门外。</p></div></div><div class="notice">新增结尾人物露出，强化下一集悬念；受影响范围：第 3 集正文与分镜。</div>`),
+        'regenerate': () => overlayFrame('regenerate-dialog','重新生成配置','保留当前版本并创建新版本',`<div class="field-grid"><div class="field"><label>生成范围</label><select><option>当前阶段全部</option><option>当前集</option><option>当前场景</option><option>当前模块</option></select></div><div class="field"><label>使用上游版本</label><select><option>最新已确认版本</option><option>保持原输入版本</option></select></div></div><div class="field" style="margin-top:12px"><label>本次临时指令</label><textarea style="min-height:90px" placeholder="仅对本次生成生效，不超过 1000 字"></textarea></div><div class="notice">默认保留当前人工修改和历史版本，新结果将创建为独立版本。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-regenerate">创建生成任务</button>`),
+        'stale-impact': () => overlayFrame('stale-impact-dialog','下游依赖影响','上游变更不会删除已有内容',`<div class="surface-list">${stages.slice(activeIndex + 1).map((stage,index) => `<div class="surface-row"><div><strong>${activeIndex + index + 2}. ${stage.name}</strong><p>将标记为需更新；现有版本继续保留，可查看变更后决定。</p></div><span class="tag">STALE</span></div>`).join('') || '<div class="empty">当前为最后阶段，没有下游影响。</div>'}</div>`,`<button class="btn secondary" data-action="close-overlay">继续使用旧版本</button><button class="btn primary" data-action="apply-stale-impact">保存并标记下游</button>`),
+        'export': () => overlayFrame('export-dialog','导出创作包','选择范围、版本和交付格式',`<div class="field-grid"><div class="field"><label>导出范围</label><select><option>当前集</option><option>已完成集数</option><option>全部有效产物</option></select></div><div class="field"><label>导出版本</label><select><option>当前已确认版本</option><option>最新草稿</option></select></div></div><div class="config-section" style="margin-top:16px"><h3>文件格式</h3><div class="choice-grid"><button class="choice selected"><strong>XLSX</strong>一镜一行</button><button class="choice"><strong>JSON</strong>系统对接</button><button class="choice"><strong>Markdown</strong>评审流转</button></div></div><div class="mini-card"><h3>文件名预览</h3><p>重生后我在三集内揭开命运系统_第1集_文字分镜_${latest}_20260805.xlsx</p></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-export">开始导出</button>`),
+        'archive': () => overlayFrame('archive-dialog','确认归档项目','归档后项目只读，可从全部项目中恢复',`<div class="notice">将保留全部产物、版本、任务与导出记录。归档不会删除任何内容。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn warn" data-action="confirm-archive">确认归档</button>`)
+      };
+      document.getElementById('overlay-content').innerHTML = (surfaces[overlayState.type] || surfaces['task-center'])();
+    }
+    function renderStageFooter() {
+      if (activeIndex === 7) return `<section class="stage-flow-footer">
+        <div class="stage-flow-info"><div><strong>最后一步 · 完成创作闭环</strong><br><span>锁定分镜后可导出或送入画布工作台</span></div><span>${stageStatusLabel(appState.stages[7].status)}</span></div>
+        <div class="stage-flow-actions"><div><button class="btn secondary" data-action="previous-stage">返回上一步</button><button class="btn secondary" data-action="save-stage-draft">保存草稿</button></div><div><button class="btn secondary" data-action="open-export">导出创作包</button><button class="btn secondary" data-action="handoff-canvas">送入画布工作台</button><button class="btn primary" data-action="lock-storyboard">确认并锁定文字分镜</button></div></div>
+      </section>`;
+      return `<section class="stage-flow-footer">
+        <div class="stage-flow-info"><div><strong>确认本阶段产物</strong><br><span>确认后系统会准备“${stages[activeIndex + 1].name}”所需上下文</span></div><span>${stageStatusLabel(appState.stages[activeIndex].status)}</span></div>
+        <div class="stage-flow-actions"><div>${activeIndex > 0 ? '<button class="btn secondary" data-action="previous-stage">返回上一步</button>' : ''}<button class="btn secondary" data-action="save-stage-draft">保存草稿</button></div><div><button class="btn primary" data-action="confirm-stage-transition">确认当前阶段并进入下一步</button></div></div>
+      </section>`;
+    }
+
+    function transitionCopy(index) {
+      return [
+        '创建项目配置快照，准备小说导入规则与解析参数',
+        '确认有效原文、章节范围与解析结果，准备小说分析任务',
+        '汇总故事、人物、事件和世界观版本，准备改编策略',
+        '锁定卖点、高压开场和创作规则，准备前三集结构',
+        '校验节拍与钩子，准备可扩写的场景上下文',
+        '提交正文检查结果，准备审核问题定位与修订上下文',
+        '确认阻断问题已关闭，准备文字分镜生成范围'
+      ][index];
+    }
+
+    function renderTransitionPage() {
+      const transition = appState.transition;
+      const statusMap = {
+        QUEUED: { label:'任务已排队', detail:'正在分配创作任务资源，请稍候。', width:'22%', step:0 },
+        RUNNING: { label:'正在准备下一阶段', detail:transitionCopy(transition.fromStage), width:'62%', step:1 },
+        SUCCEEDED: { label:'下一阶段已准备完成', detail:`“${stages[transition.toStage].name}”已开放，可以继续创作。`, width:'100%', step:2 },
+        FAILED: { label:'阶段流转失败', detail:'当前阶段产物已保留，请重新尝试准备下一阶段。', width:'62%', step:1 }
+      };
+      const current = statusMap[transition.status] || statusMap.QUEUED;
+      const actions = transition.status === 'SUCCEEDED'
+        ? `<button class="btn primary" data-action="enter-next-stage">立即进入${stages[transition.toStage].name}</button>`
+        : transition.status === 'FAILED'
+          ? `<button class="btn secondary" data-action="cancel-stage-transition">返回当前阶段</button><button class="btn primary" data-action="retry-stage-transition">重新尝试</button>`
+          : `<button class="btn secondary" data-action="cancel-stage-transition">取消并返回当前阶段</button><button class="btn secondary" data-action="simulate-transition-failure">演示失败状态</button>`;
+      return `<section class="card transition-card"><div class="transition-kicker">阶段流转 · ${transition.status}</div><h2>${current.label}</h2><p>${current.detail}</p>
+        <div class="transition-route"><div class="transition-node done"><small>已确认</small><strong>${stages[transition.fromStage].name}</strong></div><div class="transition-arrow">→</div><div class="transition-node next"><small>下一阶段</small><strong>${stages[transition.toStage].name}</strong></div></div>
+        <div class="transition-status"><div class="transition-status-head"><strong>${current.label}</strong><span>任务 ${transition.taskId}</span></div><div class="transition-track"><i style="width:${current.width}"></i></div><div class="transition-steps"><span class="${current.step >= 0 ? 'active' : ''}">1. 排队校验</span><span class="${current.step >= 1 ? 'active' : ''}">2. 准备上下文</span><span class="${current.step >= 2 ? 'active' : ''}">3. 开放下一阶段</span></div>${transition.error ? `<div class="transition-error">${transition.error}<br>请求编号：REQ-DEMO-${transition.taskId}</div>` : ''}</div>
+        <div class="actions" style="justify-content:flex-end">${actions}</div></section>`;
+    }
+
+    function validateCurrentStage() {
+      if (activeIndex === 0 && (!config.creationType || !config.platform || !config.episodes)) return ['请完成创作类型、平台和集数设置'];
+      return [];
+    }
+
+    let transitionTimers = [];
+    function clearTransitionTimers() { transitionTimers.forEach(timer => clearTimeout(timer)); transitionTimers = []; }
+    function startTransition(forceFailure = false) {
+      const errors = validateCurrentStage();
+      if (errors.length) return notify(errors.join('；'));
+      if (activeIndex === 1) appState.source.state = 'CONFIRMED';
+      appState.stages[activeIndex].status = 'NEEDS_CONFIRMATION';
+      WorkflowModel.startStageTransition(appState, activeIndex);
+      clearTransitionTimers();
+      render();
+      transitionTimers.push(setTimeout(() => {
+        if (!appState.transition.visible) return;
+        appState.transition.status = 'RUNNING';
+        const task = appState.tasks.find(item => item.id === appState.transition.taskId);
+        if (task) task.status = 'RUNNING';
+        render();
+      }, 450));
+      transitionTimers.push(setTimeout(() => {
+        if (!appState.transition.visible) return;
+        if (forceFailure) {
+          appState.transition.status = 'FAILED';
+          appState.transition.error = '上下文准备服务暂时不可用，当前产物未丢失。';
+          const task = appState.tasks.find(item => item.id === appState.transition.taskId);
+          if (task) task.status = 'FAILED';
+        } else WorkflowModel.completeStageTransition(appState, appState.transition.taskId);
+        render();
+      }, 1250));
+    }
+
+    function cancelTransition() {
+      clearTransitionTimers();
+      const task = appState.tasks.find(item => item.id === appState.transition.taskId);
+      if (task && task.status !== 'SUCCEEDED') task.status = 'CANCELED';
+      appState.transition.visible = false;
+      render();
+      notify('已返回当前阶段，已确认内容不会丢失。');
+    }
+
+    function retryTransition() {
+      appState.transition.visible = false;
+      startTransition(false);
+    }
+
+    function simulateTransitionFailure() {
+      clearTransitionTimers();
+      appState.transition.status = 'FAILED';
+      appState.transition.error = '上下文准备服务暂时不可用，当前产物与版本均已保留。';
+      const task = appState.tasks.find(item => item.id === appState.transition.taskId);
+      if (task) task.status = 'FAILED';
+      render();
+    }
+
+    function enterTransitionTarget() {
+      const target = appState.transition.toStage;
+      appState.transition.visible = false;
+      activeIndex = target;
+      appState.project.activeStage = target;
+      render();
+    }
+
+    function dispatchAction(action, element) {
+      const feedback = {
+        'select-demo-file':'已选择示例文件，上传与章节解析任务已开始。', 'retry-upload':'已保留当前记录并创建新的上传任务。',
+        'confirm-source':'原文与章节范围已确认，可进入小说分析。', 'preview-chapter':'已打开章节切分预览（示例共 126 章）。',
+        'edit-summary':'故事梗概已切换为编辑模式。', 'add-event':'已新增一个待填写的关键事件。', 'open-all-characters':'已打开人物资产列表。',
+        'edit-world':'世界观当前模块已切换为编辑模式。', 'confirm-analysis':'小说分析版本已确认。',
+        'select-hook':'已选择“天台坠亡”作为高压开场。', 'add-adaptation-rule':'已新增一条改编规则。', 'confirm-adaptation':'改编方案已确认。',
+        'open-episode-structure':'已打开第 1 集结构详情。', 'add-beat':'已新增一个待编排节拍。', 'regenerate-beats':'节拍重新生成任务已排队。', 'confirm-episode-structure':'分集结构版本已确认。',
+        'add-scene':'已新增场景并定位到场景标题。', 'add-script-block':'已新增 ACTION 正文块。', 'run-script-check':'正文检查完成：0 个阻断问题，2 个建议。', 'export-script':'正文导出任务已创建。',
+        'filter-review-issues':'已筛选：高风险与中风险问题。', 'open-review-issue':'已定位到第 2 集相关段落。', 'save-review-revision':'局部修订已保存为新版本。', 'approve-episode':'本集已审核通过。',
+        'add-shot':'已新增镜头 #04。', 'split-shot':'已将选中镜头拆分为两个镜头。', 'merge-shot':'已合并选中镜头。', 'toggle-storyboard-view':'已切换分镜展示方式。', 'run-continuity-check':'连续性检查完成：角色、场景与道具锚点一致。'
+      };
+      const handlers = {
+        'open-project-list': showProjectList,
+        'close-project-list': showHome,
+        'open-project-detail': () => openOverlay('project-detail'),
+        'open-task-center': () => openOverlay('task-center'),
+        'open-version-history': () => openOverlay('version-history'),
+        'open-version-diff': () => openOverlay('version-diff'),
+        'open-regenerate': () => openOverlay('regenerate'),
+        'open-stale-impact': () => openOverlay('stale-impact'),
+        'close-overlay': closeOverlay,
+        'archive-project': () => openOverlay('archive'),
+        'resume-project': () => { closeOverlay(); enterWorkspace('continue'); },
+        'restore-version': () => { closeOverlay(); notify('历史版本已恢复为新版本，原记录保持不变。'); },
+        'retry-task': () => { closeOverlay(); notify('已创建新的重试任务。'); },
+        'confirm-regenerate': () => { const task = WorkflowModel.createTask(appState,{type:'REGENERATE',stage:activeIndex,scope:`${stages[activeIndex].name} · 当前范围`}); closeOverlay(); notify(`生成任务 ${task.id} 已排队。`); },
+        'apply-stale-impact': () => { WorkflowModel.markDownstreamStale(appState,activeIndex); closeOverlay(); render(); notify('已保存当前版本并标记受影响下游。'); },
+        'confirm-export': () => { closeOverlay(); notify('导出任务已创建，完成后可在任务中心下载。'); },
+        'confirm-archive': () => { appState.project.archived = true; appState.project.status = 'ARCHIVED'; closeOverlay(); notify('项目已归档并切换为只读状态。'); },
+        'previous-stage': () => { if (activeIndex > 0) { activeIndex -= 1; appState.project.activeStage = activeIndex; render(); } },
+        'save-stage-draft': () => notify('草稿已保存 · 刚刚'),
+        'confirm-stage-transition': () => startTransition(false),
+        'cancel-stage-transition': cancelTransition,
+        'simulate-transition-failure': simulateTransitionFailure,
+        'retry-stage-transition': retryTransition,
+        'enter-next-stage': enterTransitionTarget,
+        'lock-storyboard': () => { appState.stages[7].status = 'COMPLETED'; render(); notify('文字分镜已锁定，创作流程完成。'); },
+        'open-export': () => openOverlay('export'),
+        'handoff-canvas': () => notify('已生成画布交接摘要，等待创建画布项目。')
+      };
+      if (handlers[action]) handlers[action]();
+      else if (feedback[action]) notify(feedback[action]);
+    }
+
+    document.addEventListener('click', event => {
+      const element = event.target.closest('[data-action]');
+      if (element) dispatchAction(element.dataset.action, element);
+    });
+
+    function renderContent() {
+      const content = document.getElementById('stage-content');
+      const transition = document.getElementById('stage-transition-view');
+      if (appState.transition.visible) {
+        content.classList.add('hidden');
+        transition.classList.remove('hidden');
+        transition.innerHTML = renderTransitionPage();
+        return;
+      }
+      transition.classList.add('hidden');
+      content.classList.remove('hidden');
+      content.innerHTML = views[activeIndex]() + renderStageFooter();
+      bindInteractions();
+    }
+    function bindHome() {
+      document.querySelectorAll('[data-entry]').forEach(button => button.onclick = () => enterWorkspace(button.dataset.entry));
+      document.getElementById('home-nav').onclick = showHome;
+    }
+    function render() { renderNav(); renderContent(); renderContext(); document.getElementById('workspace-view').classList.toggle('analysis-focus', activeIndex === 2 && !appState.transition.visible); document.getElementById('open-settings').onclick = openSettings; document.getElementById('back-home').onclick = showHome; }
+    document.getElementById('close-settings').onclick = closeSettings;
+    document.getElementById('cancel-settings').onclick = closeSettings;
+    document.getElementById('save-settings').onclick = () => { closeSettings(); render(); };
+    document.getElementById('settings-drawer').addEventListener('click', event => { if (event.target.id === 'settings-drawer') closeSettings(); });
+    document.getElementById('close-character').onclick = closeCharacter;
+    document.getElementById('confirm-character').onclick = closeCharacter;
+    document.getElementById('character-drawer').addEventListener('click', event => { if (event.target.id === 'character-drawer') closeCharacter(); });
+    bindHome();
+    render();
+    showHome();
+  </script>
+</body>
+</html>
