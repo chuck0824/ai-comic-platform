@@ -601,6 +601,22 @@
         return createActionResult(state, { ...spec, artifactId:artifact?.id || spec.artifactId, path:artifact?.path || spec.path, version:artifact?.version || spec.version, before:spec.before || '', after:spec.after || '', readonly:true, status:'SUCCEEDED' });
       }
 
+      function createStageDraft(state, stage) {
+        const specs = {
+          2:{ id:'SUMMARY-001', type:'summary', title:'故事梗概', path:'03-小说分析/故事梗概.md', dependsOn:['SOURCE-001'], affects:['ADAPT-001'], data:{ 完整梗概:'待补充的故事梗概草稿' } },
+          3:{ id:'ADAPT-001', type:'adaptation', title:'改编方案', path:'04-改编方案.md', dependsOn:['SUMMARY-001','EVENTS-001','WORLD-001'], affects:['EP-001-STRUCTURE'], data:{ 创作策略:'待完善的改编方案草稿' } },
+          4:{ id:'EP-001-STRUCTURE', type:'episode_structure', title:'EP-001 单集结构', path:'05-分集结构/EP-001-单集结构.md', dependsOn:['ADAPT-001'], affects:['EP-001-SCRIPT'], data:{ 节拍:'待补充的单集结构草稿' } },
+          5:{ id:'EP-001-SCRIPT', type:'script', title:'EP-001 剧本正文', path:'06-剧本正文/EP-001-剧本正文.md', dependsOn:['EP-001-STRUCTURE','CHAR-001','WORLD-001'], affects:['EP-001-REVIEW','EP-001-STORYBOARD'], data:{ 正文:'待补充的剧本正文草稿' } },
+          6:{ id:'EP-001-REVIEW', type:'review', title:'EP-001 审核记录', path:'07-审核修订/EP-001-审核记录.md', dependsOn:['EP-001-SCRIPT'], affects:['EP-001-STORYBOARD'], data:{ 审核结论:'待补充的审核草稿' } },
+          7:{ id:'EP-001-STORYBOARD', type:'storyboard', title:'EP-001 文字分镜', path:'08-文字分镜/EP-001-文字分镜.md', dependsOn:['EP-001-REVIEW','CHAR-001','WORLD-001'], affects:[], data:{ 镜头列表:'待补充的文字分镜草稿' } }
+        };
+        const spec = specs[stage];
+        if (!spec) return null;
+        return state.artifacts[spec.id]
+          ? updateArtifact(state, spec.id, { data:spec.data, updatedBy:'user' })
+          : createArtifact(state, { ...spec, stage, status:'draft', updatedBy:'user' });
+      }
+
       function canApproveReview(issues = []) {
         return !issues.some(issue => issue.severity === 'HIGH' && issue.status !== 'RESOLVED');
       }
@@ -732,7 +748,7 @@
         return { allowed:true, code:'ALLOW', title:'', message:'' };
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, createActionResult, startGeneration, setGenerationStatus, acceptGenerationResult, canApproveReview, evaluateActionPrecondition, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, createActionResult, startGeneration, setGenerationStatus, acceptGenerationResult, createStageDraft, canApproveReview, evaluateActionPrecondition, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -899,6 +915,13 @@
 
     function saveStoryboardArtifact(status = 'draft') {
       return upsertArtifact({ id:'EP-001-STORYBOARD', type:'storyboard', stage:7, title:'EP-001 文字分镜', path:'08-文字分镜/EP-001-文字分镜.md', status, dependsOn:['EP-001-REVIEW','CHAR-001','WORLD-001'], affects:[], data:{ 展示方式:storyboardState.view, 镜头列表:storyboardState.shots, 连续性检查:storyboardState.continuity } });
+    }
+
+    function saveCurrentStageDraft() {
+      const artifact = WorkflowModel.createStageDraft(appState, activeIndex);
+      if (!artifact) return notify('草稿已保存 · 刚刚');
+      openOverlay('stage-draft-saved', { artifact });
+      return artifact;
     }
 
     function creationSettingsView() {
@@ -1321,6 +1344,7 @@
       const versions = appState.versions[versionKey];
       const latest = versions.at(-1)?.version || `V${activeIndex + 1}`;
       const surfaces = {
+        'stage-draft-saved': () => { const artifact = overlayState.payload.artifact; return overlayFrame('stage-draft-saved','草稿已保存','当前阶段已有可版本化的 Markdown 产物',`<div class="mini-card"><h3>${escapeHtml(artifact.title)}</h3><p>${escapeHtml(artifact.path)} · V${artifact.version}</p></div>`,`<button class="btn secondary" data-action="close-overlay">稍后生成</button><button class="btn primary" data-action="open-regenerate">重新生成当前产物</button>`); },
         'generation-progress': () => { const generation = appState.generation; return overlayFrame('generation-progress','正在生成','任务将持续记录，离开页面后可在任务中心查看',`<div class="mini-card"><h3>${escapeHtml(generation.spec?.scope || '生成内容')}</h3><p>${generation.status || 'QUEUED'} · ${generation.progress}%</p><div class="progress-track" role="progressbar" aria-valuenow="${generation.progress}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${generation.progress}%"></div></div></div>`,`<button class="btn secondary" data-action="open-generation-task">在任务中心查看</button>`); },
         'generation-result': () => { const result = overlayState.payload.result || appState.generation.result || {}; const readonly = result.readonly; return overlayFrame('generation-result',readonly ? '已采纳生成结果' : '生成结果已就绪',readonly ? '已采纳结果仅供查看，不会再次写入版本或计费。' : '采纳会写入新版本；放弃不会覆盖现有产物',`<div class="grid-2"><div class="mini-card"><h3>当前版本</h3><p>${escapeHtml(result.before || result.path || '当前产物')}</p></div><div class="mini-card"><h3>建议结果</h3><p>${escapeHtml(result.after || `任务 ${result.taskId || ''} 已完成，可作为独立版本保存。`)}</p></div></div>`,readonly ? `<button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="close-overlay">关闭</button>` : `<button class="btn secondary" data-action="discard-generation-result">放弃结果</button><button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="accept-generation-result">采纳并保存新版本</button>`); },
         'action-guidance': () => overlayFrame('action-guidance',overlayState.payload.title, '完成前置条件后可继续当前操作', `<div class="notice">${escapeHtml(overlayState.payload.message || '')}</div>`, `<button class="btn secondary" data-action="close-overlay">返回当前页面</button><button class="btn primary" data-action="${overlayState.payload.targetAction}">去完成前置条件</button>`),
@@ -1839,7 +1863,7 @@
           render();
           notify('原文已保存为 Obsidian 文档并确认。');
         },
-        'save-stage-draft': () => notify('草稿已保存 · 刚刚'),
+        'save-stage-draft': saveCurrentStageDraft,
         'confirm-stage-transition': () => startTransition(false),
         'cancel-stage-transition': cancelTransition,
         'retry-stage-transition': retryTransition,

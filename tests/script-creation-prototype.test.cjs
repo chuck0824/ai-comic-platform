@@ -277,6 +277,31 @@ test('revisited generation results render in readonly mode', () => {
   assert.match(html, /已采纳结果仅供查看/);
 });
 
+test('stage draft remediation creates regeneratable artifacts with dependency mappings', () => {
+  const model = loadModel();
+  const cases = [
+    [2, 'SUMMARY-001', '03-小说分析/故事梗概.md', ['SOURCE-001'], ['ADAPT-001']],
+    [3, 'ADAPT-001', '04-改编方案.md', ['SUMMARY-001','EVENTS-001','WORLD-001'], ['EP-001-STRUCTURE']],
+    [5, 'EP-001-SCRIPT', '06-剧本正文/EP-001-剧本正文.md', ['EP-001-STRUCTURE','CHAR-001','WORLD-001'], ['EP-001-REVIEW','EP-001-STORYBOARD']],
+    [7, 'EP-001-STORYBOARD', '08-文字分镜/EP-001-文字分镜.md', ['EP-001-REVIEW','CHAR-001','WORLD-001'], []]
+  ];
+  for (const [stage, id, path, dependsOn, affects] of cases) {
+    const state = model.createInitialState();
+    const artifact = model.createStageDraft(state, stage);
+    assert.equal(artifact.id, id);
+    assert.equal(artifact.path, path);
+    assert.deepEqual(Array.from(artifact.dependsOn), dependsOn);
+    assert.deepEqual(Array.from(artifact.affects), affects);
+    assert.equal(model.evaluateActionPrecondition({ hasStageArtifact:true }, 'open-regenerate').allowed, true);
+  }
+});
+
+test('save stage draft remediation opens a retryable artifact confirmation', () => {
+  assert.match(html, /function saveCurrentStageDraft\(\)/);
+  assert.match(html, /data-action="open-regenerate"/);
+  assert.match(html, /草稿已保存/);
+});
+
 test('empty pricing response falls back to demo models', () => {
   const model = loadModel();
   const result = model.resolveModels([], [{ id:'demo-script-pro', name:'演示剧本模型', demo:true, points:0 }]);
