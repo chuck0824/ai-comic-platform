@@ -153,3 +153,51 @@ test('workbench uses contextual actions instead of the six-button header toolbar
   }
   assert.match(html, /function renderContextualStageActions\(\)/);
 });
+
+test('limits pasted novel text to 2000 Chinese characters', () => {
+  const model = loadModel();
+  const result = model.limitHanText('序'.repeat(2001) + ' END', 2000);
+  assert.equal(result.hanCount, 2000);
+  assert.equal(result.truncated, true);
+  assert.equal(model.countHan(result.text), 2000);
+});
+
+test('artifact changes mark linked downstream markdown stale', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const person = model.createArtifact(state, { id:'CHAR-001', type:'character', stage:2, title:'林野', data:{ name:'林野' } });
+  model.createArtifact(state, { id:'SCRIPT-001', type:'script', stage:5, title:'第1集正文', dependsOn:['CHAR-001'], data:{} });
+  const impacts = model.markArtifactImpacts(state, person.id, ['name']);
+  assert.deepEqual(Array.from(impacts, item => item.artifactId), ['SCRIPT-001']);
+  assert.equal(state.artifacts['SCRIPT-001'].stale, true);
+});
+
+test('markdown contains Obsidian frontmatter and links', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  model.createArtifact(state, { id:'SUMMARY-001', type:'summary', stage:2, title:'故事梗概', dependsOn:['SOURCE-001'], data:{ summary:'测试梗概' } });
+  const md = model.renderMarkdown(state, 'SUMMARY-001');
+  assert.match(md, /^---/);
+  assert.match(md, /artifact_id: SUMMARY-001/);
+  assert.match(md, /\[\[SOURCE-001\]\]/);
+  assert.match(md, /# 故事梗概/);
+});
+
+test('artifact updates create a new version without losing history', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  model.createArtifact(state, { id:'SUMMARY-001', type:'summary', stage:2, title:'故事梗概', data:{ summary:'初稿' } });
+  const updated = model.updateArtifact(state, 'SUMMARY-001', { data:{ summary:'修订稿' }, updatedBy:'user' });
+  assert.equal(updated.version, 2);
+  assert.equal(updated.data.summary, '修订稿');
+  assert.equal(updated.history.length, 1);
+  assert.equal(updated.history[0].data.summary, '初稿');
+});
+
+test('point records keep estimate preconsume settlement and refund', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const entry = model.recordPoints(state, { taskId:'TASK-1', estimated:420, preconsumed:420, actual:390, refunded:30, modelId:'demo' });
+  assert.equal(entry.actual, 390);
+  assert.equal(state.billingEntries.length, 1);
+});

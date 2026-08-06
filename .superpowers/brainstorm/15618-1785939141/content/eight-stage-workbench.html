@@ -425,9 +425,114 @@
           tasks: [],
           versions: Object.fromEntries(versionKeys.map(key => [key, []])),
           staleImpacts: [],
+          artifacts: {},
+          artifactOrder: [],
+          impacts: [],
+          billingEntries: [],
+          models: { source:'fallback', loading:false, error:null, items:[], selectedId:null },
+          editor: { selectedBlockId:null, storyboardView:'cards', reviewFilters:{ severity:'全部', status:'全部' } },
           transition: { visible:false, fromStage:null, toStage:null, status:null, taskId:null, error:null, progress:0 },
           notifications: []
         };
+      }
+
+      function countHan(text = '') {
+        return Array.from(String(text)).filter(character => /\p{Script=Han}/u.test(character)).length;
+      }
+
+      function limitHanText(text = '', maxHan = 2000) {
+        let hanCount = 0;
+        let limited = '';
+        let truncated = false;
+        for (const character of Array.from(String(text))) {
+          if (/\p{Script=Han}/u.test(character)) {
+            if (hanCount >= maxHan) { truncated = true; break; }
+            hanCount += 1;
+          }
+          limited += character;
+        }
+        return { text:limited, hanCount, totalCount:Array.from(limited).length, truncated };
+      }
+
+      function cloneValue(value) {
+        return JSON.parse(JSON.stringify(value));
+      }
+
+      function createArtifact(state, spec) {
+        const artifact = {
+          id:spec.id,
+          type:spec.type,
+          stage:spec.stage,
+          title:spec.title,
+          path:spec.path || `${spec.title}.md`,
+          version:1,
+          status:spec.status || 'draft',
+          stale:false,
+          dependsOn:[...(spec.dependsOn || [])],
+          affects:[...(spec.affects || [])],
+          data:cloneValue(spec.data || {}),
+          history:[],
+          updatedBy:spec.updatedBy || 'system',
+          updatedAt:spec.updatedAt || '2026-08-06T11:30:00+08:00'
+        };
+        state.artifacts[artifact.id] = artifact;
+        if (!state.artifactOrder.includes(artifact.id)) state.artifactOrder.push(artifact.id);
+        return artifact;
+      }
+
+      function updateArtifact(state, artifactId, patch) {
+        const artifact = state.artifacts[artifactId];
+        if (!artifact) return null;
+        artifact.history.push(cloneValue({ version:artifact.version, data:artifact.data, updatedAt:artifact.updatedAt, updatedBy:artifact.updatedBy }));
+        artifact.version += 1;
+        artifact.data = cloneValue(patch.data || artifact.data);
+        artifact.title = patch.title || artifact.title;
+        artifact.status = patch.status || artifact.status;
+        artifact.updatedBy = patch.updatedBy || 'user';
+        artifact.updatedAt = patch.updatedAt || '2026-08-06T11:30:00+08:00';
+        artifact.stale = false;
+        return artifact;
+      }
+
+      function markArtifactImpacts(state, artifactId, changedFields = []) {
+        const affected = [];
+        const pending = [artifactId];
+        const visited = new Set(pending);
+        while (pending.length) {
+          const sourceId = pending.shift();
+          for (const candidateId of state.artifactOrder) {
+            const candidate = state.artifacts[candidateId];
+            if (visited.has(candidateId) || !candidate.dependsOn.includes(sourceId)) continue;
+            candidate.stale = true;
+            visited.add(candidateId);
+            pending.push(candidateId);
+            affected.push({ artifactId:candidateId, sourceArtifactId:artifactId, changedFields:[...changedFields], status:'PENDING' });
+          }
+        }
+        state.impacts.push(...affected);
+        return affected;
+      }
+
+      function renderMarkdown(state, artifactId) {
+        const artifact = state.artifacts[artifactId];
+        if (!artifact) return '';
+        const dependencies = artifact.dependsOn.length
+          ? `\ndepends_on:\n${artifact.dependsOn.map(id => `  - "[[${id}]]"`).join('\n')}`
+          : '\ndepends_on: []';
+        const affects = artifact.affects.length
+          ? `\naffects:\n${artifact.affects.map(id => `  - "[[${id}]]"`).join('\n')}`
+          : '\naffects: []';
+        const body = Object.entries(artifact.data).map(([key, value]) => {
+          const text = Array.isArray(value) ? value.map(item => `- ${typeof item === 'object' ? JSON.stringify(item) : item}`).join('\n') : (typeof value === 'object' ? `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`` : String(value));
+          return `## ${key}\n\n${text}`;
+        }).join('\n\n');
+        return `---\nproject_id: ${state.project.id}\nartifact_id: ${artifact.id}\nartifact_type: ${artifact.type}\nstage: ${artifact.stage}\nstatus: ${artifact.status}\nversion: ${artifact.version}\nupdated_at: ${artifact.updatedAt}\nupdated_by: ${artifact.updatedBy}${dependencies}${affects}\nstale: ${artifact.stale}\n---\n\n# ${artifact.title}\n\n${body}\n`;
+      }
+
+      function recordPoints(state, entry) {
+        const record = { id:`BILL-${state.billingEntries.length + 1}`, status:'SETTLED', createdAt:'2026-08-06T11:30:00+08:00', ...entry };
+        state.billingEntries.push(record);
+        return record;
       }
 
       function canEnterStage(state, index) {
@@ -492,7 +597,7 @@
         return transition;
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
