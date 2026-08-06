@@ -601,7 +601,7 @@
         return createActionResult(state, { ...spec, artifactId:artifact?.id || spec.artifactId, path:artifact?.path || spec.path, version:artifact?.version || spec.version, before:spec.before || '', after:spec.after || '', readonly:true, status:'SUCCEEDED' });
       }
 
-      function createStageDraft(state, stage) {
+      function stageDraftSpec(stage, data) {
         const specs = {
           2:{ id:'SUMMARY-001', type:'summary', title:'故事梗概', path:'03-小说分析/故事梗概.md', dependsOn:['SOURCE-001'], affects:['ADAPT-001'], data:{ 完整梗概:'待补充的故事梗概草稿' } },
           3:{ id:'ADAPT-001', type:'adaptation', title:'改编方案', path:'04-改编方案.md', dependsOn:['SUMMARY-001','EVENTS-001','WORLD-001'], affects:['EP-001-STRUCTURE'], data:{ 创作策略:'待完善的改编方案草稿' } },
@@ -612,9 +612,24 @@
         };
         const spec = specs[stage];
         if (!spec) return null;
-        return state.artifacts[spec.id]
-          ? updateArtifact(state, spec.id, { data:spec.data, updatedBy:'user' })
-          : createArtifact(state, { ...spec, stage, status:'draft', updatedBy:'user' });
+        return { ...spec, data:data === undefined ? spec.data : data };
+      }
+
+      function ensureStageArtifactForGeneration(state, stage, currentData) {
+        const spec = stageDraftSpec(stage, currentData);
+        if (!spec) return null;
+        return state.artifacts[spec.id] || createArtifact(state, { ...spec, stage, status:'draft', updatedBy:'user' });
+      }
+
+      function saveStageDraft(state, stage, currentData) {
+        const spec = stageDraftSpec(stage, currentData);
+        if (!spec) return null;
+        const existing = state.artifacts[spec.id];
+        if (!existing) return ensureStageArtifactForGeneration(state, stage, currentData);
+        const data = currentData === undefined ? existing.data : currentData;
+        const artifact = updateArtifact(state, spec.id, { data, status:'draft', updatedBy:'user' });
+        markArtifactImpacts(state, artifact.id, Object.keys(data || {}));
+        return artifact;
       }
 
       function canApproveReview(issues = []) {
@@ -748,7 +763,7 @@
         return { allowed:true, code:'ALLOW', title:'', message:'' };
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, createActionResult, startGeneration, setGenerationStatus, acceptGenerationResult, createStageDraft, canApproveReview, evaluateActionPrecondition, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, createActionResult, startGeneration, setGenerationStatus, acceptGenerationResult, ensureStageArtifactForGeneration, saveStageDraft, canApproveReview, evaluateActionPrecondition, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -917,8 +932,29 @@
       return upsertArtifact({ id:'EP-001-STORYBOARD', type:'storyboard', stage:7, title:'EP-001 文字分镜', path:'08-文字分镜/EP-001-文字分镜.md', status, dependsOn:['EP-001-REVIEW','CHAR-001','WORLD-001'], affects:[], data:{ 展示方式:storyboardState.view, 镜头列表:storyboardState.shots, 连续性检查:storyboardState.continuity } });
     }
 
+    function serializeCurrentStageDraft() {
+      if (activeIndex === 2) {
+        const existing = appState.artifacts['SUMMARY-001']?.data || {};
+        return { ...existing, 完整梗概:existing.完整梗概 || defaultSummary };
+      }
+      if (activeIndex === 3) {
+        const existing = appState.artifacts['ADAPT-001']?.data || {};
+        const hook = adaptationState.hooks.find(item => item.id === adaptationState.selectedHook) || existing.高压开场 || null;
+        return { ...existing, 高压开场:hook, 改编规则:adaptationState.rules, 创作策略:existing.创作策略 || '前三集完成死亡钩子、能力演示和拍卖会冲突；机制视觉化，胜利依赖谋略。' };
+      }
+      if (activeIndex === 4) {
+        const existing = appState.artifacts['EP-001-STRUCTURE']?.data || {};
+        const episode = structureState.episodes[structureState.selectedEpisode];
+        return { ...existing, 本集目标:episode.goal, 核心冲突:episode.conflict, 关键转折:episode.turn, 结尾钩子:episode.hook, 节拍:episode.beats };
+      }
+      if (activeIndex === 5) return { ...(appState.artifacts['EP-001-SCRIPT']?.data || {}), ...scriptArtifactData() };
+      if (activeIndex === 6) return { ...(appState.artifacts['EP-001-REVIEW']?.data || {}), 问题列表:reviewState.issues, 审核结论:appState.artifacts['EP-001-REVIEW']?.status === 'confirmed' ? '通过' : '修订中' };
+      if (activeIndex === 7) return { ...(appState.artifacts['EP-001-STORYBOARD']?.data || {}), 展示方式:storyboardState.view, 镜头列表:storyboardState.shots, 连续性检查:storyboardState.continuity };
+      return undefined;
+    }
+
     function saveCurrentStageDraft() {
-      const artifact = WorkflowModel.createStageDraft(appState, activeIndex);
+      const artifact = WorkflowModel.saveStageDraft(appState, activeIndex, serializeCurrentStageDraft());
       if (!artifact) return notify('草稿已保存 · 刚刚');
       openOverlay('stage-draft-saved', { artifact });
       return artifact;

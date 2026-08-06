@@ -287,13 +287,55 @@ test('stage draft remediation creates regeneratable artifacts with dependency ma
   ];
   for (const [stage, id, path, dependsOn, affects] of cases) {
     const state = model.createInitialState();
-    const artifact = model.createStageDraft(state, stage);
+    const artifact = model.ensureStageArtifactForGeneration(state, stage);
     assert.equal(artifact.id, id);
     assert.equal(artifact.path, path);
     assert.deepEqual(Array.from(artifact.dependsOn), dependsOn);
     assert.deepEqual(Array.from(artifact.affects), affects);
     assert.equal(model.evaluateActionPrecondition({ hasStageArtifact:true }, 'open-regenerate').allowed, true);
   }
+});
+
+test('saving existing analysis and script drafts preserves real data and invalidates dependents', () => {
+  const model = loadModel();
+  const cases = [
+    {
+      stage:2,
+      artifact:{ id:'SUMMARY-001', type:'summary', title:'故事梗概', path:'03-小说分析/故事梗概.md', data:{ 完整梗概:'林野追查前世死亡真相。', 主线目标:'找到账本' } },
+      dependent:{ id:'ADAPT-001', type:'adaptation', stage:3, title:'改编方案', dependsOn:['SUMMARY-001'], data:{ 策略:'初稿' } }
+    },
+    {
+      stage:5,
+      artifact:{ id:'EP-001-SCRIPT', type:'script', title:'EP-001 剧本正文', path:'06-剧本正文/EP-001-剧本正文.md', data:{ 集数:'第 1 集', 场景:[{ id:'SCENE-001', 正文块:[{ id:'BLOCK-001', text:'林野猛地睁眼。' }] }] } },
+      dependent:{ id:'EP-001-REVIEW', type:'review', stage:6, title:'EP-001 审核记录', dependsOn:['EP-001-SCRIPT'], data:{ 状态:'待审核' } }
+    }
+  ];
+
+  for (const { stage, artifact:artifactSpec, dependent } of cases) {
+    const state = model.createInitialState();
+    const originalData = JSON.parse(JSON.stringify(artifactSpec.data));
+    model.createArtifact(state, { ...artifactSpec, stage });
+    model.createArtifact(state, dependent);
+
+    const saved = model.saveStageDraft(state, stage);
+
+    assert.equal(saved.version, 2);
+    assert.deepEqual(JSON.parse(JSON.stringify(saved.data)), originalData);
+    assert.deepEqual(JSON.parse(JSON.stringify(saved.history[0].data)), originalData);
+    assert.equal(state.artifacts[dependent.id].stale, true);
+  }
+});
+
+test('generation remediation creates a missing artifact from current stage data', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const currentScript = { 集数:'第 1 集', 场景:[{ id:'SCENE-009', 正文块:[{ id:'BLOCK-021', text:'账本就在拍卖会。' }] }] };
+
+  const artifact = model.ensureStageArtifactForGeneration(state, 5, currentScript);
+
+  assert.deepEqual(JSON.parse(JSON.stringify(artifact.data)), currentScript);
+  assert.equal(artifact.version, 1);
+  assert.equal(model.evaluateActionPrecondition({ hasStageArtifact:Boolean(state.artifacts['EP-001-SCRIPT']) }, 'open-regenerate').allowed, true);
 });
 
 test('save stage draft remediation opens a retryable artifact confirmation', () => {
