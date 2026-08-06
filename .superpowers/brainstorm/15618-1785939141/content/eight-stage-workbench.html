@@ -116,6 +116,16 @@
     .config-chip strong { display: block; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     textarea { width: 100%; min-height: 150px; resize: vertical; padding: 12px; border: 1px solid #dfe2e8; border-radius: 8px; outline: none; line-height: 1.7; color: #343741; }
     textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(98,91,246,.1); }
+    .text-counter { display: flex; justify-content: space-between; gap: 12px; margin-top: 7px; color: var(--muted); font-size: 11px; }
+    .text-counter strong { color: #555a65; }
+    .text-counter .limit-near { color: var(--warning); }
+    .model-picker { border: 1px solid var(--line); border-radius: 9px; background: #fafbfc; padding: 12px; }
+    .model-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+    .model-picker-head p { margin: 3px 0 0; color: var(--muted); font-size: 11px; }
+    .model-source { display: inline-flex; align-items: center; gap: 5px; border-radius: 999px; padding: 4px 8px; background: #fff7e9; color: #a86100; font-size: 10px; }
+    .model-source.remote { background: #e8f7ef; color: #167a49; }
+    .model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+    .model-row select { width: 100%; border: 1px solid #dfe2e8; border-radius: 7px; background: #fff; padding: 8px 10px; color: #343741; }
     .dropzone { border: 1px dashed #bfc3cf; border-radius: 10px; min-height: 185px; background: #fafafe; display: grid; place-items: center; text-align: center; color: var(--muted); }
     .dropzone strong { display: block; color: #444954; margin-bottom: 6px; }
     .dropzone p { font-size: 11px; margin: 0 0 12px; }
@@ -283,6 +293,7 @@
     .modal-head h2 { margin: 0 0 4px; font-size: 18px; }
     .modal-head p { margin: 0; color: var(--muted); font-size: 11px; }
     .modal-body { padding: 18px 20px; }
+    .markdown-preview { margin: 0; max-height: 58vh; overflow: auto; white-space: pre-wrap; word-break: break-word; border: 1px solid var(--line); border-radius: 8px; background: #17181c; color: #e7e9ef; padding: 14px; font: 12px/1.65 ui-monospace, SFMono-Regular, Menlo, monospace; }
     .modal-foot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); }
     .surface-list { display: grid; gap: 9px; }
     .surface-row { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 12px; border: 1px solid var(--line); border-radius: 8px; }
@@ -535,6 +546,26 @@
         return record;
       }
 
+      function normalizePricingModels(payload = {}) {
+        const models = Array.isArray(payload.data) ? payload.data : [];
+        return models.map(item => ({
+          id:item.model_name || item.name || item.id,
+          name:item.display_name || item.model_name || item.name || item.id,
+          vendor:item.vendor_name || item.vendor || item.owned_by || '未知供应商',
+          modelRatio:Number(item.model_ratio ?? item.ratio ?? 1),
+          completionRatio:Number(item.completion_ratio ?? 1),
+          groupRatio:Number(item.group_ratio ?? 1),
+          endpoints:item.endpoints || item.supported_endpoint || ['chat'],
+          demo:false
+        })).filter(item => item.id);
+      }
+
+      function resolveModels(remoteModels = [], fallbackModels = []) {
+        return remoteModels.length
+          ? { source:'remote', items:remoteModels }
+          : { source:'fallback', items:fallbackModels.map(item => ({ ...item, demo:true, points:0 })) };
+      }
+
       function canEnterStage(state, index) {
         const checks = [
           () => true,
@@ -597,12 +628,13 @@
         return transition;
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
     let activeIndex = 0;
     let sourceMode = 'text';
+    let sourceText = '林野在前世被兄弟赵承宇推下天台，重生回到两年前，并绑定逆天改命系统。他必须在三集内确认重生、获得技能，并找到第一条账本线索。';
     let screenMode = 'home';
     let analysisModule = 'basic';
     let basicTab = 'summary';
@@ -613,6 +645,14 @@
       platform: '抖音', audience: '女频', episodes: '40 集', goal: 'IP 改编',
       genre: '悬疑', plots: ['重生', '系统'], tones: ['复仇', '逆袭'], setting: '现代'
     };
+    const fallbackModels = [
+      { id:'demo-script-pro', name:'剧本创作 Pro（演示）', vendor:'内置演示', context:'128K', points:0, demo:true },
+      { id:'demo-long-context', name:'长文本分析（演示）', vendor:'内置演示', context:'200K', points:0, demo:true },
+      { id:'demo-fast-edit', name:'快速修订（演示）', vendor:'内置演示', context:'64K', points:0, demo:true }
+    ];
+    Object.assign(appState.models, WorkflowModel.resolveModels([], fallbackModels));
+    appState.models.selectedId = fallbackModels[0].id;
+    config.projectModel = fallbackModels[0].id;
     const axes = {
       genre: ['言情','现实情感','悬疑','惊悚','科幻','武侠','脑洞','仙侠','历史'],
       plots: ['权谋','重生','穿越','系统','规则怪谈','先婚后爱','职场','犯罪','探险','倒计时文学'],
@@ -670,6 +710,7 @@
         <div class="context-section"><div class="context-label">${items[0]}</div><div class="context-value">${items[1]}</div></div>
         <div class="context-section"><div class="context-label">${items[2]}</div><div class="context-value">${items[3]}</div></div>
         <div class="context-section"><div class="context-label">创作分类</div><div class="context-value">${config.creationType} · ${config.genre}<br>${config.plots.join(' / ')} · ${config.tones.join(' / ')}<br>${config.platform} · ${config.audience} · ${config.episodes}</div></div>
+        <div class="context-section"><div class="context-label">当前模型</div><div class="context-value">${escapeHtml(appState.models.items.find(model => model.id === (appState.models.stageSelections?.[activeIndex] || config.projectModel))?.name || '未选择')}<br>${appState.models.source === 'remote' ? '来自 3001 · 按实际积分结算' : '内置演示 · 0 积分'}</div></div>
         <div class="context-section"><div class="context-label">版本记录</div><div class="version"><span>当前版本 V${activeIndex + 1}</span><span>刚刚</span></div><div class="version"><span>上一版本 V${Math.max(1, activeIndex)}</span><span>昨天</span></div></div>
         ${activeIndex > 2 ? '<div class="notice">修改本阶段已确认内容后，系统会标记受影响的下游阶段，并允许选择重新生成或保留旧版本。</div>' : ''}
       `;
@@ -677,6 +718,41 @@
 
     function cardHead(title, desc, status = '当前阶段') {
       return `<div class="card-head"><div><h2>${title}</h2><p>${desc}</p></div><span class="stage-status">${status}</span></div>`;
+    }
+
+    function escapeHtml(value = '') {
+      return String(value).replace(/[&<>"']/g, character => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' })[character]);
+    }
+
+    function modelPickerMarkup(scope = 'project') {
+      const isFallback = appState.models.source !== 'remote';
+      const selectedId = scope === 'project' ? config.projectModel : (appState.models.stageSelections?.[activeIndex] || config.projectModel);
+      const options = appState.models.items.map(model => `<option value="${escapeHtml(model.id)}" ${model.id === selectedId ? 'selected' : ''}>${escapeHtml(model.name)} · ${model.demo ? '0 积分（演示）' : `${model.vendor} · 3001 积分规则`}</option>`).join('');
+      return `<div class="model-picker"><div class="model-picker-head"><div><strong>${scope === 'project' ? '项目默认模型' : '当前阶段模型'}</strong><p>${scope === 'project' ? '后续阶段默认继承，可在单次生成时覆盖' : '仅覆盖当前阶段，不改变项目默认值'}</p></div><span class="model-source ${isFallback ? '' : 'remote'}">${isFallback ? '内置演示兜底' : '已同步 3001'}</span></div><div class="model-row"><select aria-label="${scope === 'project' ? '项目默认模型' : '当前阶段模型'}" data-model-scope="${scope}">${options}</select><div><button class="btn secondary" data-action="select-project-model">设为默认</button> <button class="btn secondary" data-action="refresh-models">刷新模型</button></div></div>${appState.models.error ? `<div class="notice" style="margin-top:9px">3001 模型暂不可用：${escapeHtml(appState.models.error)}。当前使用演示模型，不消耗真实积分。</div>` : isFallback ? '<div class="notice" style="margin-top:9px">3001 当前没有可展示模型，已启用内置演示模型；演示操作不消耗真实积分。</div>' : ''}</div>`;
+    }
+
+    async function loadModels({ announce = false } = {}) {
+      appState.models.loading = true;
+      try {
+        const response = await fetch('http://localhost:3001/api/pricing', { cache:'no-store' });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const payload = await response.json();
+        const remote = WorkflowModel.normalizePricingModels(payload);
+        const resolved = WorkflowModel.resolveModels(remote, fallbackModels);
+        Object.assign(appState.models, resolved, { error:null, loading:false });
+      } catch (error) {
+        Object.assign(appState.models, WorkflowModel.resolveModels([], fallbackModels), { error:error.message || '连接失败', loading:false });
+      }
+      if (!appState.models.items.some(model => model.id === config.projectModel)) config.projectModel = appState.models.items[0]?.id || null;
+      appState.models.selectedId = config.projectModel;
+      if (screenMode === 'workspace') render();
+      if (announce) notify(appState.models.source === 'remote' ? `已同步 ${appState.models.items.length} 个 3001 模型。` : '3001 暂无可用模型，已使用内置演示模型。');
+    }
+
+    function saveSourceArtifact() {
+      const data = { 原文:sourceText, 汉字数:WorkflowModel.countHan(sourceText), 总字符数:Array.from(sourceText).length, 章节范围:'第 1—50 章' };
+      if (appState.artifacts['SOURCE-001']) return WorkflowModel.updateArtifact(appState, 'SOURCE-001', { data, status:'confirmed', updatedBy:'user' });
+      return WorkflowModel.createArtifact(appState, { id:'SOURCE-001', type:'source', stage:1, title:'小说原文索引', path:'02-小说原文/00-原文索引.md', status:'confirmed', data, updatedBy:'user' });
     }
 
     function creationSettingsView() {
@@ -698,6 +774,7 @@
           <div class="field"><label>内容目标</label><select aria-label="内容目标" data-inline-select-key="goal"><option>追更</option><option>完本</option><option>IP 改编</option></select></div>
         </div></div>
         <div class="config-section"><h3>四轴分类</h3><p>题材、情节、情绪和时空将持续影响小说分析、改编策略与剧本生成。</p>${axisPicker('genre','题材（单选）',1)}${axisPicker('plots','情节（最多 3 个）',3)}${axisPicker('tones','情绪 / 基调（最多 3 个）',3)}${axisPicker('setting','时空背景（单选）',1)}</div>
+        <div class="config-section"><h3>模型与积分</h3><p>模型来源于 3001；真实任务按 3001 原生额度一比一消耗积分。</p>${modelPickerMarkup('project')}</div>
         <div class="actions"><button class="btn secondary" data-action="save-stage-draft">保存当前设置</button><button class="btn secondary" id="open-settings-inline">更多创作参数</button></div>
       </section>`;
     }
@@ -712,8 +789,9 @@
         </div>
         <div class="source-switch"><button data-mode="text" class="${sourceMode === 'text' ? 'active' : ''}">粘贴小说文本</button><button data-mode="upload" class="${sourceMode === 'upload' ? 'active' : ''}">上传小说</button></div>
         <div style="margin-top:14px">${sourceMode === 'text' ? `
-          <textarea>林野在前世被兄弟赵承宇推下天台，重生回到两年前，并绑定逆天改命系统。他必须在三集内确认重生、获得技能，并找到第一条账本线索。</textarea>
-          <div class="actions"><button class="btn primary" data-action="confirm-source">保存、解析并确认原文</button><button class="btn secondary" data-action="preview-chapter">预览章节切分</button></div>` : `
+          <textarea data-source-text aria-label="小说文本" placeholder="粘贴小说文本，最多 2000 个汉字">${escapeHtml(sourceText)}</textarea>
+          <div class="text-counter"><span>粘贴内容会保存为 Obsidian 小说原文文档</span><strong data-source-counter class="${WorkflowModel.countHan(sourceText) >= 1800 ? 'limit-near' : ''}">汉字 ${WorkflowModel.countHan(sourceText)}/2000 · 总字符 ${Array.from(sourceText).length}</strong></div>
+          <div class="actions"><button class="btn primary" data-action="confirm-source">保存、解析并确认原文</button><button class="btn secondary" data-action="preview-chapter">预览章节切分</button><button class="btn secondary" data-action="preview-source-markdown">预览 Markdown</button></div>` : `
           <div class="dropzone"><div><strong>拖拽剧本文件到这里，或点击选择文件</strong><p>支持 DOCX、TXT，单文件不超过 50MB</p><button class="btn primary">选择文件</button></div></div>
           <div class="actions"><button class="btn primary" data-action="select-demo-file">选择文件并解析</button><button class="btn secondary" data-action="retry-upload">重新上传</button><button class="btn secondary" data-action="preview-chapter">预览章节</button><button class="btn primary" data-action="confirm-source">确认原文</button></div>`}</div>
       </section>
@@ -940,6 +1018,18 @@
     function closeSettings() { document.getElementById('settings-drawer').classList.remove('open'); }
     function bindInteractions() {
       const stageContent = document.getElementById('stage-content');
+      const sourceTextarea = stageContent.querySelector('[data-source-text]');
+      if (sourceTextarea) sourceTextarea.addEventListener('input', () => {
+        const limited = WorkflowModel.limitHanText(sourceTextarea.value, 2000);
+        sourceText = limited.text;
+        if (sourceTextarea.value !== sourceText) sourceTextarea.value = sourceText;
+        const counter = stageContent.querySelector('[data-source-counter]');
+        if (counter) {
+          counter.textContent = `汉字 ${limited.hanCount}/2000 · 总字符 ${limited.totalCount}`;
+          counter.classList.toggle('limit-near', limited.hanCount >= 1800);
+        }
+        if (limited.truncated) notify('小说文本最多保留 2000 个汉字，超出内容已截断。');
+      });
       stageContent.querySelectorAll('[data-model]').forEach(control => {
         const key = control.dataset.model.replace('config.','');
         control.value = config[key];
@@ -953,6 +1043,15 @@
         select.value = config[select.dataset.inlineSelectKey];
         select.addEventListener('change', () => { config[select.dataset.inlineSelectKey] = select.value; renderContext(); });
       });
+      stageContent.querySelectorAll('[data-model-scope]').forEach(select => select.addEventListener('change', () => {
+        if (select.dataset.modelScope === 'project') config.projectModel = select.value;
+        else {
+          appState.models.stageSelections ||= {};
+          appState.models.stageSelections[activeIndex] = select.value;
+        }
+        appState.models.selectedId = select.value;
+        renderContext();
+      }));
       stageContent.querySelectorAll('[data-axis-key]').forEach(button => button.addEventListener('click', () => {
         const key = button.dataset.axisKey, value = button.dataset.axisValue, max = Number(button.dataset.axisMax);
         if (Array.isArray(config[key])) { const index = config[key].indexOf(value); if (index >= 0) config[key].splice(index, 1); else if (config[key].length < max) config[key].push(value); }
@@ -998,6 +1097,7 @@
       const versions = appState.versions[versionKey];
       const latest = versions.at(-1)?.version || `V${activeIndex + 1}`;
       const surfaces = {
+        'markdown-preview': () => overlayFrame('markdown-preview-dialog',overlayState.payload.title || 'Markdown 预览',overlayState.payload.path || 'Obsidian 项目文档',`<pre class="markdown-preview">${escapeHtml(overlayState.payload.markdown || '')}</pre>`,`<button class="btn secondary" data-action="close-overlay">关闭</button>`),
         'project-detail': () => overlayFrame('project-detail-dialog','项目详情','查看创作状态、版本与项目操作',`<div class="grid-2"><div class="mini-card"><h3>创作进度</h3><p>当前阶段：${stages[appState.project.activeStage].name}<br>项目状态：${appState.project.status}<br>完成度：${WorkflowModel.computeProgress(appState)}%</p></div><div class="mini-card"><h3>最近活动</h3><p>审核修订 V7 已保存<br>文字分镜等待开放<br>最近更新：刚刚</p></div></div><div class="surface-list" style="margin-top:12px"><div class="surface-row"><div><strong>版本与任务</strong><p>查看全部版本、生成任务和失败记录。</p></div><div><button class="btn secondary" data-action="open-version-history">历史版本</button> <button class="btn secondary" data-action="open-task-center">任务中心</button></div></div></div>`,`<button class="btn warn" data-action="archive-project">归档项目</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="resume-project">继续创作</button>`),
         'task-center': () => overlayFrame('task-center','任务中心','查看阶段流转、生成、失败和重试记录',`<div class="surface-list">${(appState.tasks.length ? appState.tasks : [{id:'task-demo-1',type:'ANALYSIS',scope:'小说分析 · 全部模块',status:'SUCCEEDED'},{id:'task-demo-2',type:'STORYBOARD',scope:'第 1 集 · 场景 1',status:'FAILED'}]).map(task => `<div class="surface-row"><div><strong>${task.scope || task.type}</strong><p>任务 ${task.id} · ${task.status} · ${task.status === 'FAILED' ? '服务暂时不可用，结果未覆盖' : '状态已同步'}</p></div><div>${task.status === 'FAILED' ? '<button class="btn primary" data-action="retry-task">重试</button>' : '<span class="tag">'+task.status+'</span>'}</div></div>`).join('')}</div>`),
         'version-history': () => overlayFrame('version-history',`${stages[activeIndex].name} · 历史版本`,'AI 生成、人工编辑和阶段确认均独立留痕',`<div class="surface-list">${[latest,`V${Math.max(1,activeIndex)}`,'V1'].map((version,index) => `<div class="surface-row"><div><strong>${version} ${index === 0 ? '· 当前版本' : ''}</strong><p>${index === 0 ? '阶段确认' : index === 1 ? '人工编辑' : 'AI 生成'} · ${index === 0 ? '刚刚' : index === 1 ? '昨天' : '3 天前'} · 输入版本已记录</p></div><button class="btn secondary" data-action="open-version-diff">对比</button></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="restore-version">恢复为新版本</button>`),
@@ -1175,6 +1275,21 @@
         'confirm-export': () => { closeOverlay(); notify('导出任务已创建，完成后可在任务中心下载。'); },
         'confirm-archive': () => { appState.project.archived = true; appState.project.status = 'ARCHIVED'; closeOverlay(); notify('项目已归档并切换为只读状态。'); },
         'previous-stage': () => { if (activeIndex > 0) { activeIndex -= 1; appState.project.activeStage = activeIndex; render(); } },
+        'refresh-models': () => loadModels({ announce:true }),
+        'select-project-model': () => { config.projectModel = appState.models.selectedId || config.projectModel; renderContext(); notify('已更新项目默认模型。'); },
+        'preview-source-markdown': () => {
+          if (!sourceText.trim()) return notify('请先粘贴小说文本。');
+          const artifact = saveSourceArtifact();
+          openOverlay('markdown-preview', { title:'小说原文 Markdown', path:artifact.path, markdown:WorkflowModel.renderMarkdown(appState, artifact.id) });
+        },
+        'confirm-source': () => {
+          if (!sourceText.trim()) return notify('请先粘贴小说文本。');
+          saveSourceArtifact();
+          appState.source.state = 'CONFIRMED';
+          appState.stages[1].status = 'NEEDS_CONFIRMATION';
+          render();
+          notify('原文已保存为 Obsidian 文档并确认。');
+        },
         'save-stage-draft': () => notify('草稿已保存 · 刚刚'),
         'confirm-stage-transition': () => startTransition(false),
         'cancel-stage-transition': cancelTransition,
@@ -1225,6 +1340,7 @@
     bindHome();
     render();
     showHome();
+    loadModels();
   </script>
 </body>
 </html>

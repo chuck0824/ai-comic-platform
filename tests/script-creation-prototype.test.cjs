@@ -201,3 +201,28 @@ test('point records keep estimate preconsume settlement and refund', () => {
   assert.equal(entry.actual, 390);
   assert.equal(state.billingEntries.length, 1);
 });
+
+test('empty pricing response falls back to demo models', () => {
+  const model = loadModel();
+  const result = model.resolveModels([], [{ id:'demo-script-pro', name:'演示剧本模型', demo:true, points:0 }]);
+  assert.equal(result.source, 'fallback');
+  assert.equal(result.items[0].demo, true);
+  assert.equal(result.items[0].points, 0);
+});
+
+test('pricing response normalizes real models from localhost 3001', () => {
+  const model = loadModel();
+  const result = model.normalizePricingModels({ data:[{ model_name:'model-a', vendor_name:'供应商A', model_ratio:1.5, completion_ratio:2 }] });
+  assert.equal(result[0].id, 'model-a');
+  assert.equal(result[0].demo, false);
+  assert.equal(result[0].modelRatio, 1.5);
+  assert.equal(result[0].completionRatio, 2);
+});
+
+test('upload and model controls are present', () => {
+  assert.match(html, /data-source-text/);
+  assert.match(html, /汉字.*\/2000/);
+  for (const action of ['refresh-models','select-project-model','preview-source-markdown']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+});
