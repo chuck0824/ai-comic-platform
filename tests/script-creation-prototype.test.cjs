@@ -424,6 +424,13 @@ test('all script AI tools and editor controls are actionable', () => {
   }
 });
 
+test('structure and script operations expose visible outputs', () => {
+  for (const action of ['view-structure-result','view-script-result','focus-script-blocks','open-script-check','open-script-export']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+  assert.doesNotMatch(html, /data-action="ai-(?:continue|conflict|condense-dialogue|rewrite-tone|character-check)"[^>]*disabled/);
+});
+
 test('business actions remain clickable and explain missing prerequisites', () => {
   const model = loadModel();
   const missingBlock = model.evaluateActionPrecondition({ selectedBlockId:null }, 'ai-continue');

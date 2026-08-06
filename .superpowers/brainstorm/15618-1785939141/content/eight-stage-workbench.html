@@ -215,6 +215,8 @@
     .script-block { width: 100%; border: 1px solid transparent; border-radius: 7px; background: transparent; padding: 8px 9px; color: inherit; text-align: left; line-height: 1.75; }
     .script-block:hover { border-color: var(--accent-border); background: #fafaff; }
     .script-block.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .script-block.guidance-focus { animation: script-block-focus 1.8s ease-out; box-shadow: 0 0 0 3px rgba(98,91,246,.28); }
+    @keyframes script-block-focus { 0%, 45% { background: #fff5c8; border-color: #e6b800; } 100% { background: transparent; border-color: transparent; } }
     .review-layout { display: grid; grid-template-columns: 160px 1fr; gap: 14px; }
     .score-ring { width: 104px; height: 104px; border: 9px solid #e8f5ed; border-top-color: var(--success); border-radius: 50%; display: grid; place-items: center; margin: 6px auto 12px; color: var(--success); font-size: 24px; font-weight: 800; }
     .score-note { text-align: center; color: var(--muted); font-size: 11px; }
@@ -915,7 +917,7 @@
       openOverlay('impact-review', { impacts:['04-改编方案.md','05-分集结构/EP-001-单集结构.md','06-剧本正文/EP-001-剧本正文.md','07-审核修订/EP-001-审核记录.md','08-文字分镜/EP-001-文字分镜.md'] });
     }
 
-    function recordArtifactActionResult(action, artifact) {
+    function recordArtifactActionResult(action, artifact, { open = true, after } = {}) {
       const result = WorkflowModel.completeManualAction(appState, {
         action,
         stage:artifact.stage,
@@ -924,10 +926,10 @@
         path:artifact.path,
         version:artifact.version,
         before:'',
-        after:`${artifact.title} 已保存为 V${artifact.version}`,
+        after:after || `${artifact.title} 已保存为 V${artifact.version}`,
         readonly:true
       });
-      openOverlay('action-result', { result });
+      if (open) openOverlay('action-result', { result });
       return result;
     }
 
@@ -945,6 +947,31 @@
 
     function saveScriptArtifact(status = 'draft') {
       return upsertArtifact({ id:'EP-001-SCRIPT', type:'script', stage:5, title:'EP-001 剧本正文', path:'06-剧本正文/EP-001-剧本正文.md', status, dependsOn:['EP-001-STRUCTURE','CHAR-001','WORLD-001'], affects:['EP-001-REVIEW','EP-001-STORYBOARD'], data:scriptArtifactData() });
+    }
+
+    function saveStructureArtifact(status = 'draft') {
+      const episode = structureState.episodes[structureState.selectedEpisode];
+      return upsertArtifact({ id:'EP-001-STRUCTURE', type:'episode_structure', stage:4, title:'EP-001 单集结构', path:'05-分集结构/EP-001-单集结构.md', status, dependsOn:['ADAPT-001'], affects:['EP-001-SCRIPT'], data:{ 本集目标:episode.goal, 核心冲突:episode.conflict, 关键转折:episode.turn, 结尾钩子:episode.hook, 节拍:episode.beats } });
+    }
+
+    function latestArtifactResult(artifactId) {
+      return [...appState.actionResults].reverse().find(result => result.artifactId === artifactId);
+    }
+
+    function startScriptAiGeneration(label, transform) {
+      const block = findScriptBlock(scriptState.selectedBlockId);
+      if (!block) return;
+      const modelId = appState.models.stageSelections?.[5] || config.projectModel;
+      const model = appState.models.items.find(item => item.id === modelId) || fallbackModels[0];
+      const estimated = WorkflowModel.estimatePoints(model, { inputTokens:1000, outputTokens:400 });
+      const after = transform(block.text);
+      const data = JSON.parse(JSON.stringify(scriptArtifactData()));
+      for (const scene of data.场景) {
+        const candidate = scene.正文块.find(item => item.id === block.id);
+        if (candidate) candidate.text = after;
+      }
+      const artifact = appState.artifacts['EP-001-SCRIPT'] || WorkflowModel.ensureStageArtifactForGeneration(appState, 5, scriptArtifactData());
+      startGenerationFlow({ action:'script-ai-edit', type:'SCRIPT_AI_EDIT', stage:5, scope:`${label} · ${block.id}`, operation:label, modelId, estimatedPoints:estimated, actualPoints:model.demo ? 0 : Math.max(0, estimated - Math.ceil(estimated * .08)), artifactId:artifact.id, path:artifact.path, data, before:block.text, after, apply:() => { block.text = after; } });
     }
 
     function saveReviewArtifact(status = 'draft') {
@@ -1065,6 +1092,7 @@
     const scriptState = {
       selectedBlockId:null,
       pendingAi:null,
+      focusBlocks:false,
       checks:[],
       scenes:[{
         id:'SCENE-001', title:'天台 · 夜 · 外',
@@ -1156,16 +1184,16 @@
     function structureView() {
       return `<section class="card">${cardHead('结构化文字剧本', '按集确定开场方案、故事梗概、核心内容、结尾钩子和节拍结构')}
         ${structureState.episodes.map((episode,index) => `<div class="outline-row"><div class="ep">第 ${String(index + 1).padStart(2,'0')} 集</div><div><strong>${escapeHtml(episode.title)}</strong><p>${escapeHtml(episode.summary)}</p><small>${episode.beats.length} 个节拍</small></div><div class="score">${index === 0 ? '钩子 92' : '冲突 88'}</div></div>`).join('')}
-        <div class="actions"><button class="btn primary" data-action="confirm-episode-structure">确认分集结构</button><button class="btn secondary" data-action="open-episode-structure">打开单集结构</button><button class="btn secondary" data-action="add-beat">新增节拍</button><button class="btn secondary" data-action="regenerate-beats">重新生成节拍</button></div>
+        <div class="actions"><button class="btn primary" data-action="confirm-episode-structure">确认分集结构</button><button class="btn secondary" data-action="open-episode-structure">打开单集结构</button><button class="btn secondary" data-action="add-beat">新增节拍</button><button class="btn secondary" data-action="regenerate-beats">重新生成节拍</button><button class="btn secondary" data-action="view-structure-result">查看最近保存结果</button></div>
       </section>`;
     }
 
     function scriptView() {
       return `<section class="card">${cardHead('正文编辑器', '以场景、动作、对白和旁白为最小编辑单元')}
         <div class="editor-shell"><div class="episode-nav"><button class="active">第 01 集</button><button>第 02 集</button><button>第 03 集</button><button>第 04 集</button></div>
-          <div class="script-editor">${scriptState.scenes.map((scene,sceneIndex) => `<div class="scene-label">场景 ${String(sceneIndex + 1).padStart(2,'0')}　${escapeHtml(scene.title)}</div>${scene.blocks.map(block => `<button class="script-block ${scriptState.selectedBlockId === block.id ? 'selected' : ''}" data-action="select-script-block" data-block-id="${block.id}" aria-pressed="${scriptState.selectedBlockId === block.id}"><span class="tag">${block.type}</span> ${block.speaker ? `<strong>${escapeHtml(block.speaker)}：</strong>` : '△ '}${escapeHtml(block.text)}</button>`).join('')}`).join('')}
-          <div class="ai-tools"><button data-action="ai-continue">续写选中段落</button><button data-action="ai-conflict">增强冲突</button><button data-action="ai-condense-dialogue">精简对白</button><button data-action="ai-rewrite-tone">改写语气</button><button data-action="ai-character-check">检查角色一致性</button></div>${scriptState.selectedBlockId ? '<div class="notice" style="margin-top:10px">已选择正文块，可执行 AI 操作；采纳结果后才会写入新版本。</div>' : '<div class="notice" style="margin-top:10px">请先选择一个正文块，再使用 AI 工具。</div>'}</div>
-        </div><div class="notice">正文块类型：ACTION · DIALOGUE · VOICE_OVER · OFF_SCREEN · SUBTITLE · SFX · VFX · TRANSITION</div><div class="actions"><button class="btn primary" data-action="add-scene">新增场景</button><button class="btn secondary" data-action="add-script-block">新增正文块</button><button class="btn secondary" data-action="open-script-check">运行正文检查</button><button class="btn secondary" data-action="open-script-export">导出正文</button></div>
+          <div class="script-editor">${scriptState.scenes.map((scene,sceneIndex) => `<div class="scene-label">场景 ${String(sceneIndex + 1).padStart(2,'0')}　${escapeHtml(scene.title)}</div>${scene.blocks.map(block => `<button class="script-block ${scriptState.selectedBlockId === block.id ? 'selected' : ''} ${scriptState.focusBlocks ? 'guidance-focus' : ''}" data-action="select-script-block" data-block-id="${block.id}" aria-pressed="${scriptState.selectedBlockId === block.id}"><span class="tag">${block.type}</span> ${block.speaker ? `<strong>${escapeHtml(block.speaker)}：</strong>` : '△ '}${escapeHtml(block.text)}</button>`).join('')}`).join('')}
+          <div class="ai-tools"><button data-action="ai-continue">续写选中段落</button><button data-action="ai-conflict">增强冲突</button><button data-action="ai-condense-dialogue">精简对白</button><button data-action="ai-rewrite-tone">改写语气</button><button data-action="ai-character-check">检查角色一致性</button></div>${scriptState.selectedBlockId ? '<div class="notice" style="margin-top:10px">已选择正文块，可执行 AI 操作；采纳结果后才会写入新版本。</div>' : '<div class="notice" style="margin-top:10px">请先选择一个正文块，再使用 AI 工具。<button class="btn secondary" data-action="focus-script-blocks">高亮可选正文块</button></div>'}</div>
+        </div><div class="notice">正文块类型：ACTION · DIALOGUE · VOICE_OVER · OFF_SCREEN · SUBTITLE · SFX · VFX · TRANSITION</div><div class="actions"><button class="btn primary" data-action="add-scene">新增场景</button><button class="btn secondary" data-action="add-script-block">新增正文块</button><button class="btn secondary" data-action="open-script-check">运行正文检查</button><button class="btn secondary" data-action="open-script-export">导出正文</button><button class="btn secondary" data-action="view-script-result">查看最近保存结果</button></div>
       </section>`;
     }
 
@@ -1387,6 +1415,7 @@
       const generation = appState.generation;
       const spec = generation.result;
       if (!spec) return;
+      spec.apply?.();
       const result = WorkflowModel.acceptGenerationResult(appState, { ...spec, taskId:generation.taskId });
       generation.visible = false;
       closeOverlay();
@@ -1614,6 +1643,8 @@
         'open-generation-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('generation-result', { result:{ ...result, readonly:true } }); },
         'open-action-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('action-result', { result }); },
         'view-action-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('action-result', { result }); },
+        'view-structure-result': () => { const result = latestArtifactResult('EP-001-STRUCTURE'); if (result) openOverlay('action-result', { result }); else notify('尚无结构化剧本保存记录，请先保存单集结构或节拍。'); },
+        'view-script-result': () => { const result = latestArtifactResult('EP-001-SCRIPT'); if (result) openOverlay('action-result', { result }); else notify('尚无剧本正文保存记录，请先保存场景、正文块或运行检查。'); },
         'open-analysis-impact-review': openAnalysisImpactReview,
         'discard-generation-result': () => { appState.generation.visible = false; closeOverlay(); render(); notify('已放弃本次生成结果，任务记录仍可在任务中心查看。'); },
         'accept-generation-result': acceptGenerationResult,
@@ -1626,7 +1657,7 @@
         'resume-project': () => { closeOverlay(); enterWorkspace('continue'); },
         'restore-version': () => { closeOverlay(); notify('历史版本已恢复为新版本，原记录保持不变。'); },
         'retry-task': () => { closeOverlay(); notify('已创建新的重试任务。'); },
-        'focus-script-blocks': () => { closeOverlay(); activeIndex = 5; appState.project.activeStage = activeIndex; render(); notify('请选择一个正文块后重试。'); },
+        'focus-script-blocks': () => { closeOverlay(); activeIndex = 5; appState.project.activeStage = activeIndex; scriptState.focusBlocks = true; render(); document.querySelector('.script-block')?.scrollIntoView({ behavior:'smooth', block:'center' }); setTimeout(() => { scriptState.focusBlocks = false; if (activeIndex === 5) render(); }, 1800); notify('请选择高亮的正文块后重试。'); },
         'focus-storyboard-shots': () => { closeOverlay(); activeIndex = 7; appState.project.activeStage = activeIndex; render(); notify('请选择一个镜头后重试。'); },
         'focus-review-blockers': () => { closeOverlay(); activeIndex = 6; appState.project.activeStage = activeIndex; render(); notify('请先处理高风险或阻断问题。'); },
         'open-hook-selector': () => { activeIndex = 3; appState.project.activeStage = activeIndex; openOverlay('hook-selector'); },
@@ -1729,31 +1760,35 @@
           episode.conflict = document.getElementById('episode-conflict').value.trim();
           episode.turn = document.getElementById('episode-turn').value.trim();
           episode.hook = document.getElementById('episode-hook').value.trim();
-          const artifact = upsertArtifact({ id:'EP-001-STRUCTURE', type:'episode_structure', stage:4, title:'EP-001 单集结构', path:'05-分集结构/EP-001-单集结构.md', status:'draft', dependsOn:['ADAPT-001'], affects:['EP-001-SCRIPT'], data:{ 本集目标:episode.goal, 核心冲突:episode.conflict, 关键转折:episode.turn, 结尾钩子:episode.hook, 节拍:episode.beats } });
-          closeOverlay(); render(); notify(`单集结构已保存为 V${artifact.version}。`);
+          const artifact = saveStructureArtifact();
+          render(); notify(`单集结构已保存为 V${artifact.version}。`); recordArtifactActionResult('save-episode-structure', artifact);
         },
         'save-beat': () => {
           const beat = document.getElementById('beat-text').value.trim();
           if (!beat) return notify('节拍内容不能为空。');
           structureState.episodes[structureState.selectedEpisode].beats.push(beat);
-          closeOverlay(); render(); notify('新节拍已添加到当前单集。');
+          const artifact = saveStructureArtifact();
+          render(); notify(`新节拍已添加，单集结构更新为 V${artifact.version}。`); recordArtifactActionResult('save-beat', artifact);
         },
         'confirm-beat-regeneration': () => {
           const episode = structureState.episodes[structureState.selectedEpisode];
-          episode.beats = episode.beats.map((beat,index) => index === episode.beats.length - 1 ? `${beat}（强化下一集承接）` : beat);
-          const task = WorkflowModel.createTask(appState, { type:'REGENERATE_BEATS', stage:4, scope:`${episode.id} · 节拍` });
-          task.status = 'SUCCEEDED';
-          WorkflowModel.recordPoints(appState, { taskId:task.id, operation:'重新生成节拍', modelId:config.projectModel, estimated:0, preconsumed:0, actual:0, refunded:0 });
-          const artifact = upsertArtifact({ id:'EP-001-STRUCTURE', type:'episode_structure', stage:4, title:'EP-001 单集结构', path:'05-分集结构/EP-001-单集结构.md', status:'draft', dependsOn:['ADAPT-001'], affects:['EP-001-SCRIPT'], data:{ 本集目标:episode.goal, 核心冲突:episode.conflict, 关键转折:episode.turn, 结尾钩子:episode.hook, 节拍:episode.beats } });
-          closeOverlay(); render(); notify(`节拍已用演示模型重新生成，0 积分；文档 V${artifact.version}。`);
+          const modelId = appState.models.stageSelections?.[4] || config.projectModel;
+          const model = appState.models.items.find(item => item.id === modelId) || fallbackModels[0];
+          const estimated = WorkflowModel.estimatePoints(model, { inputTokens:1800, outputTokens:600 });
+          const before = episode.beats.join('\n');
+          const beats = episode.beats.map((beat,index) => index === episode.beats.length - 1 ? `${beat}（强化下一集承接）` : beat);
+          const artifact = appState.artifacts['EP-001-STRUCTURE'] || saveStructureArtifact();
+          const data = { ...artifact.data, 节拍:beats };
+          startGenerationFlow({ action:'regenerate-beats', type:'REGENERATE_BEATS', stage:4, scope:`${episode.id} · 节拍`, operation:'重新生成节拍', modelId, estimatedPoints:estimated, actualPoints:model.demo ? 0 : Math.max(0, estimated - Math.ceil(estimated * .08)), artifactId:artifact.id, path:artifact.path, data, before, after:beats.join('\n'), apply:() => { episode.beats = beats; } });
         },
         'confirm-episode-structure': () => {
           const episode = structureState.episodes[structureState.selectedEpisode];
-          const artifact = upsertArtifact({ id:'EP-001-STRUCTURE', type:'episode_structure', stage:4, title:'EP-001 单集结构', path:'05-分集结构/EP-001-单集结构.md', status:'confirmed', dependsOn:['ADAPT-001'], affects:['EP-001-SCRIPT'], data:{ 本集目标:episode.goal, 核心冲突:episode.conflict, 关键转折:episode.turn, 结尾钩子:episode.hook, 节拍:episode.beats } });
-          appState.stages[4].status = 'NEEDS_CONFIRMATION'; render(); notify(`分集结构已确认并保存为 V${artifact.version}。`);
+          const artifact = saveStructureArtifact('confirmed');
+          appState.stages[4].status = 'NEEDS_CONFIRMATION'; render(); notify(`分集结构已确认并保存为 V${artifact.version}。`); recordArtifactActionResult('confirm-episode-structure', artifact);
         },
         'select-script-block': () => {
           scriptState.selectedBlockId = element.dataset.blockId;
+          scriptState.focusBlocks = false;
           render();
           notify(`已选择正文块 ${scriptState.selectedBlockId}。`);
         },
@@ -1769,7 +1804,7 @@
           };
           scriptState.scenes.push(scene);
           const artifact = saveScriptArtifact();
-          closeOverlay(); render(); notify(`${scene.id} 已新增，剧本正文更新为 V${artifact.version}。`);
+          render(); notify(`${scene.id} 已新增，剧本正文更新为 V${artifact.version}。`); recordArtifactActionResult('save-scene', artifact, { after:`${scene.id} 已新增；${artifact.path} 已保存为 V${artifact.version}` });
         },
         'add-script-block': () => openOverlay('script-block-editor'),
         'save-script-block': () => {
@@ -1780,61 +1815,36 @@
           scriptState.scenes.at(-1).blocks.push(block);
           scriptState.selectedBlockId = block.id;
           const artifact = saveScriptArtifact();
-          closeOverlay(); render(); notify(`${block.id} 已保存，剧本正文更新为 V${artifact.version}。`);
+          render(); notify(`${block.id} 已保存，剧本正文更新为 V${artifact.version}。`); recordArtifactActionResult('save-script-block', artifact, { after:`${block.id} 已保存；${artifact.path} 已保存为 V${artifact.version}` });
         },
         'ai-continue': () => {
-          const block = findScriptBlock(scriptState.selectedBlockId);
-          if (!block) return notify('请先选择一个正文块。');
-          scriptState.pendingAi = { blockId:block.id, label:'续写选中段落', before:block.text, after:`${block.text} 他抬头望向窗外，熟悉的霓虹正倒映出一个本不该出现的人影。` };
-          openOverlay('script-ai-diff');
+          startScriptAiGeneration('续写选中段落', text => `${text} 他抬头望向窗外，熟悉的霓虹正倒映出一个本不该出现的人影。`);
         },
         'ai-conflict': () => {
-          const block = findScriptBlock(scriptState.selectedBlockId);
-          if (!block) return notify('请先选择一个正文块。');
-          scriptState.pendingAi = { blockId:block.id, label:'增强冲突', before:block.text, after:`${block.text} 门外同时响起三次急促敲门，系统警报把倒计时骤然压缩到十分钟。` };
-          openOverlay('script-ai-diff');
+          startScriptAiGeneration('增强冲突', text => `${text} 门外同时响起三次急促敲门，系统警报把倒计时骤然压缩到十分钟。`);
         },
         'ai-condense-dialogue': () => {
-          const block = findScriptBlock(scriptState.selectedBlockId);
-          if (!block) return notify('请先选择一个正文块。');
-          const concise = block.text.replace(/[，。！？…]/g,'').slice(0,18) || block.text;
-          scriptState.pendingAi = { blockId:block.id, label:'精简对白', before:block.text, after:concise };
-          openOverlay('script-ai-diff');
+          startScriptAiGeneration('精简对白', text => text.replace(/[，。！？…]/g,'').slice(0,18) || text);
         },
         'ai-rewrite-tone': () => {
-          const block = findScriptBlock(scriptState.selectedBlockId);
-          if (!block) return notify('请先选择一个正文块。');
-          scriptState.pendingAi = { blockId:block.id, label:'改写语气', before:block.text, after:`冷静地说：${block.text}` };
-          openOverlay('script-ai-diff');
+          startScriptAiGeneration('改写语气', text => `冷静地说：${text}`);
         },
         'ai-character-check': () => {
-          const block = findScriptBlock(scriptState.selectedBlockId);
-          if (!block) return notify('请先选择一个正文块。');
-          scriptState.pendingAi = { blockId:block.id, label:'检查角色一致性', before:block.text, after:`${block.text}（保持林野“先观察、后反制”的行为边界）` };
-          openOverlay('script-ai-diff');
+          startScriptAiGeneration('检查角色一致性', text => `${text}（保持林野“先观察、后反制”的行为边界）`);
         },
-        'accept-ai-diff': () => {
-          const block = findScriptBlock(scriptState.pendingAi?.blockId);
-          if (!block) return notify('建议对应的正文块已不存在。');
-          block.text = scriptState.pendingAi.after;
-          const task = WorkflowModel.createTask(appState,{type:'SCRIPT_AI_EDIT',stage:5,scope:`${scriptState.pendingAi.label} · ${block.id}`});
-          task.status = 'SUCCEEDED';
-          WorkflowModel.recordPoints(appState,{taskId:task.id,operation:scriptState.pendingAi.label,modelId:config.projectModel,estimated:0,preconsumed:0,actual:0,refunded:0});
-          const artifact = saveScriptArtifact();
-          scriptState.pendingAi = null;
-          closeOverlay(); render(); notify(`AI 建议已采纳，正文更新为 V${artifact.version}，演示任务消耗 0 积分。`);
-        },
+        'accept-ai-diff': acceptGenerationResult,
         'open-script-check': () => dispatchAction('run-script-check', element),
         'run-script-check': () => {
           scriptState.checks = [
             { level:'建议', title:'动作段可增加可视锚点', detail:'BLOCK-001 可补充“栏杆锈迹”以强化时间回溯的现场一致性。' },
             { level:'建议', title:'对白信息密度偏低', detail:'BLOCK-002 可在不暴露系统设定的前提下补充主角目标。' }
           ];
-          saveScriptArtifact();
+          const artifact = saveScriptArtifact();
+          recordArtifactActionResult('run-script-check', artifact, { open:false, after:`正文检查完成：0 个阻断问题，${scriptState.checks.length} 个建议；${artifact.path} 为 V${artifact.version}` });
           openOverlay('script-check');
         },
         'open-script-export': () => dispatchAction('export-script', element),
-        'export-script': () => openOverlay('script-export'),
+        'export-script': () => { const artifact = appState.artifacts['EP-001-SCRIPT'] || saveScriptArtifact(); recordArtifactActionResult('export-script', artifact, { open:false, after:`正文导出预览已创建：${artifact.path} · V${artifact.version}` }); openOverlay('script-export'); },
         'filter-review-issues': () => openOverlay('review-filter'),
         'apply-review-filter': () => {
           reviewState.filters.severity = document.getElementById('review-filter-severity').value;
