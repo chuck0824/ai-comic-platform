@@ -9,6 +9,12 @@ const html = fs.readFileSync(htmlPath, 'utf8');
 const prdPath = path.join(__dirname, '..', '漫剧视频创作平台_PRD.md');
 const prd = fs.readFileSync(prdPath, 'utf8');
 
+test('PRD requires clickable actions condition guidance and persistent results', () => {
+  for (const term of ['所有业务按钮可点击','条件不足','操作前需要完成','结果弹层','不能仅以 Toast','行为结果测试']) {
+    assert.ok(prd.includes(term), `missing ${term}`);
+  }
+});
+
 function loadModel() {
   const match = html.match(/\/\* WORKFLOW_MODEL_START \*\/([\s\S]*?)\/\* WORKFLOW_MODEL_END \*\//);
   assert.ok(match, 'workflow model block must exist');
