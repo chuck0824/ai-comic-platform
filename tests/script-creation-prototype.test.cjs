@@ -226,3 +226,10 @@ test('upload and model controls are present', () => {
     assert.match(html, new RegExp(`data-action="${action}"`));
   }
 });
+
+test('analysis editors have save actions and markdown targets', () => {
+  for (const action of ['save-summary','save-event','save-character','save-world','open-markdown-preview','apply-impact-choice']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+  for (const file of ['故事梗概.md','主要事件.md','章节大纲.md','世界观.md','00-人物索引.md']) assert.ok(html.includes(file));
+});
