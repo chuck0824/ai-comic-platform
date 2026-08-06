@@ -239,3 +239,9 @@ test('adaptation and structure actions persist instead of only notifying', () =>
     assert.match(html, new RegExp(`data-action="${action}"`));
   }
 });
+
+test('all script AI tools and editor controls are actionable', () => {
+  for (const action of ['select-script-block','ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check','save-scene','save-script-block','open-script-check','open-script-export','accept-ai-diff']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+});
