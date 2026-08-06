@@ -250,6 +250,33 @@ test('task center exposes revisitable generation results', () => {
   assert.match(html, /data-action="open-generation-result"/);
 });
 
+test('regeneration without a saved stage artifact is guided without creating records', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const precondition = model.evaluateActionPrecondition({ hasStageArtifact:false }, 'open-regenerate');
+  assert.equal(precondition.allowed, false);
+  assert.equal(precondition.code, 'STAGE_ARTIFACT_REQUIRED');
+  assert.equal(state.tasks.length, 0);
+  assert.equal(state.billingEntries.length, 0);
+});
+
+test('accepting the same generation task twice is idempotent', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  model.createArtifact(state, { id:'ADAPT-001', type:'adaptation', stage:3, title:'改编方案', path:'04-改编方案.md', data:{ 策略:'初稿' } });
+  const spec = { action:'regenerate', taskId:'task-1', artifactId:'ADAPT-001', data:{ 策略:'生成稿' }, actualPoints:0 };
+  const first = model.acceptGenerationResult(state, spec);
+  const second = model.acceptGenerationResult(state, spec);
+  assert.equal(second.id, first.id);
+  assert.equal(state.artifacts['ADAPT-001'].version, 2);
+  assert.equal(state.billingEntries.length, 1);
+});
+
+test('revisited generation results render in readonly mode', () => {
+  assert.match(html, /result\.readonly/);
+  assert.match(html, /已采纳结果仅供查看/);
+});
+
 test('empty pricing response falls back to demo models', () => {
   const model = loadModel();
   const result = model.resolveModels([], [{ id:'demo-script-pro', name:'演示剧本模型', demo:true, points:0 }]);

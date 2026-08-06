@@ -591,12 +591,14 @@
       }
 
       function acceptGenerationResult(state, spec = {}) {
+        const existing = spec.taskId && state.actionResults.find(result => result.taskId === spec.taskId && result.status === 'SUCCEEDED');
+        if (existing) return existing;
         const artifact = spec.artifactId && state.artifacts[spec.artifactId]
           ? updateArtifact(state, spec.artifactId, { data:spec.data || state.artifacts[spec.artifactId].data, updatedBy:'ai' })
           : null;
         if (artifact) markArtifactImpacts(state, artifact.id, Object.keys(spec.data || {}));
         recordPoints(state, { taskId:spec.taskId, operation:spec.operation || spec.action, modelId:spec.modelId, estimated:spec.estimatedPoints ?? 0, preconsumed:spec.estimatedPoints ?? 0, actual:spec.actualPoints ?? 0, refunded:Math.max(0, (spec.estimatedPoints ?? 0) - (spec.actualPoints ?? 0)) });
-        return createActionResult(state, { ...spec, artifactId:artifact?.id || spec.artifactId, path:artifact?.path || spec.path, version:artifact?.version || spec.version, before:spec.before || '', after:spec.after || '', status:'SUCCEEDED' });
+        return createActionResult(state, { ...spec, artifactId:artifact?.id || spec.artifactId, path:artifact?.path || spec.path, version:artifact?.version || spec.version, before:spec.before || '', after:spec.after || '', readonly:true, status:'SUCCEEDED' });
       }
 
       function canApproveReview(issues = []) {
@@ -723,6 +725,9 @@
         }
         if (action === 'confirm-adaptation' && !context.selectedHook) {
           return { allowed:false, code:'HOOK_REQUIRED', title:'请选择高压开场', message:'确认改编方案前必须选定一个高压开场。', targetAction:'open-hook-selector' };
+        }
+        if (action === 'open-regenerate' && !context.hasStageArtifact) {
+          return { allowed:false, code:'STAGE_ARTIFACT_REQUIRED', title:'请先保存当前阶段产物', message:'重新生成会创建当前产物的新版本。请先保存或确认本阶段产物后再继续。', targetAction:'save-stage-draft' };
         }
         return { allowed:true, code:'ALLOW', title:'', message:'' };
       }
@@ -1317,7 +1322,7 @@
       const latest = versions.at(-1)?.version || `V${activeIndex + 1}`;
       const surfaces = {
         'generation-progress': () => { const generation = appState.generation; return overlayFrame('generation-progress','正在生成','任务将持续记录，离开页面后可在任务中心查看',`<div class="mini-card"><h3>${escapeHtml(generation.spec?.scope || '生成内容')}</h3><p>${generation.status || 'QUEUED'} · ${generation.progress}%</p><div class="progress-track" role="progressbar" aria-valuenow="${generation.progress}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${generation.progress}%"></div></div></div>`,`<button class="btn secondary" data-action="open-generation-task">在任务中心查看</button>`); },
-        'generation-result': () => { const result = overlayState.payload.result || appState.generation.result || {}; return overlayFrame('generation-result','生成结果已就绪','采纳会写入新版本；放弃不会覆盖现有产物',`<div class="grid-2"><div class="mini-card"><h3>当前版本</h3><p>${escapeHtml(result.before || result.path || '当前产物')}</p></div><div class="mini-card"><h3>建议结果</h3><p>${escapeHtml(result.after || `任务 ${result.taskId || ''} 已完成，可作为独立版本保存。`)}</p></div></div>`,`<button class="btn secondary" data-action="discard-generation-result">放弃结果</button><button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="accept-generation-result">采纳并保存新版本</button>`); },
+        'generation-result': () => { const result = overlayState.payload.result || appState.generation.result || {}; const readonly = result.readonly; return overlayFrame('generation-result',readonly ? '已采纳生成结果' : '生成结果已就绪',readonly ? '已采纳结果仅供查看，不会再次写入版本或计费。' : '采纳会写入新版本；放弃不会覆盖现有产物',`<div class="grid-2"><div class="mini-card"><h3>当前版本</h3><p>${escapeHtml(result.before || result.path || '当前产物')}</p></div><div class="mini-card"><h3>建议结果</h3><p>${escapeHtml(result.after || `任务 ${result.taskId || ''} 已完成，可作为独立版本保存。`)}</p></div></div>`,readonly ? `<button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="close-overlay">关闭</button>` : `<button class="btn secondary" data-action="discard-generation-result">放弃结果</button><button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="accept-generation-result">采纳并保存新版本</button>`); },
         'action-guidance': () => overlayFrame('action-guidance',overlayState.payload.title, '完成前置条件后可继续当前操作', `<div class="notice">${escapeHtml(overlayState.payload.message || '')}</div>`, `<button class="btn secondary" data-action="close-overlay">返回当前页面</button><button class="btn primary" data-action="${overlayState.payload.targetAction}">去完成前置条件</button>`),
         'markdown-preview': () => overlayFrame('markdown-preview-dialog',overlayState.payload.title || 'Markdown 预览',overlayState.payload.path || 'Obsidian 项目文档',`<pre class="markdown-preview">${escapeHtml(overlayState.payload.markdown || '')}</pre>`,`<button class="btn secondary" data-action="close-overlay">关闭</button>`),
         'summary-editor': () => overlayFrame('summary-editor','编辑故事梗概','保存后更新 03-小说分析/故事梗概.md，并检查下游影响',`<div class="field"><label>完整梗概</label><textarea id="summary-editor-value">${escapeHtml(appState.artifacts['SUMMARY-001']?.data?.完整梗概 || defaultSummary)}</textarea></div><div class="notice">文档还包含一句话卖点、主线目标、核心冲突、开端、发展、高潮、结局和未解决悬念。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-summary">保存梗概</button>`),
@@ -1491,7 +1496,8 @@
         selectedBlockId:scriptState.selectedBlockId,
         selectedShotId:storyboardState.selectedShotId,
         issues:reviewState.issues,
-        selectedHook:adaptationState.selectedHook
+        selectedHook:adaptationState.selectedHook,
+        hasStageArtifact:Object.values(appState.artifacts).some(artifact => artifact.stage === activeIndex)
       }, action);
       if (precondition.allowed) return true;
       openOverlay('action-guidance', precondition);
@@ -1520,7 +1526,7 @@
         'open-version-diff': () => openOverlay('version-diff'),
         'open-regenerate': () => openOverlay('regenerate'),
         'open-generation-task': () => openOverlay('task-center'),
-        'open-generation-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('generation-result', { result }); },
+        'open-generation-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('generation-result', { result:{ ...result, readonly:true } }); },
         'discard-generation-result': () => { appState.generation.visible = false; closeOverlay(); render(); notify('已放弃本次生成结果，任务记录仍可在任务中心查看。'); },
         'accept-generation-result': acceptGenerationResult,
         'open-stale-impact': () => openOverlay('stale-impact'),
