@@ -106,6 +106,14 @@ The creation-settings drawer is used as focused evidence for the restored classi
 - Verified the “更多” menu, project-settings drawer, current-stage version history, breadcrumb presence, unchanged stage footer and zero browser console errors.
 - Accepted viewport evidence: `/Users/apple/Desktop/漫剧/平台/artifacts/script-creation-completion-2026-08-06/13-simplified-workbench-header.png`.
 
+### Iteration 9
+
+- P1: the stage-transition surface presented route cards, task metadata, three technical steps and a second confirmation action, creating unnecessary reading between creative stages.
+- Replaced all seven inter-stage surfaces with one centered percentage loader: next-stage name, tabular percentage, single progressbar, concise status copy and a secondary return action.
+- Verified a live mid-state at 47%, absence of the manual “立即进入” action, automatic entry after 100%, all seven shared transitions reaching stage 8, and zero browser console errors.
+- The accessible progressbar exposes min/max/current values and the status copy uses a polite live region; reduced-motion removes the width animation.
+- Accepted viewport evidence: `/Users/apple/Desktop/漫剧/平台/artifacts/script-creation-completion-2026-08-06/14-transition-percentage-loader.png`.
+
 ## Follow-up polish
 
 - P3: after product-direction approval, replace the static sample data with realistic API-backed loading, empty, failure, regeneration, and version-diff states during implementation.
