@@ -462,6 +462,49 @@ test('review storyboard and delivery controls expose complete interactions', () 
   }
 });
 
+test('script export confirmation persists a completed manual result with delivery metadata', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const result = model.completeExportAction(state, {
+    stage:5, scope:'剧本正文 · 第 1 集', artifactId:'EP-001-SCRIPT',
+    path:'06-剧本正文/EP-001-剧本正文.md', version:3, exportRange:'第 1 集', exportFormat:'DOCX'
+  });
+
+  assert.equal(result.status, 'SUCCEEDED');
+  assert.equal(result.resultType, 'MANUAL_ACTION');
+  assert.equal(result.exportRange, '第 1 集');
+  assert.equal(result.exportFormat, 'DOCX');
+  assert.equal(state.tasks[0].status, 'SUCCEEDED');
+  assert.equal(state.billingEntries[0].actual, 0);
+});
+
+test('stage model selection drives the displayed and submitted generation estimate', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  state.models.items = [
+    { id:'project-model', demo:false, modelRatio:1, completionRatio:1, groupRatio:1 },
+    { id:'stage-model', demo:false, modelRatio:2, completionRatio:3, groupRatio:1 }
+  ];
+  state.models.stageSelections = { 4:'stage-model' };
+  const generation = model.generationPricing(state, 4, 'project-model', { inputTokens:1800, outputTokens:600 });
+
+  assert.equal(generation.model.id, 'stage-model');
+  assert.equal(generation.estimatedPoints, 7200);
+});
+
+test('accepting script AI generation versions its artifact, stales dependents, and settles a result', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  model.createArtifact(state, { id:'EP-001-SCRIPT', type:'script', stage:5, title:'EP-001 剧本正文', path:'06-剧本正文/EP-001-剧本正文.md', affects:['EP-001-REVIEW'], data:{ 正文:'旧文本' } });
+  model.createArtifact(state, { id:'EP-001-REVIEW', type:'review', stage:6, title:'审核记录', path:'07-审核修订/EP-001-审核记录.md', dependsOn:['EP-001-SCRIPT'], data:{ 结论:'待检查' } });
+  const result = model.acceptGenerationResult(state, { action:'script-ai-edit', taskId:'TASK-AI-1', artifactId:'EP-001-SCRIPT', data:{ 正文:'AI 新文本' }, estimatedPoints:12, actualPoints:9, modelId:'stage-model' });
+
+  assert.equal(state.artifacts['EP-001-SCRIPT'].version, 2);
+  assert.equal(state.artifacts['EP-001-REVIEW'].stale, true);
+  assert.equal(result.status, 'SUCCEEDED');
+  assert.equal(state.billingEntries[0].actual, 9);
+});
+
 test('point estimate follows 3001 token ratio quota rules', () => {
   const model = loadModel();
   assert.equal(model.estimatePoints({ demo:true }, { inputTokens:1000, outputTokens:500 }), 0);
