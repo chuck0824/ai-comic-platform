@@ -233,3 +233,9 @@ test('analysis editors have save actions and markdown targets', () => {
   }
   for (const file of ['故事梗概.md','主要事件.md','章节大纲.md','世界观.md','00-人物索引.md']) assert.ok(html.includes(file));
 });
+
+test('adaptation and structure actions persist instead of only notifying', () => {
+  for (const action of ['choose-hook','save-adaptation-rule','save-adaptation','save-episode-structure','save-beat','confirm-beat-regeneration']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+});

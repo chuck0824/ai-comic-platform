@@ -126,6 +126,9 @@
     .model-source.remote { background: #e8f7ef; color: #167a49; }
     .model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; }
     .model-row select { width: 100%; border: 1px solid #dfe2e8; border-radius: 7px; background: #fff; padding: 8px 10px; color: #343741; }
+    .selectable-card { width: 100%; text-align: left; color: inherit; }
+    .selectable-card.selected { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 2px rgba(98,91,246,.08); }
+    .selectable-card small { display: block; margin-top: 8px; color: var(--muted); }
     .dropzone { border: 1px dashed #bfc3cf; border-radius: 10px; min-height: 185px; background: #fafafe; display: grid; place-items: center; text-align: center; color: var(--muted); }
     .dropzone strong { display: block; color: #444954; margin-bottom: 6px; }
     .dropzone p { font-size: 11px; margin: 0 0 12px; }
@@ -834,6 +837,24 @@
       ['E4','预判能力初显威，反制房东','林野首次活用低阶预判，指出房东私房钱事实，完成第一次实战。','林野、王婶','人 vs 人','爽感']
     ];
     let worldDescription = '一个现代都市“临渊市”的表象之下，潜藏由灵能、异常和规则构成的里世界。主角林野重生回灵潮爆发前两年，绑定逆天改命系统，在信息差即力量的环境中展开复仇并追查死亡真相。';
+    const adaptationState = {
+      selectedHook:null,
+      hooks:[
+        { id:'HP1', title:'天台坠亡', text:'以前世背叛与天台坠亡开场，30 秒内完成重生与系统绑定。', reason:'死亡冲击最强，能立即建立复仇目标。' },
+        { id:'HP2', title:'审讯倒计时', text:'从管理局审讯室切入，倒叙交代重生和异常能力。', reason:'悬疑感强，适合突出顾清寒与规则压力。' },
+        { id:'HP3', title:'拍卖会公开反杀', text:'先展示拍卖会反杀高潮，再回到 72 小时前。', reason:'爽点前置，适合短视频首屏留存。' }
+      ],
+      rules:[{ id:'RULE-001', type:'人物', priority:'高', text:'主角胜利依赖信息差与谋略，不依赖纯运气。' }],
+      confirmed:false
+    };
+    const structureState = {
+      selectedEpisode:0,
+      episodes:[
+        { id:'EP-001', title:'天台重生', summary:'林野确认时间回溯，并看见系统倒计时。', goal:'确认重生并获得第一个主动目标', conflict:'系统任务与前世创伤同时压迫', turn:'林野发现账本线索提前出现', hook:'管理局异常读数锁定出租屋', beats:['天台死亡闪回','出租屋惊醒','系统绑定','验证预判能力'] },
+        { id:'EP-002', title:'账本疑云', summary:'林野用新技能识破第一笔假账，赵承宇开始试探。', goal:'拿到账本线索', conflict:'赵承宇派人回收证据', turn:'账本是故意留下的诱饵', hook:'顾清寒出现在门外', beats:['追踪假账','首次试探','证据反转'] },
+        { id:'EP-003', title:'证据消失', summary:'关键文件被提前销毁，苏雅留下新的入口。', goal:'确定背叛链条', conflict:'证人与证据同时失控', turn:'苏雅掌握匿名转账记录', hook:'短信发送者来自管理局内部', beats:['仓库扑空','苏雅摇摆','匿名短信'] }
+      ]
+    };
 
     function analysisBasicContent() {
       if (basicTab === 'events') return `<div class="event-list">
@@ -886,21 +907,17 @@
         <div class="grid-2">
           <div class="mini-card"><h3>核心机制卖点</h3><p>主角绑定逆天改命系统，通过“嘲讽即变强”制造信息差、心理压迫和视觉化破防反馈。</p></div>
           <div class="mini-card"><h3>人物与情绪卖点</h3><p>前世背叛、审查官博弈、黑市交易三线交织；以重生复仇为驱动，持续制造压迫—反杀—爽点。</p></div>
-          <div class="mini-card"><h3>高压开场 HP1</h3><p>以“前世背叛与天台坠亡”开场，强化死亡冲击，并在 30 秒内完成重生与系统绑定。</p></div>
           <div class="mini-card"><h3>剧本创作策略</h3><p>前三集完成死亡钩子、能力演示和拍卖会冲突；机制必须视觉化，主角胜利依赖谋略而非纯运气。</p></div>
         </div>
-        <div class="actions"><button class="btn primary" data-action="confirm-adaptation">确认改编方案</button><button class="btn secondary" data-action="select-hook">选择高压开场</button><button class="btn secondary" data-action="add-adaptation-rule">新增改编规则</button><button class="btn secondary" data-action="open-version-history">历史版本</button></div>
+        <div class="config-section" style="margin-top:14px"><h3>高压开场候选</h3><p>必须选择一个开场才能确认方案。</p><div class="grid-2">${adaptationState.hooks.map(hook => `<button class="mini-card selectable-card ${adaptationState.selectedHook === hook.id ? 'selected' : ''}" data-action="choose-hook" data-hook-id="${hook.id}" aria-pressed="${adaptationState.selectedHook === hook.id}"><h3>${hook.id} · ${escapeHtml(hook.title)}</h3><p>${escapeHtml(hook.text)}</p><small>${escapeHtml(hook.reason)}</small></button>`).join('')}</div></div>
+        <div class="config-section"><h3>改编规则（${adaptationState.rules.length}）</h3>${adaptationState.rules.map(rule => `<div class="surface-row"><div><strong>${escapeHtml(rule.type)} · ${escapeHtml(rule.priority)}优先级</strong><p>${escapeHtml(rule.text)}</p></div><span class="tag">${rule.id}</span></div>`).join('')}</div>
+        <div class="actions"><button class="btn secondary" data-action="save-adaptation">保存改编方案</button><button class="btn primary" data-action="confirm-adaptation">确认改编方案</button><button class="btn secondary" data-action="select-hook">选择高压开场</button><button class="btn secondary" data-action="add-adaptation-rule">新增改编规则</button><button class="btn secondary" data-action="open-version-history">历史版本</button></div>
       </section>`;
     }
 
     function structureView() {
       return `<section class="card">${cardHead('结构化文字剧本', '按集确定开场方案、故事梗概、核心内容、结尾钩子和节拍结构')}
-        ${[
-          ['第 01 集','天台重生','林野确认时间回溯，并看见系统倒计时。','钩子 92'],
-          ['第 02 集','账本疑云','林野用新技能识破第一笔假账，赵承宇开始试探。','冲突 88'],
-          ['第 03 集','证据消失','关键文件被提前销毁，苏晴留下新的入口。','钩子 95'],
-          ['第 04 集','反向试探','林野主动设局，引导赵承宇暴露内部同盟。','冲突 84']
-        ].map(row => `<div class="outline-row"><div class="ep">${row[0]}</div><div><strong>${row[1]}</strong><p>${row[2]}</p></div><div class="score">${row[3]}</div></div>`).join('')}
+        ${structureState.episodes.map((episode,index) => `<div class="outline-row"><div class="ep">第 ${String(index + 1).padStart(2,'0')} 集</div><div><strong>${escapeHtml(episode.title)}</strong><p>${escapeHtml(episode.summary)}</p><small>${episode.beats.length} 个节拍</small></div><div class="score">${index === 0 ? '钩子 92' : '冲突 88'}</div></div>`).join('')}
         <div class="actions"><button class="btn primary" data-action="confirm-episode-structure">确认分集结构</button><button class="btn secondary" data-action="open-episode-structure">打开单集结构</button><button class="btn secondary" data-action="add-beat">新增节拍</button><button class="btn secondary" data-action="regenerate-beats">重新生成节拍</button></div>
       </section>`;
     }
@@ -1126,6 +1143,10 @@
         'character-editor': () => { const index = Number(overlayState.payload.index || 0); const person = characterProfiles[index]; return overlayFrame('character-editor',`编辑人物 · ${escapeHtml(person.name)}`,'保存完整人物小传并更新人物索引',`<input type="hidden" id="character-index" value="${index}"><div class="field-grid"><div class="field"><label>姓名</label><input id="character-name" value="${escapeHtml(person.name)}"></div><div class="field"><label>角色功能</label><input id="character-role" value="${escapeHtml(person.role)}"></div><div class="field"><label>与主角关系</label><input id="character-relation" value="${escapeHtml(person.relation)}"></div><div class="field"><label>人物原型</label><input id="character-archetype" value="${escapeHtml(person.archetype)}"></div></div><div class="field" style="margin-top:12px"><label>外形与身份</label><textarea id="character-appearance" style="min-height:90px">${escapeHtml(person.appearance)}</textarea></div><div class="field" style="margin-top:12px"><label>性格、欲望、恐惧、秘密与行为边界</label><textarea id="character-traits" style="min-height:110px">${escapeHtml(person.traits)}；${escapeHtml(person.boundary)}</textarea></div>`,`<button class="btn secondary" data-action="open-all-characters">返回人物列表</button><button class="btn primary" data-action="save-character">保存人物</button>`); },
         'world-editor': () => overlayFrame('world-editor','编辑世界观','保存到 03-小说分析/世界观.md，并关联主要地点、力量体系与势力阵营',`<div class="field"><label>整体世界类型与时间</label><textarea id="world-overview" style="min-height:105px">${escapeHtml(worldDescription)}</textarea></div><div class="field-grid" style="margin-top:12px"><div class="field"><label>主要地点</label><textarea id="world-places" style="min-height:100px">临渊市；旧港区夜渡拍卖会；管理局异常封锁部；青桥城中村</textarea></div><div class="field"><label>力量体系 / 规则</label><textarea id="world-power" style="min-height:100px">逆天改命系统；信息差与心理博弈；暴露底牌会被管理局监控</textarea></div><div class="field"><label>势力阵营</label><textarea id="world-factions" style="min-height:100px">管理局；赵氏世家；夜渡黑市；系统意志</textarea></div><div class="field"><label>禁忌与代价</label><textarea id="world-taboo" style="min-height:100px">普通人过度接触规则波动将被识别为异常；系统任务失败会降低命运偏移度</textarea></div></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-world">保存世界观</button>`),
         'impact-review': () => overlayFrame('impact-review','关联内容需要同步','上游文档已创建新版本，旧版不会被覆盖',`<div class="surface-list">${(overlayState.payload.impacts || ['04-改编方案.md','05-分集结构/EP-001-单集结构.md','06-剧本正文/EP-001-剧本正文.md','07-审核修订/EP-001-审核记录.md','08-文字分镜/EP-001-文字分镜.md']).map(path => `<div class="surface-row"><div><strong>${escapeHtml(path)}</strong><p>状态：需同步修改 · 可人工修改、模型同步或保留旧版</p></div><span class="tag">STALE</span></div>`).join('')}</div><div class="notice">影响记录将写入 90-变更影响.md；确认只标记状态，不自动覆盖下游内容。</div>`,`<button class="btn secondary" data-action="close-overlay">稍后处理</button><button class="btn primary" data-action="apply-impact-choice">确认影响清单</button>`),
+        'adaptation-rule-editor': () => overlayFrame('adaptation-rule-editor','新增改编规则','规则将写入 04-改编方案.md',`<div class="field-grid"><div class="field"><label>规则类型</label><select id="adaptation-rule-type"><option>人物</option><option>情节</option><option>节奏</option><option>合规</option></select></div><div class="field"><label>优先级</label><select id="adaptation-rule-priority"><option>高</option><option>中</option><option>低</option></select></div></div><div class="field" style="margin-top:12px"><label>规则内容</label><textarea id="adaptation-rule-text" style="min-height:100px">每集结尾必须形成可视化悬念，并与下一集首个节拍直接衔接。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-adaptation-rule">保存规则</button>`),
+        'episode-structure-editor': () => { const episode = structureState.episodes[structureState.selectedEpisode]; return overlayFrame('episode-structure-editor',`${episode.id} · ${escapeHtml(episode.title)}`,'保存到 05-分集结构/EP-001-单集结构.md',`<div class="field-grid"><div class="field"><label>本集目标</label><textarea id="episode-goal" style="min-height:85px">${escapeHtml(episode.goal)}</textarea></div><div class="field"><label>核心冲突</label><textarea id="episode-conflict" style="min-height:85px">${escapeHtml(episode.conflict)}</textarea></div><div class="field"><label>关键转折</label><textarea id="episode-turn" style="min-height:85px">${escapeHtml(episode.turn)}</textarea></div><div class="field"><label>结尾钩子</label><textarea id="episode-hook" style="min-height:85px">${escapeHtml(episode.hook)}</textarea></div></div><div class="config-section" style="margin-top:14px"><h3>节拍结构</h3>${episode.beats.map((beat,index) => `<div class="surface-row"><div><strong>节拍 ${index + 1}</strong><p>${escapeHtml(beat)}</p></div><span class="tag">BEAT-${String(index + 1).padStart(2,'0')}</span></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-episode-structure">保存单集结构</button>`); },
+        'beat-editor': () => overlayFrame('beat-editor','新增节拍','新增到当前单集结构末尾',`<div class="field"><label>节拍内容</label><textarea id="beat-text" style="min-height:110px">林野根据异常读数反向锁定管理局内部泄密者。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-beat">保存节拍</button>`),
+        'beat-regeneration': () => { const selectedModel = appState.models.items.find(model => model.id === config.projectModel) || fallbackModels[0]; return overlayFrame('beat-regeneration','重新生成当前节拍','旧版本保留，新结果创建独立版本',`${modelPickerMarkup('stage')}<div class="grid-2" style="margin-top:12px"><div class="mini-card"><h3>预计 Token</h3><p>输入 1,800 · 输出上限 600</p></div><div class="mini-card"><h3>预计积分</h3><p>${selectedModel.demo ? '0 积分（演示）' : '按 3001 实际倍率计算'}</p></div></div><div class="field" style="margin-top:12px"><label>临时指令</label><textarea id="beat-regenerate-instruction" style="min-height:85px">强化结尾钩子，并确保下一集开场能直接承接。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-beat-regeneration">创建生成任务</button>`); },
         'project-detail': () => overlayFrame('project-detail-dialog','项目详情','查看创作状态、版本与项目操作',`<div class="grid-2"><div class="mini-card"><h3>创作进度</h3><p>当前阶段：${stages[appState.project.activeStage].name}<br>项目状态：${appState.project.status}<br>完成度：${WorkflowModel.computeProgress(appState)}%</p></div><div class="mini-card"><h3>最近活动</h3><p>审核修订 V7 已保存<br>文字分镜等待开放<br>最近更新：刚刚</p></div></div><div class="surface-list" style="margin-top:12px"><div class="surface-row"><div><strong>版本与任务</strong><p>查看全部版本、生成任务和失败记录。</p></div><div><button class="btn secondary" data-action="open-version-history">历史版本</button> <button class="btn secondary" data-action="open-task-center">任务中心</button></div></div></div>`,`<button class="btn warn" data-action="archive-project">归档项目</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="resume-project">继续创作</button>`),
         'task-center': () => overlayFrame('task-center','任务中心','查看阶段流转、生成、失败和重试记录',`<div class="surface-list">${(appState.tasks.length ? appState.tasks : [{id:'task-demo-1',type:'ANALYSIS',scope:'小说分析 · 全部模块',status:'SUCCEEDED'},{id:'task-demo-2',type:'STORYBOARD',scope:'第 1 集 · 场景 1',status:'FAILED'}]).map(task => `<div class="surface-row"><div><strong>${task.scope || task.type}</strong><p>任务 ${task.id} · ${task.status} · ${task.status === 'FAILED' ? '服务暂时不可用，结果未覆盖' : '状态已同步'}</p></div><div>${task.status === 'FAILED' ? '<button class="btn primary" data-action="retry-task">重试</button>' : '<span class="tag">'+task.status+'</span>'}</div></div>`).join('')}</div>`),
         'version-history': () => overlayFrame('version-history',`${stages[activeIndex].name} · 历史版本`,'AI 生成、人工编辑和阶段确认均独立留痕',`<div class="surface-list">${[latest,`V${Math.max(1,activeIndex)}`,'V1'].map((version,index) => `<div class="surface-row"><div><strong>${version} ${index === 0 ? '· 当前版本' : ''}</strong><p>${index === 0 ? '阶段确认' : index === 1 ? '人工编辑' : 'AI 生成'} · ${index === 0 ? '刚刚' : index === 1 ? '昨天' : '3 天前'} · 输入版本已记录</p></div><button class="btn secondary" data-action="open-version-diff">对比</button></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="restore-version">恢复为新版本</button>`),
@@ -1353,6 +1374,56 @@
           openArtifactMarkdown(artifact);
         },
         'apply-impact-choice': () => { closeOverlay(); notify('影响清单已写入 90-变更影响.md，下游旧版本继续保留。'); },
+        'select-hook': () => { if (!adaptationState.selectedHook) adaptationState.selectedHook = adaptationState.hooks[0].id; render(); notify(`已选择 ${adaptationState.selectedHook} 高压开场。`); },
+        'choose-hook': () => { adaptationState.selectedHook = element.dataset.hookId; render(); notify(`已选择 ${adaptationState.selectedHook} 高压开场。`); },
+        'add-adaptation-rule': () => openOverlay('adaptation-rule-editor'),
+        'save-adaptation-rule': () => {
+          const text = document.getElementById('adaptation-rule-text').value.trim();
+          if (!text) return notify('改编规则内容不能为空。');
+          adaptationState.rules.push({ id:`RULE-${String(adaptationState.rules.length + 1).padStart(3,'0')}`, type:document.getElementById('adaptation-rule-type').value, priority:document.getElementById('adaptation-rule-priority').value, text });
+          closeOverlay(); render(); notify('改编规则已新增并进入待确认状态。');
+        },
+        'save-adaptation': () => {
+          if (!adaptationState.selectedHook) return notify('请先选择一个高压开场。');
+          if (!adaptationState.rules.length) return notify('至少需要一条改编规则。');
+          adaptationState.confirmed = true;
+          const hook = adaptationState.hooks.find(item => item.id === adaptationState.selectedHook);
+          const artifact = upsertArtifact({ id:'ADAPT-001', type:'adaptation', stage:3, title:'改编方案', path:'04-改编方案.md', status:'confirmed', dependsOn:['SUMMARY-001','EVENTS-001','WORLD-001'], affects:['EP-001-STRUCTURE'], data:{ 高压开场:hook, 改编规则:adaptationState.rules, 创作策略:'前三集完成死亡钩子、能力演示和拍卖会冲突；机制视觉化，胜利依赖谋略。' } });
+          appState.stages[3].status = 'NEEDS_CONFIRMATION'; render(); notify(`改编方案已确认并保存为 V${artifact.version}。`);
+        },
+        'confirm-adaptation': () => dispatchAction('save-adaptation', element),
+        'open-episode-structure': () => openOverlay('episode-structure-editor'),
+        'add-beat': () => openOverlay('beat-editor'),
+        'regenerate-beats': () => openOverlay('beat-regeneration'),
+        'save-episode-structure': () => {
+          const episode = structureState.episodes[structureState.selectedEpisode];
+          episode.goal = document.getElementById('episode-goal').value.trim();
+          episode.conflict = document.getElementById('episode-conflict').value.trim();
+          episode.turn = document.getElementById('episode-turn').value.trim();
+          episode.hook = document.getElementById('episode-hook').value.trim();
+          const artifact = upsertArtifact({ id:'EP-001-STRUCTURE', type:'episode_structure', stage:4, title:'EP-001 单集结构', path:'05-分集结构/EP-001-单集结构.md', status:'draft', dependsOn:['ADAPT-001'], affects:['EP-001-SCRIPT'], data:{ 本集目标:episode.goal, 核心冲突:episode.conflict, 关键转折:episode.turn, 结尾钩子:episode.hook, 节拍:episode.beats } });
+          closeOverlay(); render(); notify(`单集结构已保存为 V${artifact.version}。`);
+        },
+        'save-beat': () => {
+          const beat = document.getElementById('beat-text').value.trim();
+          if (!beat) return notify('节拍内容不能为空。');
+          structureState.episodes[structureState.selectedEpisode].beats.push(beat);
+          closeOverlay(); render(); notify('新节拍已添加到当前单集。');
+        },
+        'confirm-beat-regeneration': () => {
+          const episode = structureState.episodes[structureState.selectedEpisode];
+          episode.beats = episode.beats.map((beat,index) => index === episode.beats.length - 1 ? `${beat}（强化下一集承接）` : beat);
+          const task = WorkflowModel.createTask(appState, { type:'REGENERATE_BEATS', stage:4, scope:`${episode.id} · 节拍` });
+          task.status = 'SUCCEEDED';
+          WorkflowModel.recordPoints(appState, { taskId:task.id, operation:'重新生成节拍', modelId:config.projectModel, estimated:0, preconsumed:0, actual:0, refunded:0 });
+          const artifact = upsertArtifact({ id:'EP-001-STRUCTURE', type:'episode_structure', stage:4, title:'EP-001 单集结构', path:'05-分集结构/EP-001-单集结构.md', status:'draft', dependsOn:['ADAPT-001'], affects:['EP-001-SCRIPT'], data:{ 本集目标:episode.goal, 核心冲突:episode.conflict, 关键转折:episode.turn, 结尾钩子:episode.hook, 节拍:episode.beats } });
+          closeOverlay(); render(); notify(`节拍已用演示模型重新生成，0 积分；文档 V${artifact.version}。`);
+        },
+        'confirm-episode-structure': () => {
+          const episode = structureState.episodes[structureState.selectedEpisode];
+          const artifact = upsertArtifact({ id:'EP-001-STRUCTURE', type:'episode_structure', stage:4, title:'EP-001 单集结构', path:'05-分集结构/EP-001-单集结构.md', status:'confirmed', dependsOn:['ADAPT-001'], affects:['EP-001-SCRIPT'], data:{ 本集目标:episode.goal, 核心冲突:episode.conflict, 关键转折:episode.turn, 结尾钩子:episode.hook, 节拍:episode.beats } });
+          appState.stages[4].status = 'NEEDS_CONFIRMATION'; render(); notify(`分集结构已确认并保存为 V${artifact.version}。`);
+        },
         'confirm-source': () => {
           if (!sourceText.trim()) return notify('请先粘贴小说文本。');
           saveSourceArtifact();
