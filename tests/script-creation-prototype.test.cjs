@@ -202,6 +202,26 @@ test('point records keep estimate preconsume settlement and refund', () => {
   assert.equal(state.billingEntries.length, 1);
 });
 
+test('generation completion creates a revisitable result record', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const result = model.createActionResult(state, {
+    action:'regenerate', status:'SUCCEEDED', artifactId:'ADAPT-001',
+    path:'04-改编方案.md', version:2, taskId:'task-1', actualPoints:0
+  });
+  assert.equal(state.actionResults.length, 1);
+  assert.equal(result.version, 2);
+  assert.equal(result.path, '04-改编方案.md');
+});
+
+test('shared generation exposes progress result accept and discard actions', () => {
+  for (const action of ['accept-generation-result','discard-generation-result','open-generation-task']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+  assert.match(html, /overlayFrame\('generation-progress'/);
+  assert.match(html, /overlayFrame\('generation-result'/);
+});
+
 test('empty pricing response falls back to demo models', () => {
   const model = loadModel();
   const result = model.resolveModels([], [{ id:'demo-script-pro', name:'演示剧本模型', demo:true, points:0 }]);

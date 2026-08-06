@@ -447,6 +447,8 @@
           artifactOrder: [],
           impacts: [],
           billingEntries: [],
+          actionResults: [],
+          generation: { visible:false, status:null, progress:0, spec:null, taskId:null, result:null },
           models: { source:'fallback', loading:false, error:null, items:[], selectedId:null },
           editor: { selectedBlockId:null, storyboardView:'cards', reviewFilters:{ severity:'全部', status:'全部' } },
           transition: { visible:false, fromStage:null, toStage:null, status:null, taskId:null, error:null, progress:0 },
@@ -551,6 +553,25 @@
         const record = { id:`BILL-${state.billingEntries.length + 1}`, status:'SETTLED', createdAt:'2026-08-06T11:30:00+08:00', ...entry };
         state.billingEntries.push(record);
         return record;
+      }
+
+      function createActionResult(state, spec = {}) {
+        const result = {
+          id:`RESULT-${state.actionResults.length + 1}`,
+          createdAt:'2026-08-06T11:30:00+08:00',
+          action:spec.action || 'generate',
+          status:spec.status || 'SUCCEEDED',
+          artifactId:spec.artifactId || null,
+          path:spec.path || null,
+          version:spec.version || null,
+          taskId:spec.taskId || null,
+          estimatedPoints:spec.estimatedPoints ?? 0,
+          actualPoints:spec.actualPoints ?? 0,
+          refundedPoints:spec.refundedPoints ?? 0,
+          ...spec
+        };
+        state.actionResults.push(result);
+        return result;
       }
 
       function canApproveReview(issues = []) {
@@ -681,7 +702,7 @@
         return { allowed:true, code:'ALLOW', title:'', message:'' };
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, canApproveReview, evaluateActionPrecondition, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, createActionResult, canApproveReview, evaluateActionPrecondition, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -1228,6 +1249,46 @@
       overlay.setAttribute('aria-hidden', 'true');
     }
 
+    function startGenerationFlow(spec) {
+      const task = WorkflowModel.createTask(appState, { type:spec.type || 'GENERATE', stage:spec.stage ?? activeIndex, scope:spec.scope || stages[activeIndex].name, modelId:spec.modelId });
+      appState.generation = { visible:true, status:'QUEUED', progress:0, spec, taskId:task.id, result:null };
+      openOverlay('generation-progress');
+      setTimeout(() => {
+        if (appState.generation.taskId !== task.id) return;
+        appState.generation.status = 'RUNNING';
+        appState.generation.progress = WorkflowModel.advanceTransitionProgress('RUNNING', 20);
+        renderOverlay();
+      }, 200);
+      setTimeout(() => finishGenerationFlow(), 700);
+      return task;
+    }
+
+    function finishGenerationFlow() {
+      const generation = appState.generation;
+      const task = appState.tasks.find(item => item.id === generation.taskId);
+      if (!task || generation.status === 'SUCCEEDED') return generation.result;
+      task.status = 'SUCCEEDED';
+      generation.status = 'SUCCEEDED';
+      generation.progress = WorkflowModel.advanceTransitionProgress('SUCCEEDED', generation.progress);
+      generation.result = { ...generation.spec, taskId:task.id, status:'SUCCEEDED' };
+      openOverlay('generation-result');
+      return generation.result;
+    }
+
+    function acceptGenerationResult() {
+      const generation = appState.generation;
+      const spec = generation.result;
+      if (!spec) return;
+      const artifact = spec.writeArtifact ? spec.writeArtifact() : null;
+      const actual = spec.actualPoints ?? 0;
+      WorkflowModel.recordPoints(appState, { taskId:generation.taskId, operation:spec.operation || spec.action, modelId:spec.modelId, estimated:spec.estimatedPoints ?? 0, preconsumed:spec.estimatedPoints ?? 0, actual, refunded:Math.max(0, (spec.estimatedPoints ?? 0) - actual) });
+      WorkflowModel.createActionResult(appState, { ...spec, artifactId:artifact?.id || spec.artifactId, path:artifact?.path || spec.path, version:artifact?.version || spec.version, taskId:generation.taskId, actualPoints:actual });
+      generation.visible = false;
+      closeOverlay();
+      render();
+      notify(`生成结果已采纳${artifact ? `，${artifact.title} 已保存为 V${artifact.version}` : ''}。`);
+    }
+
     function overlayFrame(id, title, desc, body, foot = '') {
       return `<div id="${id}"><div class="modal-head"><div><h2>${title}</h2><p>${desc}</p></div><button class="drawer-close" data-action="close-overlay">关闭</button></div><div class="modal-body">${body}</div>${foot ? `<div class="modal-foot">${foot}</div>` : ''}</div>`;
     }
@@ -1237,6 +1298,8 @@
       const versions = appState.versions[versionKey];
       const latest = versions.at(-1)?.version || `V${activeIndex + 1}`;
       const surfaces = {
+        'generation-progress': () => { const generation = appState.generation; return overlayFrame('generation-progress','正在生成','任务将持续记录，离开页面后可在任务中心查看',`<div class="mini-card"><h3>${escapeHtml(generation.spec?.scope || '生成内容')}</h3><p>${generation.status || 'QUEUED'} · ${generation.progress}%</p><div class="progress-track" role="progressbar" aria-valuenow="${generation.progress}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${generation.progress}%"></div></div></div>`,`<button class="btn secondary" data-action="open-generation-task">在任务中心查看</button>`); },
+        'generation-result': () => { const result = appState.generation.result || {}; return overlayFrame('generation-result','生成结果已就绪','采纳会写入新版本；放弃不会覆盖现有产物',`<div class="grid-2"><div class="mini-card"><h3>当前版本</h3><p>${escapeHtml(result.path || '当前产物')}</p></div><div class="mini-card"><h3>建议结果</h3><p>任务 ${escapeHtml(result.taskId || '')} 已完成，可作为独立版本保存。</p></div></div>`,`<button class="btn secondary" data-action="discard-generation-result">放弃结果</button><button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="accept-generation-result">采纳并保存新版本</button>`); },
         'action-guidance': () => overlayFrame('action-guidance',overlayState.payload.title, '完成前置条件后可继续当前操作', `<div class="notice">${escapeHtml(overlayState.payload.message || '')}</div>`, `<button class="btn secondary" data-action="close-overlay">返回当前页面</button><button class="btn primary" data-action="${overlayState.payload.targetAction}">去完成前置条件</button>`),
         'markdown-preview': () => overlayFrame('markdown-preview-dialog',overlayState.payload.title || 'Markdown 预览',overlayState.payload.path || 'Obsidian 项目文档',`<pre class="markdown-preview">${escapeHtml(overlayState.payload.markdown || '')}</pre>`,`<button class="btn secondary" data-action="close-overlay">关闭</button>`),
         'summary-editor': () => overlayFrame('summary-editor','编辑故事梗概','保存后更新 03-小说分析/故事梗概.md，并检查下游影响',`<div class="field"><label>完整梗概</label><textarea id="summary-editor-value">${escapeHtml(appState.artifacts['SUMMARY-001']?.data?.完整梗概 || defaultSummary)}</textarea></div><div class="notice">文档还包含一句话卖点、主线目标、核心冲突、开端、发展、高潮、结局和未解决悬念。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-summary">保存梗概</button>`),
@@ -1438,6 +1501,9 @@
         'open-version-history': () => openOverlay('version-history'),
         'open-version-diff': () => openOverlay('version-diff'),
         'open-regenerate': () => openOverlay('regenerate'),
+        'open-generation-task': () => openOverlay('task-center'),
+        'discard-generation-result': () => { appState.generation.visible = false; closeOverlay(); render(); notify('已放弃本次生成结果，任务记录仍可在任务中心查看。'); },
+        'accept-generation-result': acceptGenerationResult,
         'open-stale-impact': () => openOverlay('stale-impact'),
         'toggle-workspace-more': toggleWorkspaceMoreMenu,
         'open-settings-menu': () => { closeWorkspaceMoreMenu(); openSettings(); },
@@ -1455,11 +1521,15 @@
           const modelId = appState.models.stageSelections?.[activeIndex] || config.projectModel;
           const model = appState.models.items.find(item => item.id === modelId) || fallbackModels[0];
           const estimated = WorkflowModel.estimatePoints(model,{inputTokens:6000,outputTokens:2000});
-          const task = WorkflowModel.createTask(appState,{type:'REGENERATE',stage:activeIndex,scope:`${stages[activeIndex].name} · ${document.getElementById('regenerate-scope')?.value || '当前范围'}`,modelId});
-          task.status = 'SUCCEEDED';
           const actual = model.demo ? 0 : Math.max(0,estimated - Math.ceil(estimated * .08));
-          WorkflowModel.recordPoints(appState,{taskId:task.id,operation:`重新生成${stages[activeIndex].name}`,modelId,estimated,preconsumed:estimated,actual,refunded:estimated - actual});
-          closeOverlay(); render(); notify(`生成任务 ${task.id} 已完成：预扣 ${estimated} 积分，实际 ${actual} 积分，返还 ${estimated - actual} 积分。`);
+          const stage = stages[activeIndex];
+          const scope = document.getElementById('regenerate-scope')?.value || '当前范围';
+          const instruction = document.getElementById('regenerate-instruction')?.value.trim() || '使用当前阶段配置重新生成';
+          startGenerationFlow({
+            action:'regenerate', type:'REGENERATE', stage:activeIndex, scope:`${stage.name} · ${scope}`,
+            operation:`重新生成${stage.name}`, modelId, estimatedPoints:estimated, actualPoints:actual,
+            writeArtifact:() => upsertArtifact({ id:`${stage.key.toUpperCase()}-REGENERATE`, type:'regenerate', stage:activeIndex, title:`${stage.name} 重新生成结果`, path:`${String(activeIndex + 1).padStart(2,'0')}-${stage.name}/重新生成结果.md`, status:'draft', data:{ 指令:instruction, 生成范围:scope } })
+          });
         },
         'apply-stale-impact': () => { WorkflowModel.markDownstreamStale(appState,activeIndex); closeOverlay(); render(); notify('已保存当前版本并标记受影响下游。'); },
         'confirm-export': () => { closeOverlay(); notify('导出任务已创建，完成后可在任务中心下载。'); },
