@@ -478,6 +478,29 @@ test('script export confirmation persists a completed manual result with deliver
   assert.equal(state.billingEntries[0].actual, 0);
 });
 
+test('script and project export confirmations preserve separate action scopes and metadata', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const scriptResult = model.completeExportAction(state, {
+    stage:5, artifactId:'EP-001-SCRIPT', path:'06-剧本正文/EP-001-剧本正文.md', version:4,
+    exportRange:'第 1 集', exportFormat:'JSON'
+  });
+  const projectResult = model.completeProjectExportAction(state, {
+    stage:7, exportRange:'全部有效产物', exportVersion:'当前已确认版本', exportFormat:'DOCX / PDF', packagePath:'重生项目_创作包.zip'
+  });
+
+  assert.equal(scriptResult.action, 'export-script');
+  assert.equal(scriptResult.artifactId, 'EP-001-SCRIPT');
+  assert.equal(projectResult.action, 'export-project');
+  assert.equal(projectResult.artifactId, null);
+  assert.equal(projectResult.exportRange, '全部有效产物');
+  assert.equal(projectResult.exportVersion, '当前已确认版本');
+  assert.equal(projectResult.exportFormat, 'DOCX / PDF');
+  assert.equal(projectResult.packagePath, '重生项目_创作包.zip');
+  assert.match(html, /data-action="confirm-script-export"/);
+  assert.match(html, /data-action="confirm-project-export"/);
+});
+
 test('stage model selection drives the displayed and submitted generation estimate', () => {
   const model = loadModel();
   const state = model.createInitialState();
