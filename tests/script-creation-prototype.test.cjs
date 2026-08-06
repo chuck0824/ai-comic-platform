@@ -120,3 +120,15 @@ test('PRD covers project pages, export configuration and transition acceptance',
   assert.match(prd, /失败.*重试/s);
   assert.match(prd, /过渡.*取消/s);
 });
+
+test('workbench uses contextual actions instead of the six-button header toolbar', () => {
+  const header = html.match(/<div class="project-head">([\s\S]*?)<div id="stage-content">/)?.[1] || '';
+  assert.doesNotMatch(header, /class="project-actions"/);
+  for (const id of ['workspace-breadcrumb','stage-version-action','workspace-more-action','workspace-more-menu']) {
+    assert.match(header, new RegExp(`id="${id}"`));
+  }
+  for (const action of ['open-task-center','open-version-history','open-regenerate','open-stale-impact','open-settings-menu','back-home']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+  assert.match(html, /function renderContextualStageActions\(\)/);
+});

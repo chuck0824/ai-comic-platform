@@ -85,9 +85,19 @@
     .progress-track { margin-top: 8px; height: 5px; background: #eceef3; border-radius: 99px; overflow: hidden; }
     .progress-fill { height: 100%; width: 12.5%; background: var(--accent); transition: width .25s ease; }
     .main { min-width: 0; overflow: auto; padding: 18px 24px 40px; }
-    .project-head { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+    .project-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 16px; }
     .project-head h1 { font-size: 21px; line-height: 1.4; margin: 0 0 8px; max-width: 720px; }
-    .project-actions { display: flex; gap: 8px; }
+    .workspace-breadcrumb { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; color: var(--muted); font-size: 11px; }
+    .workspace-breadcrumb button { border: 0; padding: 0; background: transparent; color: var(--accent); font-size: 11px; }
+    .workspace-head-tools { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+    .stage-version-action { white-space: nowrap; }
+    .workspace-more-wrap { position: relative; }
+    .workspace-more-menu { position: absolute; z-index: 25; top: calc(100% + 7px); right: 0; width: 156px; padding: 6px; border: 1px solid var(--line); border-radius: 9px; background: #fff; box-shadow: 0 12px 32px rgba(24,30,48,.14); display: none; }
+    .workspace-more-menu.open { display: grid; }
+    .workspace-more-menu button { border: 0; border-radius: 6px; background: transparent; padding: 9px 10px; color: #535762; text-align: left; font-size: 12px; }
+    .workspace-more-menu button:hover, .workspace-more-menu button:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none; }
+    .workspace-more-menu button.danger { color: var(--danger); }
+    .contextual-stage-actions { min-height: 38px; margin-top: 12px; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
     .meta { color: var(--muted); font-size: 11px; display: flex; gap: 8px; align-items: center; }
     .tag { display: inline-flex; padding: 3px 7px; border-radius: 4px; background: #f0f1f5; color: #686d77; font-size: 11px; }
     .ghost { border: 1px solid #dcdfe6; border-radius: 6px; background: #fff; color: #60646e; padding: 7px 12px; }
@@ -360,11 +370,12 @@
 
         <main class="main">
           <div class="project-head">
-            <div>
+            <div class="project-identity">
+              <div class="workspace-breadcrumb" id="workspace-breadcrumb"><button data-action="back-home">全部项目</button><span>/</span><span>重生后，我在三集内揭开命运系统</span></div>
               <h1>重生后，我在三集内揭开命运系统</h1>
               <div class="meta"><span class="tag">短剧</span><span class="tag">都市逆袭</span><span>自动保存于 15:42</span></div>
             </div>
-            <div class="project-actions"><button class="ghost" data-action="open-task-center">任务中心</button><button class="ghost" data-action="open-version-history">历史版本</button><button class="ghost" data-action="open-regenerate">重新生成</button><button class="ghost" data-action="open-stale-impact">依赖影响</button><button class="ghost" id="open-settings">创作设置</button><button class="ghost" id="back-home">返回首页</button></div>
+            <div class="workspace-head-tools"><button class="ghost stage-version-action" id="stage-version-action" data-action="open-version-history">V1 · 历史版本</button><div class="workspace-more-wrap"><button class="ghost" id="workspace-more-action" data-action="toggle-workspace-more" aria-haspopup="menu" aria-expanded="false">更多</button><div class="workspace-more-menu" id="workspace-more-menu" role="menu"><button role="menuitem" data-action="open-settings-menu">项目设置</button><button role="menuitem" data-action="open-project-detail">项目详情</button><button role="menuitem" class="danger" data-action="archive-project">归档项目</button></div></div></div>
           </div>
           <div id="stage-content"></div>
           <div id="stage-transition-view" class="hidden"></div>
@@ -904,6 +915,33 @@
       </section>`;
     }
 
+    function renderContextualStageActions() {
+      const hasRegeneratableOutput = activeIndex >= 2;
+      const hasStaleDownstream = appState.stages.slice(activeIndex + 1).some(stage => stage.status === 'STALE');
+      if (!hasRegeneratableOutput && !hasStaleDownstream) return '';
+      return `<div class="contextual-stage-actions">
+        ${hasRegeneratableOutput ? '<button class="btn secondary" data-action="open-regenerate">重新生成当前产物</button>' : ''}
+        ${hasStaleDownstream ? '<button class="btn warn" data-action="open-stale-impact">查看依赖影响</button>' : ''}
+      </div>`;
+    }
+
+    function closeWorkspaceMoreMenu({ restoreFocus = false } = {}) {
+      const menu = document.getElementById('workspace-more-menu');
+      const trigger = document.getElementById('workspace-more-action');
+      menu.classList.remove('open');
+      trigger.setAttribute('aria-expanded', 'false');
+      if (restoreFocus) trigger.focus();
+    }
+
+    function toggleWorkspaceMoreMenu() {
+      const menu = document.getElementById('workspace-more-menu');
+      const trigger = document.getElementById('workspace-more-action');
+      const willOpen = !menu.classList.contains('open');
+      menu.classList.toggle('open', willOpen);
+      trigger.setAttribute('aria-expanded', String(willOpen));
+      if (willOpen) menu.querySelector('[role="menuitem"]').focus();
+    }
+
     function transitionCopy(index) {
       return [
         '创建项目配置快照，准备小说导入规则与解析参数',
@@ -1022,6 +1060,9 @@
         'open-version-diff': () => openOverlay('version-diff'),
         'open-regenerate': () => openOverlay('regenerate'),
         'open-stale-impact': () => openOverlay('stale-impact'),
+        'toggle-workspace-more': toggleWorkspaceMoreMenu,
+        'open-settings-menu': () => { closeWorkspaceMoreMenu(); openSettings(); },
+        'back-home': () => { closeWorkspaceMoreMenu(); showHome(); },
         'close-overlay': closeOverlay,
         'archive-project': () => openOverlay('archive'),
         'resume-project': () => { closeOverlay(); enterWorkspace('continue'); },
@@ -1049,6 +1090,10 @@
     document.addEventListener('click', event => {
       const element = event.target.closest('[data-action]');
       if (element) dispatchAction(element.dataset.action, element);
+      if (!event.target.closest('.workspace-more-wrap') && document.getElementById('workspace-more-menu').classList.contains('open')) closeWorkspaceMoreMenu();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && document.getElementById('workspace-more-menu').classList.contains('open')) closeWorkspaceMoreMenu({ restoreFocus:true });
     });
 
     function renderContent() {
@@ -1062,14 +1107,14 @@
       }
       transition.classList.add('hidden');
       content.classList.remove('hidden');
-      content.innerHTML = views[activeIndex]() + renderStageFooter();
+      content.innerHTML = views[activeIndex]() + renderContextualStageActions() + renderStageFooter();
       bindInteractions();
     }
     function bindHome() {
       document.querySelectorAll('[data-entry]').forEach(button => button.onclick = () => enterWorkspace(button.dataset.entry));
       document.getElementById('home-nav').onclick = showHome;
     }
-    function render() { renderNav(); renderContent(); renderContext(); document.getElementById('workspace-view').classList.toggle('analysis-focus', activeIndex === 2 && !appState.transition.visible); document.getElementById('open-settings').onclick = openSettings; document.getElementById('back-home').onclick = showHome; }
+    function render() { renderNav(); renderContent(); renderContext(); document.getElementById('workspace-view').classList.toggle('analysis-focus', activeIndex === 2 && !appState.transition.visible); document.getElementById('stage-version-action').textContent = `V${activeIndex + 1} · 历史版本`; }
     document.getElementById('close-settings').onclick = closeSettings;
     document.getElementById('cancel-settings').onclick = closeSettings;
     document.getElementById('save-settings').onclick = () => { closeSettings(); render(); };
