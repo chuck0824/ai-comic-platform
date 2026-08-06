@@ -649,8 +649,21 @@
         return artifact;
       }
 
+      const WRITE_ACTIONS = new Set([
+        'confirm-source','save-stage-draft','confirm-stage-transition','cancel-stage-transition','retry-stage-transition','restore-version',
+        'save-summary','save-event','save-character','save-world','choose-hook-and-close','save-adaptation-rule','save-adaptation','confirm-adaptation',
+        'save-episode-structure','save-beat','confirm-beat-regeneration','confirm-episode-structure','add-scene','save-scene','add-script-block','save-script-block',
+        'ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check','accept-generation-result','discard-generation-result','run-script-check','export-script','confirm-script-export',
+        'save-review-edit','resolve-review-issue','open-review-diff','approve-episode','add-shot','save-shot','split-shot','merge-shot','undo-storyboard','run-continuity-check','lock-storyboard',
+        'open-regenerate','confirm-regenerate','apply-stale-impact','archive-project','archive-project-complete','confirm-archive','confirm-project-export','handoff-canvas','retry-task'
+      ]);
+
+      function isWriteAction(action = '') {
+        return WRITE_ACTIONS.has(action);
+      }
+
       function canApproveReview(issues = []) {
-        return !issues.some(issue => issue.severity === 'HIGH' && issue.status !== 'RESOLVED');
+        return !issues.some(issue => ['HIGH','BLOCKER'].includes(issue.severity) && issue.status !== 'RESOLVED');
       }
 
       function estimatePoints(model = {}, usage = {}) {
@@ -768,8 +781,11 @@
       }
 
       function evaluateActionPrecondition(context = {}, action = '') {
-        if (context.projectArchived && ['save-stage-draft','save-review-edit','resolve-review-issue','approve-episode','add-shot','save-shot','split-shot','merge-shot','toggle-storyboard-view','undo-storyboard','run-continuity-check','lock-storyboard','confirm-regenerate','confirm-script-export','confirm-project-export','handoff-canvas'].includes(action)) {
+        if (context.projectArchived && isWriteAction(action)) {
           return { allowed:false, code:'PROJECT_ARCHIVED', title:'项目已归档，只读查看', message:'归档项目会保留全部产物和任务记录；请恢复项目后再修改或创建交付。', targetAction:'open-project-detail' };
+        }
+        if (action === 'undo-storyboard' && !context.hasStoryboardHistory) {
+          return { allowed:false, code:'STORYBOARD_HISTORY_REQUIRED', title:'当前没有可撤销的分镜操作', message:'先新增、保存、拆分或合并镜头后，才会出现可撤销的历史记录。', targetAction:'focus-storyboard-shots' };
         }
         if (['ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check'].includes(action) && !context.selectedBlockId) {
           return { allowed:false, code:'SCRIPT_BLOCK_REQUIRED', title:'请先选择正文块', message:'选择一个动作、对白或旁白正文块后才能执行此操作。', targetAction:'focus-script-blocks' };
@@ -789,7 +805,7 @@
         return { allowed:true, code:'ALLOW', title:'', message:'' };
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, createActionResult, startGeneration, setGenerationStatus, acceptGenerationResult, completeManualAction, completeExportAction, completeProjectExportAction, ensureStageArtifactForGeneration, saveStageDraft, canApproveReview, evaluateActionPrecondition, estimatePoints, generationPricing, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, createActionResult, startGeneration, setGenerationStatus, acceptGenerationResult, completeManualAction, completeExportAction, completeProjectExportAction, ensureStageArtifactForGeneration, saveStageDraft, canApproveReview, isWriteAction, evaluateActionPrecondition, estimatePoints, generationPricing, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -1124,15 +1140,16 @@
     };
     const reviewState = {
       filters:{ severity:'全部', status:'全部' },
-      selectedIssueId:'ISSUE-001',
+      selectedIssueId:'ISSUE-001', focusBlockers:false,
       issues:[
         { id:'ISSUE-001', severity:'HIGH', status:'OPEN', title:'第 2 集动机跳跃', detail:'赵承宇缺少提前销毁账本的触发事件', suggestion:'补充赵承宇收到管理局泄密警告的动作，并将销毁账本变为被迫应对。' },
+        { id:'ISSUE-004', severity:'BLOCKER', status:'OPEN', title:'第 1 集关键因果缺失', detail:'账本水印的来源尚未在正文中建立，后续追查缺少事实基础。', suggestion:'补充林野拍下账本水印的可见动作，并说明其与管理局警告的时间关系。' },
         { id:'ISSUE-002', severity:'MEDIUM', status:'OPEN', title:'主角信息获取过快', detail:'建议增加一次错误判断，提高悬疑感', suggestion:'让林野先误判匿名短信来源，再由账本水印纠正。' },
         { id:'ISSUE-003', severity:'MEDIUM', status:'OPEN', title:'第 3 集结尾钩子偏弱', detail:'建议把苏雅身份线索提前到最后 5 秒', suggestion:'结尾增加顾清寒出现在苏雅门外的镜头。' }
       ]
     };
     const storyboardState = {
-      view:'table', selectedShotId:null, history:[], continuity:[],
+      view:'table', selectedShotId:null, history:[], continuity:[], focusShots:false,
       shots:[
         { id:'SHOT-001', size:'大全景', movement:'缓慢推进', visual:'夜色中的城市天台，林野倒在栏杆边。', audio:'风声、远处车流声', duration:4, status:'已确认' },
         { id:'SHOT-002', size:'近景', movement:'轻微晃动', visual:'林野猛地睁眼，手指抓紧地面。', audio:'急促喘息', duration:3, status:'已确认' },
@@ -1216,10 +1233,10 @@
     }
 
     function reviewView() {
-      const visibleIssues = reviewState.issues.filter(issue => (reviewState.filters.severity === '全部' || issue.severity === reviewState.filters.severity) && (reviewState.filters.status === '全部' || issue.status === reviewState.filters.status));
+      const visibleIssues = reviewState.issues.filter(issue => (reviewState.filters.severity === '全部' || (reviewState.filters.severity === 'BLOCKING' && ['HIGH','BLOCKER'].includes(issue.severity)) || issue.severity === reviewState.filters.severity) && (reviewState.filters.status === '全部' || issue.status === reviewState.filters.status));
       return `<section class="card">${cardHead('审核与修订中心', '问题定位、修改建议、局部修订和版本对比形成闭环')}
         <div class="review-layout"><div><div class="score-ring">${WorkflowModel.canApproveReview(reviewState.issues) ? '92' : '82'}</div><div class="score-note">综合质量 · ${WorkflowModel.canApproveReview(reviewState.issues) ? '可审核通过' : '仍有高风险问题'}</div></div><div>
-          ${visibleIssues.map(issue => `<div class="issue"><span class="severity ${issue.severity === 'HIGH' ? 'high' : 'mid'}">${issue.severity === 'HIGH' ? '高' : '中'}</span><div><strong>${escapeHtml(issue.title)}</strong><small>${escapeHtml(issue.detail)} · ${issue.status === 'RESOLVED' ? '已解决' : '待处理'}</small></div><button data-action="open-review-issue" data-issue-id="${issue.id}">${issue.status === 'RESOLVED' ? '查看修订' : '定位修订'}</button></div>`).join('') || '<div class="empty">当前筛选条件下没有问题。</div>'}
+          ${visibleIssues.map(issue => `<div class="issue ${reviewState.focusBlockers && issue.status === 'OPEN' && ['HIGH','BLOCKER'].includes(issue.severity) ? 'guidance-focus' : ''}"><span class="severity ${['HIGH','BLOCKER'].includes(issue.severity) ? 'high' : 'mid'}">${issue.severity === 'BLOCKER' ? '阻断' : issue.severity === 'HIGH' ? '高' : '中'}</span><div><strong>${escapeHtml(issue.title)}</strong><small>${escapeHtml(issue.detail)} · ${issue.status === 'RESOLVED' ? '已解决' : '待处理'}</small></div><button data-action="open-review-issue" data-issue-id="${issue.id}">${issue.status === 'RESOLVED' ? '查看修订' : '定位修订'}</button></div>`).join('') || '<div class="empty">当前筛选条件下没有问题。</div>'}
         </div></div>
         <div class="notice">筛选：${reviewState.filters.severity}风险 · ${reviewState.filters.status === '全部' ? '全部状态' : reviewState.filters.status}。高风险问题全部解决后才能审核通过。</div>
         <div class="actions"><button class="btn secondary" data-action="filter-review-issues">筛选问题</button><button class="btn primary" data-action="save-review-revision">保存局部修订</button><button class="btn secondary" data-action="open-review-diff">对比修订前后</button><button class="btn primary" data-action="approve-review">审核通过本集</button></div>
@@ -1236,9 +1253,10 @@
     function storyboardView() {
       return `<section class="card">${cardHead('文字分镜脚本', '由审核通过的正文生成可编辑镜头表、画面描述和提示词')}
         <div class="segmented"><button class="active">第 01 集</button><button>第 02 集</button><button>第 03 集</button></div>
-        ${storyboardState.view === 'table' ? `<table class="shot-table" style="margin-top:12px"><thead><tr><th>镜号</th><th>景别 / 运镜</th><th>画面内容</th><th>对白 / 声音</th><th>时长</th><th>状态</th></tr></thead><tbody>${storyboardState.shots.map((shot,index) => `<tr class="${storyboardState.selectedShotId === shot.id ? 'selected' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><td class="shot-no">#${String(index + 1).padStart(2,'0')}</td><td>${escapeHtml(shot.size)}<br>${escapeHtml(shot.movement)}</td><td>${escapeHtml(shot.visual)}</td><td>${escapeHtml(shot.audio)}</td><td>${shot.duration}s</td><td><span class="tag">${shot.status}</span></td></tr>`).join('')}</tbody></table>` : `<div class="grid-2" style="margin-top:12px">${storyboardState.shots.map((shot,index) => `<button class="mini-card selectable-card ${storyboardState.selectedShotId === shot.id ? 'selected' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><h3>#${String(index + 1).padStart(2,'0')} · ${escapeHtml(shot.size)}</h3><p>${escapeHtml(shot.visual)}</p><small>${shot.duration}s · ${escapeHtml(shot.movement)}</small></button>`).join('')}</div>`}
+        <div class="notice">当前以${storyboardState.view === 'table' ? '表格' : '卡片'}视图查看镜头；切换仅保留在本次本地查看，不会保存产物或创建任务。</div>
+        ${storyboardState.view === 'table' ? `<table class="shot-table" style="margin-top:12px"><thead><tr><th>镜号</th><th>景别 / 运镜</th><th>画面内容</th><th>对白 / 声音</th><th>时长</th><th>状态</th></tr></thead><tbody>${storyboardState.shots.map((shot,index) => `<tr class="${storyboardState.selectedShotId === shot.id ? 'selected' : ''} ${storyboardState.focusShots ? 'guidance-focus' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><td class="shot-no">#${String(index + 1).padStart(2,'0')}</td><td>${escapeHtml(shot.size)}<br>${escapeHtml(shot.movement)}</td><td>${escapeHtml(shot.visual)}</td><td>${escapeHtml(shot.audio)}</td><td>${shot.duration}s</td><td><span class="tag">${shot.status}</span></td></tr>`).join('')}</tbody></table>` : `<div class="grid-2" style="margin-top:12px">${storyboardState.shots.map((shot,index) => `<button class="mini-card selectable-card ${storyboardState.selectedShotId === shot.id ? 'selected' : ''} ${storyboardState.focusShots ? 'guidance-focus' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><h3>#${String(index + 1).padStart(2,'0')} · ${escapeHtml(shot.size)}</h3><p>${escapeHtml(shot.visual)}</p><small>${shot.duration}s · ${escapeHtml(shot.movement)}</small></button>`).join('')}</div>`}
         <div class="notice">镜头字段：shot_size · camera_angle · camera_movement · composition · generation_prompt · negative_prompt · continuity_note</div>
-        <div class="actions"><button class="btn primary" data-action="add-shot">新增镜头</button><button class="btn secondary" data-action="split-shot">拆分镜头</button><button class="btn secondary" data-action="merge-shot">合并镜头</button><button class="btn secondary" data-action="toggle-storyboard-view">切换卡片/表格</button><button class="btn secondary" data-action="run-continuity-check">连续性检查</button><button class="btn secondary" data-action="undo-storyboard" ${storyboardState.history.length ? '' : 'disabled'}>撤销</button></div>
+        <div class="actions"><button class="btn primary" data-action="add-shot">新增镜头</button><button class="btn secondary" data-action="split-shot">拆分镜头</button><button class="btn secondary" data-action="merge-shot">合并镜头</button><button class="btn secondary" data-action="toggle-storyboard-view">切换为${storyboardState.view === 'table' ? '卡片' : '表格'}视图</button><button class="btn secondary" data-action="run-continuity-check">连续性检查</button><button class="btn secondary" data-action="undo-storyboard">撤销</button></div>
       </section>
       <section class="card">${cardHead('分镜完成后的交付', '交付是八阶段完成后的动作，不占用创作阶段')}
         <div class="destination-grid"><div class="destination"><h3>保存到剧本仓库</h3><p>归档小说分析、改编方案、剧本正文、审核记录和文字分镜。</p><button class="btn secondary" data-action="archive-project-complete">完成并归档</button></div><div class="destination"><h3>导出创作包</h3><p>支持 DOCX、Markdown、PDF 和结构化 JSON。</p><button class="btn secondary" data-action="open-export">配置导出</button></div><div class="destination selected"><h3>送入画布工作台</h3><p>携带锁定的分镜、角色与世界观资产进入视频制作。</p><button class="btn primary" data-action="create-canvas-project">创建画布项目</button></div></div>
@@ -1641,6 +1659,7 @@
         issues:reviewState.issues,
         selectedHook:adaptationState.selectedHook,
         projectArchived:appState.project.archived,
+        hasStoryboardHistory:storyboardState.history.length > 0,
         hasStageArtifact:Object.values(appState.artifacts).some(artifact => artifact.stage === activeIndex)
       }, action);
       if (precondition.allowed) return true;
@@ -1688,8 +1707,20 @@
         'restore-version': () => { closeOverlay(); notify('历史版本已恢复为新版本，原记录保持不变。'); },
         'retry-task': () => { closeOverlay(); notify('已创建新的重试任务。'); },
         'focus-script-blocks': () => { closeOverlay(); activeIndex = 5; appState.project.activeStage = activeIndex; scriptState.focusBlocks = true; render(); document.querySelector('.script-block')?.scrollIntoView({ behavior:'smooth', block:'center' }); setTimeout(() => { scriptState.focusBlocks = false; if (activeIndex === 5) render(); }, 1800); notify('请选择高亮的正文块后重试。'); },
-        'focus-storyboard-shots': () => { closeOverlay(); activeIndex = 7; appState.project.activeStage = activeIndex; render(); notify('请选择一个镜头后重试。'); },
-        'focus-review-blockers': () => { closeOverlay(); activeIndex = 6; appState.project.activeStage = activeIndex; render(); notify('请先处理高风险或阻断问题。'); },
+        'focus-storyboard-shots': () => {
+          closeOverlay(); activeIndex = 7; appState.project.activeStage = activeIndex; storyboardState.focusShots = true; render();
+          document.querySelector('.shot-table tbody tr, .selectable-card')?.scrollIntoView({ behavior:'smooth', block:'center' });
+          setTimeout(() => { storyboardState.focusShots = false; if (activeIndex === 7) render(); }, 1800);
+          notify('请选择高亮镜头后重试。');
+        },
+        'focus-review-blockers': () => {
+          closeOverlay(); activeIndex = 6; appState.project.activeStage = activeIndex;
+          reviewState.filters.severity = 'BLOCKING'; reviewState.filters.status = 'OPEN'; reviewState.focusBlockers = true;
+          reviewState.selectedIssueId = reviewState.issues.find(issue => issue.status === 'OPEN' && ['HIGH','BLOCKER'].includes(issue.severity))?.id || reviewState.selectedIssueId;
+          render(); document.querySelector('.issue.guidance-focus')?.scrollIntoView({ behavior:'smooth', block:'center' });
+          setTimeout(() => { reviewState.focusBlockers = false; if (activeIndex === 6) render(); }, 1800);
+          notify('请先处理高风险或阻断问题。');
+        },
         'open-hook-selector': () => { activeIndex = 3; appState.project.activeStage = activeIndex; openOverlay('hook-selector'); },
         'confirm-regenerate': () => {
           const modelId = appState.models.stageSelections?.[activeIndex] || config.projectModel;
@@ -1936,6 +1967,7 @@
         },
         'select-shot': () => {
           storyboardState.selectedShotId = element.dataset.shotId;
+          storyboardState.focusShots = false;
           render(); notify(`已选择镜头 ${storyboardState.selectedShotId}。`);
         },
         'add-shot': () => { storyboardState.selectedShotId = null; openOverlay('shot-editor'); },
@@ -1977,10 +2009,10 @@
           const result = recordArtifactActionResult('merge-shot', artifact, { open:false, after:`已合并相邻镜头：当前共 ${storyboardState.shots.length} 个镜头，文字分镜 V${artifact.version}。` });
           render(); openOverlay('action-result', { result });
         },
-        'toggle-storyboard-view': () => { storyboardState.view = storyboardState.view === 'table' ? 'cards' : 'table'; render(); notify(`已切换为${storyboardState.view === 'table' ? '表格' : '卡片'}视图。`); },
+        'toggle-storyboard-view': () => { storyboardState.view = storyboardState.view === 'table' ? 'cards' : 'table'; render(); },
         'undo-storyboard': () => {
           const previous = storyboardState.history.pop();
-          if (!previous) return notify('没有可撤销的分镜操作。');
+          if (!previous) return guardAction('undo-storyboard', element);
           storyboardState.shots = previous; storyboardState.selectedShotId = null;
           const artifact = saveStoryboardArtifact();
           const result = recordArtifactActionResult('undo-storyboard', artifact, { open:false, after:`已撤销分镜操作：当前共 ${storyboardState.shots.length} 个镜头，文字分镜 V${artifact.version}。` });

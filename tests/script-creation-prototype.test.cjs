@@ -453,7 +453,34 @@ test('AI business buttons are not natively disabled', () => {
 test('review approval is blocked while high severity issues remain open', () => {
   const model = loadModel();
   assert.equal(model.canApproveReview([{ severity:'HIGH', status:'OPEN' }]), false);
+  assert.equal(model.canApproveReview([{ severity:'BLOCKER', status:'OPEN' }]), false);
   assert.equal(model.canApproveReview([{ severity:'HIGH', status:'RESOLVED' }, { severity:'MEDIUM', status:'OPEN' }]), true);
+});
+
+test('review and storyboard guidance expose actionable focus states', () => {
+  for (const marker of ['focusBlockers = true','focusShots = true','issue.severity === \'BLOCKER\'','guidance-focus']) assert.match(html, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(html, /reviewState\.filters\.severity = 'BLOCKING'/);
+  assert.match(html, /reviewState\.filters\.status = 'OPEN'/);
+  assert.match(html, /document\.querySelector\('\.issue\.guidance-focus'\)/);
+  assert.match(html, /document\.querySelector\('\.shot-table tbody tr, \.selectable-card'\)/);
+});
+
+test('archive guard covers all write actions while view toggling stays local-only', () => {
+  const model = loadModel();
+  for (const action of ['open-review-diff','confirm-archive','archive-project','archive-project-complete','save-shot','confirm-project-export']) {
+    assert.equal(model.isWriteAction(action), true, action);
+    assert.equal(model.evaluateActionPrecondition({ projectArchived:true }, action).code, 'PROJECT_ARCHIVED', action);
+  }
+  assert.equal(model.isWriteAction('toggle-storyboard-view'), false);
+  assert.equal(model.evaluateActionPrecondition({ projectArchived:true }, 'toggle-storyboard-view').allowed, true);
+  assert.match(html, /当前以\$\{storyboardState\.view === 'table' \? '表格' : '卡片'\}视图查看镜头/);
+});
+
+test('empty storyboard history opens guidance instead of disabling undo', () => {
+  const model = loadModel();
+  const result = model.evaluateActionPrecondition({ hasStoryboardHistory:false }, 'undo-storyboard');
+  assert.equal(result.code, 'STORYBOARD_HISTORY_REQUIRED');
+  assert.doesNotMatch(html, /data-action="undo-storyboard"[^>]*disabled/);
 });
 
 test('review storyboard and delivery controls expose complete interactions', () => {
