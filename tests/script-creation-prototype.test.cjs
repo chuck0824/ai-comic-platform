@@ -222,6 +222,34 @@ test('shared generation exposes progress result accept and discard actions', () 
   assert.match(html, /overlayFrame\('generation-result'/);
 });
 
+test('accepting generation versions its source artifact and marks downstream stale', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  model.createArtifact(state, { id:'ADAPT-001', type:'adaptation', stage:3, title:'改编方案', path:'04-改编方案.md', affects:['EP-001-STRUCTURE'], data:{ 策略:'初稿' } });
+  model.createArtifact(state, { id:'EP-001-STRUCTURE', type:'structure', stage:4, title:'单集结构', path:'05-分集结构/EP-001-单集结构.md', dependsOn:['ADAPT-001'], data:{ 节拍:'初稿' } });
+  const result = model.acceptGenerationResult(state, { action:'regenerate', taskId:'task-1', artifactId:'ADAPT-001', data:{ 策略:'生成稿' }, actualPoints:0 });
+  assert.equal(result.version, 2);
+  assert.equal(state.artifacts['ADAPT-001'].history.length, 1);
+  assert.equal(state.artifacts['EP-001-STRUCTURE'].stale, true);
+});
+
+test('generation running state updates its task and result diff remains visible', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const generation = model.startGeneration(state, { action:'regenerate', before:'旧方案内容', after:'新方案内容' });
+  model.setGenerationStatus(state, 'RUNNING');
+  assert.equal(state.tasks[0].status, 'RUNNING');
+  assert.equal(generation.before, '旧方案内容');
+  assert.equal(generation.after, '新方案内容');
+  assert.match(html, /result\.before/);
+  assert.match(html, /result\.after/);
+});
+
+test('task center exposes revisitable generation results', () => {
+  assert.match(html, /actionResults/);
+  assert.match(html, /data-action="open-generation-result"/);
+});
+
 test('empty pricing response falls back to demo models', () => {
   const model = loadModel();
   const result = model.resolveModels([], [{ id:'demo-script-pro', name:'演示剧本模型', demo:true, points:0 }]);
