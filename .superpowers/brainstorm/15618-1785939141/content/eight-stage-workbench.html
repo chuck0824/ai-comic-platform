@@ -768,6 +768,9 @@
       }
 
       function evaluateActionPrecondition(context = {}, action = '') {
+        if (context.projectArchived && ['save-stage-draft','save-review-edit','resolve-review-issue','approve-episode','add-shot','save-shot','split-shot','merge-shot','toggle-storyboard-view','undo-storyboard','run-continuity-check','lock-storyboard','confirm-regenerate','confirm-script-export','confirm-project-export','handoff-canvas'].includes(action)) {
+          return { allowed:false, code:'PROJECT_ARCHIVED', title:'项目已归档，只读查看', message:'归档项目会保留全部产物和任务记录；请恢复项目后再修改或创建交付。', targetAction:'open-project-detail' };
+        }
         if (['ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check'].includes(action) && !context.selectedBlockId) {
           return { allowed:false, code:'SCRIPT_BLOCK_REQUIRED', title:'请先选择正文块', message:'选择一个动作、对白或旁白正文块后才能执行此操作。', targetAction:'focus-script-blocks' };
         }
@@ -1451,7 +1454,15 @@
         'generation-progress': () => { const generation = appState.generation; const spec = generation.spec || {}; const model = appState.models.items.find(item => item.id === spec.modelId) || fallbackModels[0]; return overlayFrame('generation-progress','正在生成','任务将持续记录，离开页面后可在任务中心查看',`<div class="mini-card"><h3>${escapeHtml(spec.scope || '生成内容')}</h3><p>${generation.status || 'QUEUED'} · ${generation.progress}%</p><p>模型：${escapeHtml(model.name)} · 预计积分：${spec.estimatedPoints ?? 0}</p><div class="progress-track" role="progressbar" aria-valuenow="${generation.progress}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${generation.progress}%"></div></div></div>`,`<button class="btn secondary" data-action="open-generation-task">在任务中心查看</button>`); },
         'generation-result': () => { const result = overlayState.payload.result || appState.generation.result || {}; const readonly = result.readonly; const model = appState.models.items.find(item => item.id === result.modelId) || fallbackModels[0]; return overlayFrame('generation-result',readonly ? '已采纳生成结果' : '生成结果已就绪',readonly ? '已采纳结果仅供查看，不会再次写入版本或计费。' : '采纳会写入新版本；放弃不会覆盖现有产物',`<div class="grid-2"><div class="mini-card"><h3>当前版本</h3><p>${escapeHtml(result.before || result.path || '当前产物')}</p></div><div class="mini-card"><h3>建议结果</h3><p>${escapeHtml(result.after || `任务 ${result.taskId || ''} 已完成，可作为独立版本保存。`)}</p></div></div><div class="notice">模型：${escapeHtml(model.name)} · 预计积分：${result.estimatedPoints ?? 0} · 实际积分：${result.actualPoints ?? 0}</div>`,readonly ? `<button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="close-overlay">关闭</button>` : `<button class="btn secondary" data-action="discard-generation-result">放弃结果</button><button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="accept-generation-result">采纳并保存新版本</button>`); },
         'action-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('action-result','操作已保存','新 Markdown 版本已保留，可随时从任务中心回访',`<div class="mini-card"><h3>${escapeHtml(result.path || '当前产物')}</h3><p>V${escapeHtml(result.version || '-')} · ${escapeHtml(result.after || '保存成功')}</p><p>状态：${escapeHtml(result.status || 'SUCCEEDED')} · 任务 ${escapeHtml(result.taskId || '-')} · 积分 ${escapeHtml(result.actualPoints ?? 0)}</p></div>`,`<button class="btn secondary" data-action="view-action-result" data-result-id="${escapeHtml(result.id || '')}">查看保存结果</button><button class="btn primary" data-action="open-analysis-impact-review">查看关联影响</button>`); },
-        'action-guidance': () => overlayFrame('action-guidance',overlayState.payload.title, '完成前置条件后可继续当前操作', `<div class="notice">${escapeHtml(overlayState.payload.message || '')}</div>`, `<button class="btn secondary" data-action="close-overlay">返回当前页面</button><button class="btn primary" data-action="${overlayState.payload.targetAction}">去完成前置条件</button>`),
+        'action-guidance': () => {
+          const action = overlayState.payload.targetAction;
+          const next = action === 'focus-review-blockers'
+            ? '<button class="btn primary" data-action="focus-review-blockers">去处理高风险问题</button>'
+            : action === 'focus-storyboard-shots'
+              ? '<button class="btn primary" data-action="focus-storyboard-shots">去选择镜头</button>'
+              : `<button class="btn primary" data-action="${escapeHtml(action || 'close-overlay')}">去完成前置条件</button>`;
+          return overlayFrame('action-guidance',overlayState.payload.title, '完成前置条件后可继续当前操作', `<div class="notice">${escapeHtml(overlayState.payload.message || '')}</div>`, `<button class="btn secondary" data-action="close-overlay">返回当前页面</button>${next}`);
+        },
         'markdown-preview': () => overlayFrame('markdown-preview-dialog',overlayState.payload.title || 'Markdown 预览',overlayState.payload.path || 'Obsidian 项目文档',`<pre class="markdown-preview">${escapeHtml(overlayState.payload.markdown || '')}</pre>`,`<button class="btn secondary" data-action="close-overlay">关闭</button>`),
         'summary-editor': () => overlayFrame('summary-editor','编辑故事梗概','保存后更新 03-小说分析/故事梗概.md，并检查下游影响',`<div class="field"><label>完整梗概</label><textarea id="summary-editor-value">${escapeHtml(appState.artifacts['SUMMARY-001']?.data?.完整梗概 || defaultSummary)}</textarea></div><div class="notice">文档还包含一句话卖点、主线目标、核心冲突、开端、发展、高潮、结局和未解决悬念。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-summary">保存梗概</button>`),
         'event-editor': () => overlayFrame('event-editor','新增主要事件','保存到 03-小说分析/主要事件.md',`<div class="field-grid"><div class="field"><label>事件名称</label><input id="event-name" value="新的关键转折"></div><div class="field"><label>参与人物</label><input id="event-characters" value="林野、顾清寒"></div><div class="field"><label>冲突类型</label><select id="event-conflict"><option>人 vs 人</option><option>人 vs 自我</option><option>人 vs 规则</option></select></div><div class="field"><label>情绪</label><select id="event-emotion"><option>压迫</option><option>爽感</option><option>悬疑</option></select></div></div><div class="field" style="margin-top:12px"><label>事件摘要</label><textarea id="event-summary" style="min-height:100px">林野发现关键证据被提前转移，必须与顾清寒临时合作。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-event">保存事件</button>`),
@@ -1472,10 +1483,13 @@
         'review-filter': () => overlayFrame('review-filter','筛选审核问题','按风险等级与处理状态缩小问题范围',`<div class="field-grid"><div class="field"><label>风险等级</label><select id="review-filter-severity"><option>全部</option><option value="HIGH">高风险</option><option value="MEDIUM">中风险</option></select></div><div class="field"><label>处理状态</label><select id="review-filter-status"><option>全部</option><option value="OPEN">待处理</option><option value="RESOLVED">已解决</option></select></div></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="apply-review-filter">应用筛选</button>`),
         'review-editor': () => { const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0]; return overlayFrame('review-editor',`局部修订 · ${escapeHtml(issue.title)}`,'保存后生成审核记录和剧本正文新版本',`<div class="grid-2"><div class="mini-card"><h3>原问题</h3><p>${escapeHtml(issue.detail)}</p></div><div class="mini-card"><h3>修订建议</h3><p>${escapeHtml(issue.suggestion)}</p></div></div><div class="field" style="margin-top:12px"><label>修订后文本</label><textarea id="review-edit-text" style="min-height:120px">赵承宇收到管理局内部警告，神色第一次失控。他立刻命人焚毁账本，却没发现林野已提前拍下水印。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn secondary" data-action="resolve-review-issue">仅标记已解决</button><button class="btn primary" data-action="save-review-edit">保存局部修订</button>`); },
         'review-diff': () => { const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0]; return overlayFrame('review-diff','修订前后对比','差异会写入 07-审核修订/EP-001-审核记录.md',`<div class="grid-2"><div class="mini-card"><h3>修订前</h3><p>${escapeHtml(issue.detail)}</p></div><div class="mini-card"><h3>修订后</h3><p>${escapeHtml(issue.revision || issue.suggestion)}</p></div></div>`,`<button class="btn secondary" data-action="open-version-diff">查看全版本对比</button><button class="btn primary" data-action="close-overlay">完成</button>`); },
-        'review-approval': () => overlayFrame('review-approval','审核通过本集','仅当高风险问题全部解决时可确认',`<div class="notice">${WorkflowModel.canApproveReview(reviewState.issues) ? '当前无未解决的高风险问题，可以通过本集审核。' : '仍存在未解决的高风险问题，请先定位修订并标记解决。'}</div>`,`<button class="btn secondary" data-action="close-overlay">返回</button><button class="btn primary" data-action="approve-episode" ${WorkflowModel.canApproveReview(reviewState.issues) ? '' : 'disabled'}>确认审核通过</button>`),
+        'review-approval': () => overlayFrame('review-approval','审核通过本集','仅当高风险问题全部解决时可确认',`<div class="notice">${WorkflowModel.canApproveReview(reviewState.issues) ? '当前无未解决的高风险问题，可以通过本集审核。' : '仍存在未解决的高风险问题，请先定位修订并标记解决。'}</div>`,`<button class="btn secondary" data-action="close-overlay">返回</button><button class="btn primary" data-action="approve-episode">确认审核通过</button>`),
         'shot-editor': () => { const shot = storyboardState.shots.find(item => item.id === storyboardState.selectedShotId); return overlayFrame('shot-editor',shot ? `编辑镜头 · ${shot.id}` : '新增镜头','保存到 08-文字分镜/EP-001-文字分镜.md',`<div class="field-grid"><div class="field"><label>景别</label><select id="shot-size"><option ${shot?.size === '近景' ? 'selected' : ''}>近景</option><option ${shot?.size === '大全景' ? 'selected' : ''}>大全景</option><option ${shot?.size === '主观镜头' ? 'selected' : ''}>主观镜头</option></select></div><div class="field"><label>运镜</label><input id="shot-movement" value="${escapeHtml(shot?.movement || '缓慢推进')}"></div><div class="field"><label>时长（秒）</label><input id="shot-duration" type="number" min="1" value="${shot?.duration || 4}"></div><div class="field"><label>声音</label><input id="shot-audio" value="${escapeHtml(shot?.audio || '环境音')}"></div></div><div class="field" style="margin-top:12px"><label>画面内容</label><textarea id="shot-visual" style="min-height:110px">${escapeHtml(shot?.visual || '林野走进昏暗的出租屋，门后影子一闪而过。')}</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-shot">保存镜头</button>`); },
         'continuity-check': () => overlayFrame('continuity-check','连续性检查','角色、场景、道具与镜头轴线',`<div class="surface-list">${storyboardState.continuity.map(item => `<div class="surface-row"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div><span class="tag">通过</span></div>`).join('')}</div>`,`<button class="btn primary" data-action="close-overlay">完成</button>`),
         'canvas-handoff': () => overlayFrame('canvas-handoff','创建画布项目','将锁定文字分镜与关联资产交给视频生产工作台',`<div class="mini-card"><h3>交接内容</h3><p>${storyboardState.shots.length} 个镜头 · 人物资产 · 世界观 · 场景连续性锚点</p></div><div class="notice">静态演示不会真实创建外部项目；产品实现时调用画布项目创建接口。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="handoff-canvas">确认创建</button>`),
+        'archive-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('archive-result','项目已归档','静态演示已将本项目切换为只读状态；不会修改外部后端。',`<div class="mini-card"><h3>${escapeHtml(config.projectName)}</h3><p>状态：ARCHIVED（只读） · 任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p><p>全部产物、版本、任务与导出记录均已保留。</p></div>`,`<button class="btn secondary" data-action="view-archive-result" data-result-id="${escapeHtml(result.id || '')}">查看项目详情</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
+        'export-result': () => { const result = overlayState.payload.result || {}; const fileCount = Object.keys(WorkflowModel.buildVaultFiles(appState)).length; return overlayFrame('export-result','创作包导出已完成','静态演示已保存导出记录，不会创建外部文件。',`<div class="mini-card"><h3>${escapeHtml(result.packagePath || result.path || '创作包')}</h3><p>格式：${escapeHtml(result.exportFormat || '-')} · 范围：${escapeHtml(result.exportRange || '-')}</p><p>Vault 文件：${fileCount} 个 · 任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p></div>`,`<button class="btn secondary" data-action="view-export-result" data-result-id="${escapeHtml(result.id || '')}">查看导出结果</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
+        'canvas-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('canvas-result','画布项目交接已创建','静态演示已生成交接记录，不会真实创建外部画布项目。',`<div class="mini-card"><h3>演示画布项目 ${escapeHtml(result.canvasProjectId || '-')}</h3><p>已交接 ${result.shotCount ?? storyboardState.shots.length} 个镜头 · ${result.assetCount ?? 3} 类资产</p><p>任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p></div>`,`<button class="btn secondary" data-action="view-canvas-result" data-result-id="${escapeHtml(result.id || '')}">查看交接结果</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
         'project-detail': () => overlayFrame('project-detail-dialog','项目详情','查看创作状态、版本与项目操作',`<div class="grid-2"><div class="mini-card"><h3>创作进度</h3><p>当前阶段：${stages[appState.project.activeStage].name}<br>项目状态：${appState.project.status}<br>完成度：${WorkflowModel.computeProgress(appState)}%</p></div><div class="mini-card"><h3>最近活动</h3><p>审核修订 V7 已保存<br>文字分镜等待开放<br>最近更新：刚刚</p></div></div><div class="surface-list" style="margin-top:12px"><div class="surface-row"><div><strong>版本与任务</strong><p>查看全部版本、生成任务和失败记录。</p></div><div><button class="btn secondary" data-action="open-version-history">历史版本</button> <button class="btn secondary" data-action="open-task-center">任务中心</button></div></div></div>`,`<button class="btn warn" data-action="archive-project">归档项目</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="resume-project">继续创作</button>`),
         'task-center': () => overlayFrame('task-center','任务中心','查看阶段流转、生成、失败和重试记录',`<div class="surface-list">${(appState.tasks.length ? appState.tasks : [{id:'task-demo-1',type:'ANALYSIS',scope:'小说分析 · 全部模块',status:'SUCCEEDED'},{id:'task-demo-2',type:'STORYBOARD',scope:'第 1 集 · 场景 1',status:'FAILED'}]).map(task => `<div class="surface-row"><div><strong>${task.scope || task.type}</strong><p>任务 ${task.id} · ${task.status} · ${task.status === 'FAILED' ? '服务暂时不可用，结果未覆盖' : '状态已同步'}</p></div><div>${task.status === 'FAILED' ? '<button class="btn primary" data-action="retry-task">重试</button>' : '<span class="tag">'+task.status+'</span>'}</div></div>`).join('')}</div><div class="surface-list" style="margin-top:12px"><h3>可回访生成结果</h3>${appState.actionResults.length ? appState.actionResults.map(result => `<div class="surface-row"><div><strong>${escapeHtml(result.path || result.action)}</strong><p>V${result.version || '-'} · 任务 ${escapeHtml(result.taskId || '-')} · 积分 ${result.actualPoints ?? 0}</p></div>${result.resultType === 'MANUAL_ACTION' ? `<button class="btn secondary" data-action="open-action-result" data-result-id="${result.id}">查看结果</button>` : `<button class="btn secondary" data-action="open-generation-result" data-result-id="${result.id}">查看结果</button>`}</div>`).join('') : '<div class="empty">采纳生成结果后会保留在这里。</div>'}</div>`),
         'version-history': () => overlayFrame('version-history',`${stages[activeIndex].name} · 历史版本`,'AI 生成、人工编辑和阶段确认均独立留痕',`<div class="surface-list">${[latest,`V${Math.max(1,activeIndex)}`,'V1'].map((version,index) => `<div class="surface-row"><div><strong>${version} ${index === 0 ? '· 当前版本' : ''}</strong><p>${index === 0 ? '阶段确认' : index === 1 ? '人工编辑' : 'AI 生成'} · ${index === 0 ? '刚刚' : index === 1 ? '昨天' : '3 天前'} · 输入版本已记录</p></div><button class="btn secondary" data-action="open-version-diff">对比</button></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="restore-version">恢复为新版本</button>`),
@@ -1626,6 +1640,7 @@
         selectedShotId:storyboardState.selectedShotId,
         issues:reviewState.issues,
         selectedHook:adaptationState.selectedHook,
+        projectArchived:appState.project.archived,
         hasStageArtifact:Object.values(appState.artifacts).some(artifact => artifact.stage === activeIndex)
       }, action);
       if (precondition.allowed) return true;
@@ -1708,10 +1723,14 @@
           const exportFormat = document.getElementById('project-export-format')?.value || 'Obsidian Vault';
           const packagePath = `${config.projectName}_创作包_${exportVersion}_${exportFormat}.zip`;
           const result = WorkflowModel.completeProjectExportAction(appState, { stage:activeIndex, scope:`创作包 · ${exportRange}`, exportRange, exportVersion, exportFormat, packagePath, after:`已创建 ${exportFormat} 创作包：${exportRange} · ${exportVersion} · ${packagePath}` });
-          openOverlay('action-result', { result });
-          notify(`创作包导出任务已创建：${exportFormat} · ${exportRange}。`);
+          openOverlay('export-result', { result });
         },
-        'confirm-archive': () => { appState.project.archived = true; appState.project.status = 'ARCHIVED'; closeOverlay(); notify('项目已归档并切换为只读状态。'); },
+        'confirm-archive': () => {
+          appState.project.archived = true;
+          appState.project.status = 'ARCHIVED';
+          const result = WorkflowModel.completeManualAction(appState, { action:'archive-project', stage:activeIndex, scope:'项目 · 归档', path:'00-项目主页.md', after:'项目已归档并切换为只读状态。', readonly:true });
+          openOverlay('archive-result', { result });
+        },
         'previous-stage': () => { if (activeIndex > 0) { activeIndex -= 1; appState.project.activeStage = activeIndex; render(); } },
         'refresh-models': () => loadModels({ announce:true }),
         'select-project-model': () => { config.projectModel = appState.models.selectedId || config.projectModel; renderContext(); notify('已更新项目默认模型。'); },
@@ -1881,7 +1900,7 @@
         'apply-review-filter': () => {
           reviewState.filters.severity = document.getElementById('review-filter-severity').value;
           reviewState.filters.status = document.getElementById('review-filter-status').value;
-          closeOverlay(); render(); notify('审核问题筛选条件已应用。');
+          closeOverlay(); render();
         },
         'open-review-issue': () => {
           reviewState.selectedIssueId = element.dataset.issueId || reviewState.selectedIssueId;
@@ -1896,21 +1915,24 @@
           issue.status = 'RESOLVED';
           const scriptArtifact = saveScriptArtifact();
           const reviewArtifact = saveReviewArtifact();
-          closeOverlay(); render(); notify(`局部修订已保存：剧本 V${scriptArtifact.version}，审核记录 V${reviewArtifact.version}。`);
+          const result = recordArtifactActionResult('save-review-edit', reviewArtifact, { open:false, after:`局部修订已保存：剧本 V${scriptArtifact.version}，审核记录 V${reviewArtifact.version}。` });
+          openOverlay('action-result', { result });
         },
         'resolve-review-issue': () => {
           const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0];
           issue.status = 'RESOLVED';
           const artifact = saveReviewArtifact();
-          closeOverlay(); render(); notify(`${issue.id} 已标记解决，审核记录更新为 V${artifact.version}。`);
+          const result = recordArtifactActionResult('resolve-review-issue', artifact, { open:false, after:`${issue.id} 已标记解决，审核记录更新为 V${artifact.version}。` });
+          openOverlay('action-result', { result });
         },
-        'open-review-diff': () => openOverlay('review-diff'),
+        'open-review-diff': () => { const artifact = saveReviewArtifact(); recordArtifactActionResult('open-review-diff', artifact, { open:false, after:`审核修订前后对比已准备，审核记录为 V${artifact.version}。` }); openOverlay('review-diff'); },
         'approve-review': () => openOverlay('review-approval'),
         'approve-episode': () => {
-          if (!WorkflowModel.canApproveReview(reviewState.issues)) return notify('仍有未解决的高风险问题，无法审核通过。');
+          if (!WorkflowModel.canApproveReview(reviewState.issues)) return guardAction('approve-review', element);
           const artifact = saveReviewArtifact('confirmed');
           appState.stages[6].status = 'NEEDS_CONFIRMATION';
-          closeOverlay(); render(); notify(`本集审核已通过，审核记录 V${artifact.version}。`);
+          const result = recordArtifactActionResult('approve-episode', artifact, { open:false, after:`本集审核已通过，审核记录 V${artifact.version}。` });
+          openOverlay('action-result', { result });
         },
         'select-shot': () => {
           storyboardState.selectedShotId = element.dataset.shotId;
@@ -1928,7 +1950,8 @@
             storyboardState.shots.push(shot); storyboardState.selectedShotId = shot.id;
           }
           const artifact = saveStoryboardArtifact();
-          closeOverlay(); render(); notify(`镜头已保存，文字分镜更新为 V${artifact.version}。`);
+          const result = recordArtifactActionResult('save-shot', artifact, { open:false, after:`镜头已保存：共 ${storyboardState.shots.length} 个镜头，文字分镜 V${artifact.version}。` });
+          openOverlay('action-result', { result });
         },
         'split-shot': () => {
           const index = storyboardState.shots.findIndex(item => item.id === storyboardState.selectedShotId);
@@ -1938,7 +1961,9 @@
           const first = { ...original, id:`SHOT-${Date.now()}-A`, duration:Math.max(1,Math.ceil(original.duration / 2)), visual:`${original.visual}（前半动作）` };
           const second = { ...original, id:`SHOT-${Date.now()}-B`, duration:Math.max(1,Math.floor(original.duration / 2)), visual:`${original.visual}（后半反应）` };
           storyboardState.shots.splice(index,1,first,second); storyboardState.selectedShotId = first.id;
-          saveStoryboardArtifact(); render(); notify('已拆分为两个镜头，可使用撤销恢复。');
+          const artifact = saveStoryboardArtifact();
+          const result = recordArtifactActionResult('split-shot', artifact, { open:false, after:`已拆分为两个镜头：当前共 ${storyboardState.shots.length} 个镜头，文字分镜 V${artifact.version}。` });
+          render(); openOverlay('action-result', { result });
         },
         'merge-shot': () => {
           const index = storyboardState.shots.findIndex(item => item.id === storyboardState.selectedShotId);
@@ -1948,17 +1973,24 @@
           const a = storyboardState.shots[Math.min(index,partnerIndex)], b = storyboardState.shots[Math.max(index,partnerIndex)];
           const merged = { ...a, id:`SHOT-${Date.now()}-M`, visual:`${a.visual} ${b.visual}`, audio:`${a.audio}；${b.audio}`, duration:a.duration + b.duration, status:'待确认' };
           storyboardState.shots.splice(Math.min(index,partnerIndex),2,merged); storyboardState.selectedShotId = merged.id;
-          saveStoryboardArtifact(); render(); notify('两个镜头已合并，可使用撤销恢复。');
+          const artifact = saveStoryboardArtifact();
+          const result = recordArtifactActionResult('merge-shot', artifact, { open:false, after:`已合并相邻镜头：当前共 ${storyboardState.shots.length} 个镜头，文字分镜 V${artifact.version}。` });
+          render(); openOverlay('action-result', { result });
         },
         'toggle-storyboard-view': () => { storyboardState.view = storyboardState.view === 'table' ? 'cards' : 'table'; render(); notify(`已切换为${storyboardState.view === 'table' ? '表格' : '卡片'}视图。`); },
         'undo-storyboard': () => {
           const previous = storyboardState.history.pop();
           if (!previous) return notify('没有可撤销的分镜操作。');
-          storyboardState.shots = previous; storyboardState.selectedShotId = null; saveStoryboardArtifact(); render(); notify('已撤销上一步分镜操作。');
+          storyboardState.shots = previous; storyboardState.selectedShotId = null;
+          const artifact = saveStoryboardArtifact();
+          const result = recordArtifactActionResult('undo-storyboard', artifact, { open:false, after:`已撤销分镜操作：当前共 ${storyboardState.shots.length} 个镜头，文字分镜 V${artifact.version}。` });
+          render(); openOverlay('action-result', { result });
         },
         'run-continuity-check': () => {
           storyboardState.continuity = [{ title:'角色外观连续', detail:'林野服装、发型和伤口状态在相邻镜头一致。' },{ title:'场景与道具连续', detail:'天台栏杆、系统文字与夜景方向保持一致。' },{ title:'轴线与视线连续', detail:'SHOT-001 至 SHOT-003 未发生越轴。' }];
-          saveStoryboardArtifact(); openOverlay('continuity-check');
+          const artifact = saveStoryboardArtifact();
+          recordArtifactActionResult('run-continuity-check', artifact, { open:false, after:`连续性检查已保存：${storyboardState.continuity.length} 项检查，文字分镜 V${artifact.version}。` });
+          openOverlay('continuity-check');
         },
         'archive-project-complete': () => openOverlay('archive'),
         'create-canvas-project': () => openOverlay('canvas-handoff'),
@@ -1977,7 +2009,13 @@
         'lock-storyboard': () => { appState.stages[7].status = 'COMPLETED'; render(); notify('文字分镜已锁定，创作流程完成。'); },
         'open-export': () => openOverlay('export'),
         'open-vault-preview': () => openOverlay('vault-preview'),
-        'handoff-canvas': () => notify('已生成画布交接摘要，等待创建画布项目。')
+        'handoff-canvas': () => {
+          const result = WorkflowModel.completeManualAction(appState, { action:'handoff-canvas', stage:7, scope:'文字分镜 · 画布交接', path:'08-文字分镜/EP-001-文字分镜.md', version:appState.artifacts['EP-001-STORYBOARD']?.version, shotCount:storyboardState.shots.length, assetCount:3, canvasProjectId:`CANVAS-DEMO-${String(Date.now()).slice(-6)}`, after:`已生成 ${storyboardState.shots.length} 个镜头与 3 类资产的画布交接记录。`, readonly:true });
+          openOverlay('canvas-result', { result });
+        },
+        'view-archive-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('project-detail'); },
+        'view-export-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('export-result', { result }); },
+        'view-canvas-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('canvas-result', { result }); }
       };
       if (handlers[action]) handlers[action]();
       else if (feedback[action]) notify(feedback[action]);

@@ -462,6 +462,23 @@ test('review storyboard and delivery controls expose complete interactions', () 
   }
 });
 
+test('review storyboard and delivery operations never end with toast only', () => {
+  for (const id of ['review-filter','review-editor','review-diff','review-approval','shot-editor','continuity-check','archive-result','export-result','canvas-result']) {
+    assert.match(html, new RegExp(`overlayFrame\\('${id}'`));
+  }
+  for (const action of ['focus-review-blockers','focus-storyboard-shots','view-archive-result','view-export-result','view-canvas-result']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+});
+
+test('archived projects guide write attempts instead of mutating read-only records', () => {
+  const model = loadModel();
+  const result = model.evaluateActionPrecondition({ projectArchived:true }, 'save-shot');
+  assert.equal(result.allowed, false);
+  assert.equal(result.code, 'PROJECT_ARCHIVED');
+  assert.equal(result.targetAction, 'open-project-detail');
+});
+
 test('script export confirmation persists a completed manual result with delivery metadata', () => {
   const model = loadModel();
   const state = model.createInitialState();
