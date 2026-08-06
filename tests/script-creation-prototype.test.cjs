@@ -8,10 +8,123 @@ const htmlPath = '.superpowers/brainstorm/15618-1785939141/content/eight-stage-w
 const html = fs.readFileSync(htmlPath, 'utf8');
 const prdPath = path.join(__dirname, '..', '漫剧视频创作平台_PRD.md');
 const prd = fs.readFileSync(prdPath, 'utf8');
+const matrixPath = path.join(__dirname, '..', 'artifacts', 'script-action-feedback-2026-08-06', 'behavior-matrix.md');
+const matrix = fs.readFileSync(matrixPath, 'utf8');
+const screenshotPath = path.join(__dirname, '..', 'artifacts', 'script-action-feedback-2026-08-06', 'final-action-results.png');
+const screenshot = fs.readFileSync(screenshotPath);
+
+function behaviorRows() {
+  return matrix.split(/\r?\n/)
+    .filter(line => /^\|\s*\d+\s*\|/.test(line))
+    .map(line => line.split('|').slice(1, -1).map(cell => cell.trim()));
+}
 
 test('PRD requires clickable actions condition guidance and persistent results', () => {
   for (const term of ['所有业务按钮可点击','条件不足','操作前需要完成','结果弹层','不能仅以 Toast','行为结果测试']) {
     assert.ok(prd.includes(term), `missing ${term}`);
+  }
+});
+
+test('PRD sections 17.1 through 17.5 preserve the complete action feedback contract', () => {
+  for (const section of ['17.1 Action Guard 规则','17.2 生成与结果状态','17.3 六阶段操作矩阵','17.4 交付与只读规则','17.5 行为结果测试']) assert.ok(prd.includes(section), section);
+  for (const field of ['allowed','code','title','message','targetAction','targetLabel']) assert.ok(prd.includes(`\`${field}\``), field);
+  for (const code of ['SCRIPT_BLOCK_REQUIRED','REVIEW_BLOCKED','SHOT_REQUIRED','STAGE_ARTIFACT_REQUIRED','STORYBOARD_HISTORY_REQUIRED','PROJECT_ARCHIVED']) assert.ok(prd.includes(`\`${code}\``), code);
+  for (const action of [
+    '编辑梗概','新增事件','人物详情','编辑世界观','确认改编方案','选择高压开场','新增改编规则',
+    '打开单集结构','新增节拍','重新生成节拍','续写选中段落','增强冲突','精简对白','改写语气','检查角色一致性',
+    '新增场景','新增正文块','运行正文检查','导出正文','筛选问题','保存局部修订','对比修订前后','审核通过本集',
+    '新增镜头','拆分镜头','合并镜头','切换卡片/表格','连续性检查','完成并归档','配置导图','创建画布项目'
+  ]) assert.ok(prd.includes(action), action);
+  for (const stage of ['改编方案','结构化文字剧本','剧本正文','审核修订','文字分镜']) {
+    assert.ok(prd.includes(`${stage}：artifact 缺失 blocked 零写入；artifact 存在 allowed 生成/采纳。`), `${stage} regen dual path`);
+  }
+  for (const term of ['Toast 只是补充反馈','Markdown 路径','STALE','PROJECT_ARCHIVED','静态演示','不会对外部后端']) assert.ok(prd.includes(term), term);
+});
+
+test('browser matrix has exactly 45 complete action rows and all required dual paths', () => {
+  const rows = behaviorRows();
+  assert.equal(rows.length, 45);
+  assert.match(matrix, /\| # \| Stage \| Action \| Prerequisite \| Browser-visible click result \| Persistent result \| Status \|/);
+  for (const row of rows) {
+    assert.equal(row.length, 7, `row ${row[0]} column count`);
+    assert.equal(row[6], 'PASS', `row ${row[0]} status`);
+  }
+  for (const marker of [
+    'AI 编辑 / 续写选中段落 (blocked)','AI 编辑 / 续写选中段落 (allowed)',
+    '审核通过本集 (blocked)','审核通过本集 (allowed)',
+    '拆分镜头 (blocked)','拆分镜头 (allowed)','合并镜头 (blocked)','合并镜头 (allowed)'
+  ]) assert.ok(matrix.includes(marker), marker);
+  assert.match(matrix, /\| 5 \| 改编方案 \| 重新生成当前产物 \(blocked\)/);
+  assert.match(matrix, /\| 9 \| 改编方案 \| 重新生成当前产物 \(allowed\)/);
+  for (const [row, stage] of [[13,'结构化文字剧本'],[24,'剧本正文'],[30,'审核修订'],[39,'文字分镜']]) {
+    const line = rows.find(item => item[0] === String(row));
+    assert.equal(line[1], stage);
+    assert.match(line[2], /\(blocked \+ allowed\)/);
+    assert.match(line[4], /blocked:[\s\S]*allowed:/);
+    assert.match(line[5], /before tasks=\d+, results=\d+, billing=\d+, artifacts=\d+; after blocked tasks=\d+, results=\d+, billing=\d+, artifacts=\d+; after allowed tasks=\d+, results=\d+, billing=\d+, artifacts=\d+/);
+  }
+  const persistentWriteRows = [1,2,3,4,6,8,9,10,11,12,13,15,16,17,18,19,20,21,22,23,24,27,28,29,30,34,35,36,38,39];
+  for (const rowNumber of persistentWriteRows) {
+    const saved = rows.find(row => row[0] === String(rowNumber))[5];
+    assert.match(saved, /(?:\.md|artifactId=)/, `row ${rowNumber} path/artifact`);
+    assert.match(saved, /\bV\d+\b/, `row ${rowNumber} version`);
+    assert.match(saved, /task-\d+/, `row ${rowNumber} task`);
+    assert.match(saved, /\d+ 积分/, `row ${rowNumber} points`);
+  }
+  for (const [rowNumber, token] of [[40,'packagePath='],[41,'packagePath='],[42,'canvasProjectId='],[43,'archiveTaskId=']]) {
+    const saved = rows.find(row => row[0] === String(rowNumber))[5];
+    assert.ok(saved.includes(token), `row ${rowNumber} ${token}`);
+    assert.match(saved, /task-\d+/);
+    assert.match(saved, /\d+ 积分/);
+  }
+});
+
+test('final browser evidence is a real 1280 by 720 PNG with documented IHDR proof', () => {
+  assert.equal(screenshot.subarray(0, 8).toString('hex'), '89504e470d0a1a0a');
+  assert.equal(screenshot.subarray(12, 16).toString('ascii'), 'IHDR');
+  assert.equal(screenshot.readUInt32BE(16), 1280);
+  assert.equal(screenshot.readUInt32BE(20), 720);
+  assert.ok(matrix.includes('PNG signature: `89504e470d0a1a0a`; IHDR: `1280×720`'));
+});
+
+test('all five current-artifact regeneration guards are zero-write when blocked and persistent when allowed', () => {
+  const model = loadModel();
+  const cases = [
+    [3, 'ADAPT-001', '04-改编方案.md'],
+    [4, 'EP-001-STRUCTURE', '05-分集结构/EP-001-单集结构.md'],
+    [5, 'EP-001-SCRIPT', '06-剧本正文/EP-001-剧本正文.md'],
+    [6, 'EP-001-REVIEW', '07-审核修订/EP-001-审核记录.md'],
+    [7, 'EP-001-STORYBOARD', '08-文字分镜/EP-001-文字分镜.md']
+  ];
+  const counts = state => [state.tasks.length, state.actionResults.length, state.billingEntries.length, Object.keys(state.artifacts).length];
+
+  for (const [stage, artifactId, artifactPath] of cases) {
+    const state = model.createInitialState();
+    const before = counts(state);
+    const blocked = model.evaluateActionPrecondition({ hasStageArtifact:false }, 'open-regenerate');
+    assert.equal(blocked.code, 'STAGE_ARTIFACT_REQUIRED');
+    assert.deepEqual(counts(state), before, `stage ${stage} blocked must be zero-write`);
+
+    const artifact = model.ensureStageArtifactForGeneration(state, stage, { 修复轮次:'browser-matrix-audit' });
+    assert.equal(artifact.id, artifactId);
+    assert.equal(artifact.path, artifactPath);
+    assert.equal(model.evaluateActionPrecondition({ hasStageArtifact:true }, 'open-regenerate').allowed, true);
+
+    const generation = model.startGeneration(state, {
+      action:'regenerate', stage, artifactId, path:artifactPath,
+      data:{ 修复轮次:'browser-matrix-audit-accepted' }, before:'V1', after:'V2',
+      modelId:'demo-script-pro', estimatedPoints:0, actualPoints:0
+    });
+    model.setGenerationStatus(state, 'RUNNING');
+    model.setGenerationStatus(state, 'SUCCEEDED');
+    const result = model.acceptGenerationResult(state, { ...generation.spec, taskId:generation.taskId });
+
+    assert.deepEqual(counts(state), [1,1,1,1], `stage ${stage} allowed counts`);
+    assert.equal(result.taskId, 'task-1');
+    assert.equal(result.path, artifactPath);
+    assert.equal(result.version, 2);
+    assert.equal(result.actualPoints, 0);
+    assert.equal(state.artifacts[artifactId].version, 2);
   }
 });
 

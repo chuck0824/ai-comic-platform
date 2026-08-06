@@ -1167,6 +1167,12 @@ V1 默认展示前 6 个主要人物，完整人物列表可通过“查看全�
 - 测试不以“按钮存在”或 Toast 出现为通过条件，必须逐项记录阶段、前置条件、点击后的可见结果、任务/版本/Markdown/积分等持久结果及通过状态。
 - AI 编辑、审核通过、拆分镜头、合并镜头必须分别覆盖缺前提 blocked 路径和满足条件 allowed 路径。blocked 路径验证引导及零写入；allowed 路径验证持久结果可回访。
 - 重新生成在改编方案、结构化文字剧本、剧本正文、审核修订和文字分镜阶段都要验证保存前的引导与保存后的生成/采纳流。
+- 改编方案：artifact 缺失 blocked 零写入；artifact 存在 allowed 生成/采纳。
+- 结构化文字剧本：artifact 缺失 blocked 零写入；artifact 存在 allowed 生成/采纳。
+- 剧本正文：artifact 缺失 blocked 零写入；artifact 存在 allowed 生成/采纳。
+- 审核修订：artifact 缺失 blocked 零写入；artifact 存在 allowed 生成/采纳。
+- 文字分镜：artifact 缺失 blocked 零写入；artifact 存在 allowed 生成/采纳。
+- 五个阶段的 blocked 核验必须在同一可执行状态函数中记录前后 `tasks`、`actionResults`、`billingEntries`、`artifacts` 计数并确认完全不变；补救保存后再执行 allowed 生成/采纳，验证 Markdown 路径、新版本、任务 ID、积分与下游 `STALE`。
 - 必须覆盖空历史撤销、归档后写操作引导、全局导出创作包、归档结果和画布交接结果。
 - 交互核验使用当前原型预览 URL；最终页面截图需显示具体业务结果，浏览器控制台不得有未处理错误。
 
