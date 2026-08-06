@@ -557,6 +557,32 @@
         return !issues.some(issue => issue.severity === 'HIGH' && issue.status !== 'RESOLVED');
       }
 
+      function estimatePoints(model = {}, usage = {}) {
+        if (model.demo) return 0;
+        const inputTokens = Math.max(0, Number(usage.inputTokens || 0));
+        const outputTokens = Math.max(0, Number(usage.outputTokens || 0));
+        const modelRatio = Number(model.modelRatio ?? 1);
+        const completionRatio = Number(model.completionRatio ?? 1);
+        const groupRatio = Number(model.groupRatio ?? 1);
+        return Math.ceil((inputTokens + outputTokens * completionRatio) * modelRatio * groupRatio);
+      }
+
+      function buildVaultFiles(state) {
+        const files = {};
+        const links = state.artifactOrder.map(id => state.artifacts[id]).filter(Boolean).map(artifact => `- [[${artifact.path.replace(/\.md$/,'')}|${artifact.title}]] · V${artifact.version} · ${artifact.status}${artifact.stale ? ' · STALE' : ''}`).join('\n') || '- 暂无产物';
+        files['00-项目主页.md'] = `---\nproject_id: ${state.project.id}\ntype: project_index\n---\n\n# ${state.project.name}\n\n## 创作产物\n\n${links}\n`;
+        files['01-创作设置.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: creation_settings\n---\n\n# 创作设置\n\n- 项目状态：${state.project.status}\n- 当前阶段：${state.project.activeStage + 1}\n`;
+        for (const id of state.artifactOrder) {
+          const artifact = state.artifacts[id];
+          if (artifact) files[artifact.path] = renderMarkdown(state,id);
+        }
+        const impactRows = state.impacts.map((impact,index) => `${index + 1}. [[${impact.sourceArtifactId}]] → [[${impact.artifactId}]] · ${impact.status} · ${impact.changedFields.join('、') || '内容变更'}`).join('\n') || '暂无待处理影响。';
+        files['90-变更影响.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: impact_log\n---\n\n# 变更影响\n\n${impactRows}\n`;
+        const billingRows = state.billingEntries.map(entry => `| ${entry.taskId} | ${entry.operation || '-'} | ${entry.modelId || '-'} | ${entry.estimated ?? 0} | ${entry.preconsumed ?? 0} | ${entry.actual ?? 0} | ${entry.refunded ?? 0} |`).join('\n') || '| - | 暂无生成记录 | - | 0 | 0 | 0 | 0 |';
+        files['99-生成与计费记录.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: billing_log\nunit: 积分\n---\n\n# 生成与计费记录\n\n> 与 3001 配额一比一：1 quota = 1 积分。\n\n| 任务 | 操作 | 模型 | 预计积分 | 预扣积分 | 实际积分 | 返还积分 |\n|---|---|---|---:|---:|---:|---:|\n${billingRows}\n`;
+        return files;
+      }
+
       function normalizePricingModels(payload = {}) {
         const models = Array.isArray(payload.data) ? payload.data : [];
         return models.map(item => ({
@@ -639,7 +665,7 @@
         return transition;
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, canApproveReview, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, canApproveReview, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -1222,9 +1248,10 @@
         'task-center': () => overlayFrame('task-center','任务中心','查看阶段流转、生成、失败和重试记录',`<div class="surface-list">${(appState.tasks.length ? appState.tasks : [{id:'task-demo-1',type:'ANALYSIS',scope:'小说分析 · 全部模块',status:'SUCCEEDED'},{id:'task-demo-2',type:'STORYBOARD',scope:'第 1 集 · 场景 1',status:'FAILED'}]).map(task => `<div class="surface-row"><div><strong>${task.scope || task.type}</strong><p>任务 ${task.id} · ${task.status} · ${task.status === 'FAILED' ? '服务暂时不可用，结果未覆盖' : '状态已同步'}</p></div><div>${task.status === 'FAILED' ? '<button class="btn primary" data-action="retry-task">重试</button>' : '<span class="tag">'+task.status+'</span>'}</div></div>`).join('')}</div>`),
         'version-history': () => overlayFrame('version-history',`${stages[activeIndex].name} · 历史版本`,'AI 生成、人工编辑和阶段确认均独立留痕',`<div class="surface-list">${[latest,`V${Math.max(1,activeIndex)}`,'V1'].map((version,index) => `<div class="surface-row"><div><strong>${version} ${index === 0 ? '· 当前版本' : ''}</strong><p>${index === 0 ? '阶段确认' : index === 1 ? '人工编辑' : 'AI 生成'} · ${index === 0 ? '刚刚' : index === 1 ? '昨天' : '3 天前'} · 输入版本已记录</p></div><button class="btn secondary" data-action="open-version-diff">对比</button></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="restore-version">恢复为新版本</button>`),
         'version-diff': () => overlayFrame('version-diff','版本差异','当前版本与选中历史版本逐项对照',`<div class="grid-2"><div class="mini-card"><h3>历史版本 V${Math.max(1,activeIndex)}</h3><p>第 3 集结尾：苏雅收到匿名短信，画面结束。</p></div><div class="mini-card"><h3>当前版本 ${latest}</h3><p>第 3 集结尾：苏雅收到匿名短信，抬头发现顾清寒站在门外。</p></div></div><div class="notice">新增结尾人物露出，强化下一集悬念；受影响范围：第 3 集正文与分镜。</div>`),
-        'regenerate': () => overlayFrame('regenerate-dialog','重新生成配置','保留当前版本并创建新版本',`<div class="field-grid"><div class="field"><label>生成范围</label><select><option>当前阶段全部</option><option>当前集</option><option>当前场景</option><option>当前模块</option></select></div><div class="field"><label>使用上游版本</label><select><option>最新已确认版本</option><option>保持原输入版本</option></select></div></div><div class="field" style="margin-top:12px"><label>本次临时指令</label><textarea style="min-height:90px" placeholder="仅对本次生成生效，不超过 1000 字"></textarea></div><div class="notice">默认保留当前人工修改和历史版本，新结果将创建为独立版本。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-regenerate">创建生成任务</button>`),
+        'regenerate': () => { const selectedModel = appState.models.items.find(model => model.id === (appState.models.stageSelections?.[activeIndex] || config.projectModel)) || fallbackModels[0]; const estimated = WorkflowModel.estimatePoints(selectedModel,{inputTokens:6000,outputTokens:2000}); return overlayFrame('regenerate-dialog','重新生成配置','保留当前版本并创建新版本',`${modelPickerMarkup('stage')}<div class="field-grid" style="margin-top:12px"><div class="field"><label>生成范围</label><select id="regenerate-scope"><option>当前阶段全部</option><option>当前集</option><option>当前场景</option><option>当前模块</option></select></div><div class="field"><label>使用上游版本</label><select><option>最新已确认版本</option><option>保持原输入版本</option></select></div></div><div class="grid-2" style="margin-top:12px"><div class="mini-card"><h3>预计用量</h3><p>输入约 6,000 Token · 输出上限 2,000 Token</p></div><div class="mini-card"><h3>预计积分</h3><p>${estimated} 积分${selectedModel.demo ? '（演示任务）' : ' · 提交后预扣'}</p></div></div><div class="field" style="margin-top:12px"><label>本次临时指令</label><textarea id="regenerate-instruction" style="min-height:90px" placeholder="仅对本次生成生效，不超过 1000 字"></textarea></div><div class="notice">真实模型遵循 3001 原生计费：预计 → 预扣 → 实际结算 → 返还差额；1 quota = 1 积分。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-regenerate">创建生成任务</button>`); },
         'stale-impact': () => overlayFrame('stale-impact-dialog','下游依赖影响','上游变更不会删除已有内容',`<div class="surface-list">${stages.slice(activeIndex + 1).map((stage,index) => `<div class="surface-row"><div><strong>${activeIndex + index + 2}. ${stage.name}</strong><p>将标记为需更新；现有版本继续保留，可查看变更后决定。</p></div><span class="tag">STALE</span></div>`).join('') || '<div class="empty">当前为最后阶段，没有下游影响。</div>'}</div>`,`<button class="btn secondary" data-action="close-overlay">继续使用旧版本</button><button class="btn primary" data-action="apply-stale-impact">保存并标记下游</button>`),
-        'export': () => overlayFrame('export-dialog','导出创作包','选择范围、版本和交付格式',`<div class="field-grid"><div class="field"><label>导出范围</label><select><option>当前集</option><option>已完成集数</option><option>全部有效产物</option></select></div><div class="field"><label>导出版本</label><select><option>当前已确认版本</option><option>最新草稿</option></select></div></div><div class="config-section" style="margin-top:16px"><h3>文件格式</h3><div class="choice-grid"><button class="choice selected"><strong>XLSX</strong>一镜一行</button><button class="choice"><strong>JSON</strong>系统对接</button><button class="choice"><strong>Markdown</strong>评审流转</button></div></div><div class="mini-card"><h3>文件名预览</h3><p>重生后我在三集内揭开命运系统_第1集_文字分镜_${latest}_20260805.xlsx</p></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-export">开始导出</button>`),
+        'export': () => overlayFrame('export-dialog','导出创作包','选择范围、版本和交付格式',`<div class="field-grid"><div class="field"><label>导出范围</label><select><option>当前集</option><option>已完成集数</option><option>全部有效产物</option></select></div><div class="field"><label>导出版本</label><select><option>当前已确认版本</option><option>最新草稿</option></select></div></div><div class="config-section" style="margin-top:16px"><h3>文件格式</h3><div class="choice-grid"><button class="choice selected"><strong>Obsidian Vault</strong>完整 Markdown 文档库</button><button class="choice"><strong>JSON</strong>系统对接</button><button class="choice"><strong>DOCX / PDF</strong>评审流转</button></div></div><div class="mini-card"><h3>文件名预览</h3><p>重生后我在三集内揭开命运系统_Obsidian创作库_${latest}_20260806.zip</p></div>`,`<button class="btn secondary" data-action="open-vault-preview">预览 Markdown 文档库</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-export">开始导出</button>`),
+        'vault-preview': () => { const files = WorkflowModel.buildVaultFiles(appState); return overlayFrame('vault-preview','Obsidian 文档库预览',`${Object.keys(files).length} 个 Markdown 文件，关联更新和积分流水均已纳入`,`<div class="surface-list">${Object.entries(files).map(([path,markdown]) => `<details class="surface-row"><summary><strong>${escapeHtml(path)}</strong></summary><pre class="markdown-preview">${escapeHtml(markdown)}</pre></details>`).join('')}</div>`,`<button class="btn primary" data-action="close-overlay">完成</button>`); },
         'archive': () => overlayFrame('archive-dialog','确认归档项目','归档后项目只读，可从全部项目中恢复',`<div class="notice">将保留全部产物、版本、任务与导出记录。归档不会删除任何内容。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn warn" data-action="confirm-archive">确认归档</button>`)
       };
       document.getElementById('overlay-content').innerHTML = (surfaces[overlayState.type] || surfaces['task-center'])();
@@ -1390,7 +1417,16 @@
         'resume-project': () => { closeOverlay(); enterWorkspace('continue'); },
         'restore-version': () => { closeOverlay(); notify('历史版本已恢复为新版本，原记录保持不变。'); },
         'retry-task': () => { closeOverlay(); notify('已创建新的重试任务。'); },
-        'confirm-regenerate': () => { const task = WorkflowModel.createTask(appState,{type:'REGENERATE',stage:activeIndex,scope:`${stages[activeIndex].name} · 当前范围`}); closeOverlay(); notify(`生成任务 ${task.id} 已排队。`); },
+        'confirm-regenerate': () => {
+          const modelId = appState.models.stageSelections?.[activeIndex] || config.projectModel;
+          const model = appState.models.items.find(item => item.id === modelId) || fallbackModels[0];
+          const estimated = WorkflowModel.estimatePoints(model,{inputTokens:6000,outputTokens:2000});
+          const task = WorkflowModel.createTask(appState,{type:'REGENERATE',stage:activeIndex,scope:`${stages[activeIndex].name} · ${document.getElementById('regenerate-scope')?.value || '当前范围'}`,modelId});
+          task.status = 'SUCCEEDED';
+          const actual = model.demo ? 0 : Math.max(0,estimated - Math.ceil(estimated * .08));
+          WorkflowModel.recordPoints(appState,{taskId:task.id,operation:`重新生成${stages[activeIndex].name}`,modelId,estimated,preconsumed:estimated,actual,refunded:estimated - actual});
+          closeOverlay(); render(); notify(`生成任务 ${task.id} 已完成：预扣 ${estimated} 积分，实际 ${actual} 积分，返还 ${estimated - actual} 积分。`);
+        },
         'apply-stale-impact': () => { WorkflowModel.markDownstreamStale(appState,activeIndex); closeOverlay(); render(); notify('已保存当前版本并标记受影响下游。'); },
         'confirm-export': () => { closeOverlay(); notify('导出任务已创建，完成后可在任务中心下载。'); },
         'confirm-archive': () => { appState.project.archived = true; appState.project.status = 'ARCHIVED'; closeOverlay(); notify('项目已归档并切换为只读状态。'); },
@@ -1677,6 +1713,7 @@
         'retry-stage-transition': retryTransition,
         'lock-storyboard': () => { appState.stages[7].status = 'COMPLETED'; render(); notify('文字分镜已锁定，创作流程完成。'); },
         'open-export': () => openOverlay('export'),
+        'open-vault-preview': () => openOverlay('vault-preview'),
         'handoff-canvas': () => notify('已生成画布交接摘要，等待创建画布项目。')
       };
       if (handlers[action]) handlers[action]();
@@ -1687,6 +1724,18 @@
       const element = event.target.closest('[data-action]');
       if (element) dispatchAction(element.dataset.action, element);
       if (!event.target.closest('.workspace-more-wrap') && document.getElementById('workspace-more-menu').classList.contains('open')) closeWorkspaceMoreMenu();
+    });
+    document.addEventListener('change', event => {
+      const select = event.target.closest('[data-model-scope]');
+      if (!select) return;
+      if (select.dataset.modelScope === 'project') config.projectModel = select.value;
+      else {
+        appState.models.stageSelections ||= {};
+        appState.models.stageSelections[activeIndex] = select.value;
+      }
+      appState.models.selectedId = select.value;
+      if (overlayState.type === 'regenerate' || overlayState.type === 'beat-regeneration') renderOverlay();
+      renderContext();
     });
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && document.getElementById('workspace-more-menu').classList.contains('open')) closeWorkspaceMoreMenu({ restoreFocus:true });

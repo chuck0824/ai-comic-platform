@@ -257,3 +257,19 @@ test('review storyboard and delivery controls expose complete interactions', () 
     assert.match(html, new RegExp(`data-action="${action}"`));
   }
 });
+
+test('point estimate follows 3001 token ratio quota rules', () => {
+  const model = loadModel();
+  assert.equal(model.estimatePoints({ demo:true }, { inputTokens:1000, outputTokens:500 }), 0);
+  assert.equal(model.estimatePoints({ modelRatio:2, completionRatio:3, groupRatio:1 }, { inputTokens:1000, outputTokens:500 }), 5000);
+});
+
+test('vault export contains project index impact and billing markdown', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  model.createArtifact(state, { id:'SUMMARY-001', type:'summary', stage:2, title:'故事梗概', path:'03-小说分析/故事梗概.md', data:{ 梗概:'测试' } });
+  model.recordPoints(state, { taskId:'TASK-1', operation:'生成梗概', modelId:'demo', estimated:0, preconsumed:0, actual:0, refunded:0 });
+  const files = model.buildVaultFiles(state);
+  for (const path of ['00-项目主页.md','01-创作设置.md','03-小说分析/故事梗概.md','90-变更影响.md','99-生成与计费记录.md']) assert.ok(files[path]);
+  assert.match(files['99-生成与计费记录.md'], /实际积分/);
+});
