@@ -273,3 +273,7 @@ test('vault export contains project index impact and billing markdown', () => {
   for (const path of ['00-项目主页.md','01-创作设置.md','03-小说分析/故事梗概.md','90-变更影响.md','99-生成与计费记录.md']) assert.ok(files[path]);
   assert.match(files['99-生成与计费记录.md'], /实际积分/);
 });
+
+test('PRD specifies Obsidian vault model fallback and full points settlement', () => {
+  for (const term of ['Obsidian','00-项目主页.md','90-变更影响.md','99-生成与计费记录.md','1 quota = 1 积分','演示模型','预计积分','预扣积分','实际积分','返还积分']) assert.ok(prd.includes(term), `missing ${term}`);
+});
