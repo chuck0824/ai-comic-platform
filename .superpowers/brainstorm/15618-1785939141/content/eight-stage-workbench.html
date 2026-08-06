@@ -553,6 +553,10 @@
         return record;
       }
 
+      function canApproveReview(issues = []) {
+        return !issues.some(issue => issue.severity === 'HIGH' && issue.status !== 'RESOLVED');
+      }
+
       function normalizePricingModels(payload = {}) {
         const models = Array.isArray(payload.data) ? payload.data : [];
         return models.map(item => ({
@@ -635,7 +639,7 @@
         return transition;
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, canApproveReview, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -796,6 +800,14 @@
       return upsertArtifact({ id:'EP-001-SCRIPT', type:'script', stage:5, title:'EP-001 剧本正文', path:'06-剧本正文/EP-001-剧本正文.md', status, dependsOn:['EP-001-STRUCTURE','CHAR-001','WORLD-001'], affects:['EP-001-REVIEW','EP-001-STORYBOARD'], data:scriptArtifactData() });
     }
 
+    function saveReviewArtifact(status = 'draft') {
+      return upsertArtifact({ id:'EP-001-REVIEW', type:'review', stage:6, title:'EP-001 审核记录', path:'07-审核修订/EP-001-审核记录.md', status, dependsOn:['EP-001-SCRIPT'], affects:['EP-001-STORYBOARD'], data:{ 问题列表:reviewState.issues, 审核结论:status === 'confirmed' ? '通过' : '修订中' } });
+    }
+
+    function saveStoryboardArtifact(status = 'draft') {
+      return upsertArtifact({ id:'EP-001-STORYBOARD', type:'storyboard', stage:7, title:'EP-001 文字分镜', path:'08-文字分镜/EP-001-文字分镜.md', status, dependsOn:['EP-001-REVIEW','CHAR-001','WORLD-001'], affects:[], data:{ 展示方式:storyboardState.view, 镜头列表:storyboardState.shots, 连续性检查:storyboardState.continuity } });
+    }
+
     function creationSettingsView() {
       const desc = { '快速创作':'一句话快速生成', '专业创作':'完整八阶段逐步确认', '短剧':'1—3 分钟/集', '长篇':'长篇故事与小说', 'TVC':'广告与品牌脚本' };
       return `<section class="card">${cardHead('创作设置', '先确定创作类型、生产目标和内容分类，再进入小说上传', '第 1 步')}
@@ -889,6 +901,23 @@
         ]
       }]
     };
+    const reviewState = {
+      filters:{ severity:'全部', status:'全部' },
+      selectedIssueId:'ISSUE-001',
+      issues:[
+        { id:'ISSUE-001', severity:'HIGH', status:'OPEN', title:'第 2 集动机跳跃', detail:'赵承宇缺少提前销毁账本的触发事件', suggestion:'补充赵承宇收到管理局泄密警告的动作，并将销毁账本变为被迫应对。' },
+        { id:'ISSUE-002', severity:'MEDIUM', status:'OPEN', title:'主角信息获取过快', detail:'建议增加一次错误判断，提高悬疑感', suggestion:'让林野先误判匿名短信来源，再由账本水印纠正。' },
+        { id:'ISSUE-003', severity:'MEDIUM', status:'OPEN', title:'第 3 集结尾钩子偏弱', detail:'建议把苏雅身份线索提前到最后 5 秒', suggestion:'结尾增加顾清寒出现在苏雅门外的镜头。' }
+      ]
+    };
+    const storyboardState = {
+      view:'table', selectedShotId:null, history:[], continuity:[],
+      shots:[
+        { id:'SHOT-001', size:'大全景', movement:'缓慢推进', visual:'夜色中的城市天台，林野倒在栏杆边。', audio:'风声、远处车流声', duration:4, status:'已确认' },
+        { id:'SHOT-002', size:'近景', movement:'轻微晃动', visual:'林野猛地睁眼，手指抓紧地面。', audio:'急促喘息', duration:3, status:'已确认' },
+        { id:'SHOT-003', size:'主观镜头', movement:'定镜', visual:'半透明系统文字覆盖在夜空上方。', audio:'系统提示音', duration:5, status:'待修改' }
+      ]
+    };
 
     function analysisBasicContent() {
       if (basicTab === 'events') return `<div class="event-list">
@@ -966,13 +995,13 @@
     }
 
     function reviewView() {
+      const visibleIssues = reviewState.issues.filter(issue => (reviewState.filters.severity === '全部' || issue.severity === reviewState.filters.severity) && (reviewState.filters.status === '全部' || issue.status === reviewState.filters.status));
       return `<section class="card">${cardHead('审核与修订中心', '问题定位、修改建议、局部修订和版本对比形成闭环')}
-        <div class="review-layout"><div><div class="score-ring">82</div><div class="score-note">综合质量 · 可进入修订</div></div><div>
-          <div class="issue"><span class="severity high">高</span><div><strong>第 2 集动机跳跃</strong><small>赵承宇缺少提前销毁账本的触发事件</small></div><button data-action="open-review-issue">定位修订</button></div>
-          <div class="issue"><span class="severity mid">中</span><div><strong>主角信息获取过快</strong><small>建议增加一次错误判断，提高悬疑感</small></div><button>查看建议</button></div>
-          <div class="issue"><span class="severity mid">中</span><div><strong>第 3 集结尾钩子偏弱</strong><small>建议把苏晴身份线索提前到最后 5 秒</small></div><button>一键强化</button></div>
+        <div class="review-layout"><div><div class="score-ring">${WorkflowModel.canApproveReview(reviewState.issues) ? '92' : '82'}</div><div class="score-note">综合质量 · ${WorkflowModel.canApproveReview(reviewState.issues) ? '可审核通过' : '仍有高风险问题'}</div></div><div>
+          ${visibleIssues.map(issue => `<div class="issue"><span class="severity ${issue.severity === 'HIGH' ? 'high' : 'mid'}">${issue.severity === 'HIGH' ? '高' : '中'}</span><div><strong>${escapeHtml(issue.title)}</strong><small>${escapeHtml(issue.detail)} · ${issue.status === 'RESOLVED' ? '已解决' : '待处理'}</small></div><button data-action="open-review-issue" data-issue-id="${issue.id}">${issue.status === 'RESOLVED' ? '查看修订' : '定位修订'}</button></div>`).join('') || '<div class="empty">当前筛选条件下没有问题。</div>'}
         </div></div>
-        <div class="actions"><button class="btn secondary" data-action="filter-review-issues">筛选问题</button><button class="btn primary" data-action="save-review-revision">保存局部修订</button><button class="btn secondary" data-action="open-version-diff">对比修订前后</button><button class="btn primary" data-action="approve-episode">审核通过本集</button></div>
+        <div class="notice">筛选：${reviewState.filters.severity}风险 · ${reviewState.filters.status === '全部' ? '全部状态' : reviewState.filters.status}。高风险问题全部解决后才能审核通过。</div>
+        <div class="actions"><button class="btn secondary" data-action="filter-review-issues">筛选问题</button><button class="btn primary" data-action="save-review-revision">保存局部修订</button><button class="btn secondary" data-action="open-review-diff">对比修订前后</button><button class="btn primary" data-action="approve-review">审核通过本集</button></div>
       </section>`;
     }
 
@@ -986,16 +1015,12 @@
     function storyboardView() {
       return `<section class="card">${cardHead('文字分镜脚本', '由审核通过的正文生成可编辑镜头表、画面描述和提示词')}
         <div class="segmented"><button class="active">第 01 集</button><button>第 02 集</button><button>第 03 集</button></div>
-        <table class="shot-table" style="margin-top:12px"><thead><tr><th>镜号</th><th>景别 / 运镜</th><th>画面内容</th><th>对白 / 声音</th><th>时长</th><th>状态</th></tr></thead><tbody>
-          <tr><td class="shot-no">#01</td><td>大全景<br>缓慢推进</td><td>夜色中的城市天台，林野倒在栏杆边。</td><td>风声、远处车流声</td><td>4s</td><td><span class="tag">已确认</span></td></tr>
-          <tr><td class="shot-no">#02</td><td>近景<br>轻微晃动</td><td>林野猛地睁眼，手指抓紧地面。</td><td>急促喘息</td><td>3s</td><td><span class="tag">已确认</span></td></tr>
-          <tr><td class="shot-no">#03</td><td>主观镜头<br>定镜</td><td>半透明系统文字覆盖在夜空上方。</td><td>系统提示音</td><td>5s</td><td><span class="tag">待修改</span></td></tr>
-        </tbody></table>
+        ${storyboardState.view === 'table' ? `<table class="shot-table" style="margin-top:12px"><thead><tr><th>镜号</th><th>景别 / 运镜</th><th>画面内容</th><th>对白 / 声音</th><th>时长</th><th>状态</th></tr></thead><tbody>${storyboardState.shots.map((shot,index) => `<tr class="${storyboardState.selectedShotId === shot.id ? 'selected' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><td class="shot-no">#${String(index + 1).padStart(2,'0')}</td><td>${escapeHtml(shot.size)}<br>${escapeHtml(shot.movement)}</td><td>${escapeHtml(shot.visual)}</td><td>${escapeHtml(shot.audio)}</td><td>${shot.duration}s</td><td><span class="tag">${shot.status}</span></td></tr>`).join('')}</tbody></table>` : `<div class="grid-2" style="margin-top:12px">${storyboardState.shots.map((shot,index) => `<button class="mini-card selectable-card ${storyboardState.selectedShotId === shot.id ? 'selected' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><h3>#${String(index + 1).padStart(2,'0')} · ${escapeHtml(shot.size)}</h3><p>${escapeHtml(shot.visual)}</p><small>${shot.duration}s · ${escapeHtml(shot.movement)}</small></button>`).join('')}</div>`}
         <div class="notice">镜头字段：shot_size · camera_angle · camera_movement · composition · generation_prompt · negative_prompt · continuity_note</div>
-        <div class="actions"><button class="btn primary" data-action="add-shot">新增镜头</button><button class="btn secondary" data-action="split-shot">拆分镜头</button><button class="btn secondary" data-action="merge-shot">合并镜头</button><button class="btn secondary" data-action="toggle-storyboard-view">切换卡片/表格</button><button class="btn secondary" data-action="run-continuity-check">连续性检查</button></div>
+        <div class="actions"><button class="btn primary" data-action="add-shot">新增镜头</button><button class="btn secondary" data-action="split-shot">拆分镜头</button><button class="btn secondary" data-action="merge-shot">合并镜头</button><button class="btn secondary" data-action="toggle-storyboard-view">切换卡片/表格</button><button class="btn secondary" data-action="run-continuity-check">连续性检查</button><button class="btn secondary" data-action="undo-storyboard" ${storyboardState.history.length ? '' : 'disabled'}>撤销</button></div>
       </section>
       <section class="card">${cardHead('分镜完成后的交付', '交付是八阶段完成后的动作，不占用创作阶段')}
-        <div class="destination-grid"><div class="destination"><h3>保存到剧本仓库</h3><p>归档小说分析、改编方案、剧本正文、审核记录和文字分镜。</p><button class="btn secondary">完成并归档</button></div><div class="destination"><h3>导出创作包</h3><p>支持 DOCX、Markdown、PDF 和结构化 JSON。</p><button class="btn secondary">配置导出</button></div><div class="destination selected"><h3>送入画布工作台</h3><p>携带锁定的分镜、角色与世界观资产进入视频制作。</p><button class="btn primary">创建画布项目</button></div></div>
+        <div class="destination-grid"><div class="destination"><h3>保存到剧本仓库</h3><p>归档小说分析、改编方案、剧本正文、审核记录和文字分镜。</p><button class="btn secondary" data-action="archive-project-complete">完成并归档</button></div><div class="destination"><h3>导出创作包</h3><p>支持 DOCX、Markdown、PDF 和结构化 JSON。</p><button class="btn secondary" data-action="open-export">配置导出</button></div><div class="destination selected"><h3>送入画布工作台</h3><p>携带锁定的分镜、角色与世界观资产进入视频制作。</p><button class="btn primary" data-action="create-canvas-project">创建画布项目</button></div></div>
       </section>`;
     }
 
@@ -1186,6 +1211,13 @@
         'script-ai-diff': () => { const selectedModel = appState.models.items.find(model => model.id === config.projectModel) || fallbackModels[0]; return overlayFrame('script-ai-diff','AI 修改建议','采纳前不会覆盖正文；采纳后创建新版本并检查下游影响',`<div class="grid-2"><div class="mini-card"><h3>修改前</h3><p>${escapeHtml(scriptState.pendingAi?.before || '')}</p></div><div class="mini-card"><h3>建议版本</h3><p>${escapeHtml(scriptState.pendingAi?.after || '')}</p></div></div><div class="notice" style="margin-top:12px">模型：${escapeHtml(selectedModel.name)} · ${selectedModel.demo ? '演示任务 0 积分' : '按 3001 规则预扣并结算积分'} · 操作：${escapeHtml(scriptState.pendingAi?.label || '')}</div>`,`<button class="btn secondary" data-action="close-overlay">放弃建议</button><button class="btn primary" data-action="accept-ai-diff">采纳并保存新版本</button>`); },
         'script-check': () => overlayFrame('script-check','正文检查结果','检查对白、角色一致性、场景结构与格式完整性',`<div class="surface-list">${scriptState.checks.map(item => `<div class="surface-row"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div><span class="tag">${item.level}</span></div>`).join('')}</div><div class="notice">0 个阻断问题 · ${scriptState.checks.length} 个优化建议。检查结果可随剧本版本保存。</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="run-script-check">重新检查</button>`),
         'script-export': () => { const artifact = appState.artifacts['EP-001-SCRIPT'] || saveScriptArtifact(); return overlayFrame('script-export','导出剧本正文','选择当前剧本正文的交付格式',`<div class="field-grid"><div class="field"><label>导出范围</label><select><option>第 1 集</option><option>全部已完成集</option></select></div><div class="field"><label>文件格式</label><select><option>Markdown</option><option>DOCX</option><option>JSON</option></select></div></div><div class="mini-card" style="margin-top:12px"><h3>Obsidian 文件</h3><p>${escapeHtml(artifact.path)} · V${artifact.version}</p></div><pre class="markdown-preview">${escapeHtml(WorkflowModel.renderMarkdown(appState, artifact.id))}</pre>`,`<button class="btn secondary" data-action="export-script">刷新预览</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-export">创建导出任务</button>`); },
+        'review-filter': () => overlayFrame('review-filter','筛选审核问题','按风险等级与处理状态缩小问题范围',`<div class="field-grid"><div class="field"><label>风险等级</label><select id="review-filter-severity"><option>全部</option><option value="HIGH">高风险</option><option value="MEDIUM">中风险</option></select></div><div class="field"><label>处理状态</label><select id="review-filter-status"><option>全部</option><option value="OPEN">待处理</option><option value="RESOLVED">已解决</option></select></div></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="apply-review-filter">应用筛选</button>`),
+        'review-editor': () => { const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0]; return overlayFrame('review-editor',`局部修订 · ${escapeHtml(issue.title)}`,'保存后生成审核记录和剧本正文新版本',`<div class="grid-2"><div class="mini-card"><h3>原问题</h3><p>${escapeHtml(issue.detail)}</p></div><div class="mini-card"><h3>修订建议</h3><p>${escapeHtml(issue.suggestion)}</p></div></div><div class="field" style="margin-top:12px"><label>修订后文本</label><textarea id="review-edit-text" style="min-height:120px">赵承宇收到管理局内部警告，神色第一次失控。他立刻命人焚毁账本，却没发现林野已提前拍下水印。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn secondary" data-action="resolve-review-issue">仅标记已解决</button><button class="btn primary" data-action="save-review-edit">保存局部修订</button>`); },
+        'review-diff': () => { const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0]; return overlayFrame('review-diff','修订前后对比','差异会写入 07-审核修订/EP-001-审核记录.md',`<div class="grid-2"><div class="mini-card"><h3>修订前</h3><p>${escapeHtml(issue.detail)}</p></div><div class="mini-card"><h3>修订后</h3><p>${escapeHtml(issue.revision || issue.suggestion)}</p></div></div>`,`<button class="btn secondary" data-action="open-version-diff">查看全版本对比</button><button class="btn primary" data-action="close-overlay">完成</button>`); },
+        'review-approval': () => overlayFrame('review-approval','审核通过本集','仅当高风险问题全部解决时可确认',`<div class="notice">${WorkflowModel.canApproveReview(reviewState.issues) ? '当前无未解决的高风险问题，可以通过本集审核。' : '仍存在未解决的高风险问题，请先定位修订并标记解决。'}</div>`,`<button class="btn secondary" data-action="close-overlay">返回</button><button class="btn primary" data-action="approve-episode" ${WorkflowModel.canApproveReview(reviewState.issues) ? '' : 'disabled'}>确认审核通过</button>`),
+        'shot-editor': () => { const shot = storyboardState.shots.find(item => item.id === storyboardState.selectedShotId); return overlayFrame('shot-editor',shot ? `编辑镜头 · ${shot.id}` : '新增镜头','保存到 08-文字分镜/EP-001-文字分镜.md',`<div class="field-grid"><div class="field"><label>景别</label><select id="shot-size"><option ${shot?.size === '近景' ? 'selected' : ''}>近景</option><option ${shot?.size === '大全景' ? 'selected' : ''}>大全景</option><option ${shot?.size === '主观镜头' ? 'selected' : ''}>主观镜头</option></select></div><div class="field"><label>运镜</label><input id="shot-movement" value="${escapeHtml(shot?.movement || '缓慢推进')}"></div><div class="field"><label>时长（秒）</label><input id="shot-duration" type="number" min="1" value="${shot?.duration || 4}"></div><div class="field"><label>声音</label><input id="shot-audio" value="${escapeHtml(shot?.audio || '环境音')}"></div></div><div class="field" style="margin-top:12px"><label>画面内容</label><textarea id="shot-visual" style="min-height:110px">${escapeHtml(shot?.visual || '林野走进昏暗的出租屋，门后影子一闪而过。')}</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-shot">保存镜头</button>`); },
+        'continuity-check': () => overlayFrame('continuity-check','连续性检查','角色、场景、道具与镜头轴线',`<div class="surface-list">${storyboardState.continuity.map(item => `<div class="surface-row"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div><span class="tag">通过</span></div>`).join('')}</div>`,`<button class="btn primary" data-action="close-overlay">完成</button>`),
+        'canvas-handoff': () => overlayFrame('canvas-handoff','创建画布项目','将锁定文字分镜与关联资产交给视频生产工作台',`<div class="mini-card"><h3>交接内容</h3><p>${storyboardState.shots.length} 个镜头 · 人物资产 · 世界观 · 场景连续性锚点</p></div><div class="notice">静态演示不会真实创建外部项目；产品实现时调用画布项目创建接口。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="handoff-canvas">确认创建</button>`),
         'project-detail': () => overlayFrame('project-detail-dialog','项目详情','查看创作状态、版本与项目操作',`<div class="grid-2"><div class="mini-card"><h3>创作进度</h3><p>当前阶段：${stages[appState.project.activeStage].name}<br>项目状态：${appState.project.status}<br>完成度：${WorkflowModel.computeProgress(appState)}%</p></div><div class="mini-card"><h3>最近活动</h3><p>审核修订 V7 已保存<br>文字分镜等待开放<br>最近更新：刚刚</p></div></div><div class="surface-list" style="margin-top:12px"><div class="surface-row"><div><strong>版本与任务</strong><p>查看全部版本、生成任务和失败记录。</p></div><div><button class="btn secondary" data-action="open-version-history">历史版本</button> <button class="btn secondary" data-action="open-task-center">任务中心</button></div></div></div>`,`<button class="btn warn" data-action="archive-project">归档项目</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="resume-project">继续创作</button>`),
         'task-center': () => overlayFrame('task-center','任务中心','查看阶段流转、生成、失败和重试记录',`<div class="surface-list">${(appState.tasks.length ? appState.tasks : [{id:'task-demo-1',type:'ANALYSIS',scope:'小说分析 · 全部模块',status:'SUCCEEDED'},{id:'task-demo-2',type:'STORYBOARD',scope:'第 1 集 · 场景 1',status:'FAILED'}]).map(task => `<div class="surface-row"><div><strong>${task.scope || task.type}</strong><p>任务 ${task.id} · ${task.status} · ${task.status === 'FAILED' ? '服务暂时不可用，结果未覆盖' : '状态已同步'}</p></div><div>${task.status === 'FAILED' ? '<button class="btn primary" data-action="retry-task">重试</button>' : '<span class="tag">'+task.status+'</span>'}</div></div>`).join('')}</div>`),
         'version-history': () => overlayFrame('version-history',`${stages[activeIndex].name} · 历史版本`,'AI 生成、人工编辑和阶段确认均独立留痕',`<div class="surface-list">${[latest,`V${Math.max(1,activeIndex)}`,'V1'].map((version,index) => `<div class="surface-row"><div><strong>${version} ${index === 0 ? '· 当前版本' : ''}</strong><p>${index === 0 ? '阶段确认' : index === 1 ? '人工编辑' : 'AI 生成'} · ${index === 0 ? '刚刚' : index === 1 ? '昨天' : '3 天前'} · 输入版本已记录</p></div><button class="btn secondary" data-action="open-version-diff">对比</button></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="restore-version">恢复为新版本</button>`),
@@ -1546,6 +1578,91 @@
         },
         'open-script-export': () => dispatchAction('export-script', element),
         'export-script': () => openOverlay('script-export'),
+        'filter-review-issues': () => openOverlay('review-filter'),
+        'apply-review-filter': () => {
+          reviewState.filters.severity = document.getElementById('review-filter-severity').value;
+          reviewState.filters.status = document.getElementById('review-filter-status').value;
+          closeOverlay(); render(); notify('审核问题筛选条件已应用。');
+        },
+        'open-review-issue': () => {
+          reviewState.selectedIssueId = element.dataset.issueId || reviewState.selectedIssueId;
+          openOverlay('review-editor');
+        },
+        'save-review-revision': () => openOverlay('review-editor'),
+        'save-review-edit': () => {
+          const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0];
+          const revision = document.getElementById('review-edit-text').value.trim();
+          if (!revision) return notify('修订内容不能为空。');
+          issue.revision = revision;
+          issue.status = 'RESOLVED';
+          const scriptArtifact = saveScriptArtifact();
+          const reviewArtifact = saveReviewArtifact();
+          closeOverlay(); render(); notify(`局部修订已保存：剧本 V${scriptArtifact.version}，审核记录 V${reviewArtifact.version}。`);
+        },
+        'resolve-review-issue': () => {
+          const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0];
+          issue.status = 'RESOLVED';
+          const artifact = saveReviewArtifact();
+          closeOverlay(); render(); notify(`${issue.id} 已标记解决，审核记录更新为 V${artifact.version}。`);
+        },
+        'open-review-diff': () => openOverlay('review-diff'),
+        'approve-review': () => openOverlay('review-approval'),
+        'approve-episode': () => {
+          if (!WorkflowModel.canApproveReview(reviewState.issues)) return notify('仍有未解决的高风险问题，无法审核通过。');
+          const artifact = saveReviewArtifact('confirmed');
+          appState.stages[6].status = 'NEEDS_CONFIRMATION';
+          closeOverlay(); render(); notify(`本集审核已通过，审核记录 V${artifact.version}。`);
+        },
+        'select-shot': () => {
+          storyboardState.selectedShotId = element.dataset.shotId;
+          render(); notify(`已选择镜头 ${storyboardState.selectedShotId}。`);
+        },
+        'add-shot': () => { storyboardState.selectedShotId = null; openOverlay('shot-editor'); },
+        'save-shot': () => {
+          const spec = { size:document.getElementById('shot-size').value, movement:document.getElementById('shot-movement').value.trim(), visual:document.getElementById('shot-visual').value.trim(), audio:document.getElementById('shot-audio').value.trim(), duration:Number(document.getElementById('shot-duration').value) || 1, status:'待确认' };
+          if (!spec.visual) return notify('镜头画面内容不能为空。');
+          storyboardState.history.push(JSON.parse(JSON.stringify(storyboardState.shots)));
+          const existing = storyboardState.shots.find(item => item.id === storyboardState.selectedShotId);
+          if (existing) Object.assign(existing,spec);
+          else {
+            const shot = { id:`SHOT-${String(storyboardState.shots.length + 1).padStart(3,'0')}`, ...spec };
+            storyboardState.shots.push(shot); storyboardState.selectedShotId = shot.id;
+          }
+          const artifact = saveStoryboardArtifact();
+          closeOverlay(); render(); notify(`镜头已保存，文字分镜更新为 V${artifact.version}。`);
+        },
+        'split-shot': () => {
+          const index = storyboardState.shots.findIndex(item => item.id === storyboardState.selectedShotId);
+          if (index < 0) return notify('请先选择一个需要拆分的镜头。');
+          storyboardState.history.push(JSON.parse(JSON.stringify(storyboardState.shots)));
+          const original = storyboardState.shots[index];
+          const first = { ...original, id:`SHOT-${Date.now()}-A`, duration:Math.max(1,Math.ceil(original.duration / 2)), visual:`${original.visual}（前半动作）` };
+          const second = { ...original, id:`SHOT-${Date.now()}-B`, duration:Math.max(1,Math.floor(original.duration / 2)), visual:`${original.visual}（后半反应）` };
+          storyboardState.shots.splice(index,1,first,second); storyboardState.selectedShotId = first.id;
+          saveStoryboardArtifact(); render(); notify('已拆分为两个镜头，可使用撤销恢复。');
+        },
+        'merge-shot': () => {
+          const index = storyboardState.shots.findIndex(item => item.id === storyboardState.selectedShotId);
+          if (index < 0 || storyboardState.shots.length < 2) return notify('请先选择镜头，且至少需要两个镜头。');
+          const partnerIndex = index < storyboardState.shots.length - 1 ? index + 1 : index - 1;
+          storyboardState.history.push(JSON.parse(JSON.stringify(storyboardState.shots)));
+          const a = storyboardState.shots[Math.min(index,partnerIndex)], b = storyboardState.shots[Math.max(index,partnerIndex)];
+          const merged = { ...a, id:`SHOT-${Date.now()}-M`, visual:`${a.visual} ${b.visual}`, audio:`${a.audio}；${b.audio}`, duration:a.duration + b.duration, status:'待确认' };
+          storyboardState.shots.splice(Math.min(index,partnerIndex),2,merged); storyboardState.selectedShotId = merged.id;
+          saveStoryboardArtifact(); render(); notify('两个镜头已合并，可使用撤销恢复。');
+        },
+        'toggle-storyboard-view': () => { storyboardState.view = storyboardState.view === 'table' ? 'cards' : 'table'; render(); notify(`已切换为${storyboardState.view === 'table' ? '表格' : '卡片'}视图。`); },
+        'undo-storyboard': () => {
+          const previous = storyboardState.history.pop();
+          if (!previous) return notify('没有可撤销的分镜操作。');
+          storyboardState.shots = previous; storyboardState.selectedShotId = null; saveStoryboardArtifact(); render(); notify('已撤销上一步分镜操作。');
+        },
+        'run-continuity-check': () => {
+          storyboardState.continuity = [{ title:'角色外观连续', detail:'林野服装、发型和伤口状态在相邻镜头一致。' },{ title:'场景与道具连续', detail:'天台栏杆、系统文字与夜景方向保持一致。' },{ title:'轴线与视线连续', detail:'SHOT-001 至 SHOT-003 未发生越轴。' }];
+          saveStoryboardArtifact(); openOverlay('continuity-check');
+        },
+        'archive-project-complete': () => openOverlay('archive'),
+        'create-canvas-project': () => openOverlay('canvas-handoff'),
         'confirm-source': () => {
           if (!sourceText.trim()) return notify('请先粘贴小说文本。');
           saveSourceArtifact();

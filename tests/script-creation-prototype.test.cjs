@@ -245,3 +245,15 @@ test('all script AI tools and editor controls are actionable', () => {
     assert.match(html, new RegExp(`data-action="${action}"`));
   }
 });
+
+test('review approval is blocked while high severity issues remain open', () => {
+  const model = loadModel();
+  assert.equal(model.canApproveReview([{ severity:'HIGH', status:'OPEN' }]), false);
+  assert.equal(model.canApproveReview([{ severity:'HIGH', status:'RESOLVED' }, { severity:'MEDIUM', status:'OPEN' }]), true);
+});
+
+test('review storyboard and delivery controls expose complete interactions', () => {
+  for (const action of ['apply-review-filter','save-review-edit','open-review-diff','resolve-review-issue','approve-review','select-shot','save-shot','undo-storyboard','archive-project-complete','open-export','create-canvas-project']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+});
