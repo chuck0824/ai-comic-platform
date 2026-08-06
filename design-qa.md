@@ -98,6 +98,14 @@ The creation-settings drawer is used as focused evidence for the restored classi
 - Final viewport evidence: `/Users/apple/Desktop/漫剧/平台/artifacts/script-creation-completion-2026-08-05/12-final-storyboard-viewport.png`.
 - Browser console errors after the complete flow: none. No actionable P0/P1/P2 visual findings remain.
 
+### Iteration 8
+
+- P1: six global and conditional actions were permanently repeated in every stage header, forcing Chinese labels onto multiple lines and competing with the stage-confirmation action.
+- Removed the repeated toolbar. The workbench header now contains the project breadcrumb, project identity, stage-local version entry and one “更多” menu.
+- Moved project settings, project details and archive into “更多”; kept task center on the default page/project detail; moved regeneration to stages with generated output; dependency impact appears only when downstream content is `STALE`.
+- Verified the “更多” menu, project-settings drawer, current-stage version history, breadcrumb presence, unchanged stage footer and zero browser console errors.
+- Accepted viewport evidence: `/Users/apple/Desktop/漫剧/平台/artifacts/script-creation-completion-2026-08-06/13-simplified-workbench-header.png`.
+
 ## Follow-up polish
 
 - P3: after product-direction approval, replace the static sample data with realistic API-backed loading, empty, failure, regeneration, and version-diff states during implementation.
