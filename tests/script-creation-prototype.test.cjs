@@ -465,6 +465,16 @@ test('review and storyboard guidance expose actionable focus states', () => {
   assert.match(html, /document\.querySelector\('\.shot-table tbody tr, \.selectable-card'\)/);
 });
 
+test('focused review and storyboard nodes have visible focus styles and a selectable blocking filter', () => {
+  for (const selector of ['.issue.guidance-focus', '.shot-table tr.guidance-focus', '.selectable-card.guidance-focus']) {
+    const rule = new RegExp(`${selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^\\{]*\\{[^}]*?(?:border|background|box-shadow|outline)`, 's');
+    assert.match(html, rule, selector);
+  }
+  assert.match(html, new RegExp('<option value="BLOCKING"[^>]*>高风险与阻断</option>'));
+  assert.match(html, /id="review-filter-severity"[\s\S]*?value="BLOCKING"/);
+  assert.match(html, /reviewState\.filters\.severity === 'BLOCKING'/);
+});
+
 test('archive guard covers all write actions while view toggling stays local-only', () => {
   const model = loadModel();
   for (const action of ['open-review-diff','confirm-archive','archive-project','archive-project-complete','save-shot','confirm-project-export']) {
