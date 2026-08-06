@@ -665,7 +665,23 @@
         return transition;
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, canApproveReview, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      function evaluateActionPrecondition(context = {}, action = '') {
+        if (['ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check'].includes(action) && !context.selectedBlockId) {
+          return { allowed:false, code:'SCRIPT_BLOCK_REQUIRED', title:'请先选择正文块', message:'选择一个动作、对白或旁白正文块后才能执行此操作。', targetAction:'focus-script-blocks' };
+        }
+        if (['split-shot','merge-shot'].includes(action) && !context.selectedShotId) {
+          return { allowed:false, code:'SHOT_REQUIRED', title:'请先选择镜头', message:'在表格行或镜头卡片中选择一个镜头后再继续。', targetAction:'focus-storyboard-shots' };
+        }
+        if (action === 'approve-review' && !canApproveReview(context.issues || [])) {
+          return { allowed:false, code:'REVIEW_BLOCKED', title:'本集暂不能审核通过', message:'仍有未解决的高风险或阻断问题。', targetAction:'focus-review-blockers' };
+        }
+        if (action === 'confirm-adaptation' && !context.selectedHook) {
+          return { allowed:false, code:'HOOK_REQUIRED', title:'请选择高压开场', message:'确认改编方案前必须选定一个高压开场。', targetAction:'open-hook-selector' };
+        }
+        return { allowed:true, code:'ALLOW', title:'', message:'' };
+      }
+
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, canApproveReview, evaluateActionPrecondition, estimatePoints, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -1015,7 +1031,7 @@
       return `<section class="card">${cardHead('正文编辑器', '以场景、动作、对白和旁白为最小编辑单元')}
         <div class="editor-shell"><div class="episode-nav"><button class="active">第 01 集</button><button>第 02 集</button><button>第 03 集</button><button>第 04 集</button></div>
           <div class="script-editor">${scriptState.scenes.map((scene,sceneIndex) => `<div class="scene-label">场景 ${String(sceneIndex + 1).padStart(2,'0')}　${escapeHtml(scene.title)}</div>${scene.blocks.map(block => `<button class="script-block ${scriptState.selectedBlockId === block.id ? 'selected' : ''}" data-action="select-script-block" data-block-id="${block.id}" aria-pressed="${scriptState.selectedBlockId === block.id}"><span class="tag">${block.type}</span> ${block.speaker ? `<strong>${escapeHtml(block.speaker)}：</strong>` : '△ '}${escapeHtml(block.text)}</button>`).join('')}`).join('')}
-          <div class="ai-tools"><button data-action="ai-continue" ${scriptState.selectedBlockId ? '' : 'disabled'}>续写选中段落</button><button data-action="ai-conflict" ${scriptState.selectedBlockId ? '' : 'disabled'}>增强冲突</button><button data-action="ai-condense-dialogue" ${scriptState.selectedBlockId ? '' : 'disabled'}>精简对白</button><button data-action="ai-rewrite-tone" ${scriptState.selectedBlockId ? '' : 'disabled'}>改写语气</button><button data-action="ai-character-check" ${scriptState.selectedBlockId ? '' : 'disabled'}>检查角色一致性</button></div>${scriptState.selectedBlockId ? '<div class="notice" style="margin-top:10px">已选择正文块，可执行 AI 操作；采纳结果后才会写入新版本。</div>' : '<div class="notice" style="margin-top:10px">请先选择一个正文块，再使用 AI 工具。</div>'}</div>
+          <div class="ai-tools"><button data-action="ai-continue">续写选中段落</button><button data-action="ai-conflict">增强冲突</button><button data-action="ai-condense-dialogue">精简对白</button><button data-action="ai-rewrite-tone">改写语气</button><button data-action="ai-character-check">检查角色一致性</button></div>${scriptState.selectedBlockId ? '<div class="notice" style="margin-top:10px">已选择正文块，可执行 AI 操作；采纳结果后才会写入新版本。</div>' : '<div class="notice" style="margin-top:10px">请先选择一个正文块，再使用 AI 工具。</div>'}</div>
         </div><div class="notice">正文块类型：ACTION · DIALOGUE · VOICE_OVER · OFF_SCREEN · SUBTITLE · SFX · VFX · TRANSITION</div><div class="actions"><button class="btn primary" data-action="add-scene">新增场景</button><button class="btn secondary" data-action="add-script-block">新增正文块</button><button class="btn secondary" data-action="open-script-check">运行正文检查</button><button class="btn secondary" data-action="open-script-export">导出正文</button></div>
       </section>`;
     }
@@ -1221,6 +1237,7 @@
       const versions = appState.versions[versionKey];
       const latest = versions.at(-1)?.version || `V${activeIndex + 1}`;
       const surfaces = {
+        'action-guidance': () => overlayFrame('action-guidance',overlayState.payload.title, '完成前置条件后可继续当前操作', `<div class="notice">${escapeHtml(overlayState.payload.message || '')}</div>`, `<button class="btn secondary" data-action="close-overlay">返回当前页面</button><button class="btn primary" data-action="${overlayState.payload.targetAction}">去完成前置条件</button>`),
         'markdown-preview': () => overlayFrame('markdown-preview-dialog',overlayState.payload.title || 'Markdown 预览',overlayState.payload.path || 'Obsidian 项目文档',`<pre class="markdown-preview">${escapeHtml(overlayState.payload.markdown || '')}</pre>`,`<button class="btn secondary" data-action="close-overlay">关闭</button>`),
         'summary-editor': () => overlayFrame('summary-editor','编辑故事梗概','保存后更新 03-小说分析/故事梗概.md，并检查下游影响',`<div class="field"><label>完整梗概</label><textarea id="summary-editor-value">${escapeHtml(appState.artifacts['SUMMARY-001']?.data?.完整梗概 || defaultSummary)}</textarea></div><div class="notice">文档还包含一句话卖点、主线目标、核心冲突、开端、发展、高潮、结局和未解决悬念。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-summary">保存梗概</button>`),
         'event-editor': () => overlayFrame('event-editor','新增主要事件','保存到 03-小说分析/主要事件.md',`<div class="field-grid"><div class="field"><label>事件名称</label><input id="event-name" value="新的关键转折"></div><div class="field"><label>参与人物</label><input id="event-characters" value="林野、顾清寒"></div><div class="field"><label>冲突类型</label><select id="event-conflict"><option>人 vs 人</option><option>人 vs 自我</option><option>人 vs 规则</option></select></div><div class="field"><label>情绪</label><select id="event-emotion"><option>压迫</option><option>爽感</option><option>悬疑</option></select></div></div><div class="field" style="margin-top:12px"><label>事件摘要</label><textarea id="event-summary" style="min-height:100px">林野发现关键证据被提前转移，必须与顾清寒临时合作。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-event">保存事件</button>`),
@@ -1388,7 +1405,20 @@
       render();
     }
 
+    function guardAction(action, element) {
+      const precondition = WorkflowModel.evaluateActionPrecondition({
+        selectedBlockId:scriptState.selectedBlockId,
+        selectedShotId:storyboardState.selectedShotId,
+        issues:reviewState.issues,
+        selectedHook:adaptationState.selectedHook
+      }, action);
+      if (precondition.allowed) return true;
+      openOverlay('action-guidance', precondition);
+      return false;
+    }
+
     function dispatchAction(action, element) {
+      if (!guardAction(action, element)) return;
       const feedback = {
         'select-demo-file':'已选择示例文件，上传与章节解析任务已开始。', 'retry-upload':'已保留当前记录并创建新的上传任务。',
         'confirm-source':'原文与章节范围已确认，可进入小说分析。', 'preview-chapter':'已打开章节切分预览（示例共 126 章）。',
@@ -1417,6 +1447,10 @@
         'resume-project': () => { closeOverlay(); enterWorkspace('continue'); },
         'restore-version': () => { closeOverlay(); notify('历史版本已恢复为新版本，原记录保持不变。'); },
         'retry-task': () => { closeOverlay(); notify('已创建新的重试任务。'); },
+        'focus-script-blocks': () => { closeOverlay(); activeIndex = 5; appState.project.activeStage = activeIndex; render(); notify('请选择一个正文块后重试。'); },
+        'focus-storyboard-shots': () => { closeOverlay(); activeIndex = 7; appState.project.activeStage = activeIndex; render(); notify('请选择一个镜头后重试。'); },
+        'focus-review-blockers': () => { closeOverlay(); activeIndex = 6; appState.project.activeStage = activeIndex; render(); notify('请先处理高风险或阻断问题。'); },
+        'open-hook-selector': () => { closeOverlay(); activeIndex = 3; appState.project.activeStage = activeIndex; render(); notify('请选择一个高压开场。'); },
         'confirm-regenerate': () => {
           const modelId = appState.models.stageSelections?.[activeIndex] || config.projectModel;
           const model = appState.models.items.find(item => item.id === modelId) || fallbackModels[0];

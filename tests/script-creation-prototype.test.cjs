@@ -246,6 +246,25 @@ test('all script AI tools and editor controls are actionable', () => {
   }
 });
 
+test('business actions remain clickable and explain missing prerequisites', () => {
+  const model = loadModel();
+  const missingBlock = model.evaluateActionPrecondition({ selectedBlockId:null }, 'ai-continue');
+  assert.equal(missingBlock.allowed, false);
+  assert.equal(missingBlock.code, 'SCRIPT_BLOCK_REQUIRED');
+  assert.equal(missingBlock.targetAction, 'focus-script-blocks');
+
+  const missingShot = model.evaluateActionPrecondition({ selectedShotId:null }, 'split-shot');
+  assert.equal(missingShot.code, 'SHOT_REQUIRED');
+
+  const blockedReview = model.evaluateActionPrecondition({ issues:[{ severity:'HIGH', status:'OPEN' }] }, 'approve-review');
+  assert.equal(blockedReview.code, 'REVIEW_BLOCKED');
+});
+
+test('AI business buttons are not natively disabled', () => {
+  assert.doesNotMatch(html, /data-action="ai-continue"[^>]*disabled/);
+  assert.match(html, /overlayFrame\('action-guidance'/);
+});
+
 test('review approval is blocked while high severity issues remain open', () => {
   const model = loadModel();
   assert.equal(model.canApproveReview([{ severity:'HIGH', status:'OPEN' }]), false);
