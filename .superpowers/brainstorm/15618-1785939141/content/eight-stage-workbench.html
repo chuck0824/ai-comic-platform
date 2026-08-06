@@ -264,24 +264,16 @@
     .stage-flow-info span { color: var(--muted); font-size: 11px; }
     .stage-flow-actions { display: flex; justify-content: space-between; gap: 10px; }
     .stage-flow-actions > div { display: flex; gap: 8px; }
-    .transition-card { max-width: 760px; margin: 36px auto; padding: 28px; }
-    .transition-kicker { color: var(--accent); font-size: 11px; font-weight: 700; letter-spacing: .08em; }
-    .transition-card h2 { margin: 8px 0 6px; font-size: 22px; }
-    .transition-card > p { color: var(--muted); font-size: 12px; line-height: 1.7; }
-    .transition-route { display: grid; grid-template-columns: 1fr 56px 1fr; align-items: center; gap: 12px; margin: 22px 0; }
-    .transition-node { border: 1px solid var(--line); background: #fafbfc; border-radius: 10px; padding: 14px; }
-    .transition-node.done { border-color: #bfe7d0; background: #f1fbf6; }
-    .transition-node.next { border-color: var(--accent-border); background: var(--accent-soft); }
-    .transition-node small { display: block; color: var(--muted); margin-bottom: 5px; }
-    .transition-arrow { color: var(--accent); text-align: center; font-size: 20px; }
-    .transition-status { border: 1px solid var(--line); border-radius: 10px; padding: 16px; }
-    .transition-status-head { display: flex; align-items: center; justify-content: space-between; }
-    .transition-status-head span { font-size: 11px; color: var(--muted); }
-    .transition-track { height: 6px; border-radius: 99px; background: #eceef3; overflow: hidden; margin: 12px 0; }
-    .transition-track i { display: block; height: 100%; background: var(--accent); transition: width .3s ease; }
-    .transition-steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; font-size: 11px; color: var(--muted); }
-    .transition-steps .active { color: var(--accent); font-weight: 700; }
-    .transition-error { margin-top: 12px; padding: 10px; border: 1px solid #f3c1c1; background: #fff3f3; color: #a43f3f; border-radius: 7px; font-size: 11px; }
+    .transition-card { max-width: 620px; min-height: 430px; margin: 28px auto; padding: 48px 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+    .transition-kicker { color: var(--muted); font-size: 12px; font-weight: 600; }
+    .transition-card h2 { margin: 8px 0 0; font-size: 24px; }
+    .transition-percentage { margin: 30px 0 20px; color: var(--accent); font-size: 68px; line-height: 1; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+    .transition-progressbar { width: min(410px, 100%); height: 8px; border-radius: 99px; background: #eceef3; overflow: hidden; }
+    .transition-progressbar i { display: block; height: 100%; background: var(--accent); border-radius: inherit; transition: width .18s ease; }
+    .transition-status-copy { min-height: 22px; margin: 14px 0 24px; color: var(--muted); font-size: 12px; }
+    .transition-error { width: min(410px, 100%); margin: 0 0 18px; padding: 10px; border: 1px solid #f3c1c1; background: #fff3f3; color: #a43f3f; border-radius: 7px; font-size: 11px; }
+    .transition-actions { width: min(410px, 100%); display: flex; justify-content: center; gap: 8px; }
+    @media (prefers-reduced-motion: reduce) { .transition-progressbar i { transition: none; } }
     .toast { position: fixed; right: 28px; bottom: 28px; z-index: 50; max-width: 360px; padding: 11px 14px; border-radius: 8px; color: #fff; background: #292c34; box-shadow: 0 10px 30px rgba(0,0,0,.18); font-size: 12px; display: none; }
     .toast.show { display: block; }
     .modal-mask { position: fixed; inset: 0; z-index: 40; display: none; place-items: center; padding: 28px; background: rgba(20,22,29,.42); }
@@ -433,7 +425,7 @@
           tasks: [],
           versions: Object.fromEntries(versionKeys.map(key => [key, []])),
           staleImpacts: [],
-          transition: { visible:false, fromStage:null, toStage:null, status:null, taskId:null, error:null },
+          transition: { visible:false, fromStage:null, toStage:null, status:null, taskId:null, error:null, progress:0 },
           notifications: []
         };
       }
@@ -477,9 +469,17 @@
         return task;
       }
 
+      function advanceTransitionProgress(status, current) {
+        if (status === 'SUCCEEDED') return 100;
+        if (status === 'FAILED' || status === 'CANCELED') return current;
+        if (status === 'QUEUED') return Math.min(20, current + 4);
+        if (status === 'RUNNING') return Math.min(99, current + 7);
+        return current;
+      }
+
       function startStageTransition(state, fromStage) {
         const task = createTask(state, { type:'STAGE_TRANSITION', stage:fromStage, scope:`阶段 ${fromStage + 1} → ${fromStage + 2}` });
-        state.transition = { visible:true, fromStage, toStage:fromStage + 1, status:'QUEUED', taskId:task.id, error:null };
+        state.transition = { visible:true, fromStage, toStage:fromStage + 1, status:'QUEUED', taskId:task.id, error:null, progress:0 };
         return state.transition;
       }
 
@@ -492,7 +492,7 @@
         return transition;
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -942,36 +942,20 @@
       if (willOpen) menu.querySelector('[role="menuitem"]').focus();
     }
 
-    function transitionCopy(index) {
-      return [
-        '创建项目配置快照，准备小说导入规则与解析参数',
-        '确认有效原文、章节范围与解析结果，准备小说分析任务',
-        '汇总故事、人物、事件和世界观版本，准备改编策略',
-        '锁定卖点、高压开场和创作规则，准备前三集结构',
-        '校验节拍与钩子，准备可扩写的场景上下文',
-        '提交正文检查结果，准备审核问题定位与修订上下文',
-        '确认阻断问题已关闭，准备文字分镜生成范围'
-      ][index];
-    }
-
     function renderTransitionPage() {
       const transition = appState.transition;
-      const statusMap = {
-        QUEUED: { label:'任务已排队', detail:'正在分配创作任务资源，请稍候。', width:'22%', step:0 },
-        RUNNING: { label:'正在准备下一阶段', detail:transitionCopy(transition.fromStage), width:'62%', step:1 },
-        SUCCEEDED: { label:'下一阶段已准备完成', detail:`“${stages[transition.toStage].name}”已开放，可以继续创作。`, width:'100%', step:2 },
-        FAILED: { label:'阶段流转失败', detail:'当前阶段产物已保留，请重新尝试准备下一阶段。', width:'62%', step:1 }
-      };
-      const current = statusMap[transition.status] || statusMap.QUEUED;
-      const actions = transition.status === 'SUCCEEDED'
-        ? `<button class="btn primary" data-action="enter-next-stage">立即进入${stages[transition.toStage].name}</button>`
-        : transition.status === 'FAILED'
-          ? `<button class="btn secondary" data-action="cancel-stage-transition">返回当前阶段</button><button class="btn primary" data-action="retry-stage-transition">重新尝试</button>`
-          : `<button class="btn secondary" data-action="cancel-stage-transition">取消并返回当前阶段</button><button class="btn secondary" data-action="simulate-transition-failure">演示失败状态</button>`;
-      return `<section class="card transition-card"><div class="transition-kicker">阶段流转 · ${transition.status}</div><h2>${current.label}</h2><p>${current.detail}</p>
-        <div class="transition-route"><div class="transition-node done"><small>已确认</small><strong>${stages[transition.fromStage].name}</strong></div><div class="transition-arrow">→</div><div class="transition-node next"><small>下一阶段</small><strong>${stages[transition.toStage].name}</strong></div></div>
-        <div class="transition-status"><div class="transition-status-head"><strong>${current.label}</strong><span>任务 ${transition.taskId}</span></div><div class="transition-track"><i style="width:${current.width}"></i></div><div class="transition-steps"><span class="${current.step >= 0 ? 'active' : ''}">1. 排队校验</span><span class="${current.step >= 1 ? 'active' : ''}">2. 准备上下文</span><span class="${current.step >= 2 ? 'active' : ''}">3. 开放下一阶段</span></div>${transition.error ? `<div class="transition-error">${transition.error}<br>请求编号：REQ-DEMO-${transition.taskId}</div>` : ''}</div>
-        <div class="actions" style="justify-content:flex-end">${actions}</div></section>`;
+      const failed = transition.status === 'FAILED';
+      const succeeded = transition.status === 'SUCCEEDED';
+      const statusCopy = failed ? '当前阶段产物已保留，可重新加载。' : succeeded ? '加载完成，即将自动进入下一阶段。' : '正在准备创作上下文，请稍候…';
+      const actions = failed
+        ? `<button class="btn secondary" data-action="cancel-stage-transition">返回当前阶段</button><button class="btn primary" data-action="retry-stage-transition">重新加载</button>`
+        : succeeded ? '' : `<button class="btn secondary" data-action="cancel-stage-transition">返回当前阶段</button>`;
+      return `<section class="card transition-card"><div class="transition-kicker">${failed ? '阶段加载中断' : '正在进入下一阶段'}</div><h2>${failed ? '加载失败' : stages[transition.toStage].name}</h2>
+        <div class="transition-percentage">${transition.progress}%</div>
+        <div class="transition-progressbar" role="progressbar" aria-label="进入${stages[transition.toStage].name}的加载进度" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${transition.progress}"><i style="width:${transition.progress}%"></i></div>
+        <div class="transition-status-copy" aria-live="polite">${statusCopy}</div>
+        ${failed && transition.error ? `<div class="transition-error">${transition.error}</div>` : ''}
+        <div class="transition-actions">${actions}</div></section>`;
     }
 
     function validateCurrentStage() {
@@ -980,7 +964,20 @@
     }
 
     let transitionTimers = [];
-    function clearTransitionTimers() { transitionTimers.forEach(timer => clearTimeout(timer)); transitionTimers = []; }
+    let transitionProgressTimer = null;
+    function clearTransitionProgress() { clearInterval(transitionProgressTimer); transitionProgressTimer = null; }
+    function startTransitionProgress() {
+      clearTransitionProgress();
+      transitionProgressTimer = setInterval(() => {
+        if (!appState.transition.visible) return clearTransitionProgress();
+        const nextProgress = WorkflowModel.advanceTransitionProgress(appState.transition.status, appState.transition.progress);
+        if (nextProgress !== appState.transition.progress) {
+          appState.transition.progress = nextProgress;
+          render();
+        }
+      }, 120);
+    }
+    function clearTransitionTimers() { transitionTimers.forEach(timer => clearTimeout(timer)); transitionTimers = []; clearTransitionProgress(); }
     function startTransition(forceFailure = false) {
       const errors = validateCurrentStage();
       if (errors.length) return notify(errors.join('；'));
@@ -989,6 +986,7 @@
       WorkflowModel.startStageTransition(appState, activeIndex);
       clearTransitionTimers();
       render();
+      startTransitionProgress();
       transitionTimers.push(setTimeout(() => {
         if (!appState.transition.visible) return;
         appState.transition.status = 'RUNNING';
@@ -1003,8 +1001,15 @@
           appState.transition.error = '上下文准备服务暂时不可用，当前产物未丢失。';
           const task = appState.tasks.find(item => item.id === appState.transition.taskId);
           if (task) task.status = 'FAILED';
-        } else WorkflowModel.completeStageTransition(appState, appState.transition.taskId);
-        render();
+          clearTransitionProgress();
+          render();
+        } else {
+          WorkflowModel.completeStageTransition(appState, appState.transition.taskId);
+          appState.transition.progress = 100;
+          clearTransitionProgress();
+          render();
+          transitionTimers.push(setTimeout(enterTransitionTarget, 500));
+        }
       }, 1250));
     }
 
@@ -1022,16 +1027,8 @@
       startTransition(false);
     }
 
-    function simulateTransitionFailure() {
-      clearTransitionTimers();
-      appState.transition.status = 'FAILED';
-      appState.transition.error = '上下文准备服务暂时不可用，当前产物与版本均已保留。';
-      const task = appState.tasks.find(item => item.id === appState.transition.taskId);
-      if (task) task.status = 'FAILED';
-      render();
-    }
-
     function enterTransitionTarget() {
+      clearTransitionTimers();
       const target = appState.transition.toStage;
       appState.transition.visible = false;
       activeIndex = target;
@@ -1076,9 +1073,7 @@
         'save-stage-draft': () => notify('草稿已保存 · 刚刚'),
         'confirm-stage-transition': () => startTransition(false),
         'cancel-stage-transition': cancelTransition,
-        'simulate-transition-failure': simulateTransitionFailure,
         'retry-stage-transition': retryTransition,
-        'enter-next-stage': enterTransitionTarget,
         'lock-storyboard': () => { appState.stages[7].status = 'COMPLETED'; render(); notify('文字分镜已锁定，创作流程完成。'); },
         'open-export': () => openOverlay('export'),
         'handoff-canvas': () => notify('已生成画布交接摘要，等待创建画布项目。')

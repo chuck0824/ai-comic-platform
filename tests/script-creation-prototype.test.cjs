@@ -65,16 +65,37 @@ test('stage transition opens the next stage only after success', () => {
   assert.equal(model.canEnterStage(state, 1).allowed, true);
 });
 
+test('transition percentage respects task-state boundaries', () => {
+  const model = loadModel();
+  assert.equal(model.advanceTransitionProgress('QUEUED', 0), 4);
+  assert.equal(model.advanceTransitionProgress('QUEUED', 20), 20);
+  assert.equal(model.advanceTransitionProgress('RUNNING', 20), 27);
+  assert.equal(model.advanceTransitionProgress('RUNNING', 98), 99);
+  assert.equal(model.advanceTransitionProgress('FAILED', 62), 62);
+  assert.equal(model.advanceTransitionProgress('SUCCEEDED', 62), 100);
+});
+
 test('prototype contains shared transition controls and progress states', () => {
   assert.match(html, /id="stage-transition-view"/);
   assert.match(html, /function renderStageFooter\(\)/);
   assert.match(html, /function renderTransitionPage\(\)/);
-  for (const action of ['save-stage-draft','confirm-stage-transition','cancel-stage-transition','simulate-transition-failure','retry-stage-transition','enter-next-stage','lock-storyboard']) {
+  for (const action of ['save-stage-draft','confirm-stage-transition','cancel-stage-transition','retry-stage-transition','lock-storyboard']) {
     assert.match(html, new RegExp(`data-action="${action}"`));
   }
   for (const status of ['QUEUED','RUNNING','SUCCEEDED','FAILED']) assert.ok(html.includes(status));
   assert.ok(html.includes('确认当前阶段并进入下一步'));
   assert.ok(html.includes('确认并锁定文字分镜'));
+});
+
+test('transition page is a single percentage loader', () => {
+  assert.match(html, /role="progressbar"/);
+  assert.match(html, /aria-valuenow="\$\{transition\.progress\}"/);
+  assert.match(html, /transition-percentage/);
+  assert.doesNotMatch(html, /transition-route/);
+  assert.doesNotMatch(html, /transition-steps/);
+  assert.doesNotMatch(html, /simulate-transition-failure/);
+  assert.doesNotMatch(html, /enter-next-stage/);
+  assert.match(html, /setTimeout\(enterTransitionTarget, 500\)/);
 });
 
 test('prototype includes project task version regenerate stale and export surfaces', () => {
