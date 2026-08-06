@@ -393,6 +393,31 @@ test('analysis and adaptation actions have editors guards and persistent results
   assert.match(html, /04-改编方案\.md/);
 });
 
+test('manual analysis and adaptation results retain succeeded task and zero-point billing records', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const result = model.completeManualAction(state, {
+    action:'save-summary', stage:2, scope:'小说分析 · 保存故事梗概',
+    artifactId:'SUMMARY-001', path:'03-小说分析/故事梗概.md', version:1
+  });
+
+  assert.equal(result.status, 'SUCCEEDED');
+  assert.equal(result.resultType, 'MANUAL_ACTION');
+  assert.ok(result.taskId);
+  assert.equal(state.tasks[0].id, result.taskId);
+  assert.equal(state.tasks[0].status, 'SUCCEEDED');
+  assert.equal(state.versions.analysis.at(-1).source, '人工保存');
+  assert.equal(state.billingEntries[0].taskId, result.taskId);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.billingEntries[0])), {
+    id:'BILL-1', status:'SETTLED', createdAt:'2026-08-06T11:30:00+08:00', taskId:result.taskId,
+    operation:'save-summary', modelId:'manual', estimated:0, preconsumed:0, actual:0, refunded:0
+  });
+  assert.match(html, /open-action-result/);
+  assert.match(html, /状态：/);
+  assert.match(html, /任务 /);
+  assert.match(html, /积分/);
+});
+
 test('all script AI tools and editor controls are actionable', () => {
   for (const action of ['select-script-block','ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check','save-scene','save-script-block','open-script-check','open-script-export','accept-ai-diff']) {
     assert.match(html, new RegExp(`data-action="${action}"`));
