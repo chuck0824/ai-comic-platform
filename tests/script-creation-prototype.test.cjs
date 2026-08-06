@@ -382,6 +382,17 @@ test('adaptation and structure actions persist instead of only notifying', () =>
   }
 });
 
+test('analysis and adaptation actions have editors guards and persistent results', () => {
+  for (const id of ['summary-editor','event-editor','character-library','world-editor','hook-selector','action-result']) {
+    assert.match(html, new RegExp(`overlayFrame\\('${id}'`));
+  }
+  for (const action of ['save-summary','save-event','save-character','save-world','choose-hook-and-close','view-action-result']) {
+    assert.match(html, new RegExp(`data-action="${action}"`));
+  }
+  assert.match(html, /03-小说分析\/故事梗概\.md/);
+  assert.match(html, /04-改编方案\.md/);
+});
+
 test('all script AI tools and editor controls are actionable', () => {
   for (const action of ['select-script-block','ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check','save-scene','save-script-block','open-script-check','open-script-export','accept-ai-diff']) {
     assert.match(html, new RegExp(`data-action="${action}"`));

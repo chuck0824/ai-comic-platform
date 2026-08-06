@@ -908,6 +908,21 @@
       openOverlay('impact-review', { impacts:['04-改编方案.md','05-分集结构/EP-001-单集结构.md','06-剧本正文/EP-001-剧本正文.md','07-审核修订/EP-001-审核记录.md','08-文字分镜/EP-001-文字分镜.md'] });
     }
 
+    function recordArtifactActionResult(action, artifact) {
+      const result = WorkflowModel.createActionResult(appState, {
+        action,
+        status:'SUCCEEDED',
+        artifactId:artifact.id,
+        path:artifact.path,
+        version:artifact.version,
+        before:'',
+        after:`${artifact.title} 已保存为 V${artifact.version}`,
+        readonly:true
+      });
+      openOverlay('action-result', { result });
+      return result;
+    }
+
     function findScriptBlock(blockId) {
       for (const scene of scriptState.scenes) {
         const block = scene.blocks.find(item => item.id === blockId);
@@ -1383,6 +1398,7 @@
         'stage-draft-saved': () => { const artifact = overlayState.payload.artifact; return overlayFrame('stage-draft-saved','草稿已保存','当前阶段已有可版本化的 Markdown 产物',`<div class="mini-card"><h3>${escapeHtml(artifact.title)}</h3><p>${escapeHtml(artifact.path)} · V${artifact.version}</p></div>`,`<button class="btn secondary" data-action="close-overlay">稍后生成</button><button class="btn primary" data-action="open-regenerate">重新生成当前产物</button>`); },
         'generation-progress': () => { const generation = appState.generation; return overlayFrame('generation-progress','正在生成','任务将持续记录，离开页面后可在任务中心查看',`<div class="mini-card"><h3>${escapeHtml(generation.spec?.scope || '生成内容')}</h3><p>${generation.status || 'QUEUED'} · ${generation.progress}%</p><div class="progress-track" role="progressbar" aria-valuenow="${generation.progress}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${generation.progress}%"></div></div></div>`,`<button class="btn secondary" data-action="open-generation-task">在任务中心查看</button>`); },
         'generation-result': () => { const result = overlayState.payload.result || appState.generation.result || {}; const readonly = result.readonly; return overlayFrame('generation-result',readonly ? '已采纳生成结果' : '生成结果已就绪',readonly ? '已采纳结果仅供查看，不会再次写入版本或计费。' : '采纳会写入新版本；放弃不会覆盖现有产物',`<div class="grid-2"><div class="mini-card"><h3>当前版本</h3><p>${escapeHtml(result.before || result.path || '当前产物')}</p></div><div class="mini-card"><h3>建议结果</h3><p>${escapeHtml(result.after || `任务 ${result.taskId || ''} 已完成，可作为独立版本保存。`)}</p></div></div>`,readonly ? `<button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="close-overlay">关闭</button>` : `<button class="btn secondary" data-action="discard-generation-result">放弃结果</button><button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="accept-generation-result">采纳并保存新版本</button>`); },
+        'action-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('action-result','操作已保存','新 Markdown 版本已保留，可随时从任务中心回访',`<div class="mini-card"><h3>${escapeHtml(result.path || '当前产物')}</h3><p>V${escapeHtml(result.version || '-')} · ${escapeHtml(result.after || '保存成功')}</p></div>`,`<button class="btn secondary" data-action="view-action-result" data-result-id="${escapeHtml(result.id || '')}">查看保存结果</button><button class="btn primary" data-action="open-analysis-impact-review">查看关联影响</button>`); },
         'action-guidance': () => overlayFrame('action-guidance',overlayState.payload.title, '完成前置条件后可继续当前操作', `<div class="notice">${escapeHtml(overlayState.payload.message || '')}</div>`, `<button class="btn secondary" data-action="close-overlay">返回当前页面</button><button class="btn primary" data-action="${overlayState.payload.targetAction}">去完成前置条件</button>`),
         'markdown-preview': () => overlayFrame('markdown-preview-dialog',overlayState.payload.title || 'Markdown 预览',overlayState.payload.path || 'Obsidian 项目文档',`<pre class="markdown-preview">${escapeHtml(overlayState.payload.markdown || '')}</pre>`,`<button class="btn secondary" data-action="close-overlay">关闭</button>`),
         'summary-editor': () => overlayFrame('summary-editor','编辑故事梗概','保存后更新 03-小说分析/故事梗概.md，并检查下游影响',`<div class="field"><label>完整梗概</label><textarea id="summary-editor-value">${escapeHtml(appState.artifacts['SUMMARY-001']?.data?.完整梗概 || defaultSummary)}</textarea></div><div class="notice">文档还包含一句话卖点、主线目标、核心冲突、开端、发展、高潮、结局和未解决悬念。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-summary">保存梗概</button>`),
@@ -1390,6 +1406,7 @@
         'character-library': () => overlayFrame('character-library','人物详情','每位人物独立保存为 03-小说分析/人物/CHAR-NNN-姓名.md；索引为 00-人物索引.md',`<div class="surface-list">${characterProfiles.map((person,index) => `<div class="surface-row"><div><strong>${escapeHtml(person.name)} · ${escapeHtml(person.role)}</strong><p>${escapeHtml(person.identity)}<br>${escapeHtml(person.traits)}</p></div><button class="btn secondary" data-action="edit-character" data-character-index="${index}">编辑人物</button></div>`).join('')}</div>`),
         'character-editor': () => { const index = Number(overlayState.payload.index || 0); const person = characterProfiles[index]; return overlayFrame('character-editor',`编辑人物 · ${escapeHtml(person.name)}`,'保存完整人物小传并更新人物索引',`<input type="hidden" id="character-index" value="${index}"><div class="field-grid"><div class="field"><label>姓名</label><input id="character-name" value="${escapeHtml(person.name)}"></div><div class="field"><label>角色功能</label><input id="character-role" value="${escapeHtml(person.role)}"></div><div class="field"><label>与主角关系</label><input id="character-relation" value="${escapeHtml(person.relation)}"></div><div class="field"><label>人物原型</label><input id="character-archetype" value="${escapeHtml(person.archetype)}"></div></div><div class="field" style="margin-top:12px"><label>外形与身份</label><textarea id="character-appearance" style="min-height:90px">${escapeHtml(person.appearance)}</textarea></div><div class="field" style="margin-top:12px"><label>性格、欲望、恐惧、秘密与行为边界</label><textarea id="character-traits" style="min-height:110px">${escapeHtml(person.traits)}；${escapeHtml(person.boundary)}</textarea></div>`,`<button class="btn secondary" data-action="open-all-characters">返回人物列表</button><button class="btn primary" data-action="save-character">保存人物</button>`); },
         'world-editor': () => overlayFrame('world-editor','编辑世界观','保存到 03-小说分析/世界观.md，并关联主要地点、力量体系与势力阵营',`<div class="field"><label>整体世界类型与时间</label><textarea id="world-overview" style="min-height:105px">${escapeHtml(worldDescription)}</textarea></div><div class="field-grid" style="margin-top:12px"><div class="field"><label>主要地点</label><textarea id="world-places" style="min-height:100px">临渊市；旧港区夜渡拍卖会；管理局异常封锁部；青桥城中村</textarea></div><div class="field"><label>力量体系 / 规则</label><textarea id="world-power" style="min-height:100px">逆天改命系统；信息差与心理博弈；暴露底牌会被管理局监控</textarea></div><div class="field"><label>势力阵营</label><textarea id="world-factions" style="min-height:100px">管理局；赵氏世家；夜渡黑市；系统意志</textarea></div><div class="field"><label>禁忌与代价</label><textarea id="world-taboo" style="min-height:100px">普通人过度接触规则波动将被识别为异常；系统任务失败会降低命运偏移度</textarea></div></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-world">保存世界观</button>`),
+        'hook-selector': () => overlayFrame('hook-selector','选择高压开场','选择后将保存到改编方案，并可在确认前继续调整',`<div class="grid-2">${adaptationState.hooks.map(hook => `<button class="mini-card selectable-card ${adaptationState.selectedHook === hook.id ? 'selected' : ''}" data-action="choose-hook-and-close" data-hook-id="${hook.id}" aria-pressed="${adaptationState.selectedHook === hook.id}"><h3>${hook.id} · ${escapeHtml(hook.title)}</h3><p>${escapeHtml(hook.text)}</p><small>${escapeHtml(hook.reason)}</small></button>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">暂不选择</button>`),
         'impact-review': () => overlayFrame('impact-review','关联内容需要同步','上游文档已创建新版本，旧版不会被覆盖',`<div class="surface-list">${(overlayState.payload.impacts || ['04-改编方案.md','05-分集结构/EP-001-单集结构.md','06-剧本正文/EP-001-剧本正文.md','07-审核修订/EP-001-审核记录.md','08-文字分镜/EP-001-文字分镜.md']).map(path => `<div class="surface-row"><div><strong>${escapeHtml(path)}</strong><p>状态：需同步修改 · 可人工修改、模型同步或保留旧版</p></div><span class="tag">STALE</span></div>`).join('')}</div><div class="notice">影响记录将写入 90-变更影响.md；确认只标记状态，不自动覆盖下游内容。</div>`,`<button class="btn secondary" data-action="close-overlay">稍后处理</button><button class="btn primary" data-action="apply-impact-choice">确认影响清单</button>`),
         'adaptation-rule-editor': () => overlayFrame('adaptation-rule-editor','新增改编规则','规则将写入 04-改编方案.md',`<div class="field-grid"><div class="field"><label>规则类型</label><select id="adaptation-rule-type"><option>人物</option><option>情节</option><option>节奏</option><option>合规</option></select></div><div class="field"><label>优先级</label><select id="adaptation-rule-priority"><option>高</option><option>中</option><option>低</option></select></div></div><div class="field" style="margin-top:12px"><label>规则内容</label><textarea id="adaptation-rule-text" style="min-height:100px">每集结尾必须形成可视化悬念，并与下一集首个节拍直接衔接。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-adaptation-rule">保存规则</button>`),
         'episode-structure-editor': () => { const episode = structureState.episodes[structureState.selectedEpisode]; return overlayFrame('episode-structure-editor',`${episode.id} · ${escapeHtml(episode.title)}`,'保存到 05-分集结构/EP-001-单集结构.md',`<div class="field-grid"><div class="field"><label>本集目标</label><textarea id="episode-goal" style="min-height:85px">${escapeHtml(episode.goal)}</textarea></div><div class="field"><label>核心冲突</label><textarea id="episode-conflict" style="min-height:85px">${escapeHtml(episode.conflict)}</textarea></div><div class="field"><label>关键转折</label><textarea id="episode-turn" style="min-height:85px">${escapeHtml(episode.turn)}</textarea></div><div class="field"><label>结尾钩子</label><textarea id="episode-hook" style="min-height:85px">${escapeHtml(episode.hook)}</textarea></div></div><div class="config-section" style="margin-top:14px"><h3>节拍结构</h3>${episode.beats.map((beat,index) => `<div class="surface-row"><div><strong>节拍 ${index + 1}</strong><p>${escapeHtml(beat)}</p></div><span class="tag">BEAT-${String(index + 1).padStart(2,'0')}</span></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-episode-structure">保存单集结构</button>`); },
@@ -1587,6 +1604,8 @@
         'open-regenerate': () => openOverlay('regenerate'),
         'open-generation-task': () => openOverlay('task-center'),
         'open-generation-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('generation-result', { result:{ ...result, readonly:true } }); },
+        'view-action-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('action-result', { result }); },
+        'open-analysis-impact-review': openAnalysisImpactReview,
         'discard-generation-result': () => { appState.generation.visible = false; closeOverlay(); render(); notify('已放弃本次生成结果，任务记录仍可在任务中心查看。'); },
         'accept-generation-result': acceptGenerationResult,
         'open-stale-impact': () => openOverlay('stale-impact'),
@@ -1601,7 +1620,7 @@
         'focus-script-blocks': () => { closeOverlay(); activeIndex = 5; appState.project.activeStage = activeIndex; render(); notify('请选择一个正文块后重试。'); },
         'focus-storyboard-shots': () => { closeOverlay(); activeIndex = 7; appState.project.activeStage = activeIndex; render(); notify('请选择一个镜头后重试。'); },
         'focus-review-blockers': () => { closeOverlay(); activeIndex = 6; appState.project.activeStage = activeIndex; render(); notify('请先处理高风险或阻断问题。'); },
-        'open-hook-selector': () => { closeOverlay(); activeIndex = 3; appState.project.activeStage = activeIndex; render(); notify('请选择一个高压开场。'); },
+        'open-hook-selector': () => { activeIndex = 3; appState.project.activeStage = activeIndex; openOverlay('hook-selector'); },
         'confirm-regenerate': () => {
           const modelId = appState.models.stageSelections?.[activeIndex] || config.projectModel;
           const model = appState.models.items.find(item => item.id === modelId) || fallbackModels[0];
@@ -1639,7 +1658,7 @@
           const value = document.getElementById('summary-editor-value').value.trim();
           if (!value) return notify('故事梗概不能为空。');
           const artifact = upsertArtifact({ id:'SUMMARY-001', type:'summary', stage:2, title:'故事梗概', path:'03-小说分析/故事梗概.md', status:'draft', dependsOn:['SOURCE-001'], affects:['ADAPT-001'], data:{ 完整梗概:value } });
-          basicTab = 'summary'; analysisModule = 'basic'; closeOverlay(); render(); notify(`故事梗概已保存为 V${artifact.version}。`); openAnalysisImpactReview();
+          basicTab = 'summary'; analysisModule = 'basic'; render(); notify(`故事梗概已保存为 V${artifact.version}。`); recordArtifactActionResult('save-summary', artifact);
         },
         'save-event': () => {
           const name = document.getElementById('event-name').value.trim();
@@ -1647,7 +1666,7 @@
           const eventId = `E${analysisEvents.length + 1}`;
           analysisEvents.push([eventId,name,document.getElementById('event-summary').value.trim(),document.getElementById('event-characters').value.trim(),document.getElementById('event-conflict').value,document.getElementById('event-emotion').value]);
           const artifact = upsertArtifact({ id:'EVENTS-001', type:'events', stage:2, title:'主要事件', path:'03-小说分析/主要事件.md', status:'draft', dependsOn:['SOURCE-001'], affects:['ADAPT-001'], data:{ 事件列表:analysisEvents.map(event => ({ id:event[0], 名称:event[1], 摘要:event[2], 人物:event[3], 冲突:event[4], 情绪:event[5] })) } });
-          basicTab = 'events'; analysisModule = 'basic'; closeOverlay(); render(); notify(`${eventId} 已新增，主要事件文档更新为 V${artifact.version}。`); openAnalysisImpactReview();
+          basicTab = 'events'; analysisModule = 'basic'; render(); notify(`${eventId} 已新增，主要事件文档更新为 V${artifact.version}。`); recordArtifactActionResult('save-event', artifact);
         },
         'save-character': () => {
           const index = Number(document.getElementById('character-index').value);
@@ -1659,13 +1678,13 @@
           person.appearance = document.getElementById('character-appearance').value.trim();
           person.traits = document.getElementById('character-traits').value.trim();
           const artifact = upsertArtifact({ id:`CHAR-${String(index + 1).padStart(3,'0')}`, type:'character', stage:2, title:person.name, path:`03-小说分析/人物/CHAR-${String(index + 1).padStart(3,'0')}-${person.name}.md`, status:'draft', dependsOn:['SOURCE-001'], affects:['ADAPT-001','EP-001-SCRIPT','EP-001-STORYBOARD'], data:{ 姓名:person.name, 角色功能:person.role, 关系:person.relation, 外形:person.appearance, 人物原型:person.archetype, 性格与边界:person.traits, 身份演变:person.identity, 互动模式:person.interaction } });
-          analysisModule = 'characters'; closeOverlay(); render(); notify(`${person.name}人物小传已保存为 V${artifact.version}。`); openAnalysisImpactReview();
+          analysisModule = 'characters'; render(); notify(`${person.name}人物小传已保存为 V${artifact.version}。`); recordArtifactActionResult('save-character', artifact);
         },
         'save-world': () => {
           worldDescription = document.getElementById('world-overview').value.trim();
           if (!worldDescription) return notify('整体世界描述不能为空。');
           const artifact = upsertArtifact({ id:'WORLD-001', type:'world', stage:2, title:'世界观', path:'03-小说分析/世界观.md', status:'draft', dependsOn:['SOURCE-001'], affects:['ADAPT-001','EP-001-STRUCTURE','EP-001-SCRIPT','EP-001-STORYBOARD'], data:{ 整体世界类型与时间:worldDescription, 主要地点:document.getElementById('world-places').value.trim(), 力量体系与规则:document.getElementById('world-power').value.trim(), 势力阵营:document.getElementById('world-factions').value.trim(), 禁忌与代价:document.getElementById('world-taboo').value.trim() } });
-          analysisModule = 'world'; worldTab = 'overview'; closeOverlay(); render(); notify(`世界观已保存为 V${artifact.version}。`); openAnalysisImpactReview();
+          analysisModule = 'world'; worldTab = 'overview'; render(); notify(`世界观已保存为 V${artifact.version}。`); recordArtifactActionResult('save-world', artifact);
         },
         'open-markdown-preview': () => {
           const artifact = appState.artifacts['SUMMARY-001'] || appState.artifacts['EVENTS-001'] || appState.artifacts['WORLD-001'];
@@ -1673,8 +1692,9 @@
           openArtifactMarkdown(artifact);
         },
         'apply-impact-choice': () => { closeOverlay(); notify('影响清单已写入 90-变更影响.md，下游旧版本继续保留。'); },
-        'select-hook': () => { if (!adaptationState.selectedHook) adaptationState.selectedHook = adaptationState.hooks[0].id; render(); notify(`已选择 ${adaptationState.selectedHook} 高压开场。`); },
-        'choose-hook': () => { adaptationState.selectedHook = element.dataset.hookId; render(); notify(`已选择 ${adaptationState.selectedHook} 高压开场。`); },
+        'select-hook': () => openOverlay('hook-selector'),
+        'choose-hook': () => openOverlay('hook-selector'),
+        'choose-hook-and-close': () => { adaptationState.selectedHook = element.dataset.hookId; const hook = adaptationState.hooks.find(item => item.id === adaptationState.selectedHook); const artifact = upsertArtifact({ id:'ADAPT-001', type:'adaptation', stage:3, title:'改编方案', path:'04-改编方案.md', status:'draft', dependsOn:['SUMMARY-001','EVENTS-001','WORLD-001'], affects:['EP-001-STRUCTURE'], data:{ 高压开场:hook, 改编规则:adaptationState.rules, 创作策略:'前三集完成死亡钩子、能力演示和拍卖会冲突；机制视觉化，胜利依赖谋略。' } }); render(); notify(`已选择 ${adaptationState.selectedHook} 高压开场。`); recordArtifactActionResult('choose-hook', artifact); },
         'add-adaptation-rule': () => openOverlay('adaptation-rule-editor'),
         'save-adaptation-rule': () => {
           const text = document.getElementById('adaptation-rule-text').value.trim();
@@ -1688,7 +1708,7 @@
           adaptationState.confirmed = true;
           const hook = adaptationState.hooks.find(item => item.id === adaptationState.selectedHook);
           const artifact = upsertArtifact({ id:'ADAPT-001', type:'adaptation', stage:3, title:'改编方案', path:'04-改编方案.md', status:'confirmed', dependsOn:['SUMMARY-001','EVENTS-001','WORLD-001'], affects:['EP-001-STRUCTURE'], data:{ 高压开场:hook, 改编规则:adaptationState.rules, 创作策略:'前三集完成死亡钩子、能力演示和拍卖会冲突；机制视觉化，胜利依赖谋略。' } });
-          appState.stages[3].status = 'NEEDS_CONFIRMATION'; render(); notify(`改编方案已确认并保存为 V${artifact.version}。`);
+          appState.stages[3].status = 'NEEDS_CONFIRMATION'; render(); notify(`改编方案已确认并保存为 V${artifact.version}。`); recordArtifactActionResult('confirm-adaptation', artifact);
         },
         'confirm-adaptation': () => dispatchAction('save-adaptation', element),
         'open-episode-structure': () => openOverlay('episode-structure-editor'),
