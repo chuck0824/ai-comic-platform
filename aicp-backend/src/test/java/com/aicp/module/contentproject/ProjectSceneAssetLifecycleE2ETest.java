@@ -88,7 +88,7 @@ class ProjectSceneAssetLifecycleE2ETest {
     }
 
     @Test
-    void updateMarksOldApplicationsNeedsSyncAndImpactExposesAffectedStatus() throws Exception {
+    void versionAdvancementKeepsApplicationsUndoableAndReportsStaleAcrossUpdateAndRestore() throws Exception {
         long projectId = createProject(ownerId, "场景引用过期测试");
         authenticateAs(ownerId);
         long assetId = createSceneAsset(projectId, "旧版本场景", "原始灯光");
@@ -111,7 +111,18 @@ class ProjectSceneAssetLifecycleE2ETest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.current_version_no").value(2));
 
-        assertThat(applicationMapper.selectById(application.getId()).getStatus()).isEqualTo("NEEDS_SYNC");
+        assertThat(applicationMapper.selectById(application.getId()).getStatus()).isEqualTo("APPLIED");
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stale_references").value(1))
+                .andExpect(jsonPath("$.data.references[0].sync_status").value("NEEDS_SYNC"));
+
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/versions/{versionId}/restore",
+                        projectId, assetId, oldVersion.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+
+        assertThat(applicationMapper.selectById(application.getId()).getStatus()).isEqualTo("APPLIED");
         mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.stale_references").value(1))

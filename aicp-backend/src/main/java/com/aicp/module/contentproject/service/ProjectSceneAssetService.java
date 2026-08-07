@@ -109,8 +109,7 @@ public class ProjectSceneAssetService {
             throw new BizException(ErrorCode.PARAM_INVALID, "场景资产更新未包含任何有效变更");
         }
         asset.setName(nextName);
-        AssetVersion nextVersion = appendVersion(asset, metadata, userId);
-        markOldReferencesNeedsSync(assetId, previousVersion.getId(), nextVersion.getId());
+        appendVersion(asset, metadata, userId);
         return toView(requireScene(projectId, assetId));
     }
 
@@ -122,10 +121,9 @@ public class ProjectSceneAssetService {
         AssetVersion historical = versionMapper.selectOne(new LambdaQueryWrapper<AssetVersion>()
                 .eq(AssetVersion::getId, versionId).eq(AssetVersion::getAssetId, assetId));
         if (historical == null) throw new BizException(ErrorCode.ASSET_NOT_FOUND, "场景资产版本不存在");
-        AssetVersion previousVersion = requireCurrentVersion(asset);
+        requireCurrentVersion(asset);
         Map<String, Object> restoredMetadata = parseMetadata(historical.getMetadata());
         AssetVersion restored = appendVersion(asset, restoredMetadata, userId);
-        markOldReferencesNeedsSync(assetId, previousVersion.getId(), restored.getId());
         return toVersionView(restored, request == null ? null : request.changeNote());
     }
 
@@ -183,14 +181,13 @@ public class ProjectSceneAssetService {
         List<ImpactReferenceView> refs = new ArrayList<>();
         applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
                         .eq(AssetApplication::getAssetId, assetId)
-                        .in(AssetApplication::getStatus, "APPLIED", "NEEDS_SYNC"))
+                        .eq(AssetApplication::getStatus, "APPLIED"))
                 .forEach(application -> refs.add(new ImpactReferenceView("APPLICATION", application.getId(),
-                        application.getAssetVersionId(), syncStatus(application.getAssetVersionId(), currentVersionId,
-                                application.getStatus()))));
+                        application.getAssetVersionId(), syncStatus(application.getAssetVersionId(), currentVersionId))));
         placementMapper.selectList(new LambdaQueryWrapper<CanvasAssetPlacement>()
                         .eq(CanvasAssetPlacement::getAssetId, assetId).isNull(CanvasAssetPlacement::getReleasedAt))
                 .forEach(placement -> refs.add(new ImpactReferenceView("CANVAS_PLACEMENT", placement.getId(),
-                        placement.getAssetVersionId(), syncStatus(placement.getAssetVersionId(), currentVersionId, "CURRENT"))));
+                        placement.getAssetVersionId(), syncStatus(placement.getAssetVersionId(), currentVersionId))));
         long staleReferences = refs.stream().filter(reference -> "NEEDS_SYNC".equals(reference.syncStatus())).count();
         return new SceneAssetImpactView(assetId, refs.size(), staleReferences, List.copyOf(refs));
     }
@@ -350,21 +347,8 @@ public class ProjectSceneAssetService {
         }
     }
 
-    private void markOldReferencesNeedsSync(Long assetId, Long oldVersionId, Long newVersionId) {
-        if (oldVersionId == null || oldVersionId.equals(newVersionId)) return;
-        applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
-                        .eq(AssetApplication::getAssetId, assetId)
-                        .eq(AssetApplication::getAssetVersionId, oldVersionId)
-                        .eq(AssetApplication::getStatus, "APPLIED"))
-                .forEach(application -> {
-                    application.setStatus("NEEDS_SYNC");
-                    applicationMapper.updateById(application);
-                });
-    }
-
-    private String syncStatus(Long referencedVersionId, Long currentVersionId, String storedStatus) {
-        if ("NEEDS_SYNC".equals(storedStatus)
-                || currentVersionId != null && !currentVersionId.equals(referencedVersionId)) {
+    private String syncStatus(Long referencedVersionId, Long currentVersionId) {
+        if (currentVersionId != null && !currentVersionId.equals(referencedVersionId)) {
             return "NEEDS_SYNC";
         }
         return "CURRENT";
