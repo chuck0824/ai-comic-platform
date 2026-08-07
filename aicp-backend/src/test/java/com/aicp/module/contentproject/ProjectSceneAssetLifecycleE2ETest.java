@@ -23,6 +23,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -296,6 +297,36 @@ class ProjectSceneAssetLifecycleE2ETest {
                 .andExpect(jsonPath("$.data.content", org.hamcrest.Matchers.not(containsString("[[恶意目标]]"))));
     }
 
+    @Test
+    void markdownOrdersTrustedConsumerLinksByPathThenAliasRegardlessOfInsertOrder() throws Exception {
+        long projectId = createProject(ownerId, "链接排序测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "排序场景", "基础灯光");
+        ContentUnit zulu = persistedContentUnit(projectId, "UNIT-Z", "Zulu");
+        ContentUnit alpha = persistedContentUnit(projectId, "UNIT-A", "Alpha");
+        persistedContentUnitApplication(projectId, assetId, zulu);
+        persistedContentUnitApplication(projectId, assetId, alpha);
+
+        String markdown = markdownContent(projectId, assetId);
+        String alphaLink = "[[06-剧本正文/UNIT-A.md|Alpha]]";
+        String zuluLink = "[[06-剧本正文/UNIT-Z.md|Zulu]]";
+        assertThat(markdown).contains("- 消费者：" + alphaLink + "\n- 消费者：" + zuluLink);
+        assertThat(markdown.indexOf(alphaLink)).isLessThan(markdown.indexOf(zuluLink));
+    }
+
+    @Test
+    void markdownNeutralizesControlAndWikiSyntaxInTrustedConsumerAliases() throws Exception {
+        long projectId = createProject(ownerId, "链接别名安全测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "别名场景", "基础灯光");
+        ContentUnit malicious = persistedContentUnit(projectId, "UNIT-M", "恶意|别名]]\r\n伪造\u0001[");
+        persistedContentUnitApplication(projectId, assetId, malicious);
+
+        String markdown = markdownContent(projectId, assetId);
+        assertThat(markdown).contains("[[06-剧本正文/UNIT-M.md|恶意｜别名］］伪造［]]");
+        assertThat(markdown).doesNotContain("恶意|别名]]", "\r", "\u0001");
+    }
+
     private long createSceneAsset(long projectId, String name, String lighting) throws Exception {
         String body = mvc.perform(post("/api/v1/content-projects/{id}/scene-assets", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -325,17 +356,43 @@ class ProjectSceneAssetLifecycleE2ETest {
     }
 
     private ContentUnit persistedContentUnit(long projectId) {
+        return persistedContentUnit(projectId, "UNIT-001", "第一集");
+    }
+
+    private ContentUnit persistedContentUnit(long projectId, String stableKey, String title) {
         ContentUnit unit = new ContentUnit();
-        unit.setStableKey("UNIT-001");
+        unit.setStableKey(stableKey);
         unit.setProjectId(projectId);
         unit.setUnitType("EPISODE");
-        unit.setDisplayNo(1);
-        unit.setTitle("第一集");
+        unit.setDisplayNo(contentUnitMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ContentUnit>()
+                        .eq(ContentUnit::getProjectId, projectId)
+                        .eq(ContentUnit::getUnitType, "EPISODE")).intValue() + 1);
+        unit.setTitle(title);
         unit.setStatus("draft");
         unit.setRevision(0);
         unit.setIsDeleted(0);
         contentUnitMapper.insert(unit);
         return unit;
+    }
+
+    private void persistedContentUnitApplication(long projectId, long assetId, ContentUnit unit) {
+        AssetApplication application = new AssetApplication();
+        application.setWorkspaceId("project_" + projectId);
+        application.setAssetId(assetId);
+        application.setAssetVersionId(versionFor(assetId, 1).getId());
+        application.setProjectId(projectId);
+        application.setTargetType("CONTENT_UNIT");
+        application.setTargetId(unit.getId());
+        application.setIdempotencyKey(UUID.randomUUID().toString());
+        application.setStatus("APPLIED");
+        applicationMapper.insert(application);
+    }
+
+    private String markdownContent(long projectId, long assetId) throws Exception {
+        String response = mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/markdown", projectId, assetId))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString(StandardCharsets.UTF_8);
+        return JsonPath.read(response, "$.data.content");
     }
 
     private long createProject(long ownerUserId, String name) {

@@ -5,6 +5,7 @@ import com.aicp.module.asset.entity.WorkspaceAsset;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetMarkdownView;
 import org.springframework.stereotype.Component;
 
+import java.text.Normalizer;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
@@ -62,7 +63,7 @@ public class SceneAssetMarkdownProjector {
                 .append("- 来源地点：[[").append(WORLD_LOCATIONS).append("]]\n")
                 .append("- 场景资产目录：[[04-场景资产]]\n");
         trustedLinks.forEach(link -> content.append("- 消费者：[[").append(link.path()).append('|')
-                .append(safeText(link.alias())).append("]]\n"));
+                .append(wikiLinkAlias(link.alias())).append("]]\n"));
         appendReferences(content, master.get("references"));
         variants.forEach(variant -> appendReferences(content, variant.get("references")));
         return new SceneAssetMarkdownView(path, content.toString());
@@ -110,6 +111,20 @@ public class SceneAssetMarkdownProjector {
         if (value == null) return "";
         return value.replace("..", "·").replace("/", "／").replace("\\", "＼")
                 .replace("#", "＃").replace("[", "［").replace("]", "］");
+    }
+
+    static String normalizedLinkPath(String value) {
+        return normalize(value).replaceAll("[\\p{Cntrl}]", "");
+    }
+
+    /** Escapes only a wiki-link label, which has stricter syntax than ordinary markdown text. */
+    static String wikiLinkAlias(String value) {
+        return normalize(value).replaceAll("[\\p{Cntrl}]", "")
+                .replace("|", "｜").replace("[", "［").replace("]", "］");
+    }
+
+    private static String normalize(String value) {
+        return Normalizer.normalize(value == null ? "" : value, Normalizer.Form.NFC);
     }
 
     /** Only service-created links may reach the projector as navigable Obsidian links. */

@@ -44,6 +44,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -518,7 +519,13 @@ public class ProjectSceneAssetService {
                         .eq(CanvasAssetPlacement::getAssetId, assetId).isNull(CanvasAssetPlacement::getReleasedAt))
                 .forEach(placement -> trustedCanvasLink(projectId, placement.getCanvasProjectId(), placement.getNodeId())
                         .ifPresent(link -> links.putIfAbsent(link.path(), link)));
-        return List.copyOf(links.values());
+        return links.values().stream()
+                .sorted(Comparator.comparing((SceneAssetMarkdownProjector.TrustedLink link) ->
+                                SceneAssetMarkdownProjector.normalizedLinkPath(link.path()))
+                        .thenComparing(link -> SceneAssetMarkdownProjector.wikiLinkAlias(link.alias()))
+                        .thenComparing(SceneAssetMarkdownProjector.TrustedLink::path)
+                        .thenComparing(SceneAssetMarkdownProjector.TrustedLink::alias))
+                .toList();
     }
 
     private java.util.Optional<SceneAssetMarkdownProjector.TrustedLink> trustedLink(Long projectId, String type,
