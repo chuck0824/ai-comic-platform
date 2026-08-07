@@ -27,6 +27,8 @@ Thumbs.db
 *.log
 logs/
 new-api/logs/
+.dev-logs/
+.dev-pids/
 
 # Temp
 tmp/
@@ -46,3 +48,7 @@ new-api/data/*.db
 
 # Generated outputs
 outputs/
+
+# Python venv
+**/.venv/
+workers/blender/.venv/
