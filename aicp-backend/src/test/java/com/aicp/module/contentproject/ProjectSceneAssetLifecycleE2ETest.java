@@ -319,12 +319,15 @@ class ProjectSceneAssetLifecycleE2ETest {
         long projectId = createProject(ownerId, "链接别名安全测试");
         authenticateAs(ownerId);
         long assetId = createSceneAsset(projectId, "别名场景", "基础灯光");
-        ContentUnit malicious = persistedContentUnit(projectId, "UNIT-M", "恶意|别名]]\r\n伪造\u0001[");
+        ContentUnit malicious = persistedContentUnit(projectId, "UNIT-M", "恶意|别名]]\r\n伪造\u0001[../\\#");
         persistedContentUnitApplication(projectId, assetId, malicious);
 
         String markdown = markdownContent(projectId, assetId);
-        assertThat(markdown).contains("[[06-剧本正文/UNIT-M.md|恶意｜别名］］伪造［]]");
-        assertThat(markdown).doesNotContain("恶意|别名]]", "\r", "\u0001");
+        String prefix = "[[06-剧本正文/UNIT-M.md|";
+        int aliasStart = markdown.indexOf(prefix) + prefix.length();
+        String alias = markdown.substring(aliasStart, markdown.indexOf("]]", aliasStart));
+        assertThat(alias).isEqualTo("恶意｜别名］］伪造［·／＼＃");
+        assertThat(alias).doesNotContain("..", "/", "\\", "#", "|", "[", "]", "\r", "\n", "\u0001");
     }
 
     private long createSceneAsset(long projectId, String name, String lighting) throws Exception {

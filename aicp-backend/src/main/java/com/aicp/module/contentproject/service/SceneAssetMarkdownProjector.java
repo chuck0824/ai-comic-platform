@@ -107,7 +107,7 @@ public class SceneAssetMarkdownProjector {
         return value instanceof String string ? string : fallback;
     }
 
-    private String safeText(String value) {
+    private static String safeText(String value) {
         if (value == null) return "";
         return value.replace("..", "·").replace("/", "／").replace("\\", "＼")
                 .replace("#", "＃").replace("[", "［").replace("]", "］");
@@ -119,8 +119,7 @@ public class SceneAssetMarkdownProjector {
 
     /** Escapes only a wiki-link label, which has stricter syntax than ordinary markdown text. */
     static String wikiLinkAlias(String value) {
-        return normalize(value).replaceAll("[\\p{Cntrl}]", "")
-                .replace("|", "｜").replace("[", "［").replace("]", "］");
+        return safeText(normalize(value).replaceAll("[\\p{Cntrl}]", "")).replace("|", "｜");
     }
 
     private static String normalize(String value) {
