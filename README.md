@@ -66,6 +66,8 @@ TVC/电影/电视剧三大类型的剧本与分镜工业标准流程。含审查
 
 | 资源 | 路径 |
 |------|------|
+| Cursor / AI 助手规范 | [`AGENTS.md`](AGENTS.md)、[`.cursor/rules/`](.cursor/rules/) |
+| 本地一键启动 | [`scripts/dev-up.sh`](scripts/dev-up.sh) |
 | 原型页面 | [`原型页面/`](原型页面/) |
 | 后端代码 (Java) | [`aicp-backend/`](aicp-backend/) |
 | 前端代码 (Vue) | [`aicp-frontend/`](aicp-frontend/) |

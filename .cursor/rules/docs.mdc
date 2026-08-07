@@ -1,0 +1,12 @@
+---
+description: docs 与产品文档编辑约定
+globs: docs/**/*
+alwaysApply: false
+---
+
+# 文档
+
+- `docs/01-core/` 是权威事实源（PRD、后端规格、API、new-api 对接）。
+- `docs/02-derived/` 衍生；`docs/03-reference/` 参考；`docs/archive/` 禁止当开发依据。
+- 改接口或账号模型时，同步核对 README「双端账号」段落与实现是否一致，避免文档超前或夸大。
+- 不要为完成任务顺手新增长篇 markdown，除非用户明确要求。
