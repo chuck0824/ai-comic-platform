@@ -119,6 +119,10 @@
   text-decoration: none;
   min-height: 44px;
   transition: color 0.2s ease, gap 0.2s ease;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
 }
 .comic-text-link:hover {
   color: #fff;

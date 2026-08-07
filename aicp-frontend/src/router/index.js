@@ -9,6 +9,12 @@ const routes = [
     meta: { public: true }
   },
   {
+    path: '/sso',
+    name: 'Sso',
+    component: () => import('@/views/Sso.vue'),
+    meta: { public: true }
+  },
+  {
     path: '/',
     component: () => import('@/components/AppLayout.vue'),
     redirect: '/home',

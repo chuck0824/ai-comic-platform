@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/QuantumNous/new-api/common"
@@ -60,6 +61,12 @@ func AicpJwtAuth() gin.HandlerFunc {
 		}
 		userID := int64(userIDFloat)
 		userUUID, _ := claims["uuid"].(string)
+		if userUUID == "" {
+			// JwtUtil puts uuid in subject when "uuid" claim is absent (older tokens).
+			if sub, ok := claims["sub"].(string); ok {
+				userUUID = sub
+			}
+		}
 
 		// Look up or create shadow user in new-api
 		user, err := model.GetOrCreateShadowUser(userID, userUUID, claims)
@@ -87,6 +94,11 @@ func AicpJwtAuth() gin.HandlerFunc {
 		c.Set("username", user.Username)
 		c.Set("group", user.Group)
 		c.Set("aicp_user_id", userID)
+		// UserAuth requires New-Api-User; BFF/API clients often omit it when
+		// authenticating solely via AICP JWT — inject the shadow user id.
+		if c.Request.Header.Get("New-Api-User") == "" {
+			c.Request.Header.Set("New-Api-User", strconv.Itoa(user.Id))
+		}
 
 		c.Next()
 	}

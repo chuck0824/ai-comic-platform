@@ -59,9 +59,18 @@ public class AuthController {
     }
 
     @PostMapping("/login/sso")
-    public ApiResponse<Map<String, Object>> loginBySso(@RequestBody Map<String, Object> body) {
-        // SSO登录 (V1.2)
-        return ApiResponse.success(Map.of("message", "SSO登录功能将在V1.2上线"));
+    public ApiResponse<Map<String, Object>> loginBySso(@RequestBody Map<String, String> body) {
+        return ApiResponse.success(authService.loginBySso(body.get("ticket")));
+    }
+
+    /**
+     * Issue a short-lived SSO ticket for opening the 3001 console while already
+     * logged into the 8080 workbench. Requires a valid Bearer access token.
+     */
+    @PostMapping("/sso/ticket")
+    public ApiResponse<Map<String, Object>> createSsoTicket(
+            @RequestHeader(value = "Authorization", required = false) String authHeader) {
+        return ApiResponse.success(authService.createSsoTicket(authHeader));
     }
 
     @PostMapping("/refresh-token")

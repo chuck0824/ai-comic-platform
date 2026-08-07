@@ -19,7 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import type { ReactNode } from 'react'
 import { ArrowRight } from 'lucide-react'
 import type { LocalizedChapter } from '../use-comic-content'
-import { COMIC_WORKBENCH_URL } from '../comic-content'
+import { openAicpWorkbenchWithSso } from '@/lib/aicp-sso'
 
 type ProductionChapterProps = {
   chapter: LocalizedChapter
@@ -38,9 +38,13 @@ export function ProductionChapter({ chapter, reverse = false, children }: Produc
           <div className="comic-capabilities">
             {chapter.capabilities.map((capability) => <span key={capability}>{capability}</span>)}
           </div>
-          <a className="comic-text-link" href={COMIC_WORKBENCH_URL}>
+          <button
+            type="button"
+            className="comic-text-link"
+            onClick={() => void openAicpWorkbenchWithSso('/home')}
+          >
             {chapter.cta}<ArrowRight aria-hidden className="size-4" />
-          </a>
+          </button>
         </div>
         <div className="comic-chapter-visual">{children}</div>
       </div>

@@ -19,7 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { ArrowRight, Server, Palette } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
-import { getAicpWorkbenchUrl, getNewApiPublicUrl } from '@/lib/product-urls'
+import { getNewApiPublicUrl } from '@/lib/product-urls'
+import { openAicpWorkbenchWithSso } from '@/lib/aicp-sso'
 
 export function PlatformBridge() {
   const { t } = useTranslation()
@@ -88,9 +89,13 @@ export function PlatformBridge() {
             <p className='mt-3 max-w-md text-sm leading-relaxed text-white/60'>
               {t('home.bridge.comicDesc')}
             </p>
-            <a href={getAicpWorkbenchUrl('/home')} className='mt-4 inline-flex items-center gap-1 text-sm font-semibold text-pink-400 transition-colors hover:text-pink-300'>
+            <button
+              type='button'
+              onClick={() => void openAicpWorkbenchWithSso('/home')}
+              className='mt-4 inline-flex items-center gap-1 text-sm font-semibold text-pink-400 transition-colors hover:text-pink-300'
+            >
               {t('home.bridge.comicCta')} <ArrowRight className='size-3.5' />
-            </a>
+            </button>
             <div className='mt-8 grid grid-cols-2 gap-2'>
               {comicCards.map(m => (
                 <div key={m.l} className='rounded-xl border border-white/[0.06] bg-white/[0.04] p-4 transition-all duration-300 hover:-translate-y-0.5 hover:border-pink-500/20 hover:bg-pink-500/[0.06]'>

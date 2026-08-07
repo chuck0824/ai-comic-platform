@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { ArrowDown, ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { COMIC_WORKBENCH_URL } from '../comic-content'
+import { openAicpWorkbenchWithSso } from '@/lib/aicp-sso'
 import { useComicContent } from '../use-comic-content'
 
 export function ComicHero() {
@@ -33,7 +33,9 @@ export function ComicHero() {
           <h1>{hero.titleLine1}<br /><span>{hero.titleHighlight}</span></h1>
           <p className="comic-hero-lead">{hero.lead}</p>
           <div className="comic-hero-actions">
-            <Button render={<a href={COMIC_WORKBENCH_URL} />}>{hero.primaryCta}<ArrowRight aria-hidden /></Button>
+            <Button type="button" onClick={() => void openAicpWorkbenchWithSso('/home')}>
+              {hero.primaryCta}<ArrowRight aria-hidden />
+            </Button>
             <Button variant="outline" render={<a href="#story" />}>{hero.secondaryCta}<ArrowDown aria-hidden /></Button>
           </div>
           <ul className="comic-proof-list">

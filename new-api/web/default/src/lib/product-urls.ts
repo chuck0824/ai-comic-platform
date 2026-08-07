@@ -54,3 +54,21 @@ export function getNewApiPublicUrl(path: string): string {
 export function getComicWorkbenchUrl(): string {
   return getAicpWorkbenchUrl('/home')
 }
+
+/** SSO consume URL on the AICP workbench. */
+export function getAicpSsoConsumeUrl(ticket: string, redirect = '/home'): string {
+  const q = new URLSearchParams({
+    ticket,
+    redirect: redirect.startsWith('/') ? redirect : `/${redirect}`,
+  })
+  return getAicpWorkbenchUrl(`/sso?${q.toString()}`)
+}
+
+/** SSO consume URL on new-api for tickets issued by 8080. */
+export function getNewApiSsoConsumeUrl(ticket: string, redirect = '/dashboard'): string {
+  const q = new URLSearchParams({
+    ticket,
+    redirect: redirect.startsWith('/') ? redirect : `/${redirect}`,
+  })
+  return getNewApiPublicUrl(`/sso/aicp?${q.toString()}`)
+}

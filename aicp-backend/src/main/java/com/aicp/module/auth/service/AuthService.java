@@ -194,6 +194,82 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
         return buildLoginResult(user);
     }
 
+    /**
+     * Issue a short-lived SSO ticket for the currently authenticated user.
+     * Used by the 8080 SPA to open the 3001 console without a second login.
+     */
+    public Map<String, Object> createSsoTicket(String accessToken) {
+        User user = requireActiveUserFromAccessToken(accessToken);
+        String ticket = jwtUtil.generateSsoTicket(user.getId(), user.getUuid(), user.getNickname());
+        return Map.of(
+                "ticket", ticket,
+                "expires_in", 60
+        );
+    }
+
+    /**
+     * Consume an SSO ticket (from 3001 reverse bridge or peer) and issue 8080 tokens.
+     */
+    public Map<String, Object> loginBySso(String ticket) {
+        if (ticket == null || ticket.isBlank()) {
+            throw new BizException(ErrorCode.TOKEN_INVALID);
+        }
+        try {
+            var claims = jwtUtil.parseToken(ticket);
+            if (!"sso".equals(claims.get("purpose", String.class))) {
+                throw new BizException(ErrorCode.TOKEN_INVALID);
+            }
+            String jti = claims.getId();
+            if (jti == null || jti.isBlank()) {
+                throw new BizException(ErrorCode.TOKEN_INVALID);
+            }
+            Long userId = claims.get("uid", Long.class);
+            if (userId == null) {
+                throw new BizException(ErrorCode.TOKEN_INVALID);
+            }
+            User user = userMapper.selectById(userId);
+            if (user == null || "disabled".equals(user.getStatus())) {
+                throw new BizException(ErrorCode.ACCOUNT_DISABLED);
+            }
+
+            String usedKey = "sso:jti:" + jti;
+            if (redisUtil.hasKey(usedKey)) {
+                throw new BizException(ErrorCode.TOKEN_INVALID, "SSO票据已使用或已失效");
+            }
+            redisUtil.set(usedKey, "1", 2, TimeUnit.MINUTES);
+
+            user.setLastLoginAt(LocalDateTime.now());
+            userMapper.updateById(user);
+            return buildLoginResult(user);
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.TOKEN_INVALID);
+        }
+    }
+
+    private User requireActiveUserFromAccessToken(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        String token = accessToken.startsWith("Bearer ") ? accessToken.substring(7) : accessToken;
+        try {
+            if (redisUtil.isTokenBlacklisted(token)) {
+                throw new BizException(ErrorCode.UNAUTHORIZED);
+            }
+            Long userId = jwtUtil.getUserId(token);
+            User user = userMapper.selectById(userId);
+            if (user == null || "disabled".equals(user.getStatus())) {
+                throw new BizException(ErrorCode.ACCOUNT_DISABLED);
+            }
+            return user;
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+    }
+
     // ===== 刷新Token =====
     public Map<String, Object> refreshToken(String refreshToken) {
         try {

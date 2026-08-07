@@ -18,7 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import { ArrowRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { COMIC_WORKBENCH_URL } from '../comic-content'
+import { openAicpWorkbenchWithSso } from '@/lib/aicp-sso'
 import { useComicContent } from '../use-comic-content'
 
 export function ComicFinalCta() {
@@ -33,7 +33,7 @@ export function ComicFinalCta() {
         }
       </h2>
       <p>{finalCta.subtitle}</p>
-      <Button render={<a href={COMIC_WORKBENCH_URL} />}>
+      <Button type="button" onClick={() => void openAicpWorkbenchWithSso('/home')}>
         {finalCta.cta}<ArrowRight aria-hidden />
       </Button>
     </section>

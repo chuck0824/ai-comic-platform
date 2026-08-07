@@ -32,11 +32,32 @@ public class JwtUtil {
         return Jwts.builder()
                 .subject(uuid)
                 .claim("uid", userId)
+                .claim("uuid", uuid)
                 .claim("type", accountType)
                 .claim("role", role != null ? role : "free_user")
                 .claim("permissions", permissions != null ? permissions : List.of())
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessTokenExpire * 1000))
+                .signWith(secretKey)
+                .compact();
+    }
+
+    /**
+     * Short-lived one-shot SSO ticket for bridging 8080 ↔ 3001 browser sessions.
+     * Validated by the peer with the same {@code JWT_SECRET}/{@code AICP_JWT_SECRET}.
+     */
+    public String generateSsoTicket(Long userId, String uuid, String nickname) {
+        Date now = new Date();
+        String jti = UUID.randomUUID().toString().replace("-", "");
+        return Jwts.builder()
+                .id(jti)
+                .subject(uuid)
+                .claim("uid", userId)
+                .claim("uuid", uuid)
+                .claim("nickname", nickname != null ? nickname : "")
+                .claim("purpose", "sso")
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + 60_000))
                 .signWith(secretKey)
                 .compact();
     }

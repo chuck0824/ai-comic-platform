@@ -19,7 +19,8 @@ For commercial licensing, please contact support@quantumnous.com
 import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
-import { getAicpWorkbenchUrl, getNewApiPublicUrl } from '@/lib/product-urls'
+import { getNewApiPublicUrl } from '@/lib/product-urls'
+import { openAicpWorkbenchWithSso } from '@/lib/aicp-sso'
 import { HeroTerminalDemo } from '../hero-terminal-demo'
 
 interface HeroProps {
@@ -91,9 +92,10 @@ export function Hero(props: HeroProps) {
               <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />
             </Button>
             <Button
+              type='button'
               className='group h-11 rounded-lg px-5 text-sm font-medium transition-shadow hover:shadow-[0_0_28px_rgba(236,72,153,0.25)]'
               style={{ background: 'linear-gradient(135deg, #EC4899, #6366F1)' }}
-              render={<a href={getAicpWorkbenchUrl('/home')} />}
+              onClick={() => void openAicpWorkbenchWithSso('/home')}
             >
               {t('home.hero.ctaWorkbench')}
               <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />

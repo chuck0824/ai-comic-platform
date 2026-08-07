@@ -20,7 +20,8 @@ import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { AnimateInView } from '@/components/animate-in-view'
-import { getAicpWorkbenchUrl, getNewApiPublicUrl } from '@/lib/product-urls'
+import { getNewApiPublicUrl } from '@/lib/product-urls'
+import { openAicpWorkbenchWithSso } from '@/lib/aicp-sso'
 
 interface CTAProps { className?: string; isAuthenticated?: boolean }
 
@@ -47,7 +48,11 @@ export function CTA(props: CTAProps) {
           {t('home.cta.subtitle')}
         </p>
         <div className='mt-8 flex items-center justify-center gap-3'>
-          <Button className='group rounded-lg' render={<a href={getAicpWorkbenchUrl('/home')} />}>
+          <Button
+            type='button'
+            className='group rounded-lg'
+            onClick={() => void openAicpWorkbenchWithSso('/home')}
+          >
             {t('home.cta.workbench')}
             <ArrowRight className='ml-1 size-3.5 transition-transform duration-200 group-hover:translate-x-0.5' />
           </Button>

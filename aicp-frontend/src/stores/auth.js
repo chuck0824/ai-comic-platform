@@ -108,6 +108,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token, refreshToken, user, isLoggedIn, userDisplayName, memberLevel,
-    login, loginBySms, register, logout, clearAuth, getUserId, initWorkspaceAfterLogin
+    login, loginBySms, register, logout, clearAuth, getUserId, initWorkspaceAfterLogin,
+    setAuthData
   }
 })
