@@ -18,6 +18,20 @@ For commercial licensing, please contact support@quantumnous.com
 */
 /// <reference types="@rsbuild/core/types" />
 
+interface ImportMetaEnv {
+  readonly DEV?: boolean
+  readonly PROD?: boolean
+  readonly MODE?: string
+  readonly VITE_AICP_WORKBENCH_URL?: string
+  readonly VITE_NEW_API_PUBLIC_URL?: string
+  readonly VITE_REACT_APP_SERVER_URL?: string
+  readonly VITE_REACT_APP_VERSION?: string
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv
+}
+
 declare module '@visactor/react-vchart' {
   export const VChart: React.ComponentType<Record<string, unknown>>
 }

@@ -16,7 +16,10 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
-export const COMIC_WORKBENCH_URL = 'http://localhost:8080/home'
+import { getComicWorkbenchUrl } from '../../lib/product-urls.ts'
+
+/** Resolved at build/runtime from VITE_AICP_WORKBENCH_URL (DEV fallback: localhost:8080). */
+export const COMIC_WORKBENCH_URL = getComicWorkbenchUrl()
 
 export type ComicChapterId =
   | 'story'

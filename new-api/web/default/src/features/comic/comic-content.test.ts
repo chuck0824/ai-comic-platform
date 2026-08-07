@@ -18,6 +18,7 @@ For commercial licensing, please contact support@quantumnous.com
 */
 import assert from 'node:assert/strict'
 import { describe, test } from 'node:test'
+import { getAicpWorkbenchUrl } from '../../lib/product-urls.ts'
 import {
   COMIC_CHAPTER_KEYS,
   COMIC_FAQ_KEYS,
@@ -40,8 +41,9 @@ describe('comic product content contract', () => {
     )
   })
 
-  test('uses the approved workbench destination', () => {
-    assert.equal(COMIC_WORKBENCH_URL, 'http://localhost:8080/home')
+  test('resolves workbench URL ending with /home (env-configurable)', () => {
+    assert.match(getAicpWorkbenchUrl('/home'), /\/home$/)
+    assert.match(COMIC_WORKBENCH_URL, /\/home$/)
   })
 
   test('ships exactly five FAQ items with i18n keys', () => {

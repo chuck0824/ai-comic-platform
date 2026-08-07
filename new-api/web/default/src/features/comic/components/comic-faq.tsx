@@ -16,16 +16,18 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 
 For commercial licensing, please contact support@quantumnous.com
 */
+import { useTranslation } from 'react-i18next'
 import { useComicContent } from '../use-comic-content'
 
 export function ComicFaq() {
+  const { t } = useTranslation()
   const { faqs } = useComicContent()
 
   return (
     <section className="comic-faq" aria-labelledby="comic-faq-title">
       <div className="comic-section-heading">
         <p>FAQ</p>
-        <h2 id="comic-faq-title">开始之前，你可能想知道</h2>
+        <h2 id="comic-faq-title">{t('comic.faq.title')}</h2>
       </div>
       <div className="comic-faq-list">
         {faqs.map(({ question, answer }) => (

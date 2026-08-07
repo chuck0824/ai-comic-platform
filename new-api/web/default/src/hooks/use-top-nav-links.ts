@@ -67,7 +67,7 @@ export function useTopNavLinks(): TopNavLink[] {
   }
 
   // Comic product page
-  links.push({ title: t('漫剧'), href: '/comic' })
+  links.push({ title: t('Comics'), href: '/comic' })
 
   // Console -> /dashboard (new console path)
   if (modules?.console !== false) {

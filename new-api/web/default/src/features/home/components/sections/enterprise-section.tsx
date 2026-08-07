@@ -17,15 +17,17 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { Building2, CheckCircle, BarChart3, Shield, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
 
 export function EnterpriseSection() {
+  const { t } = useTranslation()
   const items = [
-    { num:'01', icon:<Building2 className='size-5' strokeWidth={1.5} />, title:'组织与成员', desc:'团队、空间、角色分工，一人一权限。' },
-    { num:'02', icon:<CheckCircle className='size-5' strokeWidth={1.5} />, title:'统一审批', desc:'关键生产动作留痕，谁批的、什么时候批的，可查。' },
-    { num:'03', icon:<BarChart3 className='size-5' strokeWidth={1.5} />, title:'预算用量', desc:'项目和模型维度成本可见，花钱心里有数。' },
-    { num:'04', icon:<Shield className='size-5' strokeWidth={1.5} />, title:'权限隔离', desc:'资产和数据边界清晰，该看的看，不该看的碰不到。' },
-    { num:'05', icon:<Search className='size-5' strokeWidth={1.5} />, title:'审计追溯', desc:'操作、版本、交付，全程有记录，合规不慌。' },
+    { num:'01', icon:<Building2 className='size-5' strokeWidth={1.5} />, title: t('home.enterprise.org.title'), desc: t('home.enterprise.org.desc') },
+    { num:'02', icon:<CheckCircle className='size-5' strokeWidth={1.5} />, title: t('home.enterprise.approval.title'), desc: t('home.enterprise.approval.desc') },
+    { num:'03', icon:<BarChart3 className='size-5' strokeWidth={1.5} />, title: t('home.enterprise.budget.title'), desc: t('home.enterprise.budget.desc') },
+    { num:'04', icon:<Shield className='size-5' strokeWidth={1.5} />, title: t('home.enterprise.acl.title'), desc: t('home.enterprise.acl.desc') },
+    { num:'05', icon:<Search className='size-5' strokeWidth={1.5} />, title: t('home.enterprise.audit.title'), desc: t('home.enterprise.audit.desc') },
   ]
   return (
     <section className='relative z-10 overflow-hidden border-t border-border/40 px-6 py-24 md:py-32'>
@@ -33,13 +35,14 @@ export function EnterpriseSection() {
         style={{ background:'radial-gradient(ellipse 60% 50% at 50% 0%, rgba(37,99,235,0.4), transparent 60%)' }} />
       <div className='relative mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>企业级管理</p>
+          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>{t('home.enterprise.eyebrow')}</p>
           <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-4xl' style={{ fontFamily: "'Fredoka', var(--font-sans)" }}>
-            让一支团队，<br />
-            <span className='bg-gradient-to-r from-pink-400 via-indigo-400 to-blue-500 bg-clip-text text-transparent'>像一个系统运转。</span>
+            {t('home.enterprise.titleLine1')}
+            <br />
+            <span className='bg-gradient-to-r from-pink-400 via-indigo-400 to-blue-500 bg-clip-text text-transparent'>{t('home.enterprise.titleHighlight')}</span>
           </h2>
           <p className='text-muted-foreground/80 mx-auto mt-5 max-w-2xl text-sm leading-relaxed md:text-base'>
-            创作项目、企业治理、模型用量，汇到一个控制面。不管团队是 5 个人还是 500 个人，管理方式一样。
+            {t('home.enterprise.lead')}
           </p>
         </AnimateInView>
         <div className='grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5'>

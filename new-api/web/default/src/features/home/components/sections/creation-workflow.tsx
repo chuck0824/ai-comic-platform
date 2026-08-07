@@ -17,26 +17,29 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { FileText, Layout, Video, Store } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { AnimateInView } from '@/components/animate-in-view'
 
 export function CreationWorkflow() {
+  const { t } = useTranslation()
   const steps = [
-    { num:'01', icon:<FileText className='size-5' strokeWidth={1.5} />, title:'剧本创作', desc:'给一个故事种子，AI 帮你长出角色、世界观、大纲和分镜脚本。短剧、长篇、TVC 都行。', color:'from-amber-500/20 to-amber-500/5 border-amber-500/20', iconColor:'text-amber-400' },
-    { num:'02', icon:<Layout className='size-5' strokeWidth={1.5} />, title:'画布生产', desc:'分镜节点拖到画布里，搭角色、场景、动作、生成任务。整条产线可视化，所见即所得。', color:'from-blue-500/20 to-blue-500/5 border-blue-500/20', iconColor:'text-blue-400' },
-    { num:'03', icon:<Video className='size-5' strokeWidth={1.5} />, title:'导演台', desc:'调镜头、改参数、看质量预览。把创意想法转成可执行可导出的生产镜头。', color:'from-violet-500/20 to-violet-500/5 border-violet-500/20', iconColor:'text-violet-400' },
-    { num:'04', icon:<Store className='size-5' strokeWidth={1.5} />, title:'资产市场', desc:'剧本能卖，AI 资产能交易。多种授权方案，在线支付。创作不只是做，还能变成收入。', color:'from-emerald-500/20 to-emerald-500/5 border-emerald-500/20', iconColor:'text-emerald-400' },
+    { num:'01', icon:<FileText className='size-5' strokeWidth={1.5} />, title: t('home.workflow.script.title'), desc: t('home.workflow.script.desc'), color:'from-amber-500/20 to-amber-500/5 border-amber-500/20', iconColor:'text-amber-400' },
+    { num:'02', icon:<Layout className='size-5' strokeWidth={1.5} />, title: t('home.workflow.canvas.title'), desc: t('home.workflow.canvas.desc'), color:'from-blue-500/20 to-blue-500/5 border-blue-500/20', iconColor:'text-blue-400' },
+    { num:'03', icon:<Video className='size-5' strokeWidth={1.5} />, title: t('home.workflow.director.title'), desc: t('home.workflow.director.desc'), color:'from-violet-500/20 to-violet-500/5 border-violet-500/20', iconColor:'text-violet-400' },
+    { num:'04', icon:<Store className='size-5' strokeWidth={1.5} />, title: t('home.workflow.market.title'), desc: t('home.workflow.market.desc'), color:'from-emerald-500/20 to-emerald-500/5 border-emerald-500/20', iconColor:'text-emerald-400' },
   ]
   return (
     <section className='relative z-10 border-t border-border/40 bg-gradient-to-b from-indigo-500/[0.02] to-transparent px-6 py-24 md:py-32'>
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>漫剧生产工作台</p>
+          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>{t('home.workflow.eyebrow')}</p>
           <h2 className='text-2xl leading-tight font-bold tracking-tight md:text-4xl' style={{ fontFamily: "'Fredoka', var(--font-sans)" }}>
-            一个想法，<br />
-            <span className='bg-gradient-to-r from-pink-400 via-indigo-400 to-blue-500 bg-clip-text text-transparent'>长成完整故事。</span>
+            {t('home.workflow.titleLine1')}
+            <br />
+            <span className='bg-gradient-to-r from-pink-400 via-indigo-400 to-blue-500 bg-clip-text text-transparent'>{t('home.workflow.titleHighlight')}</span>
           </h2>
           <p className='text-muted-foreground/80 mx-auto mt-5 max-w-2xl text-sm leading-relaxed md:text-base'>
-            AI 驱动的工业化内容产线。从剧本到分镜到画布到交易市场，创作者在一个地方跑完全程。
+            {t('home.workflow.lead')}
           </p>
         </AnimateInView>
         <div className='grid gap-6 sm:grid-cols-2 lg:grid-cols-4'>

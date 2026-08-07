@@ -19,6 +19,7 @@ For commercial licensing, please contact support@quantumnous.com
 import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { getAicpWorkbenchUrl, getNewApiPublicUrl } from '@/lib/product-urls'
 import { HeroTerminalDemo } from '../hero-terminal-demo'
 
 interface HeroProps {
@@ -58,26 +59,24 @@ export function Hero(props: HeroProps) {
               <span className='absolute inline-flex h-full w-full animate-ping rounded-full bg-pink-400 opacity-75' />
               <span className='relative inline-flex size-1.5 rounded-full bg-pink-500 dark:bg-pink-400' />
             </span>
-            <span>模型服务 x 漫剧创作</span>
+            <span>{t('home.hero.badge')}</span>
           </div>
 
           <h1
             className='landing-animate-fade-up text-[clamp(2.25rem,4.5vw,3.25rem)] leading-[1.15] font-bold tracking-tight'
             style={{ animationDelay: '60ms', fontFamily: "'Fredoka', var(--font-sans)" }}
           >
-            {t('一个 API 接 40+ 模型，')}
+            {t('home.hero.titleLine1')}
             <br />
             <span className='bg-gradient-to-r from-pink-400 via-indigo-400 to-blue-500 bg-clip-text text-transparent'>
-              {t('一条产线出完整作品。')}
+              {t('home.hero.titleHighlight')}
             </span>
           </h1>
           <p
             className='landing-animate-fade-up text-muted-foreground/80 mt-5 max-w-xl text-base leading-relaxed opacity-0 md:text-[15px]'
             style={{ animationDelay: '120ms' }}
           >
-            {t(
-              '左边是模型网关，管接入、路由、计费、配额。右边是漫剧工作台，从故事种子一路跑到可交付成片。同一个账号，两边通用。'
-            )}
+            {t('home.hero.lead')}
           </p>
 
           <div
@@ -86,17 +85,17 @@ export function Hero(props: HeroProps) {
           >
             <Button
               className='group h-11 rounded-lg px-5 text-sm font-medium transition-shadow hover:shadow-[0_0_28px_rgba(37,99,235,0.25)]'
-              render={<a href='http://localhost:3001/dashboard' />}
+              render={<a href={getNewApiPublicUrl('/dashboard')} />}
             >
-              {t('进入模型控制台')}
+              {t('home.hero.ctaConsole')}
               <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />
             </Button>
             <Button
               className='group h-11 rounded-lg px-5 text-sm font-medium transition-shadow hover:shadow-[0_0_28px_rgba(236,72,153,0.25)]'
               style={{ background: 'linear-gradient(135deg, #EC4899, #6366F1)' }}
-              render={<a href='http://localhost:8080/home' />}
+              render={<a href={getAicpWorkbenchUrl('/home')} />}
             >
-              {t('进入漫剧工作台')}
+              {t('home.hero.ctaWorkbench')}
               <ArrowRight className='ml-1.5 size-4 transition-transform duration-200 group-hover:translate-x-0.5' />
             </Button>
           </div>

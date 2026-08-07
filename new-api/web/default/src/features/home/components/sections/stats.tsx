@@ -17,6 +17,7 @@ along with this program. If not, see <https://www.gnu.org/licenses/>.
 For commercial licensing, please contact support@quantumnous.com
 */
 import { useRef, useEffect, useCallback } from 'react'
+import { useTranslation } from 'react-i18next'
 
 interface CounterProps {
   end: number
@@ -58,11 +59,12 @@ function Counter(props: CounterProps) {
 }
 
 export function Stats() {
+  const { t } = useTranslation()
   const stats = [
-    { end: 40, suffix: '+', label: '家 AI 厂商已接入' },
-    { end: 100, suffix: '+', label: '个模型支持计费' },
-    { end: 6, suffix: '', label: '种语言界面' },
-    { end: 4, suffix: '', label: '个阶段：剧本-分镜-画布-成片' },
+    { end: 40, suffix: '+', label: t('home.stats.vendors') },
+    { end: 100, suffix: '+', label: t('home.stats.models') },
+    { end: 6, suffix: '', label: t('home.stats.languages') },
+    { end: 4, suffix: '', label: t('home.stats.stages') },
   ]
   return (
     <div className='relative z-10 border-y border-border/40 bg-gradient-to-r from-pink-500/[0.03] via-indigo-500/[0.04] to-blue-500/[0.03] dark:from-pink-500/[0.04] dark:via-indigo-500/[0.05] dark:to-blue-500/[0.03] backdrop-blur-sm'>
