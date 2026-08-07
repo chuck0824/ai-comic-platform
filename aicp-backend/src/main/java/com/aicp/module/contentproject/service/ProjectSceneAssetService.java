@@ -1,0 +1,295 @@
+package com.aicp.module.contentproject.service;
+
+import com.aicp.common.exception.BizException;
+import com.aicp.common.exception.ErrorCode;
+import com.aicp.module.asset.entity.AssetApplication;
+import com.aicp.module.asset.entity.AssetVersion;
+import com.aicp.module.asset.entity.CanvasAssetPlacement;
+import com.aicp.module.asset.entity.WorkspaceAsset;
+import com.aicp.module.asset.mapper.AssetApplicationMapper;
+import com.aicp.module.asset.mapper.AssetVersionMapper;
+import com.aicp.module.asset.mapper.CanvasAssetPlacementMapper;
+import com.aicp.module.asset.mapper.WorkspaceAssetMapper;
+import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneAssetRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateVariantRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.RestoreSceneAssetRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.UpdateSceneAssetRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.ImpactReferenceView;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetImpactView;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetVersionView;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetView;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+
+/** Owns the project-only scene-master lifecycle on top of workspace_assets/asset_versions. */
+@Service
+@RequiredArgsConstructor
+public class ProjectSceneAssetService {
+
+    private static final String SCENE = "SCENE";
+    private static final String PROJECT_GENERATED = "PROJECT_GENERATED";
+
+    private final WorkspaceAssetMapper assetMapper;
+    private final AssetVersionMapper versionMapper;
+    private final AssetApplicationMapper applicationMapper;
+    private final CanvasAssetPlacementMapper placementMapper;
+    private final ProjectAccessService projectAccess;
+    private final ObjectMapper objectMapper;
+
+    public List<SceneAssetView> list(Long userId, Long projectId, String keyword, String spaceType,
+                                     String reusability, String status, Boolean referenced) {
+        projectAccess.require(projectId, userId, Action.VIEW);
+        LambdaQueryWrapper<WorkspaceAsset> query = sceneQuery(projectId);
+        if (keyword != null && !keyword.isBlank()) query.like(WorkspaceAsset::getName, keyword.trim());
+        if (status != null && !status.isBlank()) query.eq(WorkspaceAsset::getStatus, status.trim());
+        return assetMapper.selectList(query.orderByDesc(WorkspaceAsset::getUpdatedAt)).stream()
+                .map(this::toView)
+                .filter(view -> spaceType == null || spaceType.equals(view.master().get("space_type")))
+                .filter(view -> reusability == null || reusability.equals(view.master().get("reusability")))
+                .filter(view -> referenced == null || referenced == (impactFor(view.id()).lockedReferences() > 0))
+                .toList();
+    }
+
+    @Transactional
+    public SceneAssetView create(Long userId, Long projectId, CreateSceneAssetRequest request) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset asset = new WorkspaceAsset();
+        asset.setUuid(UUID.randomUUID().toString());
+        asset.setWorkspaceId(projectWorkspaceId(projectId));
+        asset.setWorkspaceType("project");
+        asset.setCreatorUserId(userId);
+        asset.setAssetType(SCENE);
+        asset.setName(request.name());
+        asset.setAccessScope("PRIVATE");
+        asset.setSourceType(PROJECT_GENERATED);
+        asset.setContentProjectId(projectId);
+        asset.setMediaType("DATA");
+        asset.setStatus("ACTIVE");
+        asset.setRowVersion(0);
+        asset.setCreatedBy(userId);
+        asset.setUpdatedBy(userId);
+        assetMapper.insert(asset);
+
+        appendVersion(asset, metadataFor(request), userId);
+        return toView(requireScene(projectId, asset.getId()));
+    }
+
+    public SceneAssetView get(Long userId, Long projectId, Long assetId) {
+        projectAccess.require(projectId, userId, Action.VIEW);
+        return toView(requireScene(projectId, assetId));
+    }
+
+    @Transactional
+    public SceneAssetView update(Long userId, Long projectId, Long assetId, UpdateSceneAssetRequest request) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        Map<String, Object> metadata = currentMetadata(asset);
+        Map<String, Object> master = master(metadata);
+        merge(master, request);
+        if (request.name() != null && !request.name().isBlank()) asset.setName(request.name());
+        if (request.variants() != null) metadata.put("variants", variants(request.variants()));
+        metadata.put("schema_version", 1);
+        metadata.put("master", master);
+        appendVersion(asset, metadata, userId);
+        return toView(requireScene(projectId, assetId));
+    }
+
+    @Transactional
+    public SceneAssetVersionView restore(Long userId, Long projectId, Long assetId, Long versionId,
+                                         RestoreSceneAssetRequest request) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        AssetVersion historical = versionMapper.selectOne(new LambdaQueryWrapper<AssetVersion>()
+                .eq(AssetVersion::getId, versionId).eq(AssetVersion::getAssetId, assetId));
+        if (historical == null) throw new BizException(ErrorCode.ASSET_NOT_FOUND, "场景资产版本不存在");
+        AssetVersion restored = appendVersion(asset, parseMetadata(historical.getMetadata()), userId);
+        return toVersionView(restored, request == null ? null : request.changeNote());
+    }
+
+    @Transactional
+    public void archive(Long userId, Long projectId, Long assetId) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        SceneAssetImpactView impact = impactFor(assetId);
+        if (impact.lockedReferences() > 0) {
+            throw new BizException(ErrorCode.ASSET_LIFECYCLE_CONFLICT,
+                    "场景资产仍被锁定引用，请先替换或停用引用");
+        }
+        asset.setStatus("ARCHIVED");
+        asset.setUpdatedBy(userId);
+        assetMapper.updateById(asset);
+    }
+
+    public SceneAssetImpactView impact(Long userId, Long projectId, Long assetId) {
+        projectAccess.require(projectId, userId, Action.VIEW);
+        requireScene(projectId, assetId);
+        return impactFor(assetId);
+    }
+
+    private WorkspaceAsset requireScene(Long projectId, Long assetId) {
+        WorkspaceAsset asset = assetMapper.selectOne(sceneQuery(projectId).eq(WorkspaceAsset::getId, assetId));
+        if (asset == null) throw new BizException(ErrorCode.ASSET_NOT_FOUND, "场景资产不存在");
+        return asset;
+    }
+
+    private LambdaQueryWrapper<WorkspaceAsset> sceneQuery(Long projectId) {
+        return new LambdaQueryWrapper<WorkspaceAsset>()
+                .eq(WorkspaceAsset::getContentProjectId, projectId)
+                .eq(WorkspaceAsset::getAssetType, SCENE)
+                .eq(WorkspaceAsset::getSourceType, PROJECT_GENERATED);
+    }
+
+    private AssetVersion appendVersion(WorkspaceAsset asset, Map<String, Object> metadata, Long userId) {
+        Long count = versionMapper.selectCount(new LambdaQueryWrapper<AssetVersion>()
+                .eq(AssetVersion::getAssetId, asset.getId()));
+        AssetVersion version = new AssetVersion();
+        version.setAssetId(asset.getId());
+        version.setVersionNumber(count.intValue() + 1);
+        version.setMetadata(writeMetadata(metadata));
+        version.setCreatedBy(userId);
+        versionMapper.insert(version);
+        asset.setCurrentVersionId(version.getId());
+        asset.setUpdatedBy(userId);
+        assetMapper.updateById(asset);
+        return version;
+    }
+
+    private SceneAssetImpactView impactFor(Long assetId) {
+        List<ImpactReferenceView> refs = new ArrayList<>();
+        applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
+                        .eq(AssetApplication::getAssetId, assetId).eq(AssetApplication::getStatus, "APPLIED"))
+                .forEach(application -> refs.add(new ImpactReferenceView("APPLICATION", application.getId(), application.getAssetVersionId())));
+        placementMapper.selectList(new LambdaQueryWrapper<CanvasAssetPlacement>()
+                        .eq(CanvasAssetPlacement::getAssetId, assetId).isNull(CanvasAssetPlacement::getReleasedAt))
+                .forEach(placement -> refs.add(new ImpactReferenceView("CANVAS_PLACEMENT", placement.getId(), placement.getAssetVersionId())));
+        return new SceneAssetImpactView(assetId, refs.size(), List.copyOf(refs));
+    }
+
+    private SceneAssetView toView(WorkspaceAsset asset) {
+        Map<String, Object> metadata = currentMetadata(asset);
+        AssetVersion current = asset.getCurrentVersionId() == null ? null : versionMapper.selectById(asset.getCurrentVersionId());
+        return new SceneAssetView(asset.getId(), asset.getUuid(), asset.getContentProjectId(), asset.getAssetType(),
+                asset.getName(), asset.getSourceType(), asset.getStatus(), asset.getCurrentVersionId(),
+                current == null ? 0 : current.getVersionNumber(), master(metadata), variantsFrom(metadata),
+                asset.getCreatedAt(), asset.getUpdatedAt());
+    }
+
+    private SceneAssetVersionView toVersionView(AssetVersion version, String changeNote) {
+        return new SceneAssetVersionView(version.getId(), version.getAssetId(), version.getVersionNumber(),
+                parseMetadata(version.getMetadata()), changeNote, version.getCreatedAt());
+    }
+
+    private Map<String, Object> metadataFor(CreateSceneAssetRequest request) {
+        Map<String, Object> master = new LinkedHashMap<>();
+        put(master, "world_location_ref", request.worldLocationRef());
+        put(master, "space_type", request.spaceType());
+        put(master, "reusability", request.reusability());
+        put(master, "reality_type", request.realityType());
+        put(master, "layout", request.layout());
+        put(master, "materials", request.materials());
+        put(master, "palette", request.palette());
+        put(master, "lighting", request.lighting());
+        put(master, "landmarks", request.landmarks());
+        put(master, "fixed_props", request.fixedProps());
+        put(master, "movable_props", request.movableProps());
+        put(master, "entrances_exits", request.entrancesExits());
+        put(master, "continuity_rules", request.continuityRules());
+        put(master, "references", request.references());
+        put(master, "prompts", request.prompts());
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("schema_version", 1);
+        metadata.put("master", master);
+        metadata.put("variants", variants(request.variants()));
+        return metadata;
+    }
+
+    private void merge(Map<String, Object> master, UpdateSceneAssetRequest request) {
+        put(master, "world_location_ref", request.worldLocationRef());
+        put(master, "space_type", request.spaceType());
+        put(master, "reusability", request.reusability());
+        put(master, "reality_type", request.realityType());
+        put(master, "layout", request.layout());
+        put(master, "materials", request.materials());
+        put(master, "palette", request.palette());
+        put(master, "lighting", request.lighting());
+        put(master, "landmarks", request.landmarks());
+        put(master, "fixed_props", request.fixedProps());
+        put(master, "movable_props", request.movableProps());
+        put(master, "entrances_exits", request.entrancesExits());
+        put(master, "continuity_rules", request.continuityRules());
+        put(master, "references", request.references());
+        put(master, "prompts", request.prompts());
+    }
+
+    private List<Map<String, Object>> variants(List<CreateVariantRequest> requests) {
+        if (requests == null) return List.of();
+        return requests.stream().map(variant -> {
+            Map<String, Object> result = new LinkedHashMap<>();
+            put(result, "id", variant.id());
+            put(result, "version", variant.version());
+            put(result, "name", variant.name());
+            put(result, "time", variant.time());
+            put(result, "lighting_delta", variant.lightingDelta());
+            put(result, "prompts", variant.prompts());
+            put(result, "references", variant.references());
+            return result;
+        }).toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> currentMetadata(WorkspaceAsset asset) {
+        if (asset.getCurrentVersionId() == null) return new LinkedHashMap<>();
+        AssetVersion version = versionMapper.selectById(asset.getCurrentVersionId());
+        return version == null ? new LinkedHashMap<>() : parseMetadata(version.getMetadata());
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> master(Map<String, Object> metadata) {
+        Object value = metadata.get("master");
+        return value instanceof Map<?, ?> map ? new LinkedHashMap<>((Map<String, Object>) map) : new LinkedHashMap<>();
+    }
+
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> variantsFrom(Map<String, Object> metadata) {
+        Object value = metadata.get("variants");
+        if (!(value instanceof List<?> list)) return List.of();
+        return list.stream().filter(Map.class::isInstance)
+                .<Map<String, Object>>map(item -> new LinkedHashMap<>((Map<String, Object>) item)).toList();
+    }
+
+    private Map<String, Object> parseMetadata(String json) {
+        try {
+            return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+        } catch (Exception ignored) {
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private String writeMetadata(Map<String, Object> metadata) {
+        try {
+            return objectMapper.writeValueAsString(metadata);
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.INTERNAL_ERROR, "场景资产元数据序列化失败");
+        }
+    }
+
+    private void put(Map<String, Object> target, String key, Object value) {
+        if (value != null) target.put(key, value);
+    }
+
+    private String projectWorkspaceId(Long projectId) {
+        return "project_" + projectId;
+    }
+}
