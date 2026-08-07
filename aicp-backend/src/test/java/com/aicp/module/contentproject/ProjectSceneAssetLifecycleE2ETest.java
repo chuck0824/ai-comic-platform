@@ -6,7 +6,9 @@ import com.aicp.module.asset.mapper.AssetApplicationMapper;
 import com.aicp.module.asset.mapper.AssetVersionMapper;
 import com.aicp.module.contentproject.entity.ContentProject;
 import com.aicp.module.contentproject.entity.ProjectMember;
+import com.aicp.module.contentproject.entity.ContentUnit;
 import com.aicp.module.contentproject.mapper.ContentProjectMapper;
+import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.aicp.module.contentproject.mapper.ProjectMemberMapper;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
@@ -43,6 +45,7 @@ class ProjectSceneAssetLifecycleE2ETest {
     @Autowired private ProjectMemberMapper memberMapper;
     @Autowired private AssetVersionMapper versionMapper;
     @Autowired private AssetApplicationMapper applicationMapper;
+    @Autowired private ContentUnitMapper contentUnitMapper;
 
     private final long ownerId = 501L;
     private final long otherUserId = 502L;
@@ -221,6 +224,78 @@ class ProjectSceneAssetLifecycleE2ETest {
                 .andExpect(jsonPath("$.data.content", containsString("VAR-001")));
     }
 
+    @Test
+    void genericScenePatchRejectsVariantReplacementWithoutAppendingVersion() throws Exception {
+        long projectId = createProject(ownerId, "变体专用接口测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "变体专用场景", "基础灯光");
+
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"variants\":[{\"name\":\"绕过专用接口\"}]}"))
+                .andExpect(status().isBadRequest());
+
+        assertThat(versionMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>()
+                .eq(AssetVersion::getAssetId, assetId))).isEqualTo(1L);
+    }
+
+    @Test
+    void variantIdsRemainMonotonicAfterRestoreToPreVariantVersion() throws Exception {
+        long projectId = createProject(ownerId, "变体 ID 恢复测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "恢复场景", "基础灯光");
+        AssetVersion preVariant = versionFor(assetId, 1);
+
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/variants", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"首个变体\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.variants[0].id").value("VAR-001"));
+
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/versions/{versionId}/restore",
+                        projectId, assetId, preVariant.getId()).contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isOk());
+
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/variants", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"恢复后的变体\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.variants[0].id").value("VAR-002"));
+
+        assertThat(versionFor(assetId, 2).getMetadata()).contains("\"id\":\"VAR-001\"");
+        assertThat(versionFor(assetId, 4).getMetadata()).contains("\"id\":\"VAR-002\"");
+    }
+
+    @Test
+    void markdownUsesTrustedPersistedConsumerLinksAndSafeUntrustedReferencesAndBasenames() throws Exception {
+        long projectId = createProject(ownerId, "Markdown 链接测试");
+        authenticateAs(ownerId);
+        String created = mvc.perform(post("/api/v1/content-projects/{id}/scene-assets", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":".","space_type":"INTERIOR","reusability":"PRIMARY",
+                                "reality_type":"REALISTIC","references":["[[恶意目标]]"]}
+                                """))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long assetId = ((Number) JsonPath.read(created, "$.data.id")).longValue();
+        ContentUnit unit = persistedContentUnit(projectId);
+        AssetApplication application = new AssetApplication();
+        application.setWorkspaceId("project_" + projectId);
+        application.setAssetId(assetId);
+        application.setAssetVersionId(versionFor(assetId, 1).getId());
+        application.setProjectId(projectId);
+        application.setTargetType("CONTENT_UNIT");
+        application.setTargetId(unit.getId());
+        application.setIdempotencyKey(UUID.randomUUID().toString());
+        application.setStatus("APPLIED");
+        applicationMapper.insert(application);
+
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/markdown", projectId, assetId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.path").value("04-场景资产/SCENE-ASSET-001-unnamed-scene.md"))
+                .andExpect(jsonPath("$.data.content", containsString(
+                        "[[06-剧本正文/UNIT-001.md|第一集]]")))
+                .andExpect(jsonPath("$.data.content", org.hamcrest.Matchers.not(containsString("[[恶意目标]]"))));
+    }
+
     private long createSceneAsset(long projectId, String name, String lighting) throws Exception {
         String body = mvc.perform(post("/api/v1/content-projects/{id}/scene-assets", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -242,6 +317,25 @@ class ProjectSceneAssetLifecycleE2ETest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.data.id")).longValue();
+    }
+
+    private AssetVersion versionFor(long assetId, int versionNo) {
+        return versionMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>()
+                .eq(AssetVersion::getAssetId, assetId).eq(AssetVersion::getVersionNumber, versionNo));
+    }
+
+    private ContentUnit persistedContentUnit(long projectId) {
+        ContentUnit unit = new ContentUnit();
+        unit.setStableKey("UNIT-001");
+        unit.setProjectId(projectId);
+        unit.setUnitType("EPISODE");
+        unit.setDisplayNo(1);
+        unit.setTitle("第一集");
+        unit.setStatus("draft");
+        unit.setRevision(0);
+        unit.setIsDeleted(0);
+        contentUnitMapper.insert(unit);
+        return unit;
     }
 
     private long createProject(long ownerUserId, String name) {

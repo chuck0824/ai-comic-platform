@@ -1,6 +1,8 @@
 package com.aicp.module.contentproject.controller;
 
 import com.aicp.common.dto.ApiResponse;
+import com.aicp.common.exception.BizException;
+import com.aicp.common.exception.ErrorCode;
 import com.aicp.common.util.SecurityUtil;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneAssetRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneVariantRequest;
@@ -13,6 +15,8 @@ import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetVersionView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetMarkdownView;
 import com.aicp.module.contentproject.service.ProjectSceneAssetService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -25,6 +29,7 @@ import java.util.List;
 public class ProjectSceneAssetController {
 
     private final ProjectSceneAssetService sceneAssets;
+    private final ObjectMapper objectMapper;
 
     @GetMapping
     public ApiResponse<List<SceneAssetView>> list(@PathVariable Long projectId,
@@ -56,7 +61,11 @@ public class ProjectSceneAssetController {
 
     @PatchMapping("/{assetId}")
     public ApiResponse<SceneAssetView> update(@PathVariable Long projectId, @PathVariable Long assetId,
-                                               @Valid @RequestBody UpdateSceneAssetRequest request) {
+                                               @RequestBody JsonNode payload) {
+        if (payload.has("variants")) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "场景变体只能通过专用变体接口修改");
+        }
+        UpdateSceneAssetRequest request = objectMapper.convertValue(payload, UpdateSceneAssetRequest.class);
         return ApiResponse.success(sceneAssets.update(SecurityUtil.requireCurrentUserId(), projectId, assetId, request));
     }
 

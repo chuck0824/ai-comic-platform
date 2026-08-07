@@ -18,7 +18,7 @@ public class SceneAssetMarkdownProjector {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ISO_LOCAL_DATE_TIME;
 
     public SceneAssetMarkdownView project(Long projectId, WorkspaceAsset asset, AssetVersion version,
-                                          Map<String, Object> metadata) {
+                                          Map<String, Object> metadata, List<TrustedLink> trustedLinks) {
         Map<String, Object> master = map(metadata.get("master"));
         List<Map<String, Object>> variants = list(metadata.get("variants"));
         String stableId = safeText(text(master.get("stable_id"), "SCENE-ASSET-%03d".formatted(asset.getId())));
@@ -61,6 +61,8 @@ public class SceneAssetMarkdownProjector {
         content.append("\n## 引用\n\n")
                 .append("- 来源地点：[[").append(WORLD_LOCATIONS).append("]]\n")
                 .append("- 场景资产目录：[[04-场景资产]]\n");
+        trustedLinks.forEach(link -> content.append("- 消费者：[[").append(link.path()).append('|')
+                .append(safeText(link.alias())).append("]]\n"));
         appendReferences(content, master.get("references"));
         variants.forEach(variant -> appendReferences(content, variant.get("references")));
         return new SceneAssetMarkdownView(path, content.toString());
@@ -92,7 +94,7 @@ public class SceneAssetMarkdownProjector {
     }
 
     private String filename(String value) {
-        String normalized = safeText(value).replaceAll("[\\r\\n]+", " ").trim();
+        String normalized = safeText(value).replaceAll("[\\r\\n]+", " ").trim().replaceAll("\\.+$", "");
         return normalized.isEmpty() ? "unnamed-scene" : normalized;
     }
 
@@ -109,4 +111,7 @@ public class SceneAssetMarkdownProjector {
         return value.replace("..", "·").replace("/", "／").replace("\\", "＼")
                 .replace("#", "＃").replace("[", "［").replace("]", "］");
     }
+
+    /** Only service-created links may reach the projector as navigable Obsidian links. */
+    public record TrustedLink(String path, String alias) {}
 }

@@ -49,7 +49,6 @@ public interface ProjectSceneAssetRequests {
             List<String> continuityRules,
             Object references,
             Object prompts,
-            List<@Valid CreateVariantRequest> variants,
             String changeNote) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

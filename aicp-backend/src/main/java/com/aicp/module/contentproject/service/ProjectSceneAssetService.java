@@ -10,6 +10,10 @@ import com.aicp.module.asset.mapper.AssetApplicationMapper;
 import com.aicp.module.asset.mapper.AssetVersionMapper;
 import com.aicp.module.asset.mapper.CanvasAssetPlacementMapper;
 import com.aicp.module.asset.mapper.WorkspaceAssetMapper;
+import com.aicp.module.canvas.entity.CanvasNode;
+import com.aicp.module.canvas.entity.CanvasProject;
+import com.aicp.module.canvas.mapper.CanvasNodeMapper;
+import com.aicp.module.canvas.mapper.CanvasProjectMapper;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneAssetRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneVariantRequest;
@@ -23,9 +27,17 @@ import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetImpac
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetMarkdownView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetVersionView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetView;
+import com.aicp.module.contentproject.entity.ContentUnit;
+import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.aicp.module.storyboard.entity.Storyboard;
+import com.aicp.module.storyboard.entity.StoryboardShot;
+import com.aicp.module.storyboard.entity.StoryboardVersion;
+import com.aicp.module.storyboard.mapper.StoryboardMapper;
+import com.aicp.module.storyboard.mapper.StoryboardVersionMapper;
+import com.aicp.module.storyboard.mapper.StoryboardVersionShotMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +61,12 @@ public class ProjectSceneAssetService {
     private final AssetVersionMapper versionMapper;
     private final AssetApplicationMapper applicationMapper;
     private final CanvasAssetPlacementMapper placementMapper;
+    private final ContentUnitMapper contentUnitMapper;
+    private final StoryboardMapper storyboardMapper;
+    private final StoryboardVersionMapper storyboardVersionMapper;
+    private final StoryboardVersionShotMapper storyboardVersionShotMapper;
+    private final CanvasNodeMapper canvasNodeMapper;
+    private final CanvasProjectMapper canvasProjectMapper;
     private final ProjectAccessService projectAccess;
     private final ObjectMapper objectMapper;
     private final SceneAssetMarkdownProjector markdownProjector;
@@ -120,7 +138,6 @@ public class ProjectSceneAssetService {
         Map<String, Object> metadata = currentMetadata(asset);
         Map<String, Object> master = master(metadata);
         merge(master, request);
-        if (request.variants() != null) metadata.put("variants", variants(request.variants()));
         metadata.put("schema_version", 1);
         metadata.put("master", master);
         String nextName = request.name() == null ? asset.getName() : request.name();
@@ -140,7 +157,7 @@ public class ProjectSceneAssetService {
         Map<String, Object> metadata = currentMetadata(asset);
         List<Map<String, Object>> variants = new ArrayList<>(variantsFrom(metadata));
         Map<String, Object> variant = new LinkedHashMap<>();
-        variant.put("id", stableVariantId(variants.size() + 1));
+        variant.put("id", stableVariantId(nextVariantSequence(asset.getId())));
         variant.put("version", 1);
         variant.put("name", request.name());
         put(variant, "time", request.time());
@@ -184,7 +201,7 @@ public class ProjectSceneAssetService {
         projectAccess.require(projectId, userId, Action.VIEW);
         WorkspaceAsset asset = requireScene(projectId, assetId);
         AssetVersion version = requireCurrentVersion(asset);
-        return markdownProjector.project(projectId, asset, version, currentMetadata(asset));
+        return markdownProjector.project(projectId, asset, version, currentMetadata(asset), trustedLinks(projectId, assetId));
     }
 
     @Transactional
@@ -423,7 +440,7 @@ public class ProjectSceneAssetService {
                 || request.materials() != null || request.palette() != null || request.lighting() != null
                 || request.landmarks() != null || request.fixedProps() != null || request.movableProps() != null
                 || request.entrancesExits() != null || request.continuityRules() != null || request.references() != null
-                || request.prompts() != null || request.variants() != null;
+                || request.prompts() != null;
     }
 
     private void requireNonBlankIfPresent(String value, String field) {
@@ -475,5 +492,81 @@ public class ProjectSceneAssetService {
 
     private String defaulted(String value, String fallback) {
         return value == null || value.isBlank() ? fallback : value;
+    }
+
+    private int nextVariantSequence(Long assetId) {
+        int max = 0;
+        for (AssetVersion version : versionMapper.selectList(new LambdaQueryWrapper<AssetVersion>()
+                .eq(AssetVersion::getAssetId, assetId))) {
+            for (Map<String, Object> variant : variantsFrom(parseMetadata(version.getMetadata()))) {
+                Object id = variant.get("id");
+                if (id instanceof String stableId && stableId.matches("VAR-\\d+")) {
+                    max = Math.max(max, Integer.parseInt(stableId.substring("VAR-".length())));
+                }
+            }
+        }
+        return max + 1;
+    }
+
+    private List<SceneAssetMarkdownProjector.TrustedLink> trustedLinks(Long projectId, Long assetId) {
+        LinkedHashMap<String, SceneAssetMarkdownProjector.TrustedLink> links = new LinkedHashMap<>();
+        applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
+                        .eq(AssetApplication::getAssetId, assetId).eq(AssetApplication::getStatus, "APPLIED"))
+                .forEach(application -> trustedLink(projectId, application.getTargetType(), application.getTargetId())
+                        .ifPresent(link -> links.putIfAbsent(link.path(), link)));
+        placementMapper.selectList(new LambdaQueryWrapper<CanvasAssetPlacement>()
+                        .eq(CanvasAssetPlacement::getAssetId, assetId).isNull(CanvasAssetPlacement::getReleasedAt))
+                .forEach(placement -> trustedCanvasLink(projectId, placement.getCanvasProjectId(), placement.getNodeId())
+                        .ifPresent(link -> links.putIfAbsent(link.path(), link)));
+        return List.copyOf(links.values());
+    }
+
+    private java.util.Optional<SceneAssetMarkdownProjector.TrustedLink> trustedLink(Long projectId, String type,
+                                                                                     Long targetId) {
+        if (targetId == null || type == null) return java.util.Optional.empty();
+        return switch (type) {
+            case "CONTENT_UNIT" -> trustedContentUnitLink(projectId, targetId);
+            case "STORYBOARD_SHOT" -> trustedStoryboardShotLink(projectId, targetId);
+            default -> java.util.Optional.empty();
+        };
+    }
+
+    private java.util.Optional<SceneAssetMarkdownProjector.TrustedLink> trustedContentUnitLink(Long projectId,
+                                                                                                 Long targetId) {
+        ContentUnit unit = contentUnitMapper.selectById(targetId);
+        if (unit == null || !projectId.equals(unit.getProjectId()) || !safeArtifactSegment(unit.getStableKey())
+                || unit.getTitle() == null || unit.getTitle().isBlank()) return java.util.Optional.empty();
+        return java.util.Optional.of(new SceneAssetMarkdownProjector.TrustedLink(
+                "06-剧本正文/" + unit.getStableKey() + ".md", unit.getTitle()));
+    }
+
+    private java.util.Optional<SceneAssetMarkdownProjector.TrustedLink> trustedStoryboardShotLink(Long projectId,
+                                                                                                     Long targetId) {
+        StoryboardShot shot = storyboardVersionShotMapper.selectById(targetId);
+        if (shot == null || !List.of("draft", "confirmed", "needs_review").contains(shot.getStatus())
+                || !safeArtifactSegment(shot.getShotCode())) return java.util.Optional.empty();
+        StoryboardVersion version = storyboardVersionMapper.selectById(shot.getVersionId());
+        Storyboard storyboard = version == null ? null : storyboardMapper.selectById(version.getStoryboardId());
+        if (storyboard == null || !projectId.equals(storyboard.getProjectId())) return java.util.Optional.empty();
+        return java.util.Optional.of(new SceneAssetMarkdownProjector.TrustedLink(
+                "08-文字分镜/" + shot.getShotCode() + ".md", shot.getShotCode()));
+    }
+
+    private java.util.Optional<SceneAssetMarkdownProjector.TrustedLink> trustedCanvasLink(Long projectId,
+                                                                                             Long canvasProjectId,
+                                                                                             Long nodeId) {
+        CanvasNode node = nodeId == null ? null : canvasNodeMapper.selectById(nodeId);
+        CanvasProject canvas = canvasProjectId == null ? null : canvasProjectMapper.selectById(canvasProjectId);
+        if (node == null || canvas == null || !projectId.equals(canvas.getContentProjectId())
+                || !canvas.getId().equals(node.getProjectId()) || !safeArtifactSegment(node.getUuid())) {
+            return java.util.Optional.empty();
+        }
+        String alias = node.getName() == null || node.getName().isBlank() ? node.getUuid() : node.getName();
+        return java.util.Optional.of(new SceneAssetMarkdownProjector.TrustedLink(
+                "09-画布交接/CANVAS-NODE-" + node.getUuid() + ".md", alias));
+    }
+
+    private boolean safeArtifactSegment(String value) {
+        return value != null && value.matches("[\\p{L}\\p{N}_-]+");
     }
 }
