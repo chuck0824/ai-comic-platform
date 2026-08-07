@@ -12,11 +12,15 @@ import com.aicp.module.asset.mapper.CanvasAssetPlacementMapper;
 import com.aicp.module.asset.mapper.WorkspaceAssetMapper;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneAssetRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneVariantRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateVariantRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.FromWorldLocationRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.RestoreSceneAssetRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.UpdateSceneVariantRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.UpdateSceneAssetRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.ImpactReferenceView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetImpactView;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetMarkdownView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetVersionView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetView;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -47,6 +51,7 @@ public class ProjectSceneAssetService {
     private final CanvasAssetPlacementMapper placementMapper;
     private final ProjectAccessService projectAccess;
     private final ObjectMapper objectMapper;
+    private final SceneAssetMarkdownProjector markdownProjector;
 
     public List<SceneAssetView> list(Long userId, Long projectId, String keyword, String spaceType,
                                      String reusability, String status, Boolean referenced) {
@@ -82,8 +87,23 @@ public class ProjectSceneAssetService {
         asset.setUpdatedBy(userId);
         assetMapper.insert(asset);
 
-        appendVersion(asset, metadataFor(request), userId);
+        appendVersion(asset, metadataFor(request, projectId), userId);
         return toView(requireScene(projectId, asset.getId()));
+    }
+
+    /** Converts a world-location reference once; subsequent calls return the same project scene. */
+    @Transactional
+    public SceneAssetView fromLocation(Long userId, Long projectId, FromWorldLocationRequest request) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset existing = assetMapper.selectList(sceneQuery(projectId).orderByAsc(WorkspaceAsset::getId))
+                .stream()
+                .filter(asset -> request.worldLocationRef().equals(master(currentMetadata(asset)).get("world_location_ref")))
+                .findFirst().orElse(null);
+        if (existing != null) return toView(existing);
+        return create(userId, projectId, new CreateSceneAssetRequest(request.name(),
+                defaulted(request.spaceType(), "INTERIOR"), defaulted(request.reusability(), "PRIMARY"),
+                defaulted(request.realityType(), "REALISTIC"), request.worldLocationRef(), request.layout(), null,
+                null, request.lighting(), null, null, null, null, List.of(), null, null, List.of()));
     }
 
     public SceneAssetView get(Long userId, Long projectId, Long assetId) {
@@ -111,6 +131,60 @@ public class ProjectSceneAssetService {
         asset.setName(nextName);
         appendVersion(asset, metadata, userId);
         return toView(requireScene(projectId, assetId));
+    }
+
+    @Transactional
+    public SceneAssetView createVariant(Long userId, Long projectId, Long assetId, CreateSceneVariantRequest request) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        Map<String, Object> metadata = currentMetadata(asset);
+        List<Map<String, Object>> variants = new ArrayList<>(variantsFrom(metadata));
+        Map<String, Object> variant = new LinkedHashMap<>();
+        variant.put("id", stableVariantId(variants.size() + 1));
+        variant.put("version", 1);
+        variant.put("name", request.name());
+        put(variant, "time", request.time());
+        put(variant, "lighting_delta", request.lightingDelta());
+        put(variant, "prompts", request.prompts());
+        put(variant, "references", request.references());
+        variants.add(variant);
+        metadata.put("variants", variants);
+        appendVersion(asset, metadata, userId);
+        return toView(requireScene(projectId, assetId));
+    }
+
+    @Transactional
+    public SceneAssetView updateVariant(Long userId, Long projectId, Long assetId, String variantId,
+                                        UpdateSceneVariantRequest request) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        requireVariantPayload(request);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        Map<String, Object> metadata = currentMetadata(asset);
+        List<Map<String, Object>> variants = new ArrayList<>(variantsFrom(metadata));
+        Map<String, Object> variant = variants.stream()
+                .filter(item -> variantId.equals(item.get("id"))).findFirst()
+                .orElseThrow(() -> new BizException(ErrorCode.ASSET_NOT_FOUND, "场景变体不存在"));
+        Map<String, Object> updated = new LinkedHashMap<>(variant);
+        put(updated, "name", request.name());
+        put(updated, "time", request.time());
+        put(updated, "lighting_delta", request.lightingDelta());
+        put(updated, "prompts", request.prompts());
+        put(updated, "references", request.references());
+        if (updated.equals(variant)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "场景变体更新未包含任何有效变更");
+        }
+        updated.put("version", variantVersion(variant) + 1);
+        variants.set(variants.indexOf(variant), updated);
+        metadata.put("variants", variants);
+        appendVersion(asset, metadata, userId);
+        return toView(requireScene(projectId, assetId));
+    }
+
+    public SceneAssetMarkdownView markdown(Long userId, Long projectId, Long assetId) {
+        projectAccess.require(projectId, userId, Action.VIEW);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        AssetVersion version = requireCurrentVersion(asset);
+        return markdownProjector.project(projectId, asset, version, currentMetadata(asset));
     }
 
     @Transactional
@@ -206,8 +280,9 @@ public class ProjectSceneAssetService {
                 parseMetadata(version.getMetadata()), changeNote, version.getCreatedAt());
     }
 
-    private Map<String, Object> metadataFor(CreateSceneAssetRequest request) {
+    private Map<String, Object> metadataFor(CreateSceneAssetRequest request, Long projectId) {
         Map<String, Object> master = new LinkedHashMap<>();
+        master.put("stable_id", nextStableAssetId(projectId));
         put(master, "world_location_ref", request.worldLocationRef());
         put(master, "space_type", request.spaceType());
         put(master, "reusability", request.reusability());
@@ -250,17 +325,19 @@ public class ProjectSceneAssetService {
 
     private List<Map<String, Object>> variants(List<CreateVariantRequest> requests) {
         if (requests == null) return List.of();
-        return requests.stream().map(variant -> {
-            Map<String, Object> result = new LinkedHashMap<>();
-            put(result, "id", variant.id());
-            put(result, "version", variant.version());
-            put(result, "name", variant.name());
-            put(result, "time", variant.time());
-            put(result, "lighting_delta", variant.lightingDelta());
-            put(result, "prompts", variant.prompts());
-            put(result, "references", variant.references());
-            return result;
-        }).toList();
+        List<Map<String, Object>> variants = new ArrayList<>();
+        for (CreateVariantRequest variant : requests) {
+            Map<String, Object> delta = new LinkedHashMap<>();
+            delta.put("id", stableVariantId(variants.size() + 1));
+            delta.put("version", 1);
+            put(delta, "name", variant.name());
+            put(delta, "time", variant.time());
+            put(delta, "lighting_delta", variant.lightingDelta());
+            put(delta, "prompts", variant.prompts());
+            put(delta, "references", variant.references());
+            variants.add(delta);
+        }
+        return List.copyOf(variants);
     }
 
     @SuppressWarnings("unchecked")
@@ -332,6 +409,14 @@ public class ProjectSceneAssetService {
         requireNonBlankIfPresent(request.realityType(), "reality_type");
     }
 
+    private void requireVariantPayload(UpdateSceneVariantRequest request) {
+        if (request == null || (request.name() == null && request.time() == null && request.lightingDelta() == null
+                && request.prompts() == null && request.references() == null)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "场景变体更新至少需要一个可变字段");
+        }
+        requireNonBlankIfPresent(request.name(), "name");
+    }
+
     private boolean hasMutableField(UpdateSceneAssetRequest request) {
         return request.name() != null || request.spaceType() != null || request.reusability() != null
                 || request.realityType() != null || request.worldLocationRef() != null || request.layout() != null
@@ -372,5 +457,23 @@ public class ProjectSceneAssetService {
 
     private String projectWorkspaceId(Long projectId) {
         return "project_" + projectId;
+    }
+
+    private String nextStableAssetId(Long projectId) {
+        long count = assetMapper.selectCount(sceneQuery(projectId));
+        return "SCENE-ASSET-%03d".formatted(count);
+    }
+
+    private String stableVariantId(int sequence) {
+        return "VAR-%03d".formatted(sequence);
+    }
+
+    private int variantVersion(Map<String, Object> variant) {
+        Object value = variant.get("version");
+        return value instanceof Number number ? number.intValue() : 1;
+    }
+
+    private String defaulted(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value;
     }
 }

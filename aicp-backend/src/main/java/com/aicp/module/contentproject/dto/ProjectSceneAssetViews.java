@@ -44,4 +44,7 @@ public interface ProjectSceneAssetViews {
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record ImpactReferenceView(String type, Long id, Long versionId, String syncStatus) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record SceneAssetMarkdownView(String path, String content) {}
 }

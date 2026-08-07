@@ -63,5 +63,31 @@ public interface ProjectSceneAssetRequests {
             Object references) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record FromWorldLocationRequest(
+            @NotBlank String worldLocationRef,
+            @NotBlank String name,
+            String spaceType,
+            String reusability,
+            String realityType,
+            String layout,
+            String lighting) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record CreateSceneVariantRequest(
+            @NotBlank String name,
+            String time,
+            String lightingDelta,
+            Object prompts,
+            Object references) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
+    record UpdateSceneVariantRequest(
+            @Pattern(regexp = ".*\\S.*", message = "name 不能为空白") String name,
+            String time,
+            String lightingDelta,
+            Object prompts,
+            Object references) {}
+
+    @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record RestoreSceneAssetRequest(String changeNote) {}
 }

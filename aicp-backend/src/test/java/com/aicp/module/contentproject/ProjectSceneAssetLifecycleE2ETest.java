@@ -30,6 +30,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.hamcrest.Matchers.containsString;
 
 @SpringBootTest
 @AutoConfigureMockMvc(addFilters = false)
@@ -200,6 +201,26 @@ class ProjectSceneAssetLifecycleE2ETest {
         assertThat(versionCount).isEqualTo(2L);
     }
 
+    @Test
+    void locationConversionCreatesVariantAndObsidianProjection() throws Exception {
+        long projectId = createProject(ownerId, "地点转换测试");
+        authenticateAs(ownerId);
+        long assetId = convertLocation(projectId, "WORLD-LOC-003", "青桥城中村出租屋");
+
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/variants", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"name\":\"深夜停电\",\"time\":\"NIGHT\",\"lighting_delta\":\"仅应急灯\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.variants[0].id").value("VAR-001"))
+                .andExpect(jsonPath("$.data.current_version_no").value(2));
+
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/markdown", projectId, assetId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.path").value("04-场景资产/SCENE-ASSET-001-青桥城中村出租屋.md"))
+                .andExpect(jsonPath("$.data.content", containsString("[[03-小说分析/世界观/主要地点]]")))
+                .andExpect(jsonPath("$.data.content", containsString("VAR-001")));
+    }
+
     private long createSceneAsset(long projectId, String name, String lighting) throws Exception {
         String body = mvc.perform(post("/api/v1/content-projects/{id}/scene-assets", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -207,6 +228,17 @@ class ProjectSceneAssetLifecycleE2ETest {
                                 {"name":"%s","space_type":"INTERIOR","reusability":"PRIMARY",
                                 "reality_type":"REALISTIC","lighting":"%s"}
                                 """.formatted(name, lighting)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(body, "$.data.id")).longValue();
+    }
+
+    private long convertLocation(long projectId, String worldLocationRef, String name) throws Exception {
+        String body = mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/from-location", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"world_location_ref":"%s","name":"%s"}
+                                """.formatted(worldLocationRef, name)))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
         return ((Number) JsonPath.read(body, "$.data.id")).longValue();

@@ -3,11 +3,15 @@ package com.aicp.module.contentproject.controller;
 import com.aicp.common.dto.ApiResponse;
 import com.aicp.common.util.SecurityUtil;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneAssetRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.CreateSceneVariantRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.FromWorldLocationRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.RestoreSceneAssetRequest;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.UpdateSceneVariantRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetRequests.UpdateSceneAssetRequest;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetImpactView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetView;
 import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetVersionView;
+import com.aicp.module.contentproject.dto.ProjectSceneAssetViews.SceneAssetMarkdownView;
 import com.aicp.module.contentproject.service.ProjectSceneAssetService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -39,6 +43,12 @@ public class ProjectSceneAssetController {
         return ApiResponse.success(sceneAssets.create(SecurityUtil.requireCurrentUserId(), projectId, request));
     }
 
+    @PostMapping("/from-location")
+    public ApiResponse<SceneAssetView> fromLocation(@PathVariable Long projectId,
+                                                     @Valid @RequestBody FromWorldLocationRequest request) {
+        return ApiResponse.success(sceneAssets.fromLocation(SecurityUtil.requireCurrentUserId(), projectId, request));
+    }
+
     @GetMapping("/{assetId}")
     public ApiResponse<SceneAssetView> get(@PathVariable Long projectId, @PathVariable Long assetId) {
         return ApiResponse.success(sceneAssets.get(SecurityUtil.requireCurrentUserId(), projectId, assetId));
@@ -48,6 +58,25 @@ public class ProjectSceneAssetController {
     public ApiResponse<SceneAssetView> update(@PathVariable Long projectId, @PathVariable Long assetId,
                                                @Valid @RequestBody UpdateSceneAssetRequest request) {
         return ApiResponse.success(sceneAssets.update(SecurityUtil.requireCurrentUserId(), projectId, assetId, request));
+    }
+
+    @PostMapping("/{assetId}/variants")
+    public ApiResponse<SceneAssetView> createVariant(@PathVariable Long projectId, @PathVariable Long assetId,
+                                                      @Valid @RequestBody CreateSceneVariantRequest request) {
+        return ApiResponse.success(sceneAssets.createVariant(SecurityUtil.requireCurrentUserId(), projectId, assetId, request));
+    }
+
+    @PatchMapping("/{assetId}/variants/{variantId}")
+    public ApiResponse<SceneAssetView> updateVariant(@PathVariable Long projectId, @PathVariable Long assetId,
+                                                      @PathVariable String variantId,
+                                                      @Valid @RequestBody UpdateSceneVariantRequest request) {
+        return ApiResponse.success(sceneAssets.updateVariant(SecurityUtil.requireCurrentUserId(), projectId, assetId,
+                variantId, request));
+    }
+
+    @GetMapping("/{assetId}/markdown")
+    public ApiResponse<SceneAssetMarkdownView> markdown(@PathVariable Long projectId, @PathVariable Long assetId) {
+        return ApiResponse.success(sceneAssets.markdown(SecurityUtil.requireCurrentUserId(), projectId, assetId));
     }
 
     @PostMapping("/{assetId}/versions/{versionId}/restore")
