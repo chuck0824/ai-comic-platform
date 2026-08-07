@@ -4,12 +4,13 @@
 - Browser: Codex in-app Browser (the user-selected browser)
 - Preview: `http://localhost:62096/`
 - Served source: `/Users/apple/Desktop/漫剧/平台/.worktrees/script-action-feedback/.superpowers/brainstorm/15618-1785939141/content/eight-stage-workbench.html`
-- Preview process: PID `60573` (Browser run used this worktree-backed process)
-- Result: **45 / 45 PASS**
+- Original preview process: PID `60573` (the complete 45-row Browser run)
+- Current preview process: PID `26955` from the same worktree; kept on port `62096`
+- Original matrix result: **45 / 45 PASS**
 - Console after the complete run: **0 errors, 0 warnings** (`tab.dev.logs`)
 - Final visible result: `final-action-results.png` (ARCHIVED result, task `task-39`, 0 points)
 - PNG signature: `89504e470d0a1a0a`; IHDR: `1280×720`
-- Fix round 1 evidence boundary: the original in-app Browser run supplies all allowed-path UI evidence and IDs. After that run was finalized per Browser cleanup instructions, the IAB backend was no longer available; the requested Chrome substitution was not used. The four newly required missing-artifact paths therefore use the executable `WorkflowModel.evaluateActionPrecondition` + state-counter test, and are not represented as new Browser clicks.
+- Evidence boundary: the table retains the original complete 45-row Browser run and its screenshot. The final Important-fix round was verified separately with the Codex in-app Browser plus an executable delegated-click DOM harness; no Chrome or standalone Playwright substitution was used. The supplement below identifies current behavior that supersedes an original row.
 
 The persistent-result column records the browser-visible Markdown path/version/task/points outcome or the explicitly verified zero-write outcome. Toast was never accepted as the sole success signal.
 
@@ -23,7 +24,7 @@ Exact sequential IDs that were not printed inside an individual generation-resul
 | 4 | 小说分析 | 编辑世界观 | 分析阶段可编辑 | 世界观编辑弹层打开 | `03-小说分析/世界观.md` V1; `task-4`; SUCCEEDED; 0 积分 | PASS |
 | 5 | 改编方案 | 重新生成当前产物 (blocked) | 尚无已保存改编产物 | 上轮 in-app Browser 实际点击 `action-guidance`: 请先保存当前阶段产物 | 可执行 WorkflowModel：before tasks=0, results=0, billing=0, artifacts=0; after blocked tasks=0, results=0, billing=0, artifacts=0 | PASS |
 | 6 | 改编方案 | 选择高压开场 | 候选开场存在 | 选择弹层打开，HP2 呈选中态 | `04-改编方案.md` V1; `task-5`; SUCCEEDED; 0 积分 | PASS |
-| 7 | 改编方案 | 新增改编规则 | 改编阶段可编辑 | 规则编辑弹层打开 | 规则计数从 1 变为 2，确认时与方案一起写入 | PASS |
+| 7 | 改编方案 | 新增改编规则 | 改编阶段可编辑 | 规则编辑弹层打开；final DOM harness 点击保存后打开持久结果 | fresh-state evidence: `04-改编方案.md`; artifactId=`ADAPT-001`; V2; `task-1`; SUCCEEDED; 0 积分 | PASS |
 | 8 | 改编方案 | 确认改编方案 | 已选开场且存在规则 | 持久结果弹层打开 | `04-改编方案.md` V2; `task-6`; SUCCEEDED; 0 积分 | PASS |
 | 9 | 改编方案 | 重新生成当前产物 (allowed) | 改编产物已保存 | 上轮 in-app Browser 实际点击：配置 → 进度 → 前后差异 → 采纳 | `04-改编方案.md`; artifactId=`ADAPT-001`; V3; `task-7`; 0 积分; after allowed tasks=1, results=1, billing=1, artifacts=1 | PASS |
 | 10 | 结构化文字剧本 | 打开单集结构 | 已有分集结构 | EP-001 结构编辑弹层打开 | `05-分集结构/EP-001-单集结构.md` V1; `task-9`; 0 积分 | PASS |
@@ -44,7 +45,7 @@ Exact sequential IDs that were not printed inside an individual generation-resul
 | 25 | 审核修订 | 审核通过本集 (blocked) | 存在未解决 HIGH/BLOCKER | `action-guidance`; 2 个阻断项获可见聚焦 | 0 审核通过记录 / 0 版本写入 | PASS |
 | 26 | 审核修订 | 筛选问题 | 已有审核问题 | 筛选弹层可选 BLOCKING + OPEN，列表保留该状态 | 当前审核视图持有筛选状态 | PASS |
 | 27 | 审核修订 | 保存局部修订 | 已选审核问题 | 修订编辑弹层打开 | `07-审核修订/EP-001-审核记录.md`; artifactId=`EP-001-REVIEW`; 剧本 V11 + 审核 V1; `task-24`; SUCCEEDED; 0 积分 | PASS |
-| 28 | 审核修订 | 对比修订前后 | 已选审核问题 | 修订前/后并列弹层打开 | `07-审核修订/EP-001-审核记录.md`; artifactId=`EP-001-REVIEW`; V2; `task-25`; 0 积分 | PASS |
+| 28 | 审核修订 | 对比修订前后 | 已选审核问题 | 修订前/后并列弹层直接读取审核记录；归档只读仍可查看 | 0 任务 / 0 计费 / 0 版本写入；原 Browser 写入行为已被 final fix 取代 | PASS |
 | 29 | 审核修订 | 审核通过本集 (allowed) | HIGH/BLOCKER 均已解决 | 确认弹层显示可通过 | `07-审核修订/EP-001-审核记录.md` V5; `task-28`; SUCCEEDED; 0 积分 | PASS |
 | 30 | 审核修订 | 重新生成当前产物 (blocked + allowed) | blocked 无产物；remediation 保存审核记录；allowed 审核产物存在 | blocked: 本修复轮 IAB finalize 后无法重连，由可执行 `evaluateActionPrecondition` 得 `STAGE_ARTIFACT_REQUIRED`；allowed: 上轮 in-app Browser 实际点击配置 → 进度 → 差异 → 采纳 | before tasks=0, results=0, billing=0, artifacts=0; after blocked tasks=0, results=0, billing=0, artifacts=0; after allowed tasks=1, results=1, billing=1, artifacts=1; `07-审核修订/EP-001-审核记录.md`; artifactId=`EP-001-REVIEW`; V6; `task-29`; 0 积分 | PASS |
 | 31 | 文字分镜 | 空历史撤销 (blocked) | 分镜历史为空 | `action-guidance`: 当前没有可撤销操作 | 0 版本 / 0 任务写入 | PASS |
@@ -76,3 +77,17 @@ Exact sequential IDs that were not printed inside an individual generation-resul
 - `http://localhost:62096/` rendered the title **八阶段剧本创作工作台** from the current worktree.
 - Browser console: `ERRORS=[]`, `WARNINGS=[]` after all 45 behavior rows.
 - Screenshot was captured through the in-app Browser at the visible `archive-result` overlay and then opened from disk to verify that the PNG is readable and shows ARCHIVED, `task-39`, 0 points and retained records.
+
+## Final Important-fix supplement
+
+The original screenshot remains evidence for the complete 45-row pass. The following targeted checks were performed against the final implementation; exact mutation counters come from the executable Node/DOM harness because the Browser page scope is used only for visible-state inspection.
+
+| Issue | Final behavior | Executable evidence | In-app Browser evidence |
+|---|---|---|---|
+| Stage confirmation | All eight footers call one confirmation guard; invalid confirmation creates no task, result, billing row, or artifact | Pure model tests enumerate stages 0–7; DOM click asserts exact zero counters | Stage 7 review footer opened “请先保存当前阶段产物” instead of starting a transition |
+| Review revision | Issue carries `sceneId`/`blockId`; save changes that exact script block and versions script plus review artifacts with history | Pure model and DOM click tests assert `SCENE-001 / BLOCK-001`, before/after data, and both histories | Saved result displayed the exact locator, old/new text, script V2, review V2, `task-1`, 0 points |
+| 3001 pricing and settlement | Fixed/ratio/cache pricing, complete model/group/vendor/endpoint snapshot, success-time idempotent settlement, independent accept/discard decision | Pricing, snapshot, Vault ledger, success/discard, and accept-idempotence tests | Result showed `SUCCEEDED`, `SETTLED`, `PENDING`, estimate source and points; after discard task center retained `SUCCEEDED` plus `DISCARDED` |
+| Archive and recovery | Preview/history/view toggles stay read-only; every persistent mutation is blocked; recovery requires confirmation and creates a 0-point result | Pure guards plus DOM archive/recovery click sequence | Archived save opened `PROJECT_ARCHIVED` guidance; project detail showed read-only; confirmed restore produced `task-3`, SUCCEEDED, 0 points |
+| Obsidian data | Links resolve real paths/aliases; chapter, character, source-version, version index and diff read actual artifact snapshots | Vault/link/history tests plus DOM Vault preview | Targeted review result displayed the real `07-审核修订/EP-001-审核记录.md` path |
+| Remaining visible actions | Adaptation-rule save, version restore, failed-task retry, explicit file simulation, and unavailable episode guidance all have honest results | Pure action tests and one delegated-click DOM sequence | Static file picker copy explicitly states no system/external file effect |
+| Browser boundary | Browser interactions are real IAB clicks; exact state assertions use the full inline script and actual delegated document handler in a VM DOM | Six DOM interaction cases pass | Final targeted run console: `[]` for error/warn logs |
