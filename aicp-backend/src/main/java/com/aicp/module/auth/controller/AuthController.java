@@ -48,8 +48,11 @@ public class AuthController {
 
     @PostMapping("/login/sms")
     public ApiResponse<Map<String, Object>> loginBySms(@RequestBody Map<String, String> body) {
-        return ApiResponse.success(
-                authService.loginBySms(body.get("phone"), body.get("verify_code")));
+        String code = body.get("verify_code");
+        if (code == null || code.isBlank()) {
+            code = body.get("verifyCode");
+        }
+        return ApiResponse.success(authService.loginBySms(body.get("phone"), code));
     }
 
     @PostMapping("/login/wechat")

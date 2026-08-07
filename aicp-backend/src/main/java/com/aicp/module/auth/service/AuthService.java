@@ -135,7 +135,13 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
     public Map<String, Object> loginBySms(String phone, String verifyCode) {
         String codeKey = "code:login:" + phone;
         String savedCode = redisUtil.get(codeKey, String.class);
-        if (savedCode == null || !savedCode.equals(verifyCode)) {
+        boolean codeOk = savedCode != null && savedCode.equals(verifyCode);
+        // 本地/联调：允许固定验证码 123456，避免「点了登录却像没反应」
+        if (!codeOk && isDevProfile() && "123456".equals(verifyCode)) {
+            codeOk = true;
+            log.info("dev 环境接受固定短信验证码登录: phone={}", phone);
+        }
+        if (!codeOk) {
             throw new BizException(ErrorCode.VERIFY_CODE_ERROR);
         }
         redisUtil.delete(codeKey);
@@ -148,7 +154,7 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
             user = new User();
             user.setUuid("usr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
             user.setPhone(phone);
-            user.setNickname("用户" + phone.substring(phone.length() - 4));
+            user.setNickname("用户" + phone.substring(Math.max(0, phone.length() - 4)));
             user.setAccountType("personal");
             user.setMemberLevel("free");
             user.setStatus("active");
@@ -164,6 +170,10 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
         userMapper.updateById(user);
 
         return buildLoginResult(user);
+    }
+
+    private boolean isDevProfile() {
+        return Arrays.asList(environment.getActiveProfiles()).contains("dev");
     }
 
     // ===== 微信登录 =====

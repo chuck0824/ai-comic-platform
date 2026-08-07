@@ -28,7 +28,15 @@
               </template>
             </el-input>
           </el-form-item>
-          <el-button type="primary" size="large" class="w-full" native-type="submit" :loading="loading">
+          <p class="login-hint">开发环境可直接用验证码 <b>123456</b>（无需先获取）</p>
+          <el-button
+            type="primary"
+            size="large"
+            class="w-full"
+            native-type="submit"
+            :loading="loading"
+            @click="handleSmsLogin"
+          >
             登 录
           </el-button>
         </el-form>
@@ -42,7 +50,15 @@
           <el-form-item label="密码">
             <el-input v-model="password" type="password" placeholder="请输入密码" size="large" show-password autocomplete="current-password" />
           </el-form-item>
-          <el-button type="primary" size="large" class="w-full" native-type="submit" :loading="loading">
+          <p class="login-hint">开发账号：<b>admin</b> / <b>admin123</b></p>
+          <el-button
+            type="primary"
+            size="large"
+            class="w-full"
+            native-type="submit"
+            :loading="loading"
+            @click="handlePasswordLogin"
+          >
             登 录
           </el-button>
         </el-form>
@@ -106,9 +122,9 @@ const countdown = ref(0)
 const activeTimers = []
 onUnmounted(() => activeTimers.forEach(clearInterval))
 
-// 密码登录
-const account = ref('13800000001')
-const password = ref('Abc@123456')
+// 密码登录（H2 种子：admin / admin123）
+const account = ref('admin')
+const password = ref('admin123')
 
 // 注册
 const showRegister = ref(false)
@@ -149,17 +165,29 @@ async function sendRegCode() {
 }
 
 async function handleSmsLogin() {
+  if (loading.value) return
+  if (!phone.value || !smsCode.value) {
+    ElMessage.warning('请输入手机号和验证码')
+    return
+  }
   loading.value = true
   try {
     await authStore.loginBySms(phone.value, smsCode.value)
     ElMessage.success('欢迎回来！')
-    router.push('/dashboard')
+    router.push('/home')
   } catch (e) {
-    ElMessage.error('登录失败，请检查手机号或验证码')
-  } finally { loading.value = false }
+    // request 拦截器已弹出后端 message，这里不再重复泛化提示
+  } finally {
+    loading.value = false
+  }
 }
 
 async function handlePasswordLogin() {
+  if (loading.value) return
+  if (!account.value || !password.value) {
+    ElMessage.warning('请输入账号和密码')
+    return
+  }
   loading.value = true
   try {
     const accountType = account.value.includes('@') ? 'email' : 'phone'
@@ -169,10 +197,12 @@ async function handlePasswordLogin() {
       password: password.value
     })
     ElMessage.success('欢迎回来！')
-    router.push('/dashboard')
+    router.push('/home')
   } catch (e) {
-    ElMessage.error('登录失败，请检查账号或密码')
-  } finally { loading.value = false }
+    // request 拦截器已弹出后端 message
+  } finally {
+    loading.value = false
+  }
 }
 
 function handleWechatLogin() { ElMessage.info('微信登录功能开发中') }
