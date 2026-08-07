@@ -39,8 +39,9 @@ public interface ProjectSceneAssetViews {
     record SceneAssetImpactView(
             Long assetId,
             long lockedReferences,
+            long staleReferences,
             List<ImpactReferenceView> references) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    record ImpactReferenceView(String type, Long id, Long versionId) {}
+    record ImpactReferenceView(String type, Long id, Long versionId, String syncStatus) {}
 }

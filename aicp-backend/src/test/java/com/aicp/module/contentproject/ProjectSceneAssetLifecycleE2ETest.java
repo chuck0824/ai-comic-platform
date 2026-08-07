@@ -1,6 +1,8 @@
 package com.aicp.module.contentproject;
 
+import com.aicp.module.asset.entity.AssetApplication;
 import com.aicp.module.asset.entity.AssetVersion;
+import com.aicp.module.asset.mapper.AssetApplicationMapper;
 import com.aicp.module.asset.mapper.AssetVersionMapper;
 import com.aicp.module.contentproject.entity.ContentProject;
 import com.aicp.module.contentproject.entity.ProjectMember;
@@ -21,6 +23,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -37,6 +41,7 @@ class ProjectSceneAssetLifecycleE2ETest {
     @Autowired private ContentProjectMapper projectMapper;
     @Autowired private ProjectMemberMapper memberMapper;
     @Autowired private AssetVersionMapper versionMapper;
+    @Autowired private AssetApplicationMapper applicationMapper;
 
     private final long ownerId = 501L;
     private final long otherUserId = 502L;
@@ -80,6 +85,120 @@ class ProjectSceneAssetLifecycleE2ETest {
         authenticateAs(otherUserId);
         mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets", projectId))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void updateMarksOldApplicationsNeedsSyncAndImpactExposesAffectedStatus() throws Exception {
+        long projectId = createProject(ownerId, "场景引用过期测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "旧版本场景", "原始灯光");
+        AssetVersion oldVersion = versionMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>()
+                        .eq(AssetVersion::getAssetId, assetId)
+                        .eq(AssetVersion::getVersionNumber, 1));
+        AssetApplication application = new AssetApplication();
+        application.setWorkspaceId("project_" + projectId);
+        application.setAssetId(assetId);
+        application.setAssetVersionId(oldVersion.getId());
+        application.setProjectId(projectId);
+        application.setIdempotencyKey(UUID.randomUUID().toString());
+        application.setStatus("APPLIED");
+        applicationMapper.insert(application);
+
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"lighting\":\"更新后的夜景灯光\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.current_version_no").value(2));
+
+        assertThat(applicationMapper.selectById(application.getId()).getStatus()).isEqualTo("NEEDS_SYNC");
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stale_references").value(1))
+                .andExpect(jsonPath("$.data.references[0].sync_status").value("NEEDS_SYNC"));
+    }
+
+    @Test
+    void rejectsInvalidOrNoopUpdatesAndInvalidNestedVariantsWithoutAppendingVersion() throws Exception {
+        long projectId = createProject(ownerId, "场景更新校验测试");
+        authenticateAs(ownerId);
+        mvc.perform(post("/api/v1/content-projects/{id}/scene-assets", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"无效变体","space_type":"INTERIOR","reusability":"PRIMARY",
+                                "reality_type":"REALISTIC","variants":[{"name":"   "}]}
+                                """))
+                .andExpect(status().isBadRequest());
+
+        long assetId = createSceneAsset(projectId, "校验场景", "原始灯光");
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"space_type\":\"   \"}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"variants\":[{\"name\":\" \"}]}"))
+                .andExpect(status().isBadRequest());
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"lighting\":\"原始灯光\"}"))
+                .andExpect(status().isBadRequest());
+
+        Long versionCount = versionMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>()
+                        .eq(AssetVersion::getAssetId, assetId));
+        assertThat(versionCount).isEqualTo(1L);
+    }
+
+    @Test
+    void rejectsCorruptCurrentOrHistoricalMetadataWithoutAppendingVersion() throws Exception {
+        long projectId = createProject(ownerId, "场景元数据校验测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "损坏元数据场景", "原始灯光");
+        AssetVersion version = versionMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>()
+                        .eq(AssetVersion::getAssetId, assetId)
+                        .eq(AssetVersion::getVersionNumber, 1));
+        version.setMetadata("[]");
+        versionMapper.updateById(version);
+
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"lighting\":\"新灯光\"}"))
+                .andExpect(status().isBadRequest());
+        assertThat(versionMapper.selectCount(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>()
+                .eq(AssetVersion::getAssetId, assetId))).isEqualTo(1L);
+
+        long historicalAssetId = createSceneAsset(projectId, "历史元数据场景", "初始灯光");
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, historicalAssetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"lighting\":\"当前灯光\"}"))
+                .andExpect(status().isOk());
+        AssetVersion historicalVersion = versionMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>()
+                        .eq(AssetVersion::getAssetId, historicalAssetId)
+                        .eq(AssetVersion::getVersionNumber, 1));
+        historicalVersion.setMetadata("[]");
+        versionMapper.updateById(historicalVersion);
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/versions/{versionId}/restore",
+                        projectId, historicalAssetId, historicalVersion.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                .andExpect(status().isBadRequest());
+
+        Long versionCount = versionMapper.selectCount(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetVersion>()
+                        .eq(AssetVersion::getAssetId, historicalAssetId));
+        assertThat(versionCount).isEqualTo(2L);
+    }
+
+    private long createSceneAsset(long projectId, String name, String lighting) throws Exception {
+        String body = mvc.perform(post("/api/v1/content-projects/{id}/scene-assets", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"%s","space_type":"INTERIOR","reusability":"PRIMARY",
+                                "reality_type":"REALISTIC","lighting":"%s"}
+                                """.formatted(name, lighting)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+        return ((Number) JsonPath.read(body, "$.data.id")).longValue();
     }
 
     private long createProject(long ownerUserId, String name) {

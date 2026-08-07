@@ -46,7 +46,7 @@ public class ProjectSceneAssetController {
 
     @PatchMapping("/{assetId}")
     public ApiResponse<SceneAssetView> update(@PathVariable Long projectId, @PathVariable Long assetId,
-                                               @RequestBody UpdateSceneAssetRequest request) {
+                                               @Valid @RequestBody UpdateSceneAssetRequest request) {
         return ApiResponse.success(sceneAssets.update(SecurityUtil.requireCurrentUserId(), projectId, assetId, request));
     }
 

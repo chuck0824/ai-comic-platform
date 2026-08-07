@@ -95,14 +95,22 @@ public class ProjectSceneAssetService {
     public SceneAssetView update(Long userId, Long projectId, Long assetId, UpdateSceneAssetRequest request) {
         projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
         WorkspaceAsset asset = requireScene(projectId, assetId);
+        requireUpdatePayload(request);
+        AssetVersion previousVersion = requireCurrentVersion(asset);
         Map<String, Object> metadata = currentMetadata(asset);
         Map<String, Object> master = master(metadata);
         merge(master, request);
-        if (request.name() != null && !request.name().isBlank()) asset.setName(request.name());
         if (request.variants() != null) metadata.put("variants", variants(request.variants()));
         metadata.put("schema_version", 1);
         metadata.put("master", master);
-        appendVersion(asset, metadata, userId);
+        String nextName = request.name() == null ? asset.getName() : request.name();
+        String nextMetadata = writeMetadata(metadata);
+        if (nextName.equals(asset.getName()) && nextMetadata.equals(previousVersion.getMetadata())) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "场景资产更新未包含任何有效变更");
+        }
+        asset.setName(nextName);
+        AssetVersion nextVersion = appendVersion(asset, metadata, userId);
+        markOldReferencesNeedsSync(assetId, previousVersion.getId(), nextVersion.getId());
         return toView(requireScene(projectId, assetId));
     }
 
@@ -114,7 +122,10 @@ public class ProjectSceneAssetService {
         AssetVersion historical = versionMapper.selectOne(new LambdaQueryWrapper<AssetVersion>()
                 .eq(AssetVersion::getId, versionId).eq(AssetVersion::getAssetId, assetId));
         if (historical == null) throw new BizException(ErrorCode.ASSET_NOT_FOUND, "场景资产版本不存在");
-        AssetVersion restored = appendVersion(asset, parseMetadata(historical.getMetadata()), userId);
+        AssetVersion previousVersion = requireCurrentVersion(asset);
+        Map<String, Object> restoredMetadata = parseMetadata(historical.getMetadata());
+        AssetVersion restored = appendVersion(asset, restoredMetadata, userId);
+        markOldReferencesNeedsSync(assetId, previousVersion.getId(), restored.getId());
         return toVersionView(restored, request == null ? null : request.changeNote());
     }
 
@@ -167,19 +178,26 @@ public class ProjectSceneAssetService {
     }
 
     private SceneAssetImpactView impactFor(Long assetId) {
+        WorkspaceAsset asset = assetMapper.selectById(assetId);
+        Long currentVersionId = asset == null ? null : asset.getCurrentVersionId();
         List<ImpactReferenceView> refs = new ArrayList<>();
         applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
-                        .eq(AssetApplication::getAssetId, assetId).eq(AssetApplication::getStatus, "APPLIED"))
-                .forEach(application -> refs.add(new ImpactReferenceView("APPLICATION", application.getId(), application.getAssetVersionId())));
+                        .eq(AssetApplication::getAssetId, assetId)
+                        .in(AssetApplication::getStatus, "APPLIED", "NEEDS_SYNC"))
+                .forEach(application -> refs.add(new ImpactReferenceView("APPLICATION", application.getId(),
+                        application.getAssetVersionId(), syncStatus(application.getAssetVersionId(), currentVersionId,
+                                application.getStatus()))));
         placementMapper.selectList(new LambdaQueryWrapper<CanvasAssetPlacement>()
                         .eq(CanvasAssetPlacement::getAssetId, assetId).isNull(CanvasAssetPlacement::getReleasedAt))
-                .forEach(placement -> refs.add(new ImpactReferenceView("CANVAS_PLACEMENT", placement.getId(), placement.getAssetVersionId())));
-        return new SceneAssetImpactView(assetId, refs.size(), List.copyOf(refs));
+                .forEach(placement -> refs.add(new ImpactReferenceView("CANVAS_PLACEMENT", placement.getId(),
+                        placement.getAssetVersionId(), syncStatus(placement.getAssetVersionId(), currentVersionId, "CURRENT"))));
+        long staleReferences = refs.stream().filter(reference -> "NEEDS_SYNC".equals(reference.syncStatus())).count();
+        return new SceneAssetImpactView(assetId, refs.size(), staleReferences, List.copyOf(refs));
     }
 
     private SceneAssetView toView(WorkspaceAsset asset) {
         Map<String, Object> metadata = currentMetadata(asset);
-        AssetVersion current = asset.getCurrentVersionId() == null ? null : versionMapper.selectById(asset.getCurrentVersionId());
+        AssetVersion current = requireCurrentVersion(asset);
         return new SceneAssetView(asset.getId(), asset.getUuid(), asset.getContentProjectId(), asset.getAssetType(),
                 asset.getName(), asset.getSourceType(), asset.getStatus(), asset.getCurrentVersionId(),
                 current == null ? 0 : current.getVersionNumber(), master(metadata), variantsFrom(metadata),
@@ -250,9 +268,7 @@ public class ProjectSceneAssetService {
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> currentMetadata(WorkspaceAsset asset) {
-        if (asset.getCurrentVersionId() == null) return new LinkedHashMap<>();
-        AssetVersion version = versionMapper.selectById(asset.getCurrentVersionId());
-        return version == null ? new LinkedHashMap<>() : parseMetadata(version.getMetadata());
+        return parseMetadata(requireCurrentVersion(asset).getMetadata());
     }
 
     @SuppressWarnings("unchecked")
@@ -271,10 +287,91 @@ public class ProjectSceneAssetService {
 
     private Map<String, Object> parseMetadata(String json) {
         try {
-            return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
-        } catch (Exception ignored) {
-            return new LinkedHashMap<>();
+            if (json == null || json.isBlank()) throw invalidMetadata();
+            Map<String, Object> metadata = objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+            validateMetadataEnvelope(metadata);
+            return metadata;
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw invalidMetadata();
         }
+    }
+
+    private AssetVersion requireCurrentVersion(WorkspaceAsset asset) {
+        if (asset.getCurrentVersionId() == null) throw invalidMetadata();
+        AssetVersion version = versionMapper.selectById(asset.getCurrentVersionId());
+        if (version == null) throw invalidMetadata();
+        return version;
+    }
+
+    private void validateMetadataEnvelope(Map<String, Object> metadata) {
+        Object schemaVersion = metadata.get("schema_version");
+        if (!(schemaVersion instanceof Number number) || number.intValue() != 1
+                || !(metadata.get("master") instanceof Map<?, ?>)
+                || !(metadata.get("variants") instanceof List<?>)) {
+            throw invalidMetadata();
+        }
+        @SuppressWarnings("unchecked")
+        Map<String, Object> sceneMaster = (Map<String, Object>) metadata.get("master");
+        for (String field : List.of("space_type", "reusability", "reality_type")) {
+            Object value = sceneMaster.get(field);
+            if (!(value instanceof String text) || text.isBlank()) throw invalidMetadata();
+        }
+        for (Object variant : (List<?>) metadata.get("variants")) {
+            if (!(variant instanceof Map<?, ?> variantMap)) throw invalidMetadata();
+            Object name = variantMap.get("name");
+            if (!(name instanceof String text) || text.isBlank()) throw invalidMetadata();
+        }
+    }
+
+    private void requireUpdatePayload(UpdateSceneAssetRequest request) {
+        if (request == null || !hasMutableField(request)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "场景资产更新至少需要一个可变字段");
+        }
+        requireNonBlankIfPresent(request.name(), "name");
+        requireNonBlankIfPresent(request.spaceType(), "space_type");
+        requireNonBlankIfPresent(request.reusability(), "reusability");
+        requireNonBlankIfPresent(request.realityType(), "reality_type");
+    }
+
+    private boolean hasMutableField(UpdateSceneAssetRequest request) {
+        return request.name() != null || request.spaceType() != null || request.reusability() != null
+                || request.realityType() != null || request.worldLocationRef() != null || request.layout() != null
+                || request.materials() != null || request.palette() != null || request.lighting() != null
+                || request.landmarks() != null || request.fixedProps() != null || request.movableProps() != null
+                || request.entrancesExits() != null || request.continuityRules() != null || request.references() != null
+                || request.prompts() != null || request.variants() != null;
+    }
+
+    private void requireNonBlankIfPresent(String value, String field) {
+        if (value != null && value.isBlank()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, field + " 不能为空白");
+        }
+    }
+
+    private void markOldReferencesNeedsSync(Long assetId, Long oldVersionId, Long newVersionId) {
+        if (oldVersionId == null || oldVersionId.equals(newVersionId)) return;
+        applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
+                        .eq(AssetApplication::getAssetId, assetId)
+                        .eq(AssetApplication::getAssetVersionId, oldVersionId)
+                        .eq(AssetApplication::getStatus, "APPLIED"))
+                .forEach(application -> {
+                    application.setStatus("NEEDS_SYNC");
+                    applicationMapper.updateById(application);
+                });
+    }
+
+    private String syncStatus(Long referencedVersionId, Long currentVersionId, String storedStatus) {
+        if ("NEEDS_SYNC".equals(storedStatus)
+                || currentVersionId != null && !currentVersionId.equals(referencedVersionId)) {
+            return "NEEDS_SYNC";
+        }
+        return "CURRENT";
+    }
+
+    private BizException invalidMetadata() {
+        return new BizException(ErrorCode.PARAM_INVALID, "场景资产版本元数据无效，无法继续操作");
     }
 
     private String writeMetadata(Map<String, Object> metadata) {

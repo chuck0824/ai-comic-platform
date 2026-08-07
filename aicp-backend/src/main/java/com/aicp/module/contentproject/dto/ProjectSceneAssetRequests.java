@@ -2,7 +2,9 @@ package com.aicp.module.contentproject.dto;
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.fasterxml.jackson.databind.annotation.JsonNaming;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 
 import java.util.List;
 
@@ -27,14 +29,14 @@ public interface ProjectSceneAssetRequests {
             List<String> continuityRules,
             Object references,
             Object prompts,
-            List<CreateVariantRequest> variants) {}
+            List<@Valid CreateVariantRequest> variants) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record UpdateSceneAssetRequest(
-            String name,
-            String spaceType,
-            String reusability,
-            String realityType,
+            @Pattern(regexp = ".*\\S.*", message = "name 不能为空白") String name,
+            @Pattern(regexp = ".*\\S.*", message = "space_type 不能为空白") String spaceType,
+            @Pattern(regexp = ".*\\S.*", message = "reusability 不能为空白") String reusability,
+            @Pattern(regexp = ".*\\S.*", message = "reality_type 不能为空白") String realityType,
             String worldLocationRef,
             String layout,
             Object materials,
@@ -47,7 +49,7 @@ public interface ProjectSceneAssetRequests {
             List<String> continuityRules,
             Object references,
             Object prompts,
-            List<CreateVariantRequest> variants,
+            List<@Valid CreateVariantRequest> variants,
             String changeNote) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
