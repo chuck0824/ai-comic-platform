@@ -456,7 +456,7 @@
           billingEntries: [],
           actionResults: [],
           generation: { visible:false, status:null, progress:0, spec:null, taskId:null, result:null },
-          models: { source:'fallback', loading:false, error:null, items:[], selectedId:null },
+          models: { source:'fallback', loading:false, error:null, items:[], selectedId:null, vendors:[], groupRatio:{}, usableGroup:{}, supportedEndpoint:{}, autoGroups:[], pricingVersion:'' },
           editor: { selectedBlockId:null, storyboardView:'cards', reviewFilters:{ severity:'全部', status:'全部' } },
           transition: { visible:false, fromStage:null, toStage:null, status:null, taskId:null, error:null, progress:0 },
           notifications: []
@@ -540,20 +540,52 @@
         return affected;
       }
 
-      function renderMarkdown(state, artifactId) {
-        const artifact = state.artifacts[artifactId];
-        if (!artifact) return '';
+      function artifactLink(state, artifactId) {
+        const target = state.artifacts[artifactId];
+        return target ? `[[${target.path.replace(/\.md$/,'')}|${target.title}]]` : `[[${artifactId}]]`;
+      }
+
+      function renderArtifactSnapshot(state, artifact, snapshot = artifact) {
         const dependencies = artifact.dependsOn.length
-          ? `\ndepends_on:\n${artifact.dependsOn.map(id => `  - "[[${id}]]"`).join('\n')}`
+          ? `\ndepends_on:\n${artifact.dependsOn.map(id => `  - "${artifactLink(state,id)}"`).join('\n')}`
           : '\ndepends_on: []';
         const affects = artifact.affects.length
-          ? `\naffects:\n${artifact.affects.map(id => `  - "[[${id}]]"`).join('\n')}`
+          ? `\naffects:\n${artifact.affects.map(id => `  - "${artifactLink(state,id)}"`).join('\n')}`
           : '\naffects: []';
-        const body = Object.entries(artifact.data).map(([key, value]) => {
+        const body = Object.entries(snapshot.data || {}).map(([key, value]) => {
           const text = Array.isArray(value) ? value.map(item => `- ${typeof item === 'object' ? JSON.stringify(item) : item}`).join('\n') : (typeof value === 'object' ? `\`\`\`json\n${JSON.stringify(value, null, 2)}\n\`\`\`` : String(value));
           return `## ${key}\n\n${text}`;
         }).join('\n\n');
-        return `---\nproject_id: ${state.project.id}\nartifact_id: ${artifact.id}\nartifact_type: ${artifact.type}\nstage: ${artifact.stage}\nstatus: ${artifact.status}\nversion: ${artifact.version}\nupdated_at: ${artifact.updatedAt}\nupdated_by: ${artifact.updatedBy}${dependencies}${affects}\nstale: ${artifact.stale}\n---\n\n# ${artifact.title}\n\n${body}\n`;
+        return `---\nproject_id: ${state.project.id}\nartifact_id: ${artifact.id}\nartifact_type: ${artifact.type}\nstage: ${artifact.stage}\nstatus: ${snapshot.status || artifact.status}\nversion: ${snapshot.version}\nupdated_at: ${snapshot.updatedAt || artifact.updatedAt}\nupdated_by: ${snapshot.updatedBy || artifact.updatedBy}${dependencies}${affects}\nstale: ${artifact.stale}\n---\n\n# ${artifact.title}\n\n${body}\n`;
+      }
+
+      function renderMarkdown(state, artifactId) {
+        const artifact = state.artifacts[artifactId];
+        return artifact ? renderArtifactSnapshot(state, artifact) : '';
+      }
+
+      function listArtifactVersions(state, artifactId) {
+        const artifact = state.artifacts[artifactId];
+        if (!artifact) return [];
+        const current = { version:artifact.version, data:cloneValue(artifact.data), status:artifact.status, updatedAt:artifact.updatedAt, updatedBy:artifact.updatedBy, current:true };
+        return [current, ...artifact.history.slice().reverse().map(snapshot => ({ ...cloneValue(snapshot), current:false }))];
+      }
+
+      function compareArtifactVersions(state, artifactId, beforeVersion, afterVersion) {
+        const versions = listArtifactVersions(state, artifactId);
+        return {
+          before:versions.find(snapshot => snapshot.version === Number(beforeVersion)) || null,
+          after:versions.find(snapshot => snapshot.version === Number(afterVersion)) || null
+        };
+      }
+
+      function renderSourcePreview(state, spec = {}) {
+        const previewState = cloneValue(state);
+        createArtifact(previewState, {
+          id:'SOURCE-PREVIEW', type:'source', stage:1, title:'小说原文预览', path:'02-小说原文/00-原文索引.md',
+          status:'preview', data:{ 原文:String(spec.sourceText || ''), 章节范围:spec.chapterRange || '待确认' }, updatedBy:'preview'
+        });
+        return renderMarkdown(previewState, 'SOURCE-PREVIEW').replace('stale: false', 'stale: false\npreview_only: true');
       }
 
       function recordPoints(state, entry) {
@@ -582,7 +614,25 @@
       }
 
       function startGeneration(state, spec = {}) {
-        const task = createTask(state, { type:spec.type || 'GENERATE', stage:spec.stage ?? state.project.activeStage, scope:spec.scope || '生成内容', modelId:spec.modelId });
+        const model = state.models.items.find(item => item.id === spec.modelId);
+        const pricingSnapshot = spec.pricingSnapshot || (model ? createPricingSnapshot(state, model) : {});
+        spec = { ...spec, pricingSnapshot, estimateSource:spec.estimateSource || (state.models.source === 'remote' ? 'local-fallback-3001-snapshot' : 'demo-zero') };
+        const task = createTask(state, {
+          type:spec.type || 'GENERATE',
+          stage:spec.stage ?? state.project.activeStage,
+          scope:spec.scope || '生成内容',
+          action:spec.action,
+          operation:spec.operation,
+          modelId:spec.modelId,
+          estimatedPoints:spec.estimatedPoints ?? 0,
+          actualPoints:spec.actualPoints ?? spec.estimatedPoints ?? 0,
+          pricingSnapshot:cloneValue(pricingSnapshot),
+          estimateSource:spec.estimateSource,
+          artifactId:spec.artifactId,
+          path:spec.path,
+          before:spec.before || '',
+          after:spec.after || ''
+        });
         const generation = { visible:true, status:'QUEUED', progress:0, spec, taskId:task.id, result:null, before:spec.before || '', after:spec.after || '' };
         state.generation = generation;
         return generation;
@@ -594,18 +644,72 @@
         if (task) task.status = status;
         generation.status = status;
         generation.progress = advanceTransitionProgress(status, generation.progress);
+        if (status === 'SUCCEEDED') generation.result = settleGeneration(state, { ...(generation.spec || {}), taskId:generation.taskId });
         return generation;
       }
 
-      function acceptGenerationResult(state, spec = {}) {
-        const existing = spec.taskId && state.actionResults.find(result => result.taskId === spec.taskId && result.status === 'SUCCEEDED');
+      function settleGeneration(state, spec = {}) {
+        const existing = spec.taskId && state.actionResults.find(result => result.taskId === spec.taskId);
         if (existing) return existing;
+        const estimated = spec.estimatedPoints ?? 0;
+        const actual = spec.actualPoints ?? estimated;
+        const refunded = Math.max(0, estimated - actual);
+        const pricingSnapshot = cloneValue(spec.pricingSnapshot || {});
+        recordPoints(state, {
+          taskId:spec.taskId,
+          operation:spec.operation || spec.action,
+          modelId:spec.modelId,
+          estimated,
+          preconsumed:estimated,
+          actual,
+          refunded,
+          pricingSnapshot,
+          estimateSource:spec.estimateSource || 'local-fallback'
+        });
+        const artifact = spec.artifactId ? state.artifacts[spec.artifactId] : null;
+        return createActionResult(state, {
+          ...spec,
+          artifactId:artifact?.id || spec.artifactId,
+          path:artifact?.path || spec.path,
+          version:artifact?.version || spec.version,
+          estimatedPoints:estimated,
+          actualPoints:actual,
+          refundedPoints:refunded,
+          pricingSnapshot,
+          decision:'PENDING',
+          readonly:false,
+          status:'SUCCEEDED'
+        });
+      }
+
+      function acceptGenerationResult(state, spec = {}) {
+        const settled = settleGeneration(state, spec);
+        if (settled.decision === 'ACCEPTED' || settled.decision === 'DISCARDED') return settled;
         const artifact = spec.artifactId && state.artifacts[spec.artifactId]
           ? updateArtifact(state, spec.artifactId, { data:spec.data || state.artifacts[spec.artifactId].data, updatedBy:'ai' })
           : null;
         if (artifact) markArtifactImpacts(state, artifact.id, Object.keys(spec.data || {}));
-        recordPoints(state, { taskId:spec.taskId, operation:spec.operation || spec.action, modelId:spec.modelId, estimated:spec.estimatedPoints ?? 0, preconsumed:spec.estimatedPoints ?? 0, actual:spec.actualPoints ?? 0, refunded:Math.max(0, (spec.estimatedPoints ?? 0) - (spec.actualPoints ?? 0)) });
-        return createActionResult(state, { ...spec, artifactId:artifact?.id || spec.artifactId, path:artifact?.path || spec.path, version:artifact?.version || spec.version, before:spec.before || '', after:spec.after || '', readonly:true, status:'SUCCEEDED' });
+        Object.assign(settled, {
+          artifactId:artifact?.id || spec.artifactId,
+          path:artifact?.path || spec.path,
+          version:artifact?.version || spec.version,
+          before:spec.before || settled.before || '',
+          after:spec.after || settled.after || '',
+          decision:'ACCEPTED',
+          readonly:true
+        });
+        return settled;
+      }
+
+      function discardGenerationResult(state, taskId) {
+        const generation = state.generation?.taskId === taskId ? state.generation : null;
+        const spec = generation ? { ...(generation.spec || {}), taskId } : { taskId };
+        const settled = settleGeneration(state, spec);
+        if (settled.decision === 'ACCEPTED') return settled;
+        settled.decision = 'DISCARDED';
+        settled.readonly = true;
+        if (generation) generation.visible = false;
+        return settled;
       }
 
       function completeManualAction(state, spec = {}) {
@@ -621,6 +725,84 @@
 
       function completeProjectExportAction(state, spec = {}) {
         return completeManualAction(state, { ...spec, action:'export-project', artifactId:null, path:spec.packagePath || null, version:null, scope:spec.scope || '创作包 · 导出' });
+      }
+
+      function restoreArchivedProject(state) {
+        if (!state.project.archived) return { allowed:false, code:'PROJECT_NOT_ARCHIVED' };
+        state.project.archived = false;
+        state.project.status = 'IN_PROGRESS';
+        return completeManualAction(state, { action:'restore-project', stage:state.project.activeStage, scope:'项目 · 恢复创作', path:'00-项目主页.md', after:'项目已从归档状态恢复，可继续创作。', readonly:true });
+      }
+
+      function saveAdaptationRule(state, spec = {}) {
+        const rule = cloneValue(spec.rule || {});
+        let artifact = state.artifacts['ADAPT-001'];
+        if (!artifact) {
+          artifact = createArtifact(state, { id:'ADAPT-001', type:'adaptation', stage:3, title:'改编方案', path:'04-改编方案.md', dependsOn:['SUMMARY-001','EVENTS-001','WORLD-001'], affects:['EP-001-STRUCTURE'], data:{ 改编规则:[] }, updatedBy:'user' });
+        }
+        const rules = spec.rules ? cloneValue(spec.rules) : [...(artifact.data.改编规则 || [])].filter(item => item.id !== rule.id);
+        if (!rules.some(item => item.id === rule.id)) rules.push(rule);
+        artifact = updateArtifact(state, artifact.id, { data:{ ...artifact.data, ...(spec.data || {}), 改编规则:rules }, updatedBy:'user' });
+        markArtifactImpacts(state, artifact.id, ['改编规则']);
+        return completeManualAction(state, { action:'save-adaptation-rule', stage:3, scope:'改编方案 · 新增规则', artifactId:artifact.id, path:artifact.path, version:artifact.version, after:`${rule.id || '新规则'} 已保存到 ${artifact.path} V${artifact.version}。`, readonly:true });
+      }
+
+      function restoreArtifactVersion(state, artifactId, version) {
+        const artifact = state.artifacts[artifactId];
+        const snapshot = listArtifactVersions(state, artifactId).find(item => item.version === Number(version));
+        if (!artifact || !snapshot) return { allowed:false, code:'VERSION_NOT_FOUND' };
+        const restored = updateArtifact(state, artifactId, { data:snapshot.data, status:'draft', updatedBy:'user' });
+        markArtifactImpacts(state, artifactId, Object.keys(snapshot.data || {}));
+        return completeManualAction(state, { action:'restore-version', stage:artifact.stage, scope:`${artifact.title} · 恢复 V${version}`, artifactId, path:artifact.path, version:restored.version, restoredFromVersion:Number(version), after:`已将 V${version} 恢复为新版本 V${restored.version}，原历史保持不变。`, readonly:true });
+      }
+
+      function retryTask(state, taskId) {
+        const failedTask = state.tasks.find(task => task.id === taskId);
+        if (!failedTask || failedTask.status !== 'FAILED') return { allowed:false, code:'FAILED_TASK_REQUIRED' };
+        const retry = createTask(state, {
+          type:failedTask.type,
+          stage:failedTask.stage,
+          scope:failedTask.scope,
+          modelId:failedTask.modelId,
+          retryOf:failedTask.id,
+          estimatedPoints:failedTask.estimatedPoints ?? 0,
+          actualPoints:failedTask.actualPoints ?? failedTask.estimatedPoints ?? 0,
+          pricingSnapshot:cloneValue(failedTask.pricingSnapshot || {}),
+          artifactId:failedTask.artifactId,
+          path:failedTask.path,
+          before:failedTask.before || '',
+          after:failedTask.after || '重试任务已完成。',
+          action:failedTask.action,
+          operation:failedTask.operation
+        });
+        retry.status = 'SUCCEEDED';
+        const result = settleGeneration(state, {
+          action:failedTask.action || 'retry-task',
+          operation:failedTask.operation || `重试 ${failedTask.scope || failedTask.type}`,
+          stage:failedTask.stage,
+          scope:failedTask.scope,
+          taskId:retry.id,
+          retryOf:failedTask.id,
+          modelId:failedTask.modelId,
+          estimatedPoints:failedTask.estimatedPoints ?? 0,
+          actualPoints:failedTask.actualPoints ?? failedTask.estimatedPoints ?? 0,
+          pricingSnapshot:failedTask.pricingSnapshot || {},
+          artifactId:failedTask.artifactId,
+          path:failedTask.path,
+          before:failedTask.before || '',
+          after:failedTask.after || '重试任务已完成。'
+        });
+        result.retryOf = failedTask.id;
+        return result;
+      }
+
+      function simulateFileSelection(state, file = {}) {
+        state.source.file = cloneValue(file);
+        state.source.state = 'PARSED';
+        const task = createTask(state, { type:'UPLOAD', stage:1, scope:`文件解析 · ${file.name || '示例文件'}`, modelId:'manual' });
+        completeTask(state, task.id);
+        recordPoints(state, { taskId:task.id, operation:'select-file', modelId:'manual', estimated:0, preconsumed:0, actual:0, refunded:0 });
+        return createActionResult(state, { action:'select-file', resultType:'MANUAL_ACTION', status:'SUCCEEDED', taskId:task.id, fileName:file.name || '示例文件', fileSize:file.size || 0, estimatedPoints:0, actualPoints:0, refundedPoints:0, readonly:true, after:`${file.name || '示例文件'} 已完成静态解析模拟。` });
       }
 
       function stageDraftSpec(stage, data) {
@@ -654,12 +836,59 @@
         return artifact;
       }
 
+      function applyReviewRevision(state, spec = {}) {
+        const issues = spec.issues || [];
+        const issue = issues.find(item => item.id === spec.issueId);
+        if (!issue?.sceneId || !issue?.blockId) {
+          return { allowed:false, code:'REVIEW_TARGET_REQUIRED', title:'审核问题缺少正文定位', message:'局部修订必须关联到具体场景和正文块。' };
+        }
+        const scene = (spec.scenes || []).find(item => item.id === issue.sceneId);
+        const block = scene?.blocks?.find(item => item.id === issue.blockId);
+        if (!block) {
+          return { allowed:false, code:'REVIEW_TARGET_NOT_FOUND', title:'未找到关联正文块', message:`${issue.sceneId} / ${issue.blockId} 已不存在，请重新定位审核问题。` };
+        }
+        const revision = String(spec.revision || '').trim();
+        if (!revision) return { allowed:false, code:'REVIEW_REVISION_REQUIRED', title:'修订内容不能为空', message:'请输入要写回正文块的新文本。' };
+
+        const scriptId = spec.scriptArtifactId || 'EP-001-SCRIPT';
+        const reviewId = spec.reviewArtifactId || 'EP-001-REVIEW';
+        const existingScriptData = cloneValue(state.artifacts[scriptId]?.data || { 场景列表:spec.scenes || [] });
+        const existingReviewData = cloneValue(state.artifacts[reviewId]?.data || { 问题列表:issues, 修订记录:[] });
+        if (!state.artifacts[scriptId]) {
+          createArtifact(state, { id:scriptId, type:'script', stage:5, title:'EP-001 剧本正文', path:'06-剧本正文/EP-001-剧本正文.md', dependsOn:['EP-001-STRUCTURE','CHAR-001','WORLD-001'], affects:['EP-001-REVIEW','EP-001-STORYBOARD'], data:existingScriptData, updatedBy:'user' });
+        }
+        if (!state.artifacts[reviewId]) {
+          createArtifact(state, { id:reviewId, type:'review', stage:6, title:'EP-001 审核记录', path:'07-审核修订/EP-001-审核记录.md', dependsOn:[scriptId], affects:['EP-001-STORYBOARD'], data:existingReviewData, updatedBy:'user' });
+        }
+
+        const before = block.text;
+        block.text = revision;
+        issue.revision = revision;
+        issue.status = 'RESOLVED';
+        const scriptData = Object.prototype.hasOwnProperty.call(existingScriptData, '场景列表')
+          ? { ...existingScriptData, 场景列表:cloneValue(spec.scenes || []) }
+          : { ...existingScriptData, 场景:(spec.scenes || []).map(item => ({ id:item.id, 标题:item.title, 正文块:cloneValue(item.blocks || []) })) };
+        const revisionRecord = { issueId:issue.id, sceneId:issue.sceneId, blockId:issue.blockId, before, after:revision };
+        const reviewData = {
+          ...existingReviewData,
+          问题列表:cloneValue(issues),
+          修订记录:[...(existingReviewData.修订记录 || []), revisionRecord],
+          审核结论:'修订中'
+        };
+        const scriptArtifact = updateArtifact(state, scriptId, { data:scriptData, updatedBy:'user' });
+        markArtifactImpacts(state, scriptId, ['场景','正文块']);
+        const reviewArtifact = updateArtifact(state, reviewId, { data:reviewData, updatedBy:'user' });
+        markArtifactImpacts(state, reviewId, ['问题列表','修订记录']);
+        return { allowed:true, code:'ALLOW', issue, sceneId:issue.sceneId, blockId:issue.blockId, before, after:revision, scriptArtifact, reviewArtifact };
+      }
+
       const WRITE_ACTIONS = new Set([
         'confirm-source','save-stage-draft','confirm-stage-transition','cancel-stage-transition','retry-stage-transition','restore-version',
+        'change-source-text','change-source-mode','change-config','change-model','select-file','open-file-picker','select-demo-file','simulate-file-selection','refresh-models','select-project-model','resume-project','confirm-restore-project',
         'save-summary','save-event','save-character','save-world','choose-hook-and-close','save-adaptation-rule','save-adaptation','confirm-adaptation',
         'save-episode-structure','save-beat','confirm-beat-regeneration','confirm-episode-structure','add-scene','save-scene','add-script-block','save-script-block',
         'ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check','accept-generation-result','discard-generation-result','run-script-check','export-script','confirm-script-export',
-        'save-review-edit','resolve-review-issue','open-review-diff','approve-episode','add-shot','save-shot','split-shot','merge-shot','undo-storyboard','run-continuity-check','lock-storyboard',
+        'save-review-edit','resolve-review-issue','approve-episode','add-shot','save-shot','split-shot','merge-shot','undo-storyboard','run-continuity-check','lock-storyboard',
         'open-regenerate','confirm-regenerate','apply-stale-impact','archive-project','archive-project-complete','confirm-archive','confirm-project-export','handoff-canvas','retry-task'
       ]);
 
@@ -675,16 +904,59 @@
         if (model.demo) return 0;
         const inputTokens = Math.max(0, Number(usage.inputTokens || 0));
         const outputTokens = Math.max(0, Number(usage.outputTokens || 0));
+        const groupRatio = Number(model.groupRatio ?? 1);
+        if (Number(model.quotaType ?? 0) === 1) {
+          return Math.max(0, Math.round(Number(model.modelPrice || 0) * 500000 * groupRatio));
+        }
+        const cacheReadTokens = Math.min(inputTokens, Math.max(0, Number(usage.cacheReadTokens || 0)));
+        const cacheCreationTokens = Math.min(inputTokens - cacheReadTokens, Math.max(0, Number(usage.cacheCreationTokens || 0)));
+        const baseInputTokens = Math.max(0, inputTokens - cacheReadTokens - cacheCreationTokens);
         const modelRatio = Number(model.modelRatio ?? 1);
         const completionRatio = Number(model.completionRatio ?? 1);
-        const groupRatio = Number(model.groupRatio ?? 1);
-        return Math.ceil((inputTokens + outputTokens * completionRatio) * modelRatio * groupRatio);
+        const cacheRatio = Number(model.cacheRatio ?? 1);
+        const createCacheRatio = Number(model.createCacheRatio ?? 1);
+        const raw = (baseInputTokens + cacheReadTokens * cacheRatio + cacheCreationTokens * createCacheRatio + outputTokens * completionRatio) * modelRatio * groupRatio;
+        if ((inputTokens || outputTokens) && modelRatio && groupRatio && raw <= 0) return 1;
+        return Math.max(0, Math.round(raw));
       }
 
       function generationPricing(state, stage, projectModelId, usage = {}) {
         const modelId = state.models.stageSelections?.[stage] || projectModelId;
         const model = state.models.items.find(item => item.id === modelId) || state.models.items[0] || { demo:true };
-        return { model, estimatedPoints:estimatePoints(model, usage) };
+        return { model, estimatedPoints:estimatePoints(model, usage), pricingSnapshot:createPricingSnapshot(state, model), estimateSource:state.models.source === 'remote' ? 'local-fallback-3001-snapshot' : 'demo-zero' };
+      }
+
+      function createPricingSnapshot(state, model = {}) {
+        return cloneValue({
+          source:state.models.source || 'fallback',
+          pricingVersion:model.pricingVersion || state.models.pricingVersion || '',
+          quotaType:Number(model.quotaType ?? 0),
+          modelPrice:Number(model.modelPrice ?? 0),
+          modelRatio:Number(model.modelRatio ?? 1),
+          completionRatio:Number(model.completionRatio ?? 1),
+          cacheRatio:Number(model.cacheRatio ?? 1),
+          createCacheRatio:Number(model.createCacheRatio ?? 1),
+          imageRatio:Number(model.imageRatio ?? 1),
+          audioRatio:Number(model.audioRatio ?? 1),
+          audioCompletionRatio:Number(model.audioCompletionRatio ?? 1),
+          billingMode:model.billingMode || (Number(model.quotaType ?? 0) === 1 ? 'fixed' : 'ratio'),
+          billingExpr:model.billingExpr || '',
+          enableGroups:model.enableGroups || [],
+          groupName:model.groupName || null,
+          groupRatio:Number(model.groupRatio ?? 1),
+          groupRatioMap:state.models.groupRatio || {},
+          usableGroup:state.models.usableGroup || {},
+          vendorId:Number(model.vendorId || 0),
+          vendor:model.vendor || '',
+          vendors:state.models.vendors || [],
+          supportedEndpoint:state.models.supportedEndpoint || {},
+          autoGroups:state.models.autoGroups || [],
+          endpoints:model.endpoints || [],
+          description:model.description || '',
+          icon:model.icon || '',
+          tags:model.tags || '',
+          ownerBy:model.ownerBy || ''
+        });
       }
 
       function buildVaultFiles(state) {
@@ -696,31 +968,102 @@
           const artifact = state.artifacts[id];
           if (artifact) files[artifact.path] = renderMarkdown(state,id);
         }
-        const impactRows = state.impacts.map((impact,index) => `${index + 1}. [[${impact.sourceArtifactId}]] → [[${impact.artifactId}]] · ${impact.status} · ${impact.changedFields.join('、') || '内容变更'}`).join('\n') || '暂无待处理影响。';
+        const chapters = state.artifactOrder.map(id => state.artifacts[id]).filter(artifact => artifact?.type === 'source').flatMap(artifact => Array.isArray(artifact.data.章节) ? artifact.data.章节 : []);
+        if (chapters.length) {
+          const chapterLinks = [];
+          for (const chapter of chapters) {
+            const path = chapter.path || `02-小说原文/章节/${chapter.id}-${chapter.title}.md`;
+            files[path] = `---\nproject_id: ${state.project.id}\nartifact_type: source_chapter\nchapter_id: ${chapter.id}\n---\n\n# ${chapter.title}\n\n${chapter.content || ''}\n`;
+            chapterLinks.push(`- [[${path.replace(/\.md$/,'')}|${chapter.title}]]`);
+          }
+          files['02-小说原文/01-章节索引.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: chapter_index\n---\n\n# 章节索引\n\n${chapterLinks.join('\n')}\n`;
+        }
+        const characters = state.artifactOrder.map(id => state.artifacts[id]).filter(artifact => artifact?.type === 'character');
+        if (characters.length) {
+          files['03-小说分析/人物/00-人物索引.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: character_index\n---\n\n# 人物索引\n\n${characters.map(artifact => `- ${artifactLink(state,artifact.id)} · V${artifact.version}`).join('\n')}\n`;
+        }
+        const versionLinks = [];
+        for (const id of state.artifactOrder) {
+          const artifact = state.artifacts[id];
+          if (!artifact) continue;
+          const directory = artifact.path.includes('/') ? artifact.path.slice(0,artifact.path.lastIndexOf('/')) : '';
+          const basename = artifact.path.split('/').at(-1).replace(/\.md$/,'');
+          for (const snapshot of artifact.history) {
+            const versionPath = artifact.type === 'source'
+              ? `02-小说原文/source_versions/${artifact.id}-V${snapshot.version}.md`
+              : `${directory ? `${directory}/` : ''}versions/${basename}-V${snapshot.version}.md`;
+            files[versionPath] = renderArtifactSnapshot(state, artifact, snapshot);
+            versionLinks.push(`- [[${versionPath.replace(/\.md$/,'')}|${artifact.title} V${snapshot.version}]] · ${snapshot.updatedBy || 'unknown'}`);
+          }
+        }
+        files['91-版本历史.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: version_index\n---\n\n# 版本历史\n\n${versionLinks.join('\n') || '暂无历史版本。'}\n`;
+        const impactRows = state.impacts.map((impact,index) => `${index + 1}. ${artifactLink(state,impact.sourceArtifactId)} → ${artifactLink(state,impact.artifactId)} · ${impact.status} · ${impact.changedFields.join('、') || '内容变更'}`).join('\n') || '暂无待处理影响。';
         files['90-变更影响.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: impact_log\n---\n\n# 变更影响\n\n${impactRows}\n`;
-        const billingRows = state.billingEntries.map(entry => `| ${entry.taskId} | ${entry.operation || '-'} | ${entry.modelId || '-'} | ${entry.estimated ?? 0} | ${entry.preconsumed ?? 0} | ${entry.actual ?? 0} | ${entry.refunded ?? 0} |`).join('\n') || '| - | 暂无生成记录 | - | 0 | 0 | 0 | 0 |';
-        files['99-生成与计费记录.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: billing_log\nunit: 积分\n---\n\n# 生成与计费记录\n\n> 与 3001 配额一比一：1 quota = 1 积分。\n\n| 任务 | 操作 | 模型 | 预计积分 | 预扣积分 | 实际积分 | 返还积分 |\n|---|---|---|---:|---:|---:|---:|\n${billingRows}\n`;
+        const billingRows = state.billingEntries.map(entry => {
+          const pricingSnapshot = JSON.stringify(entry.pricingSnapshot || {}).replace(/\|/g,'\\|');
+          return `| ${entry.taskId} | ${entry.operation || '-'} | ${entry.modelId || '-'} | ${entry.estimated ?? 0} | ${entry.preconsumed ?? 0} | ${entry.actual ?? 0} | ${entry.refunded ?? 0} | \`${pricingSnapshot}\` |`;
+        }).join('\n') || '| - | 暂无生成记录 | - | 0 | 0 | 0 | 0 | `{}` |';
+        files['99-生成与计费记录.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: billing_log\nunit: 积分\n---\n\n# 生成与计费记录\n\n> 与 3001 配额一比一：1 quota = 1 积分。\n\n| 任务 | 操作 | 模型 | 预计积分 | 预扣积分 | 实际积分 | 返还积分 | 3001 计价快照 |\n|---|---|---|---:|---:|---:|---:|---|\n${billingRows}\n`;
         return files;
       }
 
-      function normalizePricingModels(payload = {}) {
+      function normalizePricingPayload(payload = {}) {
         const models = Array.isArray(payload.data) ? payload.data : [];
-        return models.map(item => ({
+        const vendors = Array.isArray(payload.vendors) ? cloneValue(payload.vendors) : [];
+        const vendorMap = new Map(vendors.map(vendor => [Number(vendor.id), vendor]));
+        const groupRatio = cloneValue(payload.group_ratio || {});
+        const usableGroup = cloneValue(payload.usable_group || {});
+        const supportedEndpoint = cloneValue(payload.supported_endpoint || {});
+        const autoGroups = cloneValue(payload.auto_groups || []);
+        const pricingVersion = payload.pricing_version || '';
+        const items = models.map(item => {
+          const enableGroups = cloneValue(item.enable_groups || []);
+          const selectedGroup = enableGroups.find(group => Object.prototype.hasOwnProperty.call(groupRatio, group));
+          const vendorId = Number(item.vendor_id || 0);
+          const vendor = vendorMap.get(vendorId);
+          return {
           id:item.model_name || item.name || item.id,
           name:item.display_name || item.model_name || item.name || item.id,
-          vendor:item.vendor_name || item.vendor || item.owned_by || '未知供应商',
+          description:item.description || '',
+          icon:item.icon || '',
+          tags:item.tags || '',
+          ownerBy:item.owner_by || '',
+          vendor:item.vendor_name || item.vendor || vendor?.name || item.owner_by || item.owned_by || '未知供应商',
+          vendorId,
+          quotaType:Number(item.quota_type ?? 0),
+          modelPrice:Number(item.model_price ?? 0),
           modelRatio:Number(item.model_ratio ?? item.ratio ?? 1),
           completionRatio:Number(item.completion_ratio ?? 1),
-          groupRatio:Number(item.group_ratio ?? 1),
-          endpoints:item.endpoints || item.supported_endpoint || ['chat'],
+          cacheRatio:Number(item.cache_ratio ?? 1),
+          createCacheRatio:Number(item.create_cache_ratio ?? 1),
+          imageRatio:Number(item.image_ratio ?? 1),
+          audioRatio:Number(item.audio_ratio ?? 1),
+          audioCompletionRatio:Number(item.audio_completion_ratio ?? 1),
+          billingMode:item.billing_mode || (Number(item.quota_type ?? 0) === 1 ? 'fixed' : 'ratio'),
+          billingExpr:item.billing_expr || '',
+          enableGroups,
+          groupRatio:Number(item.group_ratio ?? (selectedGroup ? groupRatio[selectedGroup] : 1)),
+          groupName:selectedGroup || null,
+          endpoints:cloneValue(item.supported_endpoint_types || item.endpoints || item.supported_endpoint || ['chat']),
+          pricingVersion:item.pricing_version || pricingVersion,
           demo:false
-        })).filter(item => item.id);
+          };
+        }).filter(item => item.id);
+        return { items, vendors, groupRatio, usableGroup, supportedEndpoint, autoGroups, pricingVersion };
+      }
+
+      function normalizePricingModels(payload = {}) {
+        return normalizePricingPayload(payload).items;
       }
 
       function resolveModels(remoteModels = [], fallbackModels = []) {
         return remoteModels.length
           ? { source:'remote', items:remoteModels }
-          : { source:'fallback', items:fallbackModels.map(item => ({ ...item, demo:true, points:0 })) };
+          : {
+              source:'fallback',
+              items:fallbackModels.map(item => ({ ...item, demo:true, points:0 })),
+              vendors:[], groupRatio:{}, usableGroup:{}, supportedEndpoint:{}, autoGroups:[], pricingVersion:''
+            };
       }
 
       function canEnterStage(state, index) {
@@ -786,11 +1129,15 @@
       }
 
       function evaluateActionPrecondition(context = {}, action = '') {
+        if (action === 'confirm-restore-project' && context.projectArchived) return { allowed:true, code:'ALLOW', title:'', message:'' };
         if (context.projectArchived && isWriteAction(action)) {
           return { allowed:false, code:'PROJECT_ARCHIVED', title:'项目已归档，只读查看', message:'归档项目会保留全部产物和任务记录；请恢复项目后再修改或创建交付。', targetAction:'open-project-detail' };
         }
         if (action === 'undo-storyboard' && !context.hasStoryboardHistory) {
           return { allowed:false, code:'STORYBOARD_HISTORY_REQUIRED', title:'当前没有可撤销的分镜操作', message:'先新增、保存、拆分或合并镜头后，才会出现可撤销的历史记录。', targetAction:'focus-storyboard-shots' };
+        }
+        if (action === 'switch-episode' && !context.episodeAvailable) {
+          return { allowed:false, code:'EPISODE_NOT_AVAILABLE', title:`第 ${String(context.requestedEpisode || 1).padStart(2,'0')} 集尚未实现`, message:'当前静态原型仅提供第 01 集的正文与文字分镜数据；不会伪造切换结果。', targetAction:'close-overlay' };
         }
         if (['ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check'].includes(action) && !context.selectedBlockId) {
           return { allowed:false, code:'SCRIPT_BLOCK_REQUIRED', title:'请先选择正文块', message:'选择一个动作、对白或旁白正文块后才能执行此操作。', targetAction:'focus-script-blocks' };
@@ -810,7 +1157,38 @@
         return { allowed:true, code:'ALLOW', title:'', message:'' };
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, recordPoints, createActionResult, startGeneration, setGenerationStatus, acceptGenerationResult, completeManualAction, completeExportAction, completeProjectExportAction, ensureStageArtifactForGeneration, saveStageDraft, canApproveReview, isWriteAction, evaluateActionPrecondition, estimatePoints, generationPricing, buildVaultFiles, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      function evaluateStageConfirmation(state, stage, context = {}) {
+        if (state.project.archived) {
+          return { allowed:false, code:'PROJECT_ARCHIVED', title:'项目已归档，只读查看', message:'请先从项目详情恢复项目，再确认阶段产物。', targetAction:'open-project-detail' };
+        }
+        if (stage === 0 && !context.configComplete) {
+          return { allowed:false, code:'CREATION_CONFIG_REQUIRED', title:'请先完成创作设置', message:'创作类型、目标平台和计划集数均为必填项。', targetAction:'focus-creation-config' };
+        }
+        if (stage === 1 && (!String(context.sourceText || '').trim() || !context.sourceConfirmed || !context.hasStageArtifact)) {
+          return { allowed:false, code:'SOURCE_CONFIRMATION_REQUIRED', title:'请先保存并确认原文', message:'小说上传阶段需要非空原文、已确认 source 状态和已保存的原文产物。', targetAction:'focus-source-confirmation' };
+        }
+        if (stage >= 2 && !context.hasStageArtifact) {
+          return { allowed:false, code:'STAGE_ARTIFACT_REQUIRED', title:'请先保存当前阶段产物', message:'阶段确认前必须存在当前阶段对应的 Markdown 产物。', targetAction:'save-stage-draft' };
+        }
+        if (stage === 3 && !context.selectedHook) {
+          return { allowed:false, code:'HOOK_REQUIRED', title:'请选择高压开场', message:'确认改编方案前必须选定一个高压开场。', targetAction:'open-hook-selector' };
+        }
+        if (stage === 3 && Number(context.adaptationRuleCount || 0) < 1) {
+          return { allowed:false, code:'ADAPTATION_RULE_REQUIRED', title:'请先添加改编规则', message:'确认改编方案前至少需要一条已保存的改编规则。', targetAction:'add-adaptation-rule' };
+        }
+        if (stage === 6 && !canApproveReview(context.issues || [])) {
+          return { allowed:false, code:'REVIEW_BLOCKED', title:'本集暂不能审核通过', message:'仍有未解决的高风险或阻断问题。', targetAction:'focus-review-blockers' };
+        }
+        return { allowed:true, code:'ALLOW', title:'', message:'' };
+      }
+
+      function beginStageConfirmation(state, stage, context = {}) {
+        const precondition = evaluateStageConfirmation(state, stage, context);
+        if (!precondition.allowed) return precondition;
+        return { ...precondition, transition:stage < state.stages.length - 1 ? startStageTransition(state, stage) : null };
+      }
+
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, listArtifactVersions, compareArtifactVersions, renderSourcePreview, recordPoints, createActionResult, startGeneration, setGenerationStatus, settleGeneration, acceptGenerationResult, discardGenerationResult, completeManualAction, completeExportAction, completeProjectExportAction, restoreArchivedProject, saveAdaptationRule, restoreArtifactVersion, retryTask, simulateFileSelection, ensureStageArtifactForGeneration, saveStageDraft, applyReviewRevision, canApproveReview, isWriteAction, evaluateActionPrecondition, evaluateStageConfirmation, beginStageConfirmation, estimatePoints, generationPricing, createPricingSnapshot, buildVaultFiles, normalizePricingPayload, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -919,9 +1297,9 @@
         const response = await fetch('http://localhost:3001/api/pricing', { cache:'no-store' });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const payload = await response.json();
-        const remote = WorkflowModel.normalizePricingModels(payload);
-        const resolved = WorkflowModel.resolveModels(remote, fallbackModels);
-        Object.assign(appState.models, resolved, { error:null, loading:false });
+        const pricing = WorkflowModel.normalizePricingPayload(payload);
+        const resolved = WorkflowModel.resolveModels(pricing.items, fallbackModels);
+        Object.assign(appState.models, pricing, resolved, { error:null, loading:false });
       } catch (error) {
         Object.assign(appState.models, WorkflowModel.resolveModels([], fallbackModels), { error:error.message || '连接失败', loading:false });
       }
@@ -1014,7 +1392,8 @@
     }
 
     function saveReviewArtifact(status = 'draft') {
-      return upsertArtifact({ id:'EP-001-REVIEW', type:'review', stage:6, title:'EP-001 审核记录', path:'07-审核修订/EP-001-审核记录.md', status, dependsOn:['EP-001-SCRIPT'], affects:['EP-001-STORYBOARD'], data:{ 问题列表:reviewState.issues, 审核结论:status === 'confirmed' ? '通过' : '修订中' } });
+      const prior = appState.artifacts['EP-001-REVIEW']?.data || {};
+      return upsertArtifact({ id:'EP-001-REVIEW', type:'review', stage:6, title:'EP-001 审核记录', path:'07-审核修订/EP-001-审核记录.md', status, dependsOn:['EP-001-SCRIPT'], affects:['EP-001-STORYBOARD'], data:{ ...prior, 问题列表:reviewState.issues, 修订记录:prior.修订记录 || [], 审核结论:status === 'confirmed' ? '通过' : '修订中' } });
     }
 
     function saveStoryboardArtifact(status = 'draft') {
@@ -1086,7 +1465,7 @@
           <textarea data-source-text aria-label="小说文本" placeholder="粘贴小说文本，最多 2000 个汉字">${escapeHtml(sourceText)}</textarea>
           <div class="text-counter"><span>粘贴内容会保存为 Obsidian 小说原文文档</span><strong data-source-counter class="${WorkflowModel.countHan(sourceText) >= 1800 ? 'limit-near' : ''}">汉字 ${WorkflowModel.countHan(sourceText)}/2000 · 总字符 ${Array.from(sourceText).length}</strong></div>
           <div class="actions"><button class="btn primary" data-action="confirm-source">保存、解析并确认原文</button><button class="btn secondary" data-action="preview-chapter">预览章节切分</button><button class="btn secondary" data-action="preview-source-markdown">预览 Markdown</button></div>` : `
-          <div class="dropzone"><div><strong>拖拽剧本文件到这里，或点击选择文件</strong><p>支持 DOCX、TXT，单文件不超过 50MB</p><button class="btn primary">选择文件</button></div></div>
+          <div class="dropzone"><div><strong>拖拽剧本文件到这里，或点击选择文件</strong><p>支持 DOCX、TXT，单文件不超过 50MB</p><button class="btn primary" data-action="open-file-picker">选择文件</button></div></div>
           <div class="actions"><button class="btn primary" data-action="select-demo-file">选择文件并解析</button><button class="btn secondary" data-action="retry-upload">重新上传</button><button class="btn secondary" data-action="preview-chapter">预览章节</button><button class="btn primary" data-action="confirm-source">确认原文</button></div>`}</div>
       </section>
       <section class="card"><div class="grid-2"><div class="mini-card"><h3>解析结果 · PARSED</h3><p>文件：重生后我靠嘴炮把全世界整破防了.docx<br>识别 126 章 · 有效字数 128,640 · 当前取前 50 章</p></div><div class="mini-card"><h3>任务状态机</h3><p>EMPTY → UPLOADING → PARSING → PARSED → CONFIRMED<br>异常终态：FAILED / CANCELED</p></div></div>
@@ -1147,10 +1526,10 @@
       filters:{ severity:'全部', status:'全部' },
       selectedIssueId:'ISSUE-001', focusBlockers:false,
       issues:[
-        { id:'ISSUE-001', severity:'HIGH', status:'OPEN', title:'第 2 集动机跳跃', detail:'赵承宇缺少提前销毁账本的触发事件', suggestion:'补充赵承宇收到管理局泄密警告的动作，并将销毁账本变为被迫应对。' },
-        { id:'ISSUE-004', severity:'BLOCKER', status:'OPEN', title:'第 1 集关键因果缺失', detail:'账本水印的来源尚未在正文中建立，后续追查缺少事实基础。', suggestion:'补充林野拍下账本水印的可见动作，并说明其与管理局警告的时间关系。' },
-        { id:'ISSUE-002', severity:'MEDIUM', status:'OPEN', title:'主角信息获取过快', detail:'建议增加一次错误判断，提高悬疑感', suggestion:'让林野先误判匿名短信来源，再由账本水印纠正。' },
-        { id:'ISSUE-003', severity:'MEDIUM', status:'OPEN', title:'第 3 集结尾钩子偏弱', detail:'建议把苏雅身份线索提前到最后 5 秒', suggestion:'结尾增加顾清寒出现在苏雅门外的镜头。' }
+        { id:'ISSUE-001', sceneId:'SCENE-001', blockId:'BLOCK-001', severity:'HIGH', status:'OPEN', title:'动作动机跳跃', detail:'赵承宇缺少提前销毁账本的触发事件', suggestion:'补充赵承宇收到管理局泄密警告的动作，并将销毁账本变为被迫应对。' },
+        { id:'ISSUE-004', sceneId:'SCENE-001', blockId:'BLOCK-003', severity:'BLOCKER', status:'OPEN', title:'关键因果缺失', detail:'账本水印的来源尚未在正文中建立，后续追查缺少事实基础。', suggestion:'补充林野拍下账本水印的可见动作，并说明其与管理局警告的时间关系。' },
+        { id:'ISSUE-002', sceneId:'SCENE-001', blockId:'BLOCK-002', severity:'MEDIUM', status:'OPEN', title:'主角信息获取过快', detail:'建议增加一次错误判断，提高悬疑感', suggestion:'让林野先误判匿名短信来源，再由账本水印纠正。' },
+        { id:'ISSUE-003', sceneId:'SCENE-001', blockId:'BLOCK-004', severity:'MEDIUM', status:'OPEN', title:'结尾钩子偏弱', detail:'建议把身份线索提前到最后 5 秒', suggestion:'结尾增加顾清寒出现在苏雅门外的动作。' }
       ]
     };
     const storyboardState = {
@@ -1230,7 +1609,7 @@
 
     function scriptView() {
       return `<section class="card">${cardHead('正文编辑器', '以场景、动作、对白和旁白为最小编辑单元')}
-        <div class="editor-shell"><div class="episode-nav"><button class="active">第 01 集</button><button>第 02 集</button><button>第 03 集</button><button>第 04 集</button></div>
+        <div class="editor-shell"><div class="episode-nav"><button class="active" data-action="switch-episode" data-episode="1">第 01 集</button><button data-action="switch-episode" data-episode="2">第 02 集</button><button data-action="switch-episode" data-episode="3">第 03 集</button><button data-action="switch-episode" data-episode="4">第 04 集</button></div>
           <div class="script-editor">${scriptState.scenes.map((scene,sceneIndex) => `<div class="scene-label">场景 ${String(sceneIndex + 1).padStart(2,'0')}　${escapeHtml(scene.title)}</div>${scene.blocks.map(block => `<button class="script-block ${scriptState.selectedBlockId === block.id ? 'selected' : ''} ${scriptState.focusBlocks ? 'guidance-focus' : ''}" data-action="select-script-block" data-block-id="${block.id}" aria-pressed="${scriptState.selectedBlockId === block.id}"><span class="tag">${block.type}</span> ${block.speaker ? `<strong>${escapeHtml(block.speaker)}：</strong>` : '△ '}${escapeHtml(block.text)}</button>`).join('')}`).join('')}
           <div class="ai-tools"><button data-action="ai-continue">续写选中段落</button><button data-action="ai-conflict">增强冲突</button><button data-action="ai-condense-dialogue">精简对白</button><button data-action="ai-rewrite-tone">改写语气</button><button data-action="ai-character-check">检查角色一致性</button></div>${scriptState.selectedBlockId ? '<div class="notice" style="margin-top:10px">已选择正文块，可执行 AI 操作；采纳结果后才会写入新版本。</div>' : '<div class="notice" style="margin-top:10px">请先选择一个正文块，再使用 AI 工具。<button class="btn secondary" data-action="focus-script-blocks">高亮可选正文块</button></div>'}</div>
         </div><div class="notice">正文块类型：ACTION · DIALOGUE · VOICE_OVER · OFF_SCREEN · SUBTITLE · SFX · VFX · TRANSITION</div><div class="actions"><button class="btn primary" data-action="add-scene">新增场景</button><button class="btn secondary" data-action="add-script-block">新增正文块</button><button class="btn secondary" data-action="open-script-check">运行正文检查</button><button class="btn secondary" data-action="open-script-export">导出正文</button><button class="btn secondary" data-action="view-script-result">查看最近保存结果</button></div>
@@ -1257,7 +1636,7 @@
 
     function storyboardView() {
       return `<section class="card">${cardHead('文字分镜脚本', '由审核通过的正文生成可编辑镜头表、画面描述和提示词')}
-        <div class="segmented"><button class="active">第 01 集</button><button>第 02 集</button><button>第 03 集</button></div>
+        <div class="segmented"><button class="active" data-action="switch-episode" data-episode="1">第 01 集</button><button data-action="switch-episode" data-episode="2">第 02 集</button><button data-action="switch-episode" data-episode="3">第 03 集</button></div>
         <div class="notice">当前以${storyboardState.view === 'table' ? '表格' : '卡片'}视图查看镜头；切换仅保留在本次本地查看，不会保存产物或创建任务。</div>
         ${storyboardState.view === 'table' ? `<table class="shot-table" style="margin-top:12px"><thead><tr><th>镜号</th><th>景别 / 运镜</th><th>画面内容</th><th>对白 / 声音</th><th>时长</th><th>状态</th></tr></thead><tbody>${storyboardState.shots.map((shot,index) => `<tr class="${storyboardState.selectedShotId === shot.id ? 'selected' : ''} ${storyboardState.focusShots ? 'guidance-focus' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><td class="shot-no">#${String(index + 1).padStart(2,'0')}</td><td>${escapeHtml(shot.size)}<br>${escapeHtml(shot.movement)}</td><td>${escapeHtml(shot.visual)}</td><td>${escapeHtml(shot.audio)}</td><td>${shot.duration}s</td><td><span class="tag">${shot.status}</span></td></tr>`).join('')}</tbody></table>` : `<div class="grid-2" style="margin-top:12px">${storyboardState.shots.map((shot,index) => `<button class="mini-card selectable-card ${storyboardState.selectedShotId === shot.id ? 'selected' : ''} ${storyboardState.focusShots ? 'guidance-focus' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><h3>#${String(index + 1).padStart(2,'0')} · ${escapeHtml(shot.size)}</h3><p>${escapeHtml(shot.visual)}</p><small>${shot.duration}s · ${escapeHtml(shot.movement)}</small></button>`).join('')}</div>`}
         <div class="notice">镜头字段：shot_size · camera_angle · camera_movement · composition · generation_prompt · negative_prompt · continuity_note</div>
@@ -1285,6 +1664,17 @@
     }
     function enterWorkspace(entry) {
       screenMode = 'workspace';
+      if (appState.project.archived) {
+        activeIndex = appState.project.activeStage;
+        appState.transition.visible = false;
+        document.getElementById('home-view').classList.add('hidden');
+        document.getElementById('project-list-view').classList.add('hidden');
+        document.getElementById('workspace-view').classList.remove('hidden');
+        document.getElementById('top-title').textContent = '流程化创作台 · 归档只读';
+        render();
+        notify('项目已归档，当前仅可查看；请从项目详情确认恢复后再编辑。');
+        return;
+      }
       activeIndex = entry === 'continue' ? 6 : entry === 'upload' ? 1 : 0;
       appState.stages.forEach((stage, index) => { stage.status = index === 0 ? 'READY' : 'LOCKED'; });
       appState.transition.visible = false;
@@ -1326,9 +1716,10 @@
         <div class="config-section"><h3>四轴分类</h3><p>题材、情节、情绪与时空将持续参与选题、梗概、大纲、正文和审核。</p>
           ${axisPicker('genre','题材（单选）',1)}${axisPicker('plots','情节（最多 3 个）',3)}${axisPicker('tones','情绪 / 基调（最多 3 个）',3)}${axisPicker('setting','时空背景（单选）',1)}
         </div>`;
-      document.querySelectorAll('[data-select-key]').forEach(select => { select.value = config[select.dataset.selectKey]; select.addEventListener('change', () => { config[select.dataset.selectKey] = select.value; }); });
-      document.querySelectorAll('[data-config-key]').forEach(button => button.addEventListener('click', () => { config[button.dataset.configKey] = button.dataset.configValue; renderSettings(); }));
+      document.querySelectorAll('[data-select-key]').forEach(select => { select.value = config[select.dataset.selectKey]; select.addEventListener('change', () => { if (!guardAction('change-config', select)) { select.value = config[select.dataset.selectKey]; return; } config[select.dataset.selectKey] = select.value; }); });
+      document.querySelectorAll('[data-config-key]').forEach(button => button.addEventListener('click', () => { if (!guardAction('change-config', button)) return; config[button.dataset.configKey] = button.dataset.configValue; renderSettings(); }));
       document.querySelectorAll('[data-axis-key]').forEach(button => button.addEventListener('click', () => {
+        if (!guardAction('change-config', button)) return;
         const key = button.dataset.axisKey, value = button.dataset.axisValue, max = Number(button.dataset.axisMax);
         if (Array.isArray(config[key])) { const index = config[key].indexOf(value); if (index >= 0) config[key].splice(index,1); else if (config[key].length < max) config[key].push(value); }
         else config[key] = value;
@@ -1362,6 +1753,7 @@
       const stageContent = document.getElementById('stage-content');
       const sourceTextarea = stageContent.querySelector('[data-source-text]');
       if (sourceTextarea) sourceTextarea.addEventListener('input', () => {
+        if (!guardAction('change-source-text', sourceTextarea)) { sourceTextarea.value = sourceText; return; }
         const limited = WorkflowModel.limitHanText(sourceTextarea.value, 2000);
         sourceText = limited.text;
         if (sourceTextarea.value !== sourceText) sourceTextarea.value = sourceText;
@@ -1375,17 +1767,19 @@
       stageContent.querySelectorAll('[data-model]').forEach(control => {
         const key = control.dataset.model.replace('config.','');
         control.value = config[key];
-        control.addEventListener('change', () => { config[key] = control.value; renderContext(); });
+        control.addEventListener('change', () => { if (!guardAction('change-config', control)) { control.value = config[key]; return; } config[key] = control.value; renderContext(); });
       });
       stageContent.querySelectorAll('[data-config-key]').forEach(button => button.addEventListener('click', () => {
+        if (!guardAction('change-config', button)) return;
         config[button.dataset.configKey] = button.dataset.configValue;
         renderContent();
       }));
       stageContent.querySelectorAll('[data-inline-select-key]').forEach(select => {
         select.value = config[select.dataset.inlineSelectKey];
-        select.addEventListener('change', () => { config[select.dataset.inlineSelectKey] = select.value; renderContext(); });
+        select.addEventListener('change', () => { if (!guardAction('change-config', select)) { select.value = config[select.dataset.inlineSelectKey]; return; } config[select.dataset.inlineSelectKey] = select.value; renderContext(); });
       });
       stageContent.querySelectorAll('[data-model-scope]').forEach(select => select.addEventListener('change', () => {
+        if (!guardAction('change-model', select)) return;
         if (select.dataset.modelScope === 'project') config.projectModel = select.value;
         else {
           appState.models.stageSelections ||= {};
@@ -1395,6 +1789,7 @@
         renderContext();
       }));
       stageContent.querySelectorAll('[data-axis-key]').forEach(button => button.addEventListener('click', () => {
+        if (!guardAction('change-config', button)) return;
         const key = button.dataset.axisKey, value = button.dataset.axisValue, max = Number(button.dataset.axisMax);
         if (Array.isArray(config[key])) { const index = config[key].indexOf(value); if (index >= 0) config[key].splice(index, 1); else if (config[key].length < max) config[key].push(value); }
         else config[key] = value;
@@ -1404,15 +1799,11 @@
       stageContent.querySelectorAll('[data-go-stage]').forEach(button => button.addEventListener('click', () => { activeIndex = Number(button.dataset.goStage); render(); }));
       const inlineSettings = document.getElementById('open-settings-inline');
       if (inlineSettings) inlineSettings.onclick = openSettings;
-      document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { sourceMode = button.dataset.mode; renderContent(); }));
+      document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { if (!guardAction('change-source-mode', button)) return; sourceMode = button.dataset.mode; renderContent(); }));
       document.querySelectorAll('[data-analysis-module]').forEach(button => button.addEventListener('click', () => { analysisModule = button.dataset.analysisModule; renderContent(); }));
       document.querySelectorAll('[data-basic-tab]').forEach(button => button.addEventListener('click', () => { basicTab = button.dataset.basicTab; renderContent(); }));
       document.querySelectorAll('[data-world-tab]').forEach(button => button.addEventListener('click', () => { worldTab = button.dataset.worldTab; renderContent(); }));
       document.querySelectorAll('[data-character-id]').forEach(button => button.addEventListener('click', () => openCharacter(button.dataset.characterId)));
-      document.querySelectorAll('.episode-nav button, .segmented button').forEach(button => button.addEventListener('click', () => {
-        button.parentElement.querySelectorAll('button').forEach(item => item.classList.remove('active'));
-        button.classList.add('active');
-      }));
     }
 
     let overlayState = { type:null, payload:{} };
@@ -1447,7 +1838,7 @@
       const task = appState.tasks.find(item => item.id === generation.taskId);
       if (!task || generation.status === 'SUCCEEDED') return generation.result;
       WorkflowModel.setGenerationStatus(appState, 'SUCCEEDED');
-      generation.result = { ...generation.spec, taskId:task.id, status:'SUCCEEDED', before:generation.before, after:generation.after };
+      Object.assign(generation.result, { ...generation.spec, taskId:task.id, status:'SUCCEEDED', before:generation.before, after:generation.after, decision:generation.result.decision || 'PENDING' });
       openOverlay('generation-result');
       return generation.result;
     }
@@ -1471,11 +1862,32 @@
     function renderOverlay() {
       const versionKey = stages[activeIndex].key;
       const versions = appState.versions[versionKey];
-      const latest = versions.at(-1)?.version || `V${activeIndex + 1}`;
+      const versionArtifact = overlayState.payload.artifactId
+        ? appState.artifacts[overlayState.payload.artifactId]
+        : [...appState.artifactOrder].reverse().map(id => appState.artifacts[id]).find(artifact => artifact.stage === activeIndex);
+      const artifactVersions = versionArtifact ? WorkflowModel.listArtifactVersions(appState, versionArtifact.id) : [];
+      const latest = versionArtifact ? `V${versionArtifact.version}` : versions.at(-1)?.version || `V${activeIndex + 1}`;
       const surfaces = {
         'stage-draft-saved': () => { const artifact = overlayState.payload.artifact; return overlayFrame('stage-draft-saved','草稿已保存','当前阶段已有可版本化的 Markdown 产物',`<div class="mini-card"><h3>${escapeHtml(artifact.title)}</h3><p>${escapeHtml(artifact.path)} · V${artifact.version}</p></div>`,`<button class="btn secondary" data-action="close-overlay">稍后生成</button><button class="btn primary" data-action="open-regenerate">重新生成当前产物</button>`); },
         'generation-progress': () => { const generation = appState.generation; const spec = generation.spec || {}; const model = appState.models.items.find(item => item.id === spec.modelId) || fallbackModels[0]; return overlayFrame('generation-progress','正在生成','任务将持续记录，离开页面后可在任务中心查看',`<div class="mini-card"><h3>${escapeHtml(spec.scope || '生成内容')}</h3><p>${generation.status || 'QUEUED'} · ${generation.progress}%</p><p>模型：${escapeHtml(model.name)} · 预计积分：${spec.estimatedPoints ?? 0}</p><div class="progress-track" role="progressbar" aria-valuenow="${generation.progress}" aria-valuemin="0" aria-valuemax="100"><div class="progress-fill" style="width:${generation.progress}%"></div></div></div>`,`<button class="btn secondary" data-action="open-generation-task">在任务中心查看</button>`); },
-        'generation-result': () => { const result = overlayState.payload.result || appState.generation.result || {}; const readonly = result.readonly; const model = appState.models.items.find(item => item.id === result.modelId) || fallbackModels[0]; return overlayFrame('generation-result',readonly ? '已采纳生成结果' : '生成结果已就绪',readonly ? '已采纳结果仅供查看，不会再次写入版本或计费。' : '采纳会写入新版本；放弃不会覆盖现有产物',`<div class="grid-2"><div class="mini-card"><h3>当前版本</h3><p>${escapeHtml(result.before || result.path || '当前产物')}</p></div><div class="mini-card"><h3>建议结果</h3><p>${escapeHtml(result.after || `任务 ${result.taskId || ''} 已完成，可作为独立版本保存。`)}</p></div></div><div class="notice">模型：${escapeHtml(model.name)} · 预计积分：${result.estimatedPoints ?? 0} · 实际积分：${result.actualPoints ?? 0}</div>`,readonly ? `<button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="close-overlay">关闭</button>` : `<button class="btn secondary" data-action="discard-generation-result">放弃结果</button><button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="accept-generation-result">采纳并保存新版本</button>`); },
+        'generation-result': () => {
+          const result = overlayState.payload.result || appState.generation.result || {};
+          const readonly = result.readonly;
+          const model = appState.models.items.find(item => item.id === result.modelId) || fallbackModels[0];
+          const decision = result.decision || 'PENDING';
+          const estimateSource = result.estimateSource === 'local-fallback-3001-snapshot' ? '本地 fallback（3001 计价快照）' : result.estimateSource === 'demo-zero' ? '演示模型固定 0 积分' : (result.estimateSource || '3001 同源结算');
+          const title = decision === 'ACCEPTED' ? '已采纳生成结果' : decision === 'DISCARDED' ? '已放弃生成结果' : '生成结果已就绪';
+          const desc = decision === 'ACCEPTED'
+            ? '已采纳结果仅供查看，不会再次写入版本或计费。'
+            : decision === 'DISCARDED'
+              ? '任务已成功并完成结算；生成内容未覆盖当前产物。'
+              : '任务成功即结算；采纳才写入新版本，放弃不会覆盖现有产物。';
+          const body = `<div class="grid-2"><div class="mini-card"><h3>当前版本</h3><p>${escapeHtml(result.before || result.path || '当前产物')}</p></div><div class="mini-card"><h3>建议结果</h3><p>${escapeHtml(result.after || `任务 ${result.taskId || ''} 已完成，可作为独立版本保存。`)}</p></div></div><div class="notice">任务状态：SUCCEEDED · 结算状态：SETTLED · 结果决策：${escapeHtml(decision)}<br>模型：${escapeHtml(model.name)} · 估算来源：${escapeHtml(estimateSource)} · 预计积分：${result.estimatedPoints ?? 0} · 实际积分：${result.actualPoints ?? 0}</div>`;
+          const foot = readonly
+            ? `<button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="close-overlay">关闭</button>`
+            : `<button class="btn secondary" data-action="discard-generation-result">放弃结果</button><button class="btn secondary" data-action="open-generation-task">查看任务</button><button class="btn primary" data-action="accept-generation-result">采纳并保存新版本</button>`;
+          return overlayFrame('generation-result', title, desc, body, foot);
+        },
         'action-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('action-result','操作已保存','新 Markdown 版本已保留，可随时从任务中心回访',`<div class="mini-card"><h3>${escapeHtml(result.path || '当前产物')}</h3><p>V${escapeHtml(result.version || '-')} · ${escapeHtml(result.after || '保存成功')}</p><p>状态：${escapeHtml(result.status || 'SUCCEEDED')} · 任务 ${escapeHtml(result.taskId || '-')} · 积分 ${escapeHtml(result.actualPoints ?? 0)}</p></div>`,`<button class="btn secondary" data-action="view-action-result" data-result-id="${escapeHtml(result.id || '')}">查看保存结果</button><button class="btn primary" data-action="open-analysis-impact-review">查看关联影响</button>`); },
         'action-guidance': () => {
           const action = overlayState.payload.targetAction;
@@ -1504,8 +1916,8 @@
         'script-check': () => overlayFrame('script-check','正文检查结果','检查对白、角色一致性、场景结构与格式完整性',`<div class="surface-list">${scriptState.checks.map(item => `<div class="surface-row"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div><span class="tag">${item.level}</span></div>`).join('')}</div><div class="notice">0 个阻断问题 · ${scriptState.checks.length} 个优化建议。检查结果可随剧本版本保存。</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="run-script-check">重新检查</button>`),
         'script-export': () => { const artifact = appState.artifacts['EP-001-SCRIPT'] || saveScriptArtifact(); return overlayFrame('script-export','导出剧本正文','选择当前剧本正文的交付格式',`<div class="field-grid"><div class="field"><label>导出范围</label><select id="script-export-range"><option>第 1 集</option><option>全部已完成集</option></select></div><div class="field"><label>文件格式</label><select id="script-export-format"><option>Markdown</option><option>DOCX</option><option>JSON</option></select></div></div><div class="mini-card" style="margin-top:12px"><h3>Obsidian 文件</h3><p>${escapeHtml(artifact.path)} · V${artifact.version}</p></div><pre class="markdown-preview">${escapeHtml(WorkflowModel.renderMarkdown(appState, artifact.id))}</pre>`,`<button class="btn secondary" data-action="export-script">刷新预览</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-script-export">创建导出任务</button>`); },
         'review-filter': () => overlayFrame('review-filter','筛选审核问题','按风险等级与处理状态缩小问题范围',`<div class="field-grid"><div class="field"><label>风险等级</label><select id="review-filter-severity"><option ${reviewState.filters.severity === '全部' ? 'selected' : ''}>全部</option><option value="BLOCKING" ${reviewState.filters.severity === 'BLOCKING' ? 'selected' : ''}>高风险与阻断</option><option value="HIGH" ${reviewState.filters.severity === 'HIGH' ? 'selected' : ''}>高风险</option><option value="BLOCKER" ${reviewState.filters.severity === 'BLOCKER' ? 'selected' : ''}>阻断</option><option value="MEDIUM" ${reviewState.filters.severity === 'MEDIUM' ? 'selected' : ''}>中风险</option></select></div><div class="field"><label>处理状态</label><select id="review-filter-status"><option ${reviewState.filters.status === '全部' ? 'selected' : ''}>全部</option><option value="OPEN" ${reviewState.filters.status === 'OPEN' ? 'selected' : ''}>待处理</option><option value="RESOLVED" ${reviewState.filters.status === 'RESOLVED' ? 'selected' : ''}>已解决</option></select></div></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="apply-review-filter">应用筛选</button>`),
-        'review-editor': () => { const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0]; return overlayFrame('review-editor',`局部修订 · ${escapeHtml(issue.title)}`,'保存后生成审核记录和剧本正文新版本',`<div class="grid-2"><div class="mini-card"><h3>原问题</h3><p>${escapeHtml(issue.detail)}</p></div><div class="mini-card"><h3>修订建议</h3><p>${escapeHtml(issue.suggestion)}</p></div></div><div class="field" style="margin-top:12px"><label>修订后文本</label><textarea id="review-edit-text" style="min-height:120px">赵承宇收到管理局内部警告，神色第一次失控。他立刻命人焚毁账本，却没发现林野已提前拍下水印。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn secondary" data-action="resolve-review-issue">仅标记已解决</button><button class="btn primary" data-action="save-review-edit">保存局部修订</button>`); },
-        'review-diff': () => { const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0]; return overlayFrame('review-diff','修订前后对比','差异会写入 07-审核修订/EP-001-审核记录.md',`<div class="grid-2"><div class="mini-card"><h3>修订前</h3><p>${escapeHtml(issue.detail)}</p></div><div class="mini-card"><h3>修订后</h3><p>${escapeHtml(issue.revision || issue.suggestion)}</p></div></div>`,`<button class="btn secondary" data-action="open-version-diff">查看全版本对比</button><button class="btn primary" data-action="close-overlay">完成</button>`); },
+        'review-editor': () => { const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0]; const target = findScriptBlock(issue.blockId); return overlayFrame('review-editor',`局部修订 · ${escapeHtml(issue.title)}`,'保存后写回对应正文块，并生成审核记录和剧本正文新版本',`<div class="notice">定位：${escapeHtml(issue.sceneId || '未关联场景')} / ${escapeHtml(issue.blockId || '未关联正文块')}</div><div class="grid-2" style="margin-top:12px"><div class="mini-card"><h3>正文原文</h3><p>${escapeHtml(target?.text || issue.detail)}</p></div><div class="mini-card"><h3>修订建议</h3><p>${escapeHtml(issue.suggestion)}</p></div></div><div class="field" style="margin-top:12px"><label>修订后文本</label><textarea id="review-edit-text" style="min-height:120px">赵承宇收到管理局内部警告，神色第一次失控。他立刻命人焚毁账本，却没发现林野已提前拍下水印。</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn secondary" data-action="resolve-review-issue">仅标记已解决</button><button class="btn primary" data-action="save-review-edit">保存局部修订</button>`); },
+        'review-diff': () => { const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0]; return overlayFrame('review-diff','修订前后对比','差异直接读取审核记录，不会创建新版本',`<div class="grid-2"><div class="mini-card"><h3>修订前</h3><p>${escapeHtml(issue.detail)}</p></div><div class="mini-card"><h3>修订后</h3><p>${escapeHtml(issue.revision || issue.suggestion)}</p></div></div>`,`<button class="btn secondary" data-action="open-version-diff">查看全版本对比</button><button class="btn primary" data-action="close-overlay">完成</button>`); },
         'review-approval': () => overlayFrame('review-approval','审核通过本集','仅当高风险问题全部解决时可确认',`<div class="notice">${WorkflowModel.canApproveReview(reviewState.issues) ? '当前无未解决的高风险问题，可以通过本集审核。' : '仍存在未解决的高风险问题，请先定位修订并标记解决。'}</div>`,`<button class="btn secondary" data-action="close-overlay">返回</button><button class="btn primary" data-action="approve-episode">确认审核通过</button>`),
         'shot-editor': () => { const shot = storyboardState.shots.find(item => item.id === storyboardState.selectedShotId); return overlayFrame('shot-editor',shot ? `编辑镜头 · ${shot.id}` : '新增镜头','保存到 08-文字分镜/EP-001-文字分镜.md',`<div class="field-grid"><div class="field"><label>景别</label><select id="shot-size"><option ${shot?.size === '近景' ? 'selected' : ''}>近景</option><option ${shot?.size === '大全景' ? 'selected' : ''}>大全景</option><option ${shot?.size === '主观镜头' ? 'selected' : ''}>主观镜头</option></select></div><div class="field"><label>运镜</label><input id="shot-movement" value="${escapeHtml(shot?.movement || '缓慢推进')}"></div><div class="field"><label>时长（秒）</label><input id="shot-duration" type="number" min="1" value="${shot?.duration || 4}"></div><div class="field"><label>声音</label><input id="shot-audio" value="${escapeHtml(shot?.audio || '环境音')}"></div></div><div class="field" style="margin-top:12px"><label>画面内容</label><textarea id="shot-visual" style="min-height:110px">${escapeHtml(shot?.visual || '林野走进昏暗的出租屋，门后影子一闪而过。')}</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-shot">保存镜头</button>`); },
         'continuity-check': () => overlayFrame('continuity-check','连续性检查','角色、场景、道具与镜头轴线',`<div class="surface-list">${storyboardState.continuity.map(item => `<div class="surface-row"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div><span class="tag">通过</span></div>`).join('')}</div>`,`<button class="btn primary" data-action="close-overlay">完成</button>`),
@@ -1513,15 +1925,17 @@
         'archive-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('archive-result','项目已归档','静态演示已将本项目切换为只读状态；不会修改外部后端。',`<div class="mini-card"><h3>${escapeHtml(config.projectName)}</h3><p>状态：ARCHIVED（只读） · 任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p><p>全部产物、版本、任务与导出记录均已保留。</p></div>`,`<button class="btn secondary" data-action="view-archive-result" data-result-id="${escapeHtml(result.id || '')}">查看项目详情</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
         'export-result': () => { const result = overlayState.payload.result || {}; const fileCount = Object.keys(WorkflowModel.buildVaultFiles(appState)).length; return overlayFrame('export-result','创作包导出已完成','静态演示已保存导出记录，不会创建外部文件。',`<div class="mini-card"><h3>${escapeHtml(result.packagePath || result.path || '创作包')}</h3><p>格式：${escapeHtml(result.exportFormat || '-')} · 范围：${escapeHtml(result.exportRange || '-')}</p><p>Vault 文件：${fileCount} 个 · 任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p></div>`,`<button class="btn secondary" data-action="view-export-result" data-result-id="${escapeHtml(result.id || '')}">查看导出结果</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
         'canvas-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('canvas-result','画布项目交接已创建','静态演示已生成交接记录，不会真实创建外部画布项目。',`<div class="mini-card"><h3>演示画布项目 ${escapeHtml(result.canvasProjectId || '-')}</h3><p>已交接 ${result.shotCount ?? storyboardState.shots.length} 个镜头 · ${result.assetCount ?? 3} 类资产</p><p>任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p></div>`,`<button class="btn secondary" data-action="view-canvas-result" data-result-id="${escapeHtml(result.id || '')}">查看交接结果</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
-        'project-detail': () => overlayFrame('project-detail-dialog','项目详情','查看创作状态、版本与项目操作',`<div class="grid-2"><div class="mini-card"><h3>创作进度</h3><p>当前阶段：${stages[appState.project.activeStage].name}<br>项目状态：${appState.project.status}<br>完成度：${WorkflowModel.computeProgress(appState)}%</p></div><div class="mini-card"><h3>最近活动</h3><p>审核修订 V7 已保存<br>文字分镜等待开放<br>最近更新：刚刚</p></div></div><div class="surface-list" style="margin-top:12px"><div class="surface-row"><div><strong>版本与任务</strong><p>查看全部版本、生成任务和失败记录。</p></div><div><button class="btn secondary" data-action="open-version-history">历史版本</button> <button class="btn secondary" data-action="open-task-center">任务中心</button></div></div></div>`,`<button class="btn warn" data-action="archive-project">归档项目</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="resume-project">继续创作</button>`),
-        'task-center': () => overlayFrame('task-center','任务中心','查看阶段流转、生成、失败和重试记录',`<div class="surface-list">${(appState.tasks.length ? appState.tasks : [{id:'task-demo-1',type:'ANALYSIS',scope:'小说分析 · 全部模块',status:'SUCCEEDED'},{id:'task-demo-2',type:'STORYBOARD',scope:'第 1 集 · 场景 1',status:'FAILED'}]).map(task => `<div class="surface-row"><div><strong>${task.scope || task.type}</strong><p>任务 ${task.id} · ${task.status} · ${task.status === 'FAILED' ? '服务暂时不可用，结果未覆盖' : '状态已同步'}</p></div><div>${task.status === 'FAILED' ? '<button class="btn primary" data-action="retry-task">重试</button>' : '<span class="tag">'+task.status+'</span>'}</div></div>`).join('')}</div><div class="surface-list" style="margin-top:12px"><h3>可回访生成结果</h3>${appState.actionResults.length ? appState.actionResults.map(result => `<div class="surface-row"><div><strong>${escapeHtml(result.path || result.action)}</strong><p>V${result.version || '-'} · 任务 ${escapeHtml(result.taskId || '-')} · 积分 ${result.actualPoints ?? 0}</p></div>${result.resultType === 'MANUAL_ACTION' ? `<button class="btn secondary" data-action="open-action-result" data-result-id="${result.id}">查看结果</button>` : `<button class="btn secondary" data-action="open-generation-result" data-result-id="${result.id}">查看结果</button>`}</div>`).join('') : '<div class="empty">采纳生成结果后会保留在这里。</div>'}</div>`),
-        'version-history': () => overlayFrame('version-history',`${stages[activeIndex].name} · 历史版本`,'AI 生成、人工编辑和阶段确认均独立留痕',`<div class="surface-list">${[latest,`V${Math.max(1,activeIndex)}`,'V1'].map((version,index) => `<div class="surface-row"><div><strong>${version} ${index === 0 ? '· 当前版本' : ''}</strong><p>${index === 0 ? '阶段确认' : index === 1 ? '人工编辑' : 'AI 生成'} · ${index === 0 ? '刚刚' : index === 1 ? '昨天' : '3 天前'} · 输入版本已记录</p></div><button class="btn secondary" data-action="open-version-diff">对比</button></div>`).join('')}</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button><button class="btn primary" data-action="restore-version">恢复为新版本</button>`),
-        'version-diff': () => overlayFrame('version-diff','版本差异','当前版本与选中历史版本逐项对照',`<div class="grid-2"><div class="mini-card"><h3>历史版本 V${Math.max(1,activeIndex)}</h3><p>第 3 集结尾：苏雅收到匿名短信，画面结束。</p></div><div class="mini-card"><h3>当前版本 ${latest}</h3><p>第 3 集结尾：苏雅收到匿名短信，抬头发现顾清寒站在门外。</p></div></div><div class="notice">新增结尾人物露出，强化下一集悬念；受影响范围：第 3 集正文与分镜。</div>`),
+        'project-detail': () => overlayFrame('project-detail-dialog','项目详情',appState.project.archived ? '归档项目仅供查看；恢复需要单独确认并留痕。' : '查看创作状态、版本与项目操作',`<div class="grid-2"><div class="mini-card"><h3>创作进度</h3><p>当前阶段：${stages[appState.project.activeStage].name}<br>项目状态：${appState.project.status}<br>完成度：${WorkflowModel.computeProgress(appState)}%</p></div><div class="mini-card"><h3>最近活动</h3><p>审核修订与文字分镜版本均保留<br>任务和积分记录可回访<br>当前视图：${appState.project.archived ? '只读' : '可编辑'}</p></div></div><div class="surface-list" style="margin-top:12px"><div class="surface-row"><div><strong>版本与任务</strong><p>查看全部版本、生成任务和失败记录。</p></div><div><button class="btn secondary" data-action="open-version-history">历史版本</button> <button class="btn secondary" data-action="open-task-center">任务中心</button></div></div></div>`,appState.project.archived ? `<button class="btn secondary" data-action="close-overlay">继续只读查看</button><button class="btn primary" data-action="open-restore-project">恢复项目</button>` : `<button class="btn warn" data-action="archive-project">归档项目</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="resume-project">继续创作</button>`),
+        'task-center': () => overlayFrame('task-center','任务中心','查看阶段流转、生成、失败和重试记录',`<div class="surface-list">${appState.tasks.length ? appState.tasks.map(task => `<div class="surface-row"><div><strong>${task.scope || task.type}</strong><p>任务 ${task.id} · ${task.status} · ${task.status === 'FAILED' ? '服务暂时不可用，结果未覆盖' : '状态已同步'}</p></div><div>${task.status === 'FAILED' ? `<button class="btn primary" data-action="retry-task" data-task-id="${task.id}">重试</button>` : '<span class="tag">'+task.status+'</span>'}</div></div>`).join('') : '<div class="empty">暂无真实任务记录；静态界面不会伪造失败任务。</div>'}</div><div class="surface-list" style="margin-top:12px"><h3>可回访任务结果</h3>${appState.actionResults.length ? appState.actionResults.map(result => `<div class="surface-row"><div><strong>${escapeHtml(result.path || result.action)}</strong><p>V${result.version || '-'} · 任务 ${escapeHtml(result.taskId || '-')} · 积分 ${result.actualPoints ?? 0} · ${escapeHtml(result.decision || result.status)}</p></div>${result.resultType === 'MANUAL_ACTION' ? `<button class="btn secondary" data-action="open-action-result" data-result-id="${result.id}">查看结果</button>` : `<button class="btn secondary" data-action="open-generation-result" data-result-id="${result.id}">查看结果</button>`}</div>`).join('') : '<div class="empty">任务成功后会保留结算与结果；采纳或放弃不删除记录。</div>'}</div>`),
+        'version-history': () => overlayFrame('version-history',`${versionArtifact?.title || stages[activeIndex].name} · 历史版本`,'以下条目直接读取当前产物及 artifact.history 快照',`<div class="surface-list">${artifactVersions.length ? artifactVersions.map(snapshot => `<div class="surface-row"><div><strong>V${snapshot.version} ${snapshot.current ? '· 当前版本' : ''}</strong><p>${escapeHtml(snapshot.updatedBy || 'unknown')} · ${escapeHtml(snapshot.updatedAt || '-')} · ${escapeHtml(JSON.stringify(snapshot.data))}</p></div><div>${snapshot.current ? '<span class="tag">CURRENT</span>' : `<button class="btn secondary" data-action="open-version-diff" data-artifact-id="${versionArtifact.id}" data-before-version="${snapshot.version}" data-after-version="${versionArtifact.version}">对比</button> <button class="btn primary" data-action="restore-version" data-artifact-id="${versionArtifact.id}" data-version="${snapshot.version}">恢复为新版本</button>`}</div></div>`).join('') : '<div class="empty">当前阶段尚无已保存产物或历史版本。</div>'}</div>`,`<button class="btn secondary" data-action="close-overlay">关闭</button>`),
+        'version-diff': () => { const comparison = overlayState.payload.comparison || (versionArtifact && artifactVersions.length > 1 ? WorkflowModel.compareArtifactVersions(appState, versionArtifact.id, artifactVersions[1].version, versionArtifact.version) : { before:null, after:null }); return overlayFrame('version-diff','版本差异','对比内容直接来自 artifact.history 与当前 data',comparison.before && comparison.after ? `<div class="grid-2"><div class="mini-card"><h3>历史版本 V${comparison.before.version}</h3><pre class="markdown-preview">${escapeHtml(JSON.stringify(comparison.before.data,null,2))}</pre></div><div class="mini-card"><h3>当前版本 V${comparison.after.version}</h3><pre class="markdown-preview">${escapeHtml(JSON.stringify(comparison.after.data,null,2))}</pre></div></div>` : '<div class="empty">至少需要一个历史快照才能对比。</div>'); },
         'regenerate': () => { const selectedModel = appState.models.items.find(model => model.id === (appState.models.stageSelections?.[activeIndex] || config.projectModel)) || fallbackModels[0]; const estimated = WorkflowModel.estimatePoints(selectedModel,{inputTokens:6000,outputTokens:2000}); return overlayFrame('regenerate-dialog','重新生成配置','保留当前版本并创建新版本',`${modelPickerMarkup('stage')}<div class="field-grid" style="margin-top:12px"><div class="field"><label>生成范围</label><select id="regenerate-scope"><option>当前阶段全部</option><option>当前集</option><option>当前场景</option><option>当前模块</option></select></div><div class="field"><label>使用上游版本</label><select><option>最新已确认版本</option><option>保持原输入版本</option></select></div></div><div class="grid-2" style="margin-top:12px"><div class="mini-card"><h3>预计用量</h3><p>输入约 6,000 Token · 输出上限 2,000 Token</p></div><div class="mini-card"><h3>预计积分</h3><p>${estimated} 积分${selectedModel.demo ? '（演示任务）' : ' · 提交后预扣'}</p></div></div><div class="field" style="margin-top:12px"><label>本次临时指令</label><textarea id="regenerate-instruction" style="min-height:90px" placeholder="仅对本次生成生效，不超过 1000 字"></textarea></div><div class="notice">真实模型遵循 3001 原生计费：预计 → 预扣 → 实际结算 → 返还差额；1 quota = 1 积分。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-regenerate">创建生成任务</button>`); },
         'stale-impact': () => overlayFrame('stale-impact-dialog','下游依赖影响','上游变更不会删除已有内容',`<div class="surface-list">${stages.slice(activeIndex + 1).map((stage,index) => `<div class="surface-row"><div><strong>${activeIndex + index + 2}. ${stage.name}</strong><p>将标记为需更新；现有版本继续保留，可查看变更后决定。</p></div><span class="tag">STALE</span></div>`).join('') || '<div class="empty">当前为最后阶段，没有下游影响。</div>'}</div>`,`<button class="btn secondary" data-action="close-overlay">继续使用旧版本</button><button class="btn primary" data-action="apply-stale-impact">保存并标记下游</button>`),
         'export': () => overlayFrame('export-dialog','导出创作包','选择范围、版本和交付格式',`<div class="field-grid"><div class="field"><label>导出范围</label><select id="project-export-range"><option>当前集</option><option>已完成集数</option><option>全部有效产物</option></select></div><div class="field"><label>导出版本</label><select id="project-export-version"><option>当前已确认版本</option><option>最新草稿</option></select></div><div class="field"><label>文件格式</label><select id="project-export-format"><option>Obsidian Vault</option><option>JSON</option><option>DOCX / PDF</option></select></div></div><div class="mini-card"><h3>文件名预览</h3><p>重生后我在三集内揭开命运系统_创作包_${latest}_20260806.zip</p></div>`,`<button class="btn secondary" data-action="open-vault-preview">预览 Markdown 文档库</button><button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-project-export">开始导出</button>`),
         'vault-preview': () => { const files = WorkflowModel.buildVaultFiles(appState); return overlayFrame('vault-preview','Obsidian 文档库预览',`${Object.keys(files).length} 个 Markdown 文件，关联更新和积分流水均已纳入`,`<div class="surface-list">${Object.entries(files).map(([path,markdown]) => `<details class="surface-row"><summary><strong>${escapeHtml(path)}</strong></summary><pre class="markdown-preview">${escapeHtml(markdown)}</pre></details>`).join('')}</div>`,`<button class="btn primary" data-action="close-overlay">完成</button>`); },
-        'archive': () => overlayFrame('archive-dialog','确认归档项目','归档后项目只读，可从全部项目中恢复',`<div class="notice">将保留全部产物、版本、任务与导出记录。归档不会删除任何内容。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn warn" data-action="confirm-archive">确认归档</button>`)
+        'archive': () => overlayFrame('archive-dialog','确认归档项目','归档后项目只读，可从全部项目中恢复',`<div class="notice">将保留全部产物、版本、任务与导出记录。归档不会删除任何内容。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn warn" data-action="confirm-archive">确认归档</button>`),
+        'restore-project': () => overlayFrame('restore-project-dialog','确认恢复项目','恢复会解除本地只读状态，并创建可回访的 0 积分操作记录。',`<div class="notice">产物、历史版本、任务与已结算积分均保持不变；静态演示不会修改外部后端。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-restore-project">确认恢复</button>`),
+        'file-picker-guidance': () => overlayFrame('file-picker-guidance','选择小说文件','静态交付无法唤起系统文件选择器；可执行一次明确标记的本地模拟。',`<div class="mini-card"><h3>模拟文件</h3><p>重生后我靠嘴炮把全世界整破防了.docx · 2 KB · 不会读取或写入外部文件。</p></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="simulate-file-selection">模拟选择并解析</button>`)
       };
       document.getElementById('overlay-content').innerHTML = (surfaces[overlayState.type] || surfaces['task-center'])();
     }
@@ -1579,9 +1993,16 @@
         <div class="transition-actions">${actions}</div></section>`;
     }
 
-    function validateCurrentStage() {
-      if (activeIndex === 0 && (!config.creationType || !config.platform || !config.episodes)) return ['请完成创作类型、平台和集数设置'];
-      return [];
+    function currentStageConfirmationContext() {
+      return {
+        configComplete:Boolean(config.creationType && config.platform && config.episodes),
+        sourceText,
+        sourceConfirmed:appState.source.state === 'CONFIRMED',
+        hasStageArtifact:Object.values(appState.artifacts).some(artifact => artifact.stage === activeIndex),
+        selectedHook:adaptationState.selectedHook,
+        adaptationRuleCount:adaptationState.rules.length,
+        issues:reviewState.issues
+      };
     }
 
     let transitionTimers = [];
@@ -1600,11 +2021,12 @@
     }
     function clearTransitionTimers() { transitionTimers.forEach(timer => clearTimeout(timer)); transitionTimers = []; clearTransitionProgress(); }
     function startTransition(forceFailure = false) {
-      const errors = validateCurrentStage();
-      if (errors.length) return notify(errors.join('；'));
-      if (activeIndex === 1) appState.source.state = 'CONFIRMED';
+      const confirmation = WorkflowModel.beginStageConfirmation(appState, activeIndex, currentStageConfirmationContext());
+      if (!confirmation.allowed) {
+        openOverlay('action-guidance', confirmation);
+        return confirmation;
+      }
       appState.stages[activeIndex].status = 'NEEDS_CONFIRMATION';
-      WorkflowModel.startStageTransition(appState, activeIndex);
       clearTransitionTimers();
       render();
       startTransitionProgress();
@@ -1665,7 +2087,9 @@
         selectedHook:adaptationState.selectedHook,
         projectArchived:appState.project.archived,
         hasStoryboardHistory:storyboardState.history.length > 0,
-        hasStageArtifact:Object.values(appState.artifacts).some(artifact => artifact.stage === activeIndex)
+        hasStageArtifact:Object.values(appState.artifacts).some(artifact => artifact.stage === activeIndex),
+        requestedEpisode:Number(element?.dataset?.episode || 1),
+        episodeAvailable:Number(element?.dataset?.episode || 1) === 1
       }, action);
       if (precondition.allowed) return true;
       openOverlay('action-guidance', precondition);
@@ -1690,8 +2114,15 @@
         'close-project-list': showHome,
         'open-project-detail': () => openOverlay('project-detail'),
         'open-task-center': () => openOverlay('task-center'),
-        'open-version-history': () => openOverlay('version-history'),
-        'open-version-diff': () => openOverlay('version-diff'),
+        'open-version-history': () => openOverlay('version-history', { artifactId:element?.dataset?.artifactId }),
+        'open-version-diff': () => {
+          const artifactId = element?.dataset?.artifactId || [...appState.artifactOrder].reverse().find(id => appState.artifacts[id].stage === activeIndex);
+          const artifact = appState.artifacts[artifactId];
+          const versions = artifact ? WorkflowModel.listArtifactVersions(appState, artifactId) : [];
+          const beforeVersion = Number(element?.dataset?.beforeVersion || versions[1]?.version);
+          const afterVersion = Number(element?.dataset?.afterVersion || artifact?.version);
+          openOverlay('version-diff', { artifactId, comparison:artifact ? WorkflowModel.compareArtifactVersions(appState, artifactId, beforeVersion, afterVersion) : null });
+        },
         'open-regenerate': () => openOverlay('regenerate'),
         'open-generation-task': () => openOverlay('task-center'),
         'open-generation-result': () => { const result = appState.actionResults.find(item => item.id === element.dataset.resultId); if (result) openOverlay('generation-result', { result:{ ...result, readonly:true } }); },
@@ -1700,7 +2131,7 @@
         'view-structure-result': () => { const result = latestArtifactResult('EP-001-STRUCTURE'); if (result) openOverlay('action-result', { result }); else notify('尚无结构化剧本保存记录，请先保存单集结构或节拍。'); },
         'view-script-result': () => { const result = latestArtifactResult('EP-001-SCRIPT'); if (result) openOverlay('action-result', { result }); else notify('尚无剧本正文保存记录，请先保存场景、正文块或运行检查。'); },
         'open-analysis-impact-review': openAnalysisImpactReview,
-        'discard-generation-result': () => { appState.generation.visible = false; closeOverlay(); render(); notify('已放弃本次生成结果，任务记录仍可在任务中心查看。'); },
+        'discard-generation-result': () => { const result = WorkflowModel.discardGenerationResult(appState, appState.generation.taskId); closeOverlay(); render(); notify(`已放弃本次生成结果；任务 ${result.taskId} 与 ${result.actualPoints ?? 0} 积分结算仍保留。`); },
         'accept-generation-result': acceptGenerationResult,
         'open-stale-impact': () => openOverlay('stale-impact'),
         'toggle-workspace-more': toggleWorkspaceMoreMenu,
@@ -1709,8 +2140,30 @@
         'close-overlay': closeOverlay,
         'archive-project': () => openOverlay('archive'),
         'resume-project': () => { closeOverlay(); enterWorkspace('continue'); },
-        'restore-version': () => { closeOverlay(); notify('历史版本已恢复为新版本，原记录保持不变。'); },
-        'retry-task': () => { closeOverlay(); notify('已创建新的重试任务。'); },
+        'open-restore-project': () => openOverlay('restore-project'),
+        'confirm-restore-project': () => {
+          const result = WorkflowModel.restoreArchivedProject(appState);
+          if (result.allowed === false) return openOverlay('action-guidance', { title:'项目无需恢复', message:'当前项目并未归档。', targetAction:'close-overlay' });
+          openOverlay('action-result', { result });
+          render();
+        },
+        'restore-version': () => {
+          const result = WorkflowModel.restoreArtifactVersion(appState, element.dataset.artifactId, Number(element.dataset.version));
+          if (result.allowed === false) return openOverlay('action-guidance', { title:'无法恢复版本', message:'未找到对应的产物历史快照。', targetAction:'close-overlay' });
+          openOverlay('action-result', { result }); render();
+        },
+        'retry-task': () => {
+          const result = WorkflowModel.retryTask(appState, element.dataset.taskId);
+          if (result.allowed === false) return openOverlay('action-guidance', { title:'无法重试任务', message:'只可重试仍保留的失败任务。', targetAction:'open-task-center' });
+          openOverlay('generation-result', { result:{ ...result, readonly:true } }); render();
+        },
+        'open-file-picker': () => openOverlay('file-picker-guidance'),
+        'select-demo-file': () => openOverlay('file-picker-guidance'),
+        'simulate-file-selection': () => {
+          const result = WorkflowModel.simulateFileSelection(appState, { name:'重生后我靠嘴炮把全世界整破防了.docx', size:2048, type:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          openOverlay('action-result', { result }); render();
+        },
+        'switch-episode': () => notify('当前显示第 01 集；该集正文与分镜数据已加载。'),
         'focus-script-blocks': () => { closeOverlay(); activeIndex = 5; appState.project.activeStage = activeIndex; scriptState.focusBlocks = true; render(); document.querySelector('.script-block')?.scrollIntoView({ behavior:'smooth', block:'center' }); setTimeout(() => { scriptState.focusBlocks = false; if (activeIndex === 5) render(); }, 1800); notify('请选择高亮的正文块后重试。'); },
         'focus-storyboard-shots': () => {
           closeOverlay(); activeIndex = 7; appState.project.activeStage = activeIndex; storyboardState.focusShots = true; render();
@@ -1765,6 +2218,7 @@
           appState.project.archived = true;
           appState.project.status = 'ARCHIVED';
           const result = WorkflowModel.completeManualAction(appState, { action:'archive-project', stage:activeIndex, scope:'项目 · 归档', path:'00-项目主页.md', after:'项目已归档并切换为只读状态。', readonly:true });
+          render();
           openOverlay('archive-result', { result });
         },
         'previous-stage': () => { if (activeIndex > 0) { activeIndex -= 1; appState.project.activeStage = activeIndex; render(); } },
@@ -1772,8 +2226,7 @@
         'select-project-model': () => { config.projectModel = appState.models.selectedId || config.projectModel; renderContext(); notify('已更新项目默认模型。'); },
         'preview-source-markdown': () => {
           if (!sourceText.trim()) return notify('请先粘贴小说文本。');
-          const artifact = saveSourceArtifact();
-          openOverlay('markdown-preview', { title:'小说原文 Markdown', path:artifact.path, markdown:WorkflowModel.renderMarkdown(appState, artifact.id) });
+          openOverlay('markdown-preview', { title:'小说原文 Markdown · 仅预览', path:'02-小说原文/00-原文索引.md', markdown:WorkflowModel.renderSourcePreview(appState, { sourceText, chapterRange:'第 1—50 章' }) });
         },
         'edit-summary': () => openOverlay('summary-editor'),
         'add-event': () => openOverlay('event-editor'),
@@ -1825,8 +2278,11 @@
         'save-adaptation-rule': () => {
           const text = document.getElementById('adaptation-rule-text').value.trim();
           if (!text) return notify('改编规则内容不能为空。');
-          adaptationState.rules.push({ id:`RULE-${String(adaptationState.rules.length + 1).padStart(3,'0')}`, type:document.getElementById('adaptation-rule-type').value, priority:document.getElementById('adaptation-rule-priority').value, text });
-          closeOverlay(); render(); notify('改编规则已新增并进入待确认状态。');
+          const rule = { id:`RULE-${String(adaptationState.rules.length + 1).padStart(3,'0')}`, type:document.getElementById('adaptation-rule-type').value, priority:document.getElementById('adaptation-rule-priority').value, text };
+          adaptationState.rules.push(rule);
+          const hook = adaptationState.hooks.find(item => item.id === adaptationState.selectedHook) || null;
+          const result = WorkflowModel.saveAdaptationRule(appState, { rule, rules:adaptationState.rules, data:{ 高压开场:hook, 创作策略:'前三集完成死亡钩子、能力演示和拍卖会冲突；机制视觉化，胜利依赖谋略。' } });
+          render(); openOverlay('action-result', { result });
         },
         'save-adaptation': () => {
           if (!adaptationState.selectedHook) return notify('请先选择一个高压开场。');
@@ -1947,11 +2403,9 @@
           const issue = reviewState.issues.find(item => item.id === reviewState.selectedIssueId) || reviewState.issues[0];
           const revision = document.getElementById('review-edit-text').value.trim();
           if (!revision) return notify('修订内容不能为空。');
-          issue.revision = revision;
-          issue.status = 'RESOLVED';
-          const scriptArtifact = saveScriptArtifact();
-          const reviewArtifact = saveReviewArtifact();
-          const result = recordArtifactActionResult('save-review-edit', reviewArtifact, { open:false, after:`局部修订已保存：剧本 V${scriptArtifact.version}，审核记录 V${reviewArtifact.version}。` });
+          const outcome = WorkflowModel.applyReviewRevision(appState, { issueId:issue.id, issues:reviewState.issues, scenes:scriptState.scenes, revision });
+          if (!outcome.allowed) return openOverlay('action-guidance', outcome);
+          const result = recordArtifactActionResult('save-review-edit', outcome.reviewArtifact, { open:false, after:`${outcome.sceneId} / ${outcome.blockId} 已从“${outcome.before}”修订为“${outcome.after}”；剧本 V${outcome.scriptArtifact.version}，审核记录 V${outcome.reviewArtifact.version}。` });
           openOverlay('action-result', { result });
         },
         'resolve-review-issue': () => {
@@ -1961,7 +2415,7 @@
           const result = recordArtifactActionResult('resolve-review-issue', artifact, { open:false, after:`${issue.id} 已标记解决，审核记录更新为 V${artifact.version}。` });
           openOverlay('action-result', { result });
         },
-        'open-review-diff': () => { const artifact = saveReviewArtifact(); recordArtifactActionResult('open-review-diff', artifact, { open:false, after:`审核修订前后对比已准备，审核记录为 V${artifact.version}。` }); openOverlay('review-diff'); },
+        'open-review-diff': () => openOverlay('review-diff'),
         'approve-review': () => openOverlay('review-approval'),
         'approve-episode': () => {
           if (!WorkflowModel.canApproveReview(reviewState.issues)) return guardAction('approve-review', element);
@@ -2043,7 +2497,11 @@
         'confirm-stage-transition': () => startTransition(false),
         'cancel-stage-transition': cancelTransition,
         'retry-stage-transition': retryTransition,
-        'lock-storyboard': () => { appState.stages[7].status = 'COMPLETED'; render(); notify('文字分镜已锁定，创作流程完成。'); },
+        'lock-storyboard': () => {
+          const confirmation = WorkflowModel.beginStageConfirmation(appState, 7, currentStageConfirmationContext());
+          if (!confirmation.allowed) return openOverlay('action-guidance', confirmation);
+          appState.stages[7].status = 'COMPLETED'; render(); notify('文字分镜已锁定，创作流程完成。');
+        },
         'open-export': () => openOverlay('export'),
         'open-vault-preview': () => openOverlay('vault-preview'),
         'handoff-canvas': () => {
@@ -2066,6 +2524,7 @@
     document.addEventListener('change', event => {
       const select = event.target.closest('[data-model-scope]');
       if (!select) return;
+      if (!guardAction('change-model', select)) return;
       if (select.dataset.modelScope === 'project') config.projectModel = select.value;
       else {
         appState.models.stageSelections ||= {};
@@ -2090,14 +2549,24 @@
       }
       transition.classList.add('hidden');
       content.classList.remove('hidden');
-      content.innerHTML = views[activeIndex]() + renderContextualStageActions() + renderStageFooter();
+      const readonlyNotice = appState.project.archived
+        ? '<div class="notice archived-readonly-notice" role="status"><strong>归档只读模式</strong> · 查看、预览、筛选和版本对比仍可用；保存、生成、结算决策、恢复版本、导出及阶段确认会说明恢复路径。</div>'
+        : '';
+      content.innerHTML = readonlyNotice + views[activeIndex]() + renderContextualStageActions() + renderStageFooter();
       bindInteractions();
     }
     function bindHome() {
       document.querySelectorAll('[data-entry]').forEach(button => button.onclick = () => enterWorkspace(button.dataset.entry));
       document.getElementById('home-nav').onclick = showHome;
     }
-    function render() { renderNav(); renderContent(); renderContext(); document.getElementById('workspace-view').classList.toggle('analysis-focus', activeIndex === 2 && !appState.transition.visible); document.getElementById('stage-version-action').textContent = `V${activeIndex + 1} · 历史版本`; }
+    function render() {
+      renderNav(); renderContent(); renderContext();
+      const workspace = document.getElementById('workspace-view');
+      workspace.classList.toggle('analysis-focus', activeIndex === 2 && !appState.transition.visible);
+      workspace.setAttribute('aria-readonly', String(appState.project.archived));
+      if (screenMode === 'workspace') document.getElementById('top-title').textContent = appState.project.archived ? '流程化创作台 · 归档只读' : '流程化创作台';
+      document.getElementById('stage-version-action').textContent = `V${activeIndex + 1} · 历史版本`;
+    }
     document.getElementById('close-settings').onclick = closeSettings;
     document.getElementById('cancel-settings').onclick = closeSettings;
     document.getElementById('save-settings').onclick = () => { closeSettings(); render(); };
@@ -2109,6 +2578,17 @@
     render();
     showHome();
     loadModels();
+    globalThis.WorkflowPrototypeHarness = Object.freeze({
+      model:WorkflowModel,
+      state:appState,
+      ui:{ config, adaptationState, structureState, scriptState, reviewState, storyboardState },
+      setActiveStage(index) { activeIndex = Number(index); appState.project.activeStage = activeIndex; render(); },
+      getActiveStage() { return activeIndex; },
+      getOverlayState() { return overlayState; },
+      seedArtifact(spec) { return WorkflowModel.createArtifact(appState, spec); },
+      setSource(text, status = appState.source.state) { sourceText = String(text); appState.source.state = status; },
+      finishGenerationFlow
+    });
   </script>
 </body>
 </html>
