@@ -2,6 +2,7 @@ package com.aicp.module.storyboard.dto;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 public final class StoryboardViews {
 
@@ -114,7 +115,12 @@ public final class StoryboardViews {
             String visualDescriptionSummary,
             String dialogueText,
             String status,
-            Integer sortOrder) {}
+            Integer sortOrder,
+            Long sceneAssetId,
+            Long sceneAssetVersionId,
+            String sceneVariantId,
+            Integer sceneVariantVersion,
+            Map<String, Object> sceneAssetSnapshot) {}
 
     public record ShotDetail(
             Long id,
@@ -145,7 +151,23 @@ public final class StoryboardViews {
             String subtitleText,
             String failureStrategy,
             String status,
-            Integer sortOrder) {}
+            Integer sortOrder,
+            Long sceneAssetId,
+            Long sceneAssetVersionId,
+            String sceneVariantId,
+            Integer sceneVariantVersion,
+            Map<String, Object> sceneAssetSnapshot) {}
+
+    public record ContinuityCheckView(
+            boolean valid,
+            List<ContinuityIssueView> issues) {}
+
+    public record ContinuityIssueView(
+            String code,
+            Long shotId,
+            String shotCode,
+            String message,
+            String repairAction) {}
 
     public record EmotionSegmentView(
             Long id,

@@ -3,6 +3,7 @@ package com.aicp.module.storyboard.service;
 import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
+import com.aicp.module.contentproject.service.ProjectSceneAssetService;
 import com.aicp.module.storyboard.domain.StoryboardEnums.ShotStatus;
 import com.aicp.module.storyboard.domain.StoryboardStateMachine;
 import com.aicp.module.storyboard.dto.StoryboardRequests.*;
@@ -33,6 +34,7 @@ public class StoryboardEditingService {
     private final StoryboardAuditLogMapper auditLogMapper;
     private final StoryboardAccessService accessService;
     private final StoryboardVersionService versionService;
+    private final ProjectSceneAssetService sceneAssetService;
 
     private static final ObjectMapper objectMapper = new ObjectMapper();
     private static final int SUMMARY_MAX_LENGTH = 200;
@@ -182,7 +184,8 @@ public class StoryboardEditingService {
                 s.getId(), s.getUuid(), s.getVersionId(), s.getSceneId(),
                 s.getShotKey(), s.getShotCode(), s.getDurationMs(), s.getShotSize(),
                 summarize(s.getVisualDescription()), s.getDialogueText(),
-                s.getStatus(), s.getSortOrder())).toList();
+                s.getStatus(), s.getSortOrder(), s.getSceneAssetId(), s.getSceneAssetVersionId(),
+                s.getSceneVariantId(), s.getSceneVariantVersion(), parseJsonMap(s.getSceneAssetSnapshot()))).toList();
     }
 
     public ShotDetail getShotDetail(Long projectId, Long versionId, Long shotId, Long userId) {
@@ -323,6 +326,11 @@ public class StoryboardEditingService {
         copy.setReferenceText(original.getReferenceText());
         copy.setImagePrompt(original.getImagePrompt());
         copy.setVideoMotionPrompt(original.getVideoMotionPrompt());
+        copy.setSceneAssetId(original.getSceneAssetId());
+        copy.setSceneAssetVersionId(original.getSceneAssetVersionId());
+        copy.setSceneVariantId(original.getSceneVariantId());
+        copy.setSceneVariantVersion(original.getSceneVariantVersion());
+        copy.setSceneAssetSnapshot(original.getSceneAssetSnapshot());
         copy.setStatus(ShotStatus.DRAFT.value());
         copy.setSortOrder(original.getSortOrder() + 1);
         shotMapper.insert(copy);
@@ -360,6 +368,11 @@ public class StoryboardEditingService {
         second.setShotKey(UUID.randomUUID().toString());
         second.setDurationMs(secondDuration);
         second.setShotSize(original.getShotSize());
+        second.setSceneAssetId(original.getSceneAssetId());
+        second.setSceneAssetVersionId(original.getSceneAssetVersionId());
+        second.setSceneVariantId(original.getSceneVariantId());
+        second.setSceneVariantVersion(original.getSceneVariantVersion());
+        second.setSceneAssetSnapshot(original.getSceneAssetSnapshot());
         second.setStatus(ShotStatus.DRAFT.value());
         second.setSortOrder(original.getSortOrder() + 1);
         shotMapper.insert(second);
@@ -439,6 +452,38 @@ public class StoryboardEditingService {
         writeAudit(versionId, userId, "reorder_shots", "version", versionId, null);
     }
 
+    @Transactional
+    public ShotDetail bindSceneAsset(Long projectId, Long storyboardId, Long versionId, Long shotId,
+                                     Long userId, BindSceneAssetRequest request) {
+        StoryboardVersion version = requireVersionInStoryboard(
+                projectId, storyboardId, versionId, userId, Action.EDIT_CONTENT);
+        requireEditable(version);
+        StoryboardShot shot = accessService.requireShot(projectId, versionId, shotId, userId, Action.EDIT_CONTENT);
+        ProjectSceneAssetService.ResolvedSceneBinding binding = sceneAssetService.resolveStoryboardSnapshot(
+                userId, projectId, request.sceneAssetId(), request.sceneAssetVersionId(),
+                request.sceneVariantId(), request.sceneVariantVersion(), request.sceneOverride());
+        shot.setSceneAssetId(binding.assetId());
+        shot.setSceneAssetVersionId(binding.assetVersionId());
+        shot.setSceneVariantId(binding.variantId());
+        shot.setSceneVariantVersion(binding.variantVersion());
+        shot.setSceneAssetSnapshot(binding.snapshotJson());
+        shotMapper.updateById(shot);
+        versionService.bumpRevision(version, version.getRevision());
+        writeAudit(versionId, userId, "bind_scene_asset", "shot", shotId,
+                "asset=" + binding.assetId() + ",version=" + binding.assetVersionId());
+        return toShotDetail(shot);
+    }
+
+    public ContinuityCheckView continuityCheck(Long projectId, Long storyboardId, Long versionId, Long userId) {
+        requireVersionInStoryboard(projectId, storyboardId, versionId, userId, Action.VIEW);
+        List<StoryboardShot> shots = shotMapper.selectList(new LambdaQueryWrapper<StoryboardShot>()
+                .eq(StoryboardShot::getVersionId, versionId).orderByAsc(StoryboardShot::getSortOrder));
+        List<ContinuityIssueView> issues = sceneAssetService.storyboardContinuityIssues(projectId, shots).stream()
+                .map(issue -> new ContinuityIssueView(issue.code(), issue.shotId(), issue.shotCode(),
+                        issue.message(), issue.repairAction())).toList();
+        return new ContinuityCheckView(issues.isEmpty(), issues);
+    }
+
     // ===== Helpers =====
 
     private void requireEditable(StoryboardVersion version) {
@@ -447,6 +492,16 @@ public class StoryboardEditingService {
                         version.getStatus().toUpperCase()))) {
             throw new BizException(ErrorCode.STORYBOARD_VERSION_LOCKED);
         }
+    }
+
+    private StoryboardVersion requireVersionInStoryboard(Long projectId, Long storyboardId, Long versionId,
+                                                          Long userId, Action action) {
+        accessService.requireStoryboard(projectId, storyboardId, userId, action);
+        StoryboardVersion version = accessService.requireVersion(projectId, versionId, userId, action);
+        if (!storyboardId.equals(version.getStoryboardId())) {
+            throw new BizException(ErrorCode.STORYBOARD_VERSION_NOT_FOUND);
+        }
+        return version;
     }
 
     private void applyPatch(StoryboardShot shot, PatchShotRequest r) {
@@ -569,7 +624,8 @@ public class StoryboardEditingService {
                 s.getVideoMotionPrompt(), s.getDirectorIntention(), s.getActionMotivation(),
                 s.getRelationshipBlocking(), s.getInformationGap(), s.getAudioVisualRelation(),
                 s.getEditPoint(), s.getDubText(), s.getSubtitleText(), s.getFailureStrategy(),
-                s.getStatus(), s.getSortOrder());
+                s.getStatus(), s.getSortOrder(), s.getSceneAssetId(), s.getSceneAssetVersionId(),
+                s.getSceneVariantId(), s.getSceneVariantVersion(), parseJsonMap(s.getSceneAssetSnapshot()));
     }
 
     @SuppressWarnings("unchecked")
@@ -579,6 +635,16 @@ public class StoryboardEditingService {
             return objectMapper.readValue(json, List.class);
         } catch (Exception e) {
             return List.of();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonMap(String json) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            return objectMapper.readValue(json, LinkedHashMap.class);
+        } catch (Exception e) {
+            return null;
         }
     }
 }

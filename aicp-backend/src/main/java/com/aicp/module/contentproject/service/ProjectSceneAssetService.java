@@ -48,6 +48,8 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.TreeMap;
 import java.util.UUID;
 
 /** Owns the project-only scene-master lifecycle on top of workspace_assets/asset_versions. */
@@ -238,6 +240,218 @@ public class ProjectSceneAssetService {
         requireScene(projectId, assetId);
         return impactFor(assetId);
     }
+
+    /** Resolves and freezes one historical scene master + variant for a V2 storyboard shot. */
+    public ResolvedSceneBinding resolveStoryboardSnapshot(Long userId, Long projectId, Long assetId,
+                                                           Long assetVersionId, String variantId,
+                                                           Integer variantVersion,
+                                                           Map<String, Object> sceneOverride) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        AssetVersion version = versionMapper.selectOne(new LambdaQueryWrapper<AssetVersion>()
+                .eq(AssetVersion::getId, assetVersionId).eq(AssetVersion::getAssetId, assetId));
+        if (version == null) throw new BizException(ErrorCode.ASSET_NOT_FOUND, "场景资产版本不存在");
+        Map<String, Object> metadata = parseMetadata(version.getMetadata());
+        Map<String, Object> variant = variantsFrom(metadata).stream()
+                .filter(item -> variantId.equals(item.get("id"))).findFirst()
+                .orElseThrow(() -> new BizException(ErrorCode.ASSET_NOT_FOUND, "场景变体不属于该资产版本"));
+        int persistedVariantVersion = variantVersion(variant);
+        if (!Objects.equals(variantVersion, persistedVariantVersion)) {
+            throw new BizException(ErrorCode.ASSET_VERSION_CONFLICT,
+                    "场景变体版本不匹配，请选择资产版本中实际存在的变体版本");
+        }
+
+        Map<String, Object> masterMetadata = master(metadata);
+        Map<String, Object> snapshotMaster = new LinkedHashMap<>();
+        snapshotMaster.put("id", masterMetadata.get("stable_id"));
+        snapshotMaster.put("name", asset.getName());
+        snapshotMaster.put("version", version.getVersionNumber());
+        snapshotMaster.put("path", canonicalScenePath(masterMetadata, asset));
+        snapshotMaster.put("fixedProps", normalizeValue(masterMetadata.get("fixed_props")));
+
+        Map<String, Object> snapshotVariant = new LinkedHashMap<>();
+        snapshotVariant.put("id", variantId);
+        snapshotVariant.put("name", variant.get("name"));
+        snapshotVariant.put("version", persistedVariantVersion);
+
+        Map<String, Object> normalizedOverride = normalizedMap(sceneOverride);
+        Map<String, Object> snapshot = new LinkedHashMap<>();
+        snapshot.put("master", snapshotMaster);
+        snapshot.put("variant", snapshotVariant);
+        snapshot.put("sceneOverride", normalizedOverride);
+        snapshot.put("continuityRules", normalizeValue(masterMetadata.getOrDefault("continuity_rules", List.of())));
+        snapshot.put("finalPromptFragment", finalPromptFragment(masterMetadata, variant, normalizedOverride));
+        Map<String, Object> canonical = normalizedMap(snapshot);
+        return new ResolvedSceneBinding(assetId, assetVersionId, variantId, persistedVariantVersion,
+                canonical, writeMetadata(canonical));
+    }
+
+    public List<SceneContinuityIssue> storyboardContinuityIssues(Long projectId, List<StoryboardShot> shots) {
+        List<SceneContinuityIssue> issues = new ArrayList<>();
+        for (StoryboardShot shot : shots) {
+            String integrity = bindingIntegrityIssue(projectId, shot);
+            if (integrity != null) {
+                issues.add(issue("MISSING_ASSET", shot, integrity,
+                        "PUT /shots/" + shot.getId() + "/scene-asset 重新绑定有效场景资产快照"));
+                continue;
+            }
+            WorkspaceAsset asset = assetMapper.selectById(shot.getSceneAssetId());
+            if (!Objects.equals(asset.getCurrentVersionId(), shot.getSceneAssetVersionId())) {
+                issues.add(issue("STALE_ASSET", shot, "场景资产已有新版本，当前镜头仍保留历史快照",
+                        "确认变更后重新调用 scene-asset 绑定接口"));
+            }
+            Map<String, Object> currentMetadata;
+            try {
+                currentMetadata = currentMetadata(asset);
+            } catch (BizException ex) {
+                issues.add(issue("STALE_ASSET", shot, "场景资产当前版本无法校验",
+                        "修复资产版本元数据后重新绑定"));
+                continue;
+            }
+            Map<String, Object> currentVariant = variantsFrom(currentMetadata).stream()
+                    .filter(item -> Objects.equals(shot.getSceneVariantId(), item.get("id"))).findFirst().orElse(null);
+            if (currentVariant == null || !Objects.equals(shot.getSceneVariantVersion(), variantVersion(currentVariant))) {
+                issues.add(issue("VARIANT_MISMATCH", shot, "场景变体版本已变更或不再存在",
+                        "选择当前资产版本中的变体并重新绑定"));
+            }
+            if (hasFixedPropConflict(parseSnapshot(shot.getSceneAssetSnapshot()))) {
+                issues.add(issue("FIXED_PROP_CONFLICT", shot, "镜头覆写与主场景固定道具冲突",
+                        "移除冲突的 sceneOverride.fixed_props 或确认新的主场景版本"));
+            }
+        }
+        return List.copyOf(issues);
+    }
+
+    public void requireStoryboardLockSnapshots(Long projectId, Long versionId) {
+        List<StoryboardShot> shots = storyboardVersionShotMapper.selectList(
+                new LambdaQueryWrapper<StoryboardShot>().eq(StoryboardShot::getVersionId, versionId));
+        List<String> invalid = shots.stream().map(shot -> {
+            String problem = bindingIntegrityIssue(projectId, shot);
+            return problem == null ? null : "shotId=" + shot.getId() + "(" + problem + ")";
+        }).filter(Objects::nonNull).toList();
+        if (!invalid.isEmpty()) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "分镜锁定失败：镜头缺少有效场景资产快照 " + String.join(", ", invalid)
+                    + "；请调用 PUT /shots/{shotId}/scene-asset 修复");
+        }
+    }
+
+    private String bindingIntegrityIssue(Long projectId, StoryboardShot shot) {
+        if (shot.getSceneAssetId() == null || shot.getSceneAssetVersionId() == null
+                || shot.getSceneVariantId() == null || shot.getSceneVariantVersion() == null
+                || shot.getSceneAssetSnapshot() == null || shot.getSceneAssetSnapshot().isBlank()) {
+            return "缺少场景资产绑定字段";
+        }
+        WorkspaceAsset asset = assetMapper.selectOne(sceneQuery(projectId).eq(WorkspaceAsset::getId, shot.getSceneAssetId()));
+        if (asset == null) return "场景资产不属于当前项目";
+        AssetVersion version = versionMapper.selectOne(new LambdaQueryWrapper<AssetVersion>()
+                .eq(AssetVersion::getId, shot.getSceneAssetVersionId())
+                .eq(AssetVersion::getAssetId, shot.getSceneAssetId()));
+        if (version == null) return "场景资产版本不属于已绑定资产";
+        try {
+            Map<String, Object> metadata = parseMetadata(version.getMetadata());
+            Map<String, Object> variant = variantsFrom(metadata).stream()
+                    .filter(item -> Objects.equals(shot.getSceneVariantId(), item.get("id"))).findFirst().orElse(null);
+            if (variant == null || !Objects.equals(shot.getSceneVariantVersion(), variantVersion(variant))) {
+                return "变体不属于已绑定资产版本";
+            }
+            Map<String, Object> snapshot = parseSnapshot(shot.getSceneAssetSnapshot());
+            Map<String, Object> snapshotMaster = mapValue(snapshot.get("master"));
+            Map<String, Object> snapshotVariant = mapValue(snapshot.get("variant"));
+            if (!nonBlank(snapshotMaster.get("id")) || !nonBlank(snapshotMaster.get("name"))
+                    || !nonBlank(snapshotMaster.get("path"))
+                    || !(snapshot.get("sceneOverride") instanceof Map<?, ?>)
+                    || !(snapshot.get("continuityRules") instanceof List<?>)
+                    || !(snapshot.get("finalPromptFragment") instanceof String)
+                    || !nonBlank(snapshotVariant.get("name"))
+                    || !Objects.equals(number(snapshotMaster.get("version")), version.getVersionNumber())
+                    || !Objects.equals(snapshotVariant.get("id"), shot.getSceneVariantId())
+                    || !Objects.equals(number(snapshotVariant.get("version")), shot.getSceneVariantVersion())) {
+                return "场景资产快照与绑定版本不一致";
+            }
+        } catch (RuntimeException ex) {
+            return "场景资产快照无法解析";
+        }
+        return null;
+    }
+
+    private SceneContinuityIssue issue(String code, StoryboardShot shot, String message, String repair) {
+        return new SceneContinuityIssue(code, shot.getId(), shot.getShotCode(), message, repair);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseSnapshot(String json) {
+        try {
+            return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
+        } catch (Exception ex) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "场景资产快照无效");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> mapValue(Object value) {
+        return value instanceof Map<?, ?> map ? (Map<String, Object>) map : Map.of();
+    }
+
+    private boolean hasFixedPropConflict(Map<String, Object> snapshot) {
+        Map<String, Object> masterProps = mapValue(mapValue(snapshot.get("master")).get("fixedProps"));
+        Map<String, Object> overrideProps = mapValue(mapValue(snapshot.get("sceneOverride")).get("fixed_props"));
+        return overrideProps.entrySet().stream().anyMatch(entry -> masterProps.containsKey(entry.getKey())
+                && !Objects.equals(masterProps.get(entry.getKey()), entry.getValue()));
+    }
+
+    private Integer number(Object value) {
+        return value instanceof Number number ? number.intValue() : null;
+    }
+
+    private boolean nonBlank(Object value) {
+        return value instanceof String text && !text.isBlank();
+    }
+
+    private Map<String, Object> normalizedMap(Map<String, Object> input) {
+        if (input == null || input.isEmpty()) return new LinkedHashMap<>();
+        Map<String, Object> sorted = new TreeMap<>();
+        input.forEach((key, value) -> sorted.put(key, normalizeValue(value)));
+        return new LinkedHashMap<>(sorted);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Object normalizeValue(Object value) {
+        if (value instanceof Map<?, ?> map) return normalizedMap((Map<String, Object>) map);
+        if (value instanceof List<?> list) return list.stream().map(this::normalizeValue).toList();
+        return value;
+    }
+
+    private String finalPromptFragment(Map<String, Object> master, Map<String, Object> variant,
+                                       Map<String, Object> sceneOverride) {
+        return java.util.stream.Stream.of(master.get("prompts"), variant.get("prompts"),
+                        variant.get("lighting_delta"), sceneOverride.get("prompt_fragment"))
+                .filter(Objects::nonNull).map(this::promptText).filter(text -> !text.isBlank())
+                .collect(java.util.stream.Collectors.joining("; "));
+    }
+
+    private String promptText(Object value) {
+        return value instanceof String text ? text : writeMetadata(Map.of("value", normalizeValue(value)));
+    }
+
+    private String canonicalScenePath(Map<String, Object> master, WorkspaceAsset asset) {
+        String stableId = String.valueOf(master.getOrDefault("stable_id", "SCENE-ASSET-%03d".formatted(asset.getId())));
+        String safeId = safePathPart(stableId);
+        String safeName = safePathPart(asset.getName()).replaceAll("\\.+$", "");
+        return "04-场景资产/" + safeId + "-" + (safeName.isBlank() ? "unnamed-scene" : safeName) + ".md";
+    }
+
+    private String safePathPart(String value) {
+        return (value == null ? "" : value).replace("..", "·").replace("/", "／").replace("\\", "＼")
+                .replace("#", "＃").replace("[", "［").replace("]", "］")
+                .replaceAll("[\\r\\n]+", " ").trim();
+    }
+
+    public record ResolvedSceneBinding(Long assetId, Long assetVersionId, String variantId,
+                                       Integer variantVersion, Map<String, Object> snapshot,
+                                       String snapshotJson) {}
+
+    public record SceneContinuityIssue(String code, Long shotId, String shotCode,
+                                       String message, String repairAction) {}
 
     private WorkspaceAsset requireScene(Long projectId, Long assetId) {
         WorkspaceAsset asset = assetMapper.selectOne(sceneQuery(projectId).eq(WorkspaceAsset::getId, assetId));

@@ -1211,3 +1211,13 @@ CREATE TABLE IF NOT EXISTS generation_context_snapshots (
     CONSTRAINT uk_gcs_job UNIQUE (generation_job_id)
 );
 CREATE INDEX IF NOT EXISTS idx_gcs_project ON generation_context_snapshots(project_id);
+
+-- V2 storyboard scene-asset snapshot binding (the V2 tables are introduced by the
+-- storyboard baseline/migrations in deployments that consume this compatibility schema).
+ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_asset_id BIGINT NULL;
+ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_asset_version_id BIGINT NULL;
+ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_variant_id VARCHAR(64) NULL;
+ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_variant_version INT NULL;
+ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_asset_snapshot JSON NULL;
+CREATE INDEX IF NOT EXISTS idx_sbshot_scene_asset ON storyboard_version_shots(scene_asset_id);
+CREATE INDEX IF NOT EXISTS idx_sbshot_scene_asset_version ON storyboard_version_shots(scene_asset_version_id);

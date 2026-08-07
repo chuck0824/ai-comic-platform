@@ -1264,6 +1264,11 @@ CREATE TABLE IF NOT EXISTS storyboard_version_shots (
     reference_text TEXT,
     image_prompt LONGTEXT,
     video_motion_prompt LONGTEXT,
+    scene_asset_id BIGINT,
+    scene_asset_version_id BIGINT,
+    scene_variant_id VARCHAR(64),
+    scene_variant_version INT,
+    scene_asset_snapshot JSON,
     director_intention TEXT COMMENT 'B-tier: 导演意图',
     action_motivation TEXT COMMENT 'B-tier: 动作动机',
     relationship_blocking TEXT COMMENT 'B-tier: 关系调度',
@@ -1279,7 +1284,9 @@ CREATE TABLE IF NOT EXISTS storyboard_version_shots (
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT uk_sb_shot_key UNIQUE(version_id, shot_key),
     CONSTRAINT uk_sb_shot_code UNIQUE(version_id, shot_code),
-    INDEX idx_sbshot_version (version_id, scene_id, sort_order)
+    INDEX idx_sbshot_version (version_id, scene_id, sort_order),
+    INDEX idx_sbshot_scene_asset (scene_asset_id),
+    INDEX idx_sbshot_scene_asset_version (scene_asset_version_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='分镜镜头表(V2)';
 
 -- 6类专业辅助表

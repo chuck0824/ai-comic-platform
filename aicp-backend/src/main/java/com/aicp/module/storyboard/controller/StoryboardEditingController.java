@@ -159,4 +159,23 @@ public class StoryboardEditingController {
         Long userId = SecurityUtil.requireCurrentUserId();
         return ApiResponse.success(editingService.copyShot(projectId, versionId, shotId, userId));
     }
+
+    @PutMapping("/shots/{shotId}/scene-asset")
+    public ApiResponse<ShotDetail> bindSceneAsset(
+            @PathVariable Long projectId, @PathVariable Long storyboardId,
+            @PathVariable Long versionId, @PathVariable Long shotId,
+            @Valid @RequestBody BindSceneAssetRequest request) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(editingService.bindSceneAsset(
+                projectId, storyboardId, versionId, shotId, userId, request));
+    }
+
+    @PostMapping("/continuity-check")
+    public ApiResponse<ContinuityCheckView> continuityCheck(
+            @PathVariable Long projectId, @PathVariable Long storyboardId,
+            @PathVariable Long versionId) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(editingService.continuityCheck(
+                projectId, storyboardId, versionId, userId));
+    }
 }

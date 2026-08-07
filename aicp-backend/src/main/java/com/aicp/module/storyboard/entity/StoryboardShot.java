@@ -29,6 +29,11 @@ public class StoryboardShot {
     private String referenceText;
     private String imagePrompt;
     private String videoMotionPrompt;
+    private Long sceneAssetId;
+    private Long sceneAssetVersionId;
+    private String sceneVariantId;
+    private Integer sceneVariantVersion;
+    private String sceneAssetSnapshot;
     private String directorIntention;
     private String actionMotivation;
     private String relationshipBlocking;

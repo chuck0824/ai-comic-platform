@@ -4,6 +4,7 @@ import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
 import com.aicp.module.contentproject.service.ProjectAccessService;
+import com.aicp.module.contentproject.service.ProjectSceneAssetService;
 import com.aicp.module.storyboard.entity.Storyboard;
 import com.aicp.module.storyboard.entity.StoryboardScene;
 import com.aicp.module.storyboard.entity.StoryboardShot;
@@ -35,6 +36,7 @@ class StoryboardVersionServiceTest {
     @Mock StoryboardAuditLogMapper auditLogMapper;
     @Mock StoryboardAccessService accessService;
     @Mock ProjectAccessService projectAccessService;
+    @Mock ProjectSceneAssetService sceneAssetService;
 
     @InjectMocks
     StoryboardVersionService service;
