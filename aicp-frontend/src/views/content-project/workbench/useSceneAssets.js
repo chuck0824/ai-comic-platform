@@ -2,23 +2,14 @@ import { computed, reactive, ref } from 'vue'
 import { sceneAssetApi } from '@/api/sceneAsset'
 import { normalizeSceneAsset, validateSceneAssetDraft } from './sceneAssetModel'
 import { normalizeSceneAssetMarkdown } from './sceneAssetMarkdown'
-
-const cacheKey = projectId => `scene_assets:${projectId}`
-
-function readCache(projectId) {
-  try {
-    const value = JSON.parse(localStorage.getItem(cacheKey(projectId)) || '[]')
-    return Array.isArray(value) ? value.map(normalizeSceneAsset) : []
-  } catch {
-    return []
-  }
-}
-
-function writeCache(projectId, items) {
-  try {
-    localStorage.setItem(cacheKey(projectId), JSON.stringify(items))
-  } catch { /* Cache is optional. */ }
-}
+import {
+  invalidateSceneAssetListCache,
+  prepareSceneAssetMutation,
+  readSceneAssetListCache,
+  resolveSceneAssetProjectId,
+  sceneAssetMutationGuard,
+  writeSuccessfulSceneAssetListCache
+} from './sceneAssetState'
 
 function failure(code, message) {
   return { ok: false, code, message }
@@ -34,8 +25,12 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
   const impact = ref(null)
   const markdown = ref(null)
   const actionResult = ref(null)
-  const projectArchived = ref(Boolean(typeof isProjectArchived === 'function' ? isProjectArchived() : isProjectArchived?.value ?? isProjectArchived))
-  const readOnly = computed(() => state.value === 'readonly' || projectArchived.value)
+  const projectArchived = ref(false)
+  const activeProjectId = () => resolveSceneAssetProjectId(projectId)
+  const isArchived = () => projectArchived.value || Boolean(typeof isProjectArchived === 'function'
+    ? isProjectArchived()
+    : isProjectArchived?.value ?? isProjectArchived)
+  const readOnly = computed(() => state.value === 'readonly' || isArchived())
 
   const filteredAssets = computed(() => assets.value.filter(asset => {
     if (filters.keyword && !asset.name?.toLowerCase().includes(filters.keyword.toLowerCase())) return false
@@ -59,17 +54,19 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
 
   async function load() {
     state.value = 'loading'
+    const resolvedProjectId = activeProjectId()
+    const filterSnapshot = { ...filters }
     try {
-      const response = await sceneAssetApi.list(projectId, filters)
+      const response = await sceneAssetApi.list(resolvedProjectId, filterSnapshot)
       const list = Array.isArray(response) ? response : response.items ?? []
       assets.value = list.map(normalizeSceneAsset)
-      writeCache(projectId, assets.value)
-      state.value = projectArchived.value ? 'readonly' : (assets.value.length ? 'ready' : 'empty')
+      writeSuccessfulSceneAssetListCache(resolvedProjectId, filterSnapshot, assets.value)
+      state.value = isArchived() ? 'readonly' : (assets.value.length ? 'ready' : 'empty')
       return { ok: true, items: assets.value }
     } catch (error) {
-      const cached = readCache(projectId)
-      if (cached.length) {
-        assets.value = cached
+      const cached = readSceneAssetListCache(resolvedProjectId, filterSnapshot)
+      if (cached.found) {
+        assets.value = cached.items.map(normalizeSceneAsset)
         state.value = 'readonly'
         return failure('DEGRADED_READ_ONLY', '网络不可用，正在显示最近成功缓存，当前仅可查看')
       }
@@ -80,7 +77,7 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
 
   async function loadAsset(assetId) {
     try {
-      const asset = normalizeSceneAsset(await sceneAssetApi.get(projectId, assetId))
+      const asset = normalizeSceneAsset(await sceneAssetApi.get(activeProjectId(), assetId))
       selectAsset(asset)
       return { ok: true, asset }
     } catch (error) {
@@ -89,8 +86,8 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
   }
 
   async function mutate(operation) {
-    if (projectArchived.value) return failure('PROJECT_ARCHIVED', '项目已归档，仅可查看场景资产')
-    if (state.value === 'readonly') return failure('DEGRADED_READ_ONLY', '当前为缓存只读模式，网络恢复后再修改')
+    const guarded = sceneAssetMutationGuard({ projectArchived: isArchived(), state: state.value })
+    if (guarded) return guarded
     try {
       const result = await operation()
       actionResult.value = { ok: true, data: result }
@@ -102,12 +99,15 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
   }
 
   async function create(draft) {
-    const errors = validateSceneAssetDraft(draft)
-    if (Object.keys(errors).length) return failure('VALIDATION_FAILED', '请补全必填场景信息')
+    const prepared = prepareSceneAssetMutation({
+      projectArchived: isArchived(), state: state.value, draft, validate: validateSceneAssetDraft
+    })
+    if (prepared) return prepared
     return mutate(async () => {
-      const asset = normalizeSceneAsset(await sceneAssetApi.create(projectId, draft))
+      const resolvedProjectId = activeProjectId()
+      const asset = normalizeSceneAsset(await sceneAssetApi.create(resolvedProjectId, draft))
       assets.value = [asset, ...assets.value]
-      writeCache(projectId, assets.value)
+      invalidateSceneAssetListCache(resolvedProjectId)
       selectAsset(asset)
       state.value = 'ready'
       return asset
@@ -116,39 +116,49 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
 
   async function update(assetId, draft) {
     return mutate(async () => {
-      const asset = normalizeSceneAsset(await sceneAssetApi.update(projectId, assetId, draft))
+      const resolvedProjectId = activeProjectId()
+      const asset = normalizeSceneAsset(await sceneAssetApi.update(resolvedProjectId, assetId, draft))
       replaceAsset(asset)
+      invalidateSceneAssetListCache(resolvedProjectId)
       return asset
     })
   }
 
   async function createFromLocation(draft) {
     return mutate(async () => {
-      const asset = normalizeSceneAsset(await sceneAssetApi.createFromLocation(projectId, draft))
+      const resolvedProjectId = activeProjectId()
+      const asset = normalizeSceneAsset(await sceneAssetApi.createFromLocation(resolvedProjectId, draft))
       replaceAsset(asset, true)
+      invalidateSceneAssetListCache(resolvedProjectId)
       return asset
     })
   }
 
   async function createVariant(assetId, draft) {
     return mutate(async () => {
-      const asset = normalizeSceneAsset(await sceneAssetApi.createVariant(projectId, assetId, draft))
+      const resolvedProjectId = activeProjectId()
+      const asset = normalizeSceneAsset(await sceneAssetApi.createVariant(resolvedProjectId, assetId, draft))
       replaceAsset(asset)
+      invalidateSceneAssetListCache(resolvedProjectId)
       return asset
     })
   }
 
   async function updateVariant(assetId, variantId, draft) {
     return mutate(async () => {
-      const asset = normalizeSceneAsset(await sceneAssetApi.updateVariant(projectId, assetId, variantId, draft))
+      const resolvedProjectId = activeProjectId()
+      const asset = normalizeSceneAsset(await sceneAssetApi.updateVariant(resolvedProjectId, assetId, variantId, draft))
       replaceAsset(asset)
+      invalidateSceneAssetListCache(resolvedProjectId)
       return asset
     })
   }
 
   async function restore(assetId, versionId, draft = {}) {
     return mutate(async () => {
-      const version = await sceneAssetApi.restore(projectId, assetId, versionId, draft)
+      const resolvedProjectId = activeProjectId()
+      const version = await sceneAssetApi.restore(resolvedProjectId, assetId, versionId, draft)
+      invalidateSceneAssetListCache(resolvedProjectId)
       await loadAsset(assetId)
       return version
     })
@@ -156,16 +166,17 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
 
   async function archive(assetId) {
     return mutate(async () => {
-      await sceneAssetApi.archive(projectId, assetId)
+      const resolvedProjectId = activeProjectId()
+      await sceneAssetApi.archive(resolvedProjectId, assetId)
       assets.value = assets.value.map(asset => asset.id === assetId ? { ...asset, status: 'ARCHIVED' } : asset)
-      writeCache(projectId, assets.value)
+      invalidateSceneAssetListCache(resolvedProjectId)
       return null
     })
   }
 
   async function loadImpact(assetId = selectedAsset.value?.id) {
     try {
-      impact.value = await sceneAssetApi.impact(projectId, assetId)
+      impact.value = await sceneAssetApi.impact(activeProjectId(), assetId)
       return { ok: true, impact: impact.value }
     } catch (error) {
       return failure(error?.code || 'SCENE_ASSET_IMPACT_FAILED', error?.message || '影响范围加载失败')
@@ -174,7 +185,7 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
 
   async function loadMarkdown(assetId = selectedAsset.value?.id) {
     try {
-      markdown.value = normalizeSceneAssetMarkdown(await sceneAssetApi.markdown(projectId, assetId))
+      markdown.value = normalizeSceneAssetMarkdown(await sceneAssetApi.markdown(activeProjectId(), assetId))
       return { ok: true, markdown: markdown.value }
     } catch (error) {
       return failure(error?.code || 'SCENE_ASSET_MARKDOWN_FAILED', error?.message || 'Markdown 预览加载失败')
@@ -184,7 +195,6 @@ export function useSceneAssets(projectId, { isProjectArchived = false } = {}) {
   function replaceAsset(asset, addWhenMissing = false) {
     const index = assets.value.findIndex(item => item.id === asset.id)
     assets.value = index < 0 ? (addWhenMissing ? [asset, ...assets.value] : assets.value) : assets.value.map(item => item.id === asset.id ? asset : item)
-    writeCache(projectId, assets.value)
     if (selectedAsset.value?.id === asset.id) selectAsset(asset)
   }
 

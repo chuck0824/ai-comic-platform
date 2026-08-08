@@ -6,6 +6,14 @@ import {
   mergeSceneAssetVariant,
   classifySceneAssetChange
 } from '../src/views/content-project/workbench/sceneAssetModel.js'
+import {
+  resolveSceneAssetProjectId,
+  sceneAssetCacheKey,
+  readSceneAssetListCache,
+  writeSuccessfulSceneAssetListCache,
+  invalidateSceneAssetListCache,
+  prepareSceneAssetMutation
+} from '../src/views/content-project/workbench/sceneAssetState.js'
 
 test('scene asset normalizes the API envelope into camelCase state', () => {
   const asset = normalizeSceneAsset({
@@ -91,3 +99,84 @@ test('scene asset nested API master visual changes stale downstream scenes', () 
   assert.equal(change.downstreamStatus, 'STALE')
   assert.deepEqual(change.affectedScopes, ['visual'])
 })
+
+test('variant binding never treats display version as an AssetVersion primary key', () => {
+  const incomplete = mergeSceneAssetVariant(
+    { id: 7, version: 2, name: '出租屋' },
+    { id: 'VAR-001', version: 1, name: '停电' }
+  )
+  assert.equal(incomplete.masterVersion, 2)
+  assert.equal(incomplete.bindingPayload.sceneAssetVersionId, null)
+  assert.equal(incomplete.bindingState.submittable, false)
+  assert.equal(incomplete.bindingState.fieldErrors.sceneAssetVersionId, '请选择包含资产版本主键的场景版本')
+
+  const complete = mergeSceneAssetVariant(
+    { id: 7, currentVersionId: 99, currentVersionNo: 2, name: '出租屋' },
+    { id: 'VAR-001', version: 1, name: '停电' }
+  )
+  assert.equal(complete.masterVersion, 2)
+  assert.equal(complete.bindingPayload.sceneAssetVersionId, 99)
+  assert.equal(complete.bindingState.submittable, true)
+})
+
+test('variant rename and version-only changes remain CURRENT', () => {
+  const change = classifySceneAssetChange(
+    { variants: [{ id: 'VAR-001', name: '白天', version: 1, tags: ['主用'], notes: '旧备注' }] },
+    { variants: [{ id: 'VAR-001', name: '晨间', version: 2, tags: ['常驻'], notes: '新备注' }] }
+  )
+  assert.deepEqual(change, { visualChange: false, downstreamStatus: 'CURRENT', affectedScopes: [] })
+})
+
+test('variant lighting event and prompt deltas stale their semantic scopes', () => {
+  const change = classifySceneAssetChange(
+    { variants: [{ id: 'VAR-001', lightingDelta: '自然光', eventState: '平静', prompts: '干净室内' }] },
+    { variants: [{ id: 'VAR-001', lightingDelta: '应急灯', eventState: '停电', prompts: '闪烁应急灯' }] }
+  )
+  assert.equal(change.visualChange, true)
+  assert.equal(change.downstreamStatus, 'STALE')
+  assert.deepEqual(change.affectedScopes, ['visual', 'continuity'])
+})
+
+test('scene asset project resolver follows ref-like route changes for API and cache keys', () => {
+  const projectId = { value: 21 }
+  assert.equal(resolveSceneAssetProjectId(projectId), 21)
+  assert.match(sceneAssetCacheKey(projectId, { status: 'ACTIVE' }), /^scene_assets:21:/)
+  projectId.value = 22
+  assert.equal(resolveSceneAssetProjectId(projectId), 22)
+  assert.match(sceneAssetCacheKey(projectId, { status: 'ACTIVE' }), /^scene_assets:22:/)
+})
+
+test('scene asset cache distinguishes an absent snapshot from a successful empty list and invalidates after mutation', () => {
+  const storage = memoryStorage()
+  const filters = { status: 'ACTIVE' }
+  assert.deepEqual(readSceneAssetListCache(21, filters, storage), { found: false, items: [] })
+  writeSuccessfulSceneAssetListCache(21, filters, [], storage)
+  assert.deepEqual(readSceneAssetListCache(21, filters, storage), { found: true, items: [] })
+  invalidateSceneAssetListCache(21, storage)
+  assert.deepEqual(readSceneAssetListCache(21, filters, storage), { found: false, items: [] })
+})
+
+test('scene asset mutation guard runs before draft validation for archived and degraded state', () => {
+  let validated = false
+  const validate = () => {
+    validated = true
+    return { name: '场景名称不能为空' }
+  }
+  assert.equal(prepareSceneAssetMutation({ projectArchived: true, state: 'ready', draft: {}, validate }).code, 'PROJECT_ARCHIVED')
+  assert.equal(validated, false)
+  assert.equal(prepareSceneAssetMutation({ projectArchived: false, state: 'readonly', draft: {}, validate }).code, 'DEGRADED_READ_ONLY')
+  assert.equal(validated, false)
+  assert.equal(prepareSceneAssetMutation({ projectArchived: false, state: 'ready', draft: {}, validate }).code, 'VALIDATION_FAILED')
+  assert.equal(validated, true)
+})
+
+function memoryStorage() {
+  const values = new Map()
+  return {
+    getItem: key => values.has(key) ? values.get(key) : null,
+    setItem: (key, value) => values.set(key, value),
+    removeItem: key => values.delete(key),
+    get length() { return values.size },
+    key: index => [...values.keys()][index] ?? null
+  }
+}

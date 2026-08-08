@@ -8,7 +8,7 @@ const REQUIRED_FIELDS = {
 const VISUAL_FIELDS = new Set([
   'spaceType', 'realityType', 'worldLocationRef', 'layout', 'materials', 'palette',
   'lighting', 'landmarks', 'fixedProps', 'movableProps', 'entrancesExits',
-  'references', 'prompts', 'variants'
+  'references', 'prompts'
 ])
 
 function isRecord(value) {
@@ -66,7 +66,7 @@ export function mergeSceneAssetVariant(master = {}, variant = {}) {
     : normalizedMaster
   const resolvedVariant = camelize(variant)
   const masterVersion = base.currentVersionNo ?? base.version ?? 0
-  const assetVersionId = base.currentVersionId ?? base.assetVersionId ?? base.versionId ?? base.version ?? null
+  const assetVersionId = base.currentVersionId ?? base.assetVersionId ?? base.versionId ?? null
   const sceneOverride = {}
   if (resolvedVariant.lightingDelta != null) sceneOverride.lighting = resolvedVariant.lightingDelta
   for (const key of ['time', 'eventState', 'prompts', 'references']) {
@@ -88,6 +88,12 @@ export function mergeSceneAssetVariant(master = {}, variant = {}) {
       sceneOverride
     }
   }
+  const fieldErrors = {}
+  if (assetVersionId == null) fieldErrors.sceneAssetVersionId = '请选择包含资产版本主键的场景版本'
+  if (base.id == null) fieldErrors.sceneAssetId = '请选择场景资产'
+  if (resolvedVariant.id == null) fieldErrors.sceneVariantId = '请选择场景变体'
+  if (resolvedVariant.version == null) fieldErrors.sceneVariantVersion = '请选择场景变体版本'
+  resolved.bindingState = { submittable: Object.keys(fieldErrors).length === 0, fieldErrors }
 
   // This mirrors the stable portion of the server-created snapshot. The backend
   // remains the sole issuer of finalPromptFragment and fingerprint.
@@ -124,6 +130,7 @@ export function classifySceneAssetChange(before = {}, after = {}) {
   let visualChange = false
   for (const key of keys) {
     if (stableValue(previous[key]) === stableValue(next[key])) continue
+    if (key === 'variants') continue
     if (key === 'continuityRules') {
       affectedScopes.push('continuity')
     } else if (VISUAL_FIELDS.has(key)) {
@@ -131,8 +138,36 @@ export function classifySceneAssetChange(before = {}, after = {}) {
       if (!affectedScopes.includes('visual')) affectedScopes.push('visual')
     }
   }
+  const variantScopes = classifyVariantDeltas(previous.variants, next.variants)
+  if (variantScopes.includes('visual')) {
+    visualChange = true
+    if (!affectedScopes.includes('visual')) affectedScopes.push('visual')
+  }
+  if (variantScopes.includes('continuity') && !affectedScopes.includes('continuity')) {
+    affectedScopes.push('continuity')
+  }
   const stale = visualChange || affectedScopes.includes('continuity')
   return { visualChange, downstreamStatus: stale ? 'STALE' : 'CURRENT', affectedScopes }
+}
+
+function classifyVariantDeltas(before, after) {
+  const previous = new Map((Array.isArray(before) ? before : []).filter(isRecord).map(item => [item.id, item]))
+  const next = new Map((Array.isArray(after) ? after : []).filter(isRecord).map(item => [item.id, item]))
+  const scopes = []
+  for (const id of new Set([...previous.keys(), ...next.keys()])) {
+    const left = previous.get(id)
+    const right = next.get(id)
+    // Adding/removing options, labels, tags, notes, and version bookkeeping does
+    // not invalidate historical consumers. Compare only paired semantic deltas.
+    if (!left || !right) continue
+    if (['lightingDelta', 'prompts', 'references'].some(key => stableValue(left[key]) !== stableValue(right[key]))) {
+      scopes.push('visual')
+    }
+    if (['eventState', 'time', 'continuityRules'].some(key => stableValue(left[key]) !== stableValue(right[key]))) {
+      scopes.push('continuity')
+    }
+  }
+  return [...new Set(scopes)]
 }
 
 export { camelize }
