@@ -157,9 +157,13 @@ function classifyVariantDeltas(before, after) {
   for (const id of new Set([...previous.keys(), ...next.keys()])) {
     const left = previous.get(id)
     const right = next.get(id)
-    // Adding/removing options, labels, tags, notes, and version bookkeeping does
-    // not invalidate historical consumers. Compare only paired semantic deltas.
-    if (!left || !right) continue
+    // A newly added variant is not referenced by an existing binding. Removing
+    // one can break a binding (including when restoring an older asset version).
+    if (!left && right) continue
+    if (left && !right) {
+      scopes.push('continuity')
+      continue
+    }
     if (['lightingDelta', 'prompts', 'references'].some(key => stableValue(left[key]) !== stableValue(right[key]))) {
       scopes.push('visual')
     }

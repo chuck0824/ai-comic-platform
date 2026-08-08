@@ -137,6 +137,24 @@ test('variant lighting event and prompt deltas stale their semantic scopes', () 
   assert.deepEqual(change.affectedScopes, ['visual', 'continuity'])
 })
 
+test('adding an unreferenced variant keeps downstream scenes CURRENT', () => {
+  const change = classifySceneAssetChange(
+    { variants: [] },
+    { variants: [{ id: 'VAR-002', lightingDelta: '烛光', eventState: '夜间' }] }
+  )
+  assert.deepEqual(change, { visualChange: false, downstreamStatus: 'CURRENT', affectedScopes: [] })
+})
+
+test('removing an existing variant stales continuity bindings', () => {
+  const change = classifySceneAssetChange(
+    { variants: [{ id: 'VAR-001', lightingDelta: '自然光', eventState: '停电' }] },
+    { variants: [] }
+  )
+  assert.equal(change.visualChange, false)
+  assert.equal(change.downstreamStatus, 'STALE')
+  assert.deepEqual(change.affectedScopes, ['continuity'])
+})
+
 test('scene asset project resolver follows ref-like route changes for API and cache keys', () => {
   const projectId = { value: 21 }
   assert.equal(resolveSceneAssetProjectId(projectId), 21)
@@ -154,6 +172,31 @@ test('scene asset cache distinguishes an absent snapshot from a successful empty
   assert.deepEqual(readSceneAssetListCache(21, filters, storage), { found: true, items: [] })
   invalidateSceneAssetListCache(21, storage)
   assert.deepEqual(readSceneAssetListCache(21, filters, storage), { found: false, items: [] })
+})
+
+test('scene asset cache safely degrades when the global localStorage getter throws', () => {
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() { throw new Error('SecurityError') }
+  })
+  try {
+    assert.deepEqual(readSceneAssetListCache(21, { status: 'ACTIVE' }), { found: false, items: [] })
+    assert.doesNotThrow(() => writeSuccessfulSceneAssetListCache(21, { status: 'ACTIVE' }, []))
+    assert.doesNotThrow(() => invalidateSceneAssetListCache(21))
+  } finally {
+    if (descriptor) Object.defineProperty(globalThis, 'localStorage', descriptor)
+    else delete globalThis.localStorage
+  }
+})
+
+test('scene asset mutation cache invalidation ignores broken storage operations', () => {
+  const storage = {
+    get length() { throw new Error('storage unavailable') },
+    key() { throw new Error('storage unavailable') },
+    removeItem() { throw new Error('storage unavailable') }
+  }
+  assert.doesNotThrow(() => invalidateSceneAssetListCache(21, storage))
 })
 
 test('scene asset mutation guard runs before draft validation for archived and degraded state', () => {

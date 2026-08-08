@@ -9,7 +9,12 @@ function stableValue(value) {
 }
 
 function storageOrNull(storage) {
-  return storage ?? globalThis.localStorage ?? null
+  if (storage != null) return storage
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
+  }
 }
 
 function failure(code, message, fieldErrors) {
