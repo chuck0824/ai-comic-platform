@@ -2,17 +2,23 @@
   <div class="workflow-rail">
     <div class="rail-title">创作流程</div>
     <div v-for="(stage, i) in stages" :key="stage.key" class="stage-group">
-      <div :class="['stage-item', 'stage-' + stage.status]">
+      <button
+        type="button"
+        :class="['stage-item', 'stage-' + stage.status, { 'stage-entered': canNavigate(stage) }]"
+        :aria-current="stage.status === 'current' ? 'step' : undefined"
+        :aria-disabled="canNavigate(stage) ? undefined : 'true'"
+        @click="navigate(stage)"
+      >
         <div class="stage-indicator">
           <span :class="['stage-dot', stage.status]"></span>
           <span class="stage-label" :class="{ 'font-semibold': stage.status === 'current' }">
-            {{ stageLabel(stage.key) }}
+            {{ stageLabel(stage.key, stage.label) }}
           </span>
         </div>
         <span v-if="stage.status === 'current'" class="stage-current-badge">← 当前</span>
         <el-icon v-else-if="stage.status === 'completed'" class="stage-check" :size="14"><CircleCheck /></el-icon>
-        <span v-else-if="stage.status === 'skipped'" class="stage-skipped">跳过</span>
-      </div>
+        <span v-else-if="stage.status === 'error'" class="stage-error">需处理</span>
+      </button>
       <div v-if="i < stages.length - 1" :class="['stage-connector', { active: stage.status === 'completed' }]"></div>
     </div>
 
@@ -21,17 +27,41 @@
       <div class="rail-progress-label">完成度</div>
       <el-progress :percentage="progress" :stroke-width="6" :color="'var(--accent)'" />
     </div>
+
+    <div class="stage-footer">
+      <el-button size="small" @click="emit('previous')">上一步</el-button>
+      <el-button size="small" @click="emit('save-draft')">保存草稿</el-button>
+      <el-button size="small" type="primary" @click="emit('confirm-next')">确认并进入下一步</el-button>
+    </div>
   </div>
 </template>
 
 <script setup>
 import { CircleCheck } from '@element-plus/icons-vue'
-import { stageLabel } from '../utils/workflowPath'
+import { STAGES } from '../workbench/scriptWorkbenchModel'
 
-defineProps({
+const APPROVED_LABELS = Object.fromEntries(STAGES.map(stage => [stage.key, stage.label]))
+
+const props = defineProps({
   stages: { type: Array, default: () => [] },
-  progress: { type: Number, default: 0 }
+  progress: { type: Number, default: 0 },
+  enteredStages: { type: Array, default: () => [] }
 })
+
+const emit = defineEmits(['navigate', 'previous', 'save-draft', 'confirm-next'])
+
+function stageLabel(key, fallback) {
+  return APPROVED_LABELS[key] || fallback || key
+}
+
+function canNavigate(stage) {
+  return props.enteredStages.includes(stage.key)
+    || stage.status === 'current' || stage.status === 'completed' || stage.status === 'error'
+}
+
+function navigate(stage) {
+  if (canNavigate(stage)) emit('navigate', stage.key)
+}
 </script>
 
 <style scoped>
@@ -57,6 +87,11 @@ defineProps({
   margin-bottom: 2px;
 }
 .stage-item {
+  width: 100%;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  background: transparent;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -65,6 +100,8 @@ defineProps({
   font-size: 13px;
   transition: background .15s ease;
 }
+.stage-item.stage-entered { cursor: pointer; }
+.stage-item:not(.stage-entered) { cursor: default; }
 .stage-item.stage-current {
   background: var(--accent-bg);
 }
@@ -107,9 +144,9 @@ defineProps({
 .stage-check {
   color: var(--success);
 }
-.stage-skipped {
+.stage-error {
   font-size: 11px;
-  color: var(--text-tertiary);
+  color: var(--danger);
 }
 
 .stage-connector {
@@ -132,6 +169,7 @@ defineProps({
   color: var(--text-tertiary);
   margin-bottom: 8px;
 }
+.stage-footer { display: grid; gap: 8px; margin-top: 18px; }
 
 @media (max-width: 768px) {
   .workflow-rail {
