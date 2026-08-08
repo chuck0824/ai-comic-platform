@@ -392,18 +392,31 @@ public class StoryboardEditingService {
                                   MergeShotsRequest request) {
         StoryboardVersion version = accessService.requireVersion(projectId, versionId, userId, Action.EDIT_CONTENT);
         requireEditable(version);
-        versionService.bumpRevision(version, request.revision());
 
-        List<Long> shotIds = request.shotIds();
+        List<Long> shotIds = new ArrayList<>(new LinkedHashSet<>(request.shotIds()));
         if (shotIds.size() < 2) {
-            throw new BizException(ErrorCode.PARAM_INVALID, "合并至少需要2个镜头");
+            throw new BizException(ErrorCode.PARAM_INVALID, "合并至少需要2个不同镜头");
+        }
+        if (shotIds.stream().anyMatch(Objects::isNull)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "镜头ID不能为空");
         }
 
         List<StoryboardShot> shots = shotIds.stream()
-                .map(shotMapper::selectById)
-                .filter(Objects::nonNull)
+                .map(shotId -> accessService.requireShot(
+                        projectId, versionId, shotId, userId, Action.EDIT_CONTENT))
                 .sorted(Comparator.comparingInt(StoryboardShot::getSortOrder))
                 .collect(Collectors.toList());
+        Long sceneId = shots.get(0).getSceneId();
+        if (shots.stream().anyMatch(shot -> !Objects.equals(sceneId, shot.getSceneId()))) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "只能合并同一场景内的镜头");
+        }
+        StoryboardShot bindingReference = shots.get(0);
+        if (shots.stream().anyMatch(shot -> !sameSceneAssetBinding(bindingReference, shot))) {
+            throw new BizException(ErrorCode.PARAM_INVALID,
+                    "镜头场景资产绑定不一致，无法合并；请先统一镜头 "
+                            + shotIds + " 的场景资产/变体快照");
+        }
+        versionService.bumpRevision(version, request.revision());
 
         StoryboardShot first = shots.get(0);
         long totalDuration = shots.stream().mapToLong(s -> s.getDurationMs() != null ? s.getDurationMs() : 0).sum();
@@ -431,6 +444,24 @@ public class StoryboardEditingService {
         writeAudit(versionId, userId, "merge_shots", "version", versionId, null);
 
         return toShotDetail(first);
+    }
+
+    private boolean sameSceneAssetBinding(StoryboardShot left, StoryboardShot right) {
+        return Objects.equals(left.getSceneAssetId(), right.getSceneAssetId())
+                && Objects.equals(left.getSceneAssetVersionId(), right.getSceneAssetVersionId())
+                && Objects.equals(left.getSceneVariantId(), right.getSceneVariantId())
+                && Objects.equals(left.getSceneVariantVersion(), right.getSceneVariantVersion())
+                && sameJsonContent(left.getSceneAssetSnapshot(), right.getSceneAssetSnapshot());
+    }
+
+    private boolean sameJsonContent(String left, String right) {
+        if (Objects.equals(left, right)) return true;
+        if (left == null || right == null) return false;
+        try {
+            return objectMapper.readTree(left).equals(objectMapper.readTree(right));
+        } catch (JsonProcessingException ex) {
+            return false;
+        }
     }
 
     @Transactional

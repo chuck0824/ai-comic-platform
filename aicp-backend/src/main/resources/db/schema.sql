@@ -1212,12 +1212,112 @@ CREATE TABLE IF NOT EXISTS generation_context_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_gcs_project ON generation_context_snapshots(project_id);
 
--- V2 storyboard scene-asset snapshot binding (the V2 tables are introduced by the
--- storyboard baseline/migrations in deployments that consume this compatibility schema).
-ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_asset_id BIGINT NULL;
-ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_asset_version_id BIGINT NULL;
-ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_variant_id VARCHAR(64) NULL;
-ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_variant_version INT NULL;
-ALTER TABLE storyboard_version_shots ADD COLUMN IF NOT EXISTS scene_asset_snapshot JSON NULL;
+-- V2 storyboard scene-asset snapshot binding.
+-- This baseline is self-contained so a fresh generic-schema database does not depend on migrations.
+CREATE TABLE IF NOT EXISTS storyboards (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    content_unit_id BIGINT NOT NULL,
+    source_content_version_id BIGINT NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    purpose VARCHAR(30) NOT NULL DEFAULT 'default',
+    current_draft_version_id BIGINT NULL,
+    current_locked_version_id BIGINT NULL,
+    production_status VARCHAR(30) NOT NULL DEFAULT 'not_ready',
+    created_by BIGINT NOT NULL,
+    is_deleted TINYINT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sb_source UNIQUE (project_id, content_unit_id, source_content_version_id, purpose)
+);
+
+CREATE TABLE IF NOT EXISTS storyboard_versions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    storyboard_id BIGINT NOT NULL,
+    parent_version_id BIGINT NULL,
+    source_content_version_id BIGINT NOT NULL,
+    tier VARCHAR(1) NOT NULL,
+    version_no INT NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    revision INT NOT NULL DEFAULT 0,
+    schema_version INT NOT NULL DEFAULT 1,
+    total_scenes INT NOT NULL DEFAULT 0,
+    total_shots INT NOT NULL DEFAULT 0,
+    total_duration_ms BIGINT NOT NULL DEFAULT 0,
+    created_from VARCHAR(20) NOT NULL,
+    locked_by BIGINT NULL,
+    locked_at TIMESTAMP NULL,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sb_version UNIQUE (storyboard_id, tier, version_no)
+);
+
+CREATE TABLE IF NOT EXISTS storyboard_version_scenes (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    version_id BIGINT NOT NULL,
+    scene_key VARCHAR(36) NOT NULL,
+    scene_no INT NOT NULL,
+    title VARCHAR(255) NULL,
+    dramatic_goal TEXT NULL,
+    beat_description TEXT NULL,
+    location_ref_id BIGINT NULL,
+    duration_ms BIGINT NOT NULL DEFAULT 0,
+    emotion_label VARCHAR(100) NULL,
+    emotion_intensity INT NULL,
+    sort_order INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sb_scene_key UNIQUE (version_id, scene_key),
+    CONSTRAINT uk_sb_scene_no UNIQUE (version_id, scene_no)
+);
+
+CREATE TABLE IF NOT EXISTS storyboard_version_shots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    version_id BIGINT NOT NULL,
+    scene_id BIGINT NOT NULL,
+    shot_key VARCHAR(36) NOT NULL,
+    shot_code VARCHAR(30) NOT NULL,
+    duration_ms BIGINT NOT NULL DEFAULT 0,
+    shot_size VARCHAR(50) NULL,
+    visual_description TEXT NULL,
+    lighting_atmosphere TEXT NULL,
+    character_action TEXT NULL,
+    emotion_description TEXT NULL,
+    dialogue_text TEXT NULL,
+    scene_tags_json JSON NULL,
+    sound_effect TEXT NULL,
+    reference_text TEXT NULL,
+    image_prompt TEXT NULL,
+    video_motion_prompt TEXT NULL,
+    scene_asset_id BIGINT NULL,
+    scene_asset_version_id BIGINT NULL,
+    scene_variant_id VARCHAR(64) NULL,
+    scene_variant_version INT NULL,
+    scene_asset_snapshot JSON NULL,
+    director_intention TEXT NULL,
+    action_motivation TEXT NULL,
+    relationship_blocking TEXT NULL,
+    information_gap TEXT NULL,
+    audio_visual_relation TEXT NULL,
+    edit_point TEXT NULL,
+    dub_text TEXT NULL,
+    subtitle_text TEXT NULL,
+    failure_strategy VARCHAR(30) NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
+    sort_order INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_sb_shot_key UNIQUE (version_id, shot_key),
+    CONSTRAINT uk_sb_shot_code UNIQUE (version_id, shot_code)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sb_project ON storyboards(project_id, updated_at);
+CREATE INDEX IF NOT EXISTS idx_sbv_master ON storyboard_versions(storyboard_id, tier, version_no);
+CREATE INDEX IF NOT EXISTS idx_sbscene_version ON storyboard_version_scenes(version_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_sbshot_version ON storyboard_version_shots(version_id, scene_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_sbshot_scene_asset ON storyboard_version_shots(scene_asset_id);
 CREATE INDEX IF NOT EXISTS idx_sbshot_scene_asset_version ON storyboard_version_shots(scene_asset_version_id);
