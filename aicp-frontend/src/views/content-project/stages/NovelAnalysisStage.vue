@@ -30,7 +30,7 @@
       <div class="location-list">
         <div v-for="location in state.locations" :key="location.id" class="location-row">
           <div><strong>{{ location.name }}</strong><p>{{ location.description || location.spaceType || '暂无地点描述' }}</p></div>
-          <div v-if="location.sceneAsset" class="asset-reference"><el-tag type="success">{{ location.sceneAsset.status }}</el-tag><span>{{ location.sceneAsset.stableId }} · v{{ location.sceneAsset.versionNo }}</span><el-button text @click="convertLocation(location)">打开资产详情</el-button></div>
+          <div v-if="location.sceneAsset" class="asset-reference"><el-tag :type="sceneAssetStatus(location.sceneAsset)==='STALE'?'warning':'success'">{{ sceneAssetStatus(location.sceneAsset) }}</el-tag><span>{{ location.sceneAsset.stableId }} · v{{ location.sceneAsset.versionNo }}</span><el-button text @click="openSceneAssetReference(location.sceneAsset)">打开资产详情</el-button><el-button v-if="sceneAssets?.actionResult?.value" text @click="openSceneActionResult">查看最近结果</el-button></div>
           <el-button v-else data-action="convert-location-to-scene-asset" @click="convertLocation(location)">转为场景资产</el-button>
         </div>
         <el-empty v-if="!state.locations.length" description="暂无主要地点" :image-size="64" />
@@ -77,7 +77,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { convertLocationToSceneAsset, createAnalysisState, saveAnalysisSection } from '../workbench/upstreamStageModel.js'
 const props = defineProps({ modelValue:{type:Object,default:()=>({})}, persistArtifact:{type:Function,default:null}, sceneAssets:{type:Object,default:null} })
-const emit = defineEmits(['update:modelValue','guidance','artifact-saved','open-scene-asset'])
+const emit = defineEmits(['update:modelValue','guidance','artifact-saved','open-scene-asset','open-scene-action-result'])
 const state = reactive(createAnalysisState(props.modelValue)); const editorVisible=ref(false); const editorSection=ref(''); const editorDraft=ref(null); const editorLocations=ref([]); const factionsText=ref(''); const characterVisible=ref(false); const characterIndex=ref(-1); const characterDraft=reactive({});
 const latestVersion=computed(()=>state.artifactVersions.at(-1)||null); const editorTitle=computed(()=>({synopsis:'编辑故事梗概',events:'编辑主要事件',chapterOutline:'编辑章节大纲',worldview:'编辑世界观'}[editorSection.value]||'编辑'))
 watch(()=>props.modelValue,value=>Object.assign(state,createAnalysisState(value)),{deep:true})
@@ -89,6 +89,10 @@ async function saveEditor(){let value=editorDraft.value;if(editorSection.value==
 function openCharacter(index=-1){characterIndex.value=index;Object.keys(characterDraft).forEach(k=>delete characterDraft[k]);Object.assign(characterDraft,index>=0?clone(state.characters[index]):{id:`CHAR-${Date.now()}`,name:'',role:'',age:'',appearance:'',personality:'',goal:'',motivation:'',conflict:'',arc:'',speechStyle:'',relationships:'',secret:''});characterVisible.value=true}
 async function saveCharacter(){const list=clone(state.characters);if(characterIndex.value>=0)list[characterIndex.value]=clone(characterDraft);else list.push(clone(characterDraft));const saved=await saveAnalysisSection(state,'characters',list,props.persistArtifact);if(!saved.ok)return guidance(saved);characterVisible.value=false;sync();emit('artifact-saved',saved)}
 async function convertLocation(location){const adapter={createFromLocation:props.sceneAssets?.createFromLocation,openAsset:async asset=>{if(props.sceneAssets?.selectAsset)props.sceneAssets.selectAsset(asset);emit('open-scene-asset',asset)}};const result=await convertLocationToSceneAsset(state,location.id,adapter);if(!result.ok)return guidance(result);sync();if(result.created)emit('artifact-saved',{section:'sceneAsset',asset:result.asset});return result}
+function authoritativeSceneAsset(reference){return props.sceneAssets?.assets?.value?.find(asset=>asset.id===reference.id||asset.stableId===reference.stableId)||reference}
+function sceneAssetStatus(reference){const asset=authoritativeSceneAsset(reference);const impact=props.sceneAssets?.impact?.value;return asset.syncStatus||(impact?.assetId===asset.id&&impact.staleReferences?'STALE':asset.status||'CURRENT')}
+function openSceneAssetReference(reference){const asset=authoritativeSceneAsset(reference);if(props.sceneAssets?.selectAsset)props.sceneAssets.selectAsset(asset);emit('open-scene-asset',asset)}
+function openSceneActionResult(){const result=props.sceneAssets?.actionResult?.value?.data;if(!result)return guidance({ok:false,code:'SCENE_ACTION_RESULT_NOT_FOUND',message:'暂无可查看的场景资产结果'});props.sceneAssets.openActionResult?.(result);emit('open-scene-action-result',result)}
 </script>
 
 <style scoped>
