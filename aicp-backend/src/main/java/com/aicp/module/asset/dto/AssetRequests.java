@@ -50,7 +50,11 @@ public class AssetRequests {
             @NotNull @Positive Long projectId,
             String targetType,
             Long targetId,
+            @Size(max = 128) String targetKey,
             @NotBlank String idempotencyKey) {
+        public ApplyAssetRequest(Long projectId, String targetType, Long targetId, String idempotencyKey) {
+            this(projectId, targetType, targetId, null, idempotencyKey);
+        }
     }
 
     public record UndoRequest(

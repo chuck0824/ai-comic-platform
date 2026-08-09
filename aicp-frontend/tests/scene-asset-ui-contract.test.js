@@ -11,6 +11,7 @@ import {
   sceneConsumerStatus
 } from '../src/views/content-project/workbench/sceneAssetUiModel.js'
 import { normalizeSceneAsset } from '../src/views/content-project/workbench/sceneAssetModel.js'
+import { useSceneAssets } from '../src/views/content-project/workbench/useSceneAssets.js'
 
 const contentProjectDir = fileURLToPath(new URL('../src/views/content-project/', import.meta.url))
 const read = path => readFileSync(`${contentProjectDir}${path}`, 'utf8')
@@ -116,14 +117,14 @@ test('script scene impact matches the stable consumer key used by the script sta
   const result = normalizeSceneAsset({
     assetId: 3,
     affectedConsumers: [
-      { type: 'SCRIPT_SCENE', consumer_id: 9001, consumer_key: 'EP01-SCENE-003', downstream_status: 'STALE' }
+      { type: 'SCRIPT_SCENE', consumer_id: 9001, consumer_key: 'EP-007-SCENE-001', downstream_status: 'STALE' }
     ]
   })
   assert.equal(sceneConsumerStatus({
     assetId: 3,
     type: 'SCRIPT_SCENE',
     id: 'local-render-id',
-    consumerKey: 'EP01-SCENE-003',
+    consumerKey: 'EP-007-SCENE-001',
     result,
     fallback: 'CURRENT'
   }), 'STALE')
@@ -188,8 +189,8 @@ test('referenced lifecycle uses reversible disable and keeps archive separate', 
   const composable = read('workbench/useSceneAssets.js')
   const drawer = read('components/SceneAssetDetailDrawer.vue')
   const library = read('components/SceneAssetLibrary.vue')
-  assert.match(composable, /api\.disable/)
-  assert.match(composable, /api\.activate/)
+  assert.match(composable, /client\.disable/)
+  assert.match(composable, /client\.activate/)
   assert.match(composable, /action:\s*'archive-scene-asset'/)
   assert.match(library, /'archive-scene-asset':\s*'归档场景资产'/)
   assert.match(drawer, /sceneAssets\.disable/)
@@ -204,6 +205,43 @@ test('disable can preserve loaded authoritative consumers before selection clear
   assert.equal(clearedImpact, null)
   const composable = read('workbench/useSceneAssets.js')
   assert.match(composable, /const affectedConsumers = preservedImpactConsumers\(refreshedImpact\.impact\)[\s\S]*await adapter[\s\S]*affectedConsumers:/)
+})
+
+test('composable disable loads authoritative impact before mutation and preserves consumers', async () => {
+  const calls = []
+  const references = [{ type: 'SCRIPT_SCENE', consumerId: 9001, consumerKey: 'EP-007-SCENE-001', syncStatus: 'CURRENT' }]
+  const api = {
+    list: async () => [{ id: 3, status: 'ACTIVE', current_version_id: 8 }],
+    impact: async (_projectId, assetId) => { calls.push(`impact:${assetId}`); return { assetId, references } },
+    disable: async (_projectId, assetId) => { calls.push(`disable:${assetId}`); return { id: assetId, status: 'DISABLED', current_version_id: 8 } }
+  }
+  const sceneAssets = useSceneAssets(9, { api, resultStorage: memoryStorage() })
+  await sceneAssets.load()
+  sceneAssets.selectAsset(sceneAssets.assets.value[0])
+
+  const result = await sceneAssets.disable(3)
+
+  assert.deepEqual(calls, ['impact:3', 'disable:3'])
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.data.affectedConsumers, references)
+})
+
+test('composable disable guides on impact load failure and never fakes mutation success', async () => {
+  let disableCalls = 0
+  const api = {
+    list: async () => [{ id: 3, status: 'ACTIVE', current_version_id: 8 }],
+    impact: async () => { throw Object.assign(new Error('影响范围加载失败'), { code: 'SCENE_ASSET_IMPACT_FAILED' }) },
+    disable: async () => { disableCalls += 1; return { id: 3, status: 'DISABLED' } }
+  }
+  const sceneAssets = useSceneAssets(9, { api, resultStorage: memoryStorage() })
+  await sceneAssets.load()
+
+  const result = await sceneAssets.disable(3)
+
+  assert.equal(result.ok, false)
+  assert.equal(result.code, 'SCENE_ASSET_IMPACT_FAILED')
+  assert.match(result.message, /影响范围加载失败/)
+  assert.equal(disableCalls, 0)
 })
 
 function memoryStorage() {

@@ -102,3 +102,30 @@ GREEN:
 ### Scope note
 
 - `ContentProjectWorkspace.vue` remains untouched. Native mounting and real consumer persistence adapter composition remain Task 9 scope.
+
+---
+
+## Review fix round 3/5 — reviewing consumers, stable script IDs, and authoritative disable impact
+
+### Changes
+
+- A storyboard version referenced by `currentDraftVersionId` remains an active consumer while its state is either `DRAFT` or `REVIEWING`. Archive is therefore blocked throughout review. The immutable `currentLockedVersionId` path is unchanged and continues to report locked/superseded snapshots as `PINNED`.
+- `asset_applications.target_key` now persists the real textual consumer identity. `SCRIPT_SCENE` impact returns that value end to end (for example `EP-007-SCENE-001`), while legacy rows with no text key continue to expose their numeric `target_id` as the compatibility key.
+- Added the idempotent V17 schema migration and undo script, plus canonical H2/MySQL schema columns. A focused migration test applies V17 twice to a legacy table and verifies both the column and composite index.
+- Disable now loads authoritative impact before mutation, captures the affected consumers before selection refresh can clear transient state, and records those consumers in the durable action result. If impact loading fails, disable is not called and the UI returns actionable failure guidance rather than fake success.
+- The `WorkspaceAsset.status` entity contract now documents `DISABLED` alongside the other persisted lifecycle values.
+
+### RED / GREEN evidence
+
+- RED: the new frontend composable tests initially failed because `useSceneAssets` could not be imported directly and disable did not load impact first. The backend focused test initially failed to compile because `AssetApplication` had no textual target key.
+- Backend GREEN (run independently to avoid the repository's known shared dev-seed collision): `ProjectSceneAssetLifecycleE2ETest` 17/17, `ProjectSceneAssetBatchQueryTest` 1/1, `StoryboardSceneAssetSnapshotE2ETest` 17/17, `AssetWorkbenchContractTest` 20/20, `AssetWorkbenchSchemaTest` 9/9, and `AssetApplicationServiceTest` 1/1.
+- Frontend GREEN: Task 8 contract 19/19; Task 4–8 focused regressions 82/82; requested name-pattern suite passed 20/20. Five affected SFCs passed parse, script, and template compilation; all affected JavaScript files passed `node --check`.
+- Vite production build passed after transforming 1,963 modules to `/tmp/aicp-task8-fix3-dist`; `git diff --check` passed.
+
+### Known unrelated test baseline
+
+- `AssetMarketLifecycleE2ETest` still fails before reaching this change because the test schema lacks the pre-existing `canvas_projects.canvas_mode` column expected by `CanvasProjectMapper`. No production or test-schema change was made for that unrelated baseline issue; textual-key persistence is covered by the focused service test and lifecycle/schema E2E coverage above.
+
+### Scope note
+
+- `ContentProjectWorkspace.vue` remains untouched.

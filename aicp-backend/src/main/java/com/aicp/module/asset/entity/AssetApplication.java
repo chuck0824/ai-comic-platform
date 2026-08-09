@@ -15,6 +15,7 @@ public class AssetApplication {
     private Long projectId;
     private String targetType;
     private Long targetId;
+    private String targetKey;         // Stable textual consumer ID; legacy rows may remain null
     private String changeSummary;
     private String previousState;     // JSON: snapshot before application for undo
     private String undoTokenHash;     // SHA-256 hash of the undo token

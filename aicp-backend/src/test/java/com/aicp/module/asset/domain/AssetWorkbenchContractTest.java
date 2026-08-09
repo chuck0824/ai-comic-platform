@@ -2,6 +2,8 @@ package com.aicp.module.asset.domain;
 
 import com.aicp.common.exception.ErrorCode;
 import org.junit.jupiter.api.Test;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -49,6 +51,13 @@ class AssetWorkbenchContractTest {
                 .containsExactly("ACTIVE", "DISABLED", "ARCHIVED", "TRASHED");
         assertThat(AssetEnums.AssetStatus.values()).extracting(Enum::name)
                 .containsExactly("ACTIVE", "DISABLED", "ARCHIVED");
+    }
+
+    @Test
+    void workspaceAssetStatusDocumentsReversibleDisabledLifecycle() throws Exception {
+        String source = Files.readString(Path.of(
+                "src/main/java/com/aicp/module/asset/entity/WorkspaceAsset.java"));
+        assertThat(source).contains("ACTIVE / DISABLED / ARCHIVED / TRASHED");
     }
 
     // ── Error-code contracts ──────────────────────────────────────────

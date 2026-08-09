@@ -1,7 +1,6 @@
 import { computed, reactive, ref } from 'vue'
-import { sceneAssetApi } from '@/api/sceneAsset'
-import { classifySceneAssetChange, normalizeSceneAsset, validateSceneAssetDraft } from './sceneAssetModel'
-import { normalizeSceneAssetMarkdown } from './sceneAssetMarkdown'
+import { classifySceneAssetChange, normalizeSceneAsset, validateSceneAssetDraft } from './sceneAssetModel.js'
+import { normalizeSceneAssetMarkdown } from './sceneAssetMarkdown.js'
 import {
   filterSceneAssets,
   impactConsumers,
@@ -9,7 +8,7 @@ import {
   preservedImpactConsumers,
   readSceneAssetActionResults,
   sceneAssetIsReferenced
-} from './sceneAssetUiModel'
+} from './sceneAssetUiModel.js'
 import {
   invalidateSceneAssetListCache,
   prepareSceneAssetMutation,
@@ -17,19 +16,31 @@ import {
   resolveSceneAssetProjectId,
   sceneAssetMutationGuard,
   writeSuccessfulSceneAssetListCache
-} from './sceneAssetState'
+} from './sceneAssetState.js'
 
 function failure(code, message) {
   return { ok: false, code, message }
 }
 
+function lazyDefaultApi() {
+  return new Proxy({}, {
+    get(_target, operation) {
+      return async (...args) => {
+        const { sceneAssetApi } = await import('@/api/sceneAsset')
+        return sceneAssetApi[operation](...args)
+      }
+    }
+  })
+}
+
 /** Project-scoped scene asset state; degraded cache is intentionally read-only. */
 export function useSceneAssets(projectId, {
   isProjectArchived = false,
-  api = sceneAssetApi,
+  api = null,
   resultStorage,
   consumerAdapter = null
 } = {}) {
+  const client = api || lazyDefaultApi()
   const state = ref('loading')
   const assets = ref([])
   const filters = reactive({ keyword: '', spaceType: '', reusability: '', status: '', referenced: undefined })
@@ -65,7 +76,7 @@ export function useSceneAssets(projectId, {
     const resolvedProjectId = activeProjectId()
     const filterSnapshot = { ...filters }
     try {
-      const response = await api.list(resolvedProjectId, filterSnapshot)
+      const response = await client.list(resolvedProjectId, filterSnapshot)
       const list = Array.isArray(response) ? response : response.items ?? []
       assets.value = list.map(normalizeSceneAsset)
       writeSuccessfulSceneAssetListCache(resolvedProjectId, filterSnapshot, assets.value)
@@ -86,7 +97,7 @@ export function useSceneAssets(projectId, {
 
   async function loadAsset(assetId) {
     try {
-      const asset = normalizeSceneAsset(await api.get(activeProjectId(), assetId))
+      const asset = normalizeSceneAsset(await client.get(activeProjectId(), assetId))
       selectAsset(asset)
       return { ok: true, asset }
     } catch (error) {
@@ -142,7 +153,7 @@ export function useSceneAssets(projectId, {
     if (prepared) return prepared
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
-      const asset = normalizeSceneAsset(await api.create(resolvedProjectId, draft))
+      const asset = normalizeSceneAsset(await client.create(resolvedProjectId, draft))
       assets.value = [asset, ...assets.value]
       invalidateSceneAssetListCache(resolvedProjectId)
       selectAsset(asset)
@@ -155,7 +166,7 @@ export function useSceneAssets(projectId, {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
       const before = assets.value.find(item => item.id === assetId) || selectedAsset.value || {}
-      const asset = normalizeSceneAsset(await api.update(resolvedProjectId, assetId, draft))
+      const asset = normalizeSceneAsset(await client.update(resolvedProjectId, assetId, draft))
       replaceAsset(asset)
       invalidateSceneAssetListCache(resolvedProjectId)
       const change = classifySceneAssetChange(before, asset)
@@ -171,7 +182,7 @@ export function useSceneAssets(projectId, {
   async function createFromLocation(draft) {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
-      const asset = normalizeSceneAsset(await api.createFromLocation(resolvedProjectId, draft))
+      const asset = normalizeSceneAsset(await client.createFromLocation(resolvedProjectId, draft))
       replaceAsset(asset, true)
       invalidateSceneAssetListCache(resolvedProjectId)
       return asset
@@ -182,7 +193,7 @@ export function useSceneAssets(projectId, {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
       const before = assets.value.find(item => item.id === assetId) || selectedAsset.value || {}
-      const asset = normalizeSceneAsset(await api.createVariant(resolvedProjectId, assetId, draft))
+      const asset = normalizeSceneAsset(await client.createVariant(resolvedProjectId, assetId, draft))
       replaceAsset(asset)
       invalidateSceneAssetListCache(resolvedProjectId)
       const change = classifySceneAssetChange(before, asset)
@@ -195,7 +206,7 @@ export function useSceneAssets(projectId, {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
       const before = assets.value.find(item => item.id === assetId) || selectedAsset.value || {}
-      const asset = normalizeSceneAsset(await api.updateVariant(resolvedProjectId, assetId, variantId, draft))
+      const asset = normalizeSceneAsset(await client.updateVariant(resolvedProjectId, assetId, variantId, draft))
       replaceAsset(asset)
       invalidateSceneAssetListCache(resolvedProjectId)
       const change = classifySceneAssetChange(before, asset)
@@ -208,7 +219,7 @@ export function useSceneAssets(projectId, {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
       const before = assets.value.find(item => item.id === assetId) || selectedAsset.value || {}
-      const version = await api.restore(resolvedProjectId, assetId, versionId, draft)
+      const version = await client.restore(resolvedProjectId, assetId, versionId, draft)
       invalidateSceneAssetListCache(resolvedProjectId)
       const reloaded = await loadAsset(assetId)
       const change = reloaded.ok
@@ -227,7 +238,7 @@ export function useSceneAssets(projectId, {
   async function archive(assetId) {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
-      await api.archive(resolvedProjectId, assetId)
+      await client.archive(resolvedProjectId, assetId)
       const archived = assets.value.find(asset => asset.id === assetId)
       assets.value = assets.value.map(asset => asset.id === assetId ? { ...asset, status: 'ARCHIVED' } : asset)
       if (selectedAsset.value?.id === assetId && archived) selectAsset({ ...archived, status: 'ARCHIVED' })
@@ -239,8 +250,10 @@ export function useSceneAssets(projectId, {
   async function disable(assetId) {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
-      const affectedConsumers = preservedImpactConsumers(impact.value)
-      const asset = normalizeSceneAsset(await api.disable(resolvedProjectId, assetId))
+      const loadedImpact = await loadImpact(assetId)
+      if (!loadedImpact.ok) throw Object.assign(new Error(loadedImpact.message), { code: loadedImpact.code })
+      const affectedConsumers = preservedImpactConsumers(loadedImpact.impact)
+      const asset = normalizeSceneAsset(await client.disable(resolvedProjectId, assetId))
       replaceAsset(asset)
       invalidateSceneAssetListCache(resolvedProjectId)
       return { asset, result: recordResult({ action: 'disable-scene-asset', assetId, affectedConsumers }) }
@@ -250,7 +263,7 @@ export function useSceneAssets(projectId, {
   async function activate(assetId) {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
-      const asset = normalizeSceneAsset(await api.activate(resolvedProjectId, assetId))
+      const asset = normalizeSceneAsset(await client.activate(resolvedProjectId, assetId))
       replaceAsset(asset)
       invalidateSceneAssetListCache(resolvedProjectId)
       return { asset, result: recordResult({ action: 'activate-scene-asset', assetId, affectedConsumers: [] }) }
@@ -260,7 +273,7 @@ export function useSceneAssets(projectId, {
   async function loadImpact(assetId = selectedAsset.value?.id) {
     try {
       if (assetId == null) return failure('SCENE_ASSET_REQUIRED', '请先选择场景资产')
-      impact.value = await api.impact(activeProjectId(), assetId)
+      impact.value = await client.impact(activeProjectId(), assetId)
       return { ok: true, impact: impact.value }
     } catch (error) {
       return failure(error?.code || 'SCENE_ASSET_IMPACT_FAILED', error?.message || '影响范围加载失败')
@@ -270,7 +283,7 @@ export function useSceneAssets(projectId, {
   async function loadMarkdown(assetId = selectedAsset.value?.id) {
     try {
       if (assetId == null) return failure('SCENE_ASSET_REQUIRED', '请先选择场景资产')
-      markdown.value = normalizeSceneAssetMarkdown(await api.markdown(activeProjectId(), assetId))
+      markdown.value = normalizeSceneAssetMarkdown(await client.markdown(activeProjectId(), assetId))
       return { ok: true, markdown: markdown.value }
     } catch (error) {
       return failure(error?.code || 'SCENE_ASSET_MARKDOWN_FAILED', error?.message || 'Markdown 预览加载失败')

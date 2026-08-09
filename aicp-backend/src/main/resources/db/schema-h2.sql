@@ -490,6 +490,7 @@ CREATE TABLE IF NOT EXISTS asset_applications (
     project_id BIGINT NOT NULL,
     target_type VARCHAR(20),
     target_id BIGINT,
+    target_key VARCHAR(128),
     change_summary VARCHAR(500),
     previous_state VARCHAR(4000),
     undo_token_hash VARCHAR(64),

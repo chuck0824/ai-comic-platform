@@ -412,15 +412,63 @@ class ProjectSceneAssetLifecycleE2ETest {
         application.setProjectId(projectId);
         application.setTargetType("SCRIPT_SCENE");
         application.setTargetId(9001L);
+        application.setTargetKey("EP-007-SCENE-001");
         application.setIdempotencyKey(UUID.randomUUID().toString());
         application.setStatus("APPLIED");
         applicationMapper.insert(application);
 
+        AssetApplication legacyApplication = new AssetApplication();
+        legacyApplication.setWorkspaceId("project_" + projectId);
+        legacyApplication.setAssetId(assetId);
+        legacyApplication.setAssetVersionId(versionFor(assetId, 1).getId());
+        legacyApplication.setProjectId(projectId);
+        legacyApplication.setTargetType("SCRIPT_SCENE");
+        legacyApplication.setTargetId(9002L);
+        legacyApplication.setIdempotencyKey(UUID.randomUUID().toString());
+        legacyApplication.setStatus("APPLIED");
+        applicationMapper.insert(legacyApplication);
+
+        String body = mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> refs = JsonPath.read(body, "$.data.references");
+        assertThat(refs).anySatisfy(ref -> {
+            assertThat(ref.get("type")).isEqualTo("SCRIPT_SCENE");
+            assertThat(ref.get("consumer_id")).isEqualTo(9001);
+            assertThat(ref.get("consumer_key")).isEqualTo("EP-007-SCENE-001");
+        });
+        assertThat(refs).anySatisfy(ref -> {
+            assertThat(ref.get("type")).isEqualTo("SCRIPT_SCENE");
+            assertThat(ref.get("consumer_id")).isEqualTo(9002);
+            assertThat(ref.get("consumer_key")).isEqualTo("9002");
+        });
+    }
+
+    @Test
+    void reviewingCurrentDraftRemainsAnActiveConsumerAndBlocksArchive() throws Exception {
+        long projectId = createProject(ownerId, "待审分镜活跃引用测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "待审场景", "白天");
+        long assetVersionId = versionFor(assetId, 1).getId();
+        ContentUnit unit = persistedContentUnit(projectId, "UNIT-REVIEWING", "待审分镜");
+        Storyboard storyboard = persistedStoryboard(projectId, unit, "reviewing-current-draft");
+        StoryboardVersion draft = persistedStoryboardVersion(storyboard, "draft", 1);
+        persistedStoryboardShot(draft, assetId, assetVersionId, "SHOT-REVIEWING");
+        storyboard.setCurrentDraftVersionId(draft.getId());
+        storyboardMapper.updateById(storyboard);
+
+        mvc.perform(post("/api/v1/content-projects/{projectId}/storyboards/{storyboardId}/versions/{versionId}/submit-review",
+                        projectId, storyboard.getId(), draft.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"revision\":0}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("reviewing"));
+
         mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.references[0].type").value("SCRIPT_SCENE"))
-                .andExpect(jsonPath("$.data.references[0].consumer_id").value(9001))
-                .andExpect(jsonPath("$.data.references[0].consumer_key").value("9001"));
+                .andExpect(jsonPath("$.data.references.length()").value(1))
+                .andExpect(jsonPath("$.data.references[0].consumer_key").value("SHOT-REVIEWING"));
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/archive", projectId, assetId))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message", containsString("仍被引用")));
     }
 
     @Test

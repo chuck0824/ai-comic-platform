@@ -102,6 +102,7 @@ public class AssetApplicationService {
         application.setProjectId(req.projectId());
         application.setTargetType(req.targetType());
         application.setTargetId(req.targetId());
+        application.setTargetKey(req.targetKey());
         application.setChangeSummary(changeSummary);
         application.setPreviousState(previousState);
         application.setUndoTokenHash(undoTokenHash);

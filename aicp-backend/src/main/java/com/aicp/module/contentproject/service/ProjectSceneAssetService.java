@@ -633,7 +633,7 @@ public class ProjectSceneAssetService {
             Storyboard storyboard = storyboardById.get(version.getStoryboardId());
             if (storyboard == null) continue;
             boolean currentDraft = Objects.equals(storyboard.getCurrentDraftVersionId(), version.getId())
-                    && storyboardVersionEditable(version);
+                    && storyboardVersionActiveDraft(version);
             boolean currentImmutable = Objects.equals(storyboard.getCurrentLockedVersionId(), version.getId())
                     && storyboardVersionLocked(version);
             if (currentDraft || currentImmutable) authoritativeVersions.put(version.getId(), version);
@@ -661,8 +661,8 @@ public class ProjectSceneAssetService {
                     ? units.get(application.getTargetId()) : null;
             String type = application.getTargetType() == null || application.getTargetType().isBlank()
                     ? "APPLICATION" : application.getTargetType();
-            String consumerKey = "SCRIPT_SCENE".equals(type) && application.getTargetId() != null
-                    ? String.valueOf(application.getTargetId()) : (unit == null ? null : unit.getStableKey());
+            String consumerKey = "SCRIPT_SCENE".equals(type)
+                    ? scriptSceneConsumerKey(application) : (unit == null ? null : unit.getStableKey());
             refsByAsset.get(application.getAssetId()).add(new ImpactReferenceView(
                     type, application.getId(), application.getTargetId(), consumerKey,
                     null, application.getAssetVersionId(),
@@ -754,13 +754,21 @@ public class ProjectSceneAssetService {
         }
     }
 
-    private boolean storyboardVersionEditable(StoryboardVersion version) {
+    private boolean storyboardVersionActiveDraft(StoryboardVersion version) {
         if (version == null || version.getStatus() == null) return false;
         try {
-            return StoryboardStateMachine.isEditable(VersionStatus.valueOf(version.getStatus().toUpperCase()));
+            VersionStatus status = VersionStatus.valueOf(version.getStatus().toUpperCase());
+            return status == VersionStatus.DRAFT || status == VersionStatus.REVIEWING;
         } catch (IllegalArgumentException ignored) {
             return false;
         }
+    }
+
+    private String scriptSceneConsumerKey(AssetApplication application) {
+        if (application.getTargetKey() != null && !application.getTargetKey().isBlank()) {
+            return application.getTargetKey();
+        }
+        return application.getTargetId() == null ? null : String.valueOf(application.getTargetId());
     }
 
     private record SceneAssetBase(WorkspaceAsset asset, AssetVersion current,
