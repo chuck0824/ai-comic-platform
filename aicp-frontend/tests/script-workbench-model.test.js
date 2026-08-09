@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import * as workbenchModel from '../src/views/content-project/workbench/scriptWorkbenchModel.js'
+import { useScriptWorkbench } from '../src/views/content-project/workbench/useScriptWorkbench.js'
 import {
   STAGES,
   createWorkbenchState,
@@ -184,4 +185,78 @@ test('overall progress counts completed stages and reaches 100 only after final 
   assert.equal(workbenchModel.getOverallProgress(state), 88)
   workbenchModel.completeFinalStage(state, { persisted: true })
   assert.equal(workbenchModel.getOverallProgress(state), 100)
+})
+
+test('non-demo generation requires a positive point estimate while explicit demos remain free', () => {
+  const invalidEstimates = [undefined, Number.NaN, 0, -3]
+
+  for (const estimatedPoints of invalidEstimates) {
+    const state = createWorkbenchState()
+    const rejected = beginGeneration(state, {
+      id: `invalid-${String(estimatedPoints)}`,
+      model: { id: 'qwen-plus' },
+      estimatedPoints
+    })
+    assert.deepEqual(rejected, {
+      allowed: false,
+      code: 'POINT_ESTIMATE_REQUIRED',
+      title: '请确认积分预估',
+      message: '非演示模型需要大于 0 的预估积分后才能开始生成。',
+      targetAction: 'set_generation_point_estimate'
+    })
+    assert.equal(state.tasks.length, 0)
+  }
+
+  const paidState = createWorkbenchState()
+  const paid = beginGeneration(paidState, {
+    id: 'positive-estimate', model: { id: 'qwen-plus' }, estimatedPoints: 7
+  })
+  assert.equal(paid.estimatedPoints, 7)
+  assert.equal(paidState.tasks.length, 1)
+
+  const demoState = createWorkbenchState()
+  const demo = beginGeneration(demoState, {
+    id: 'free-demo', model: { id: 'demo-text', demo: true }, estimatedPoints: 0
+  })
+  assert.equal(demo.estimatedPoints, 0)
+  assert.equal(demoState.tasks.length, 1)
+})
+
+function reachFinalStage(state) {
+  for (const stage of STAGES.slice(1)) {
+    requestStageTransition(state, stage.key)
+    completeStageTransition(state, { persisted: true })
+  }
+}
+
+test('final-stage adapter persists before completing the final stage', async () => {
+  const calls = []
+  const workbench = useScriptWorkbench({
+    persistFinalStage: async stageKey => {
+      calls.push(stageKey)
+      return { persisted: true, message: '最终阶段已保存' }
+    }
+  })
+  reachFinalStage(workbench.state)
+  assert.equal(workbench.progress.value, 88)
+
+  const completed = await workbench.completeFinalStageWithPersistence()
+
+  assert.deepEqual(calls, ['text_storyboard'])
+  assert.equal(completed.key, 'text_storyboard')
+  assert.equal(workbench.progress.value, 100)
+})
+
+test('final-stage adapter keeps progress at 88 when persistence fails', async () => {
+  const workbench = useScriptWorkbench({
+    persistFinalStage: async () => ({ persisted: false, message: '最终阶段保存失败' })
+  })
+  reachFinalStage(workbench.state)
+
+  const rejected = await workbench.completeFinalStageWithPersistence()
+
+  assert.equal(rejected.allowed, false)
+  assert.equal(rejected.code, 'FINAL_STAGE_PERSISTENCE_FAILED')
+  assert.equal(workbench.state.completedStages.includes('text_storyboard'), false)
+  assert.equal(workbench.progress.value, 88)
 })

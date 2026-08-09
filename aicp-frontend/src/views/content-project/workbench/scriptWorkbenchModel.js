@@ -74,6 +74,11 @@ function generationRejection(code, title, message) {
   return result(false, code, title, message, 'focus_generation_result')
 }
 
+function hasPositivePointEstimate(estimatedPoints) {
+  const value = Number(estimatedPoints)
+  return Number.isFinite(value) && value > 0
+}
+
 /** Returns an explanation for unmet business conditions without disabling an action. */
 export function evaluateActionPrecondition(context = {}, action) {
   if (context.projectArchived) {
@@ -84,6 +89,9 @@ export function evaluateActionPrecondition(context = {}, action) {
   }
   if (['generate', 'begin_generation'].includes(action) && (!context.model || !(context.model.id ?? context.model.modelId))) {
     return result(false, 'MODEL_REQUIRED', '请选择模型', '选择可用模型后才能开始生成。', 'select_generation_model')
+  }
+  if (['generate', 'begin_generation'].includes(action) && !isDemoModel(context.model) && !hasPositivePointEstimate(context.estimatedPoints)) {
+    return result(false, 'POINT_ESTIMATE_REQUIRED', '请确认积分预估', '非演示模型需要大于 0 的预估积分后才能开始生成。', 'set_generation_point_estimate')
   }
   if (action === 'novel_analysis' && !context.novelUploaded) {
     return result(false, 'NOVEL_UPLOAD_REQUIRED', '请先上传小说', '上传并解析小说文件后才能开始分析。', 'focus_novel_upload')
@@ -185,7 +193,7 @@ export function navigateToEnteredStage(state, targetStage) {
 
 /** Begins one task record shared by progress, result, acceptance, and discard. */
 export function beginGeneration(state, input = {}) {
-  const condition = evaluateActionPrecondition({ model: input.model }, 'begin_generation')
+  const condition = evaluateActionPrecondition({ model: input.model, estimatedPoints: input.estimatedPoints }, 'begin_generation')
   if (!condition.allowed) return condition
   const existingTask = input.id != null ? findTask(state, input.id) : null
   if (existingTask) return generationRejection('GENERATION_TASK_EXISTS', '生成任务已存在', '该任务已经创建，不能重复开始。')
@@ -195,7 +203,7 @@ export function beginGeneration(state, input = {}) {
     status: 'running',
     modelId: model.id,
     modelName: model.name,
-    estimatedPoints: model.demo ? 0 : Number(input.estimatedPoints) || 0,
+    estimatedPoints: model.demo ? 0 : Number(input.estimatedPoints),
     actualPoints: null,
     progress: 0,
     subtask: input.subtask || '正在准备生成任务',

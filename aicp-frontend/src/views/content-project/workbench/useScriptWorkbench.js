@@ -1,8 +1,10 @@
 import { computed, reactive, ref } from 'vue'
 import {
+  STAGES,
   acceptGeneration,
   beginGeneration,
   canNavigateToStage,
+  completeFinalStage as completeFinalStageModel,
   completeStageTransition,
   createWorkbenchState,
   discardGeneration,
@@ -13,10 +15,42 @@ import {
   requestStageTransition,
   updateGenerationProgress,
   updateStageTransitionProgress
-} from './scriptWorkbenchModel'
+} from './scriptWorkbenchModel.js'
+
+function finalStagePersistenceFailure(message) {
+  return {
+    allowed: false,
+    code: 'FINAL_STAGE_PERSISTENCE_FAILED',
+    title: '最终阶段保存失败',
+    message: message || '最终阶段保存失败，请重试。',
+    targetAction: 'retry_final_stage_persistence'
+  }
+}
+
+/** Persists the terminal stage through an injected adapter before completing its pure-model state. */
+export async function completeFinalStageWithPersistence(state, persistFinalStage) {
+  const finalStage = STAGES.at(-1).key
+  if (state.activeStage !== finalStage) {
+    return {
+      allowed: false,
+      code: 'FINAL_STAGE_REQUIRED',
+      title: '请先进入最终阶段',
+      message: '仅文字分镜阶段可以完成整个创作流程。',
+      targetAction: 'focus_text_storyboard'
+    }
+  }
+  try {
+    if (typeof persistFinalStage !== 'function') return finalStagePersistenceFailure('最终阶段保存服务不可用。')
+    const response = await persistFinalStage(finalStage)
+    if (response?.persisted !== true) return finalStagePersistenceFailure(response?.message)
+    return completeFinalStageModel(state, { persisted: true }) || finalStagePersistenceFailure(response.message)
+  } catch (error) {
+    return finalStagePersistenceFailure(error?.message)
+  }
+}
 
 /** Vue adapter around the pure workbench state; callers provide real persistence. */
-export function useScriptWorkbench({ persistStage } = {}) {
+export function useScriptWorkbench({ persistStage, persistFinalStage } = {}) {
   const state = reactive(createWorkbenchState())
   const guidance = ref(null)
   const generationTask = ref(null)
@@ -87,6 +121,10 @@ export function useScriptWorkbench({ persistStage } = {}) {
     }
   }
 
+  function completeFinalStage() {
+    return completeFinalStageWithPersistence(state, persistFinalStage)
+  }
+
   function navigate(targetStage) {
     return navigateToEnteredStage(state, targetStage)
   }
@@ -95,6 +133,7 @@ export function useScriptWorkbench({ persistStage } = {}) {
     state, activeStage, stages, progress, guidance, generationTaskRecord, result,
     runAction, beginGeneration: begin, updateGenerationProgress: updateGeneration,
     finishGeneration: finish, acceptGeneration: accept, discardGeneration: discard,
-    transition, navigate, canNavigateToStage: targetStage => canNavigateToStage(state, targetStage)
+    transition, completeFinalStageWithPersistence: completeFinalStage,
+    navigate, canNavigateToStage: targetStage => canNavigateToStage(state, targetStage)
   }
 }

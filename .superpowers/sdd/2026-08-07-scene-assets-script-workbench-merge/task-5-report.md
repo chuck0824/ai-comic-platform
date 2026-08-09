@@ -54,3 +54,26 @@ DONE_WITH_CONCERNS
 ## Fix round 1/5 — concern
 
 - The worktree lacks installed Vue dependencies, so the Vue composable/SFCs are syntax-checked but cannot run in Node here. The adapter's early-return path is deliberately minimal and follows the tested pure transition result.
+
+---
+
+## Fix round 2/5 — human adjudication
+
+- Scope remains the workbench state model and shared Vue adapter only. `ContentProjectWorkspace.vue` remains untouched; Task 9 owns integration.
+- Non-demo generation now requires a finite, positive point estimate. Missing, `NaN`, zero, and negative estimates return the actionable `POINT_ESTIMATE_REQUIRED` guidance without creating a task. An explicitly selected demo model remains the sole zero-point path.
+- `useScriptWorkbench` now exposes `completeFinalStageWithPersistence`. It validates that the active stage is `text_storyboard`, invokes injected `persistFinalStage`, and calls the pure-model final completion only for `{ persisted: true }`. Rejected or thrown persistence leaves the final stage incomplete and progress at 88%.
+
+## Fix round 2/5 — RED / GREEN evidence
+
+- RED: `cd aicp-frontend && node --test tests/script-workbench-model.test.js`
+  - 3 targeted failures: invalid paid-model estimates produced tasks with zero points; the final-stage persistence method was not exposed for either success or failure flows.
+  - The initial adapter import also exposed a Node ESM resolution issue; adding the `.js` extension was a no-behavior testability correction, after which the three behavior failures reproduced directly.
+- GREEN: `cd aicp-frontend && node --test tests/script-workbench-model.test.js`
+  - Passed: 15 tests, 0 failures. The estimate table covers missing, `NaN`, zero, negative, positive, and explicit-demo inputs; adapter success and rejection are both exercised through the composable.
+- Focused regression: `node --test --test-name-pattern='workbench|eight-stage|transition|actions stay clickable' tests/*.test.js`
+  - Passed: 18 tests, 0 failures.
+- Syntax and hygiene: `node --check` passed for the pure model, composable, and test; `git diff --check` passed.
+
+## Fix round 2/5 — concern
+
+- Vue dependencies were installed locally from the existing lockfile (without changing dependency files) to run the composable adapter tests. The audit reports existing dependency advisories; this task does not alter dependencies.
