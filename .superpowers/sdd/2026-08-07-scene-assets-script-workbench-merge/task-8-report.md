@@ -76,3 +76,29 @@ GREEN:
 ### Remaining integration note
 
 - The three downstream consumer decisions still intentionally require Task 9 persistence adapters. The backend now supplies sufficient consumer/lock/snapshot identity for those adapters; the Task 8 UI will not report success when an adapter is absent or does not return `persisted: true`.
+
+---
+
+## Review fix round 2/5 — active consumers, durable sync semantics, and bounded reads
+
+### Changes
+
+- Impact now treats only the storyboard's editable current-draft pointer and immutable current-locked pointer as authoritative consumers. Historical copies are omitted; a current locked `SUPERSEDED` version remains immutable and `PINNED` through the shared storyboard state machine.
+- Scene-asset list projection batches all versions, active applications, canvas placements, project storyboards, authoritative storyboard versions/shots, and content units. Filters run before impact aggregation where their fields allow it, and the query-count regression remains bounded as the asset count grows.
+- Sync state is derived from persisted version semantics. Management-only metadata such as tags remains `CURRENT` after API reload in the library, drawer, and all cross-stage fallbacks; semantic visual changes remain `STALE`. Restoring the same semantic version as a pinned consumer also resolves to `CURRENT`.
+- `SCRIPT_SCENE` impact exposes its exact target as both `consumer_id` and stable string `consumer_key`; the script stage passes the same stable key into shared status resolution.
+- Added documented `DISABLED` values to both shared asset lifecycle enums. No production status switch over these enums exists, so no exhaustive switch required expansion; existing new-binding guards continue to reject disabled assets.
+- Disable and reference-replacement flows capture authoritative consumers before selection or adapter side effects can clear transient impact state. Empty adapter consumer results no longer erase the pre-mutation affected-consumer audit.
+
+### RED / GREEN evidence
+
+- Recovered RED: backend focused tests reported two failures and one test error: shared lifecycle enums omitted `DISABLED`; the legacy restore assertion conflicted with persisted semantic equality; and the new bounded-query test had strict-Mockito unused stubs.
+- Added frontend REDs independently reproduced missing stable `SCRIPT_SCENE` key wiring and replacement results losing the pre-adapter impact snapshot.
+- Backend GREEN: `ProjectSceneAssetLifecycleE2ETest` 16/16, `ProjectSceneAssetBatchQueryTest` 1/1, `StoryboardSceneAssetSnapshotE2ETest` 17/17, and `AssetWorkbenchContractTest` 19/19 (53/53 total).
+- Frontend GREEN: Task 8 contract 17/17; Task 4/5/6/7 focused regression 63/63; requested name-pattern suite passed across 20 contracts with zero failures.
+- Five affected Vue SFCs passed parse, script, and template compilation. `node --check` passed for the affected JavaScript files and contract test.
+- Vite production build passed after transforming 1,963 modules to `/tmp/aicp-task8-fix2-dist`; `git diff --check` passed.
+
+### Scope note
+
+- `ContentProjectWorkspace.vue` remains untouched. Native mounting and real consumer persistence adapter composition remain Task 9 scope.

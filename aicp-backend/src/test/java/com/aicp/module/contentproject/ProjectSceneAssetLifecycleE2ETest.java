@@ -104,7 +104,7 @@ class ProjectSceneAssetLifecycleE2ETest {
     }
 
     @Test
-    void versionAdvancementKeepsApplicationsUndoableAndReportsStaleAcrossUpdateAndRestore() throws Exception {
+    void versionAdvancementKeepsApplicationsUndoableAndUsesPersistedSemanticStatusAcrossUpdateAndRestore() throws Exception {
         long projectId = createProject(ownerId, "场景引用过期测试");
         authenticateAs(ownerId);
         long assetId = createSceneAsset(projectId, "旧版本场景", "原始灯光");
@@ -141,8 +141,8 @@ class ProjectSceneAssetLifecycleE2ETest {
         assertThat(applicationMapper.selectById(application.getId()).getStatus()).isEqualTo("APPLIED");
         mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.stale_references").value(1))
-                .andExpect(jsonPath("$.data.references[0].sync_status").value("NEEDS_SYNC"));
+                .andExpect(jsonPath("$.data.stale_references").value(0))
+                .andExpect(jsonPath("$.data.references[0].sync_status").value("CURRENT"));
     }
 
     @Test
@@ -377,6 +377,53 @@ class ProjectSceneAssetLifecycleE2ETest {
     }
 
     @Test
+    void managementOnlyUpdateRemainsCurrentAfterApiReload() throws Exception {
+        long projectId = createProject(ownerId, "管理字段同步契约测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "管理字段场景", "白天");
+        ContentUnit unit = persistedContentUnit(projectId, "UNIT-MANAGEMENT", "管理字段集");
+        persistedContentUnitApplication(projectId, assetId, unit);
+
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"tags\":[\"重要场景\"]}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sync_status").value("CURRENT"));
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.sync_status").value("CURRENT"));
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets", projectId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data[0].sync_status").value("CURRENT"));
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.stale_references").value(0))
+                .andExpect(jsonPath("$.data.references[0].sync_status").value("CURRENT"));
+    }
+
+    @Test
+    void scriptSceneImpactUsesExactStableConsumerIdentity() throws Exception {
+        long projectId = createProject(ownerId, "正文场景消费者契约测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "正文场景", "白天");
+        AssetApplication application = new AssetApplication();
+        application.setWorkspaceId("project_" + projectId);
+        application.setAssetId(assetId);
+        application.setAssetVersionId(versionFor(assetId, 1).getId());
+        application.setProjectId(projectId);
+        application.setTargetType("SCRIPT_SCENE");
+        application.setTargetId(9001L);
+        application.setIdempotencyKey(UUID.randomUUID().toString());
+        application.setStatus("APPLIED");
+        applicationMapper.insert(application);
+
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.references[0].type").value("SCRIPT_SCENE"))
+                .andExpect(jsonPath("$.data.references[0].consumer_id").value(9001))
+                .andExpect(jsonPath("$.data.references[0].consumer_key").value("9001"));
+    }
+
+    @Test
     void impactEnumeratesUnlockedAndLockedModernStoryboardConsumers() throws Exception {
         long projectId = createProject(ownerId, "分镜影响契约测试");
         authenticateAs(ownerId);
@@ -404,6 +451,49 @@ class ProjectSceneAssetLifecycleE2ETest {
             assertThat(ref.get("snapshot_locked")).isEqualTo(true);
             assertThat(ref.get("sync_status")).isEqualTo("PINNED");
             assertThat(ref.get("snapshot_fingerprint")).isEqualTo("fp-SHOT-LOCKED");
+        });
+    }
+
+    @Test
+    void forkAndSupersedeImpactIncludesOnlyCurrentDraftAndCurrentImmutableLockedConsumer() throws Exception {
+        long projectId = createProject(ownerId, "分镜活跃指针契约测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "分镜版本场景", "白天");
+        long oldVersionId = versionFor(assetId, 1).getId();
+        ContentUnit unit = persistedContentUnit(projectId, "UNIT-FORK", "派生分镜");
+
+        Storyboard storyboard = persistedStoryboard(projectId, unit, "fork-supersede");
+        StoryboardVersion historical = persistedStoryboardVersion(storyboard, "superseded", 1);
+        persistedStoryboardShot(historical, assetId, oldVersionId, "SHOT-HISTORICAL");
+        StoryboardVersion immutableCurrent = persistedStoryboardVersion(storyboard, "superseded", 2);
+        persistedStoryboardShot(immutableCurrent, assetId, oldVersionId, "SHOT-CURRENT-LOCKED");
+        StoryboardVersion forkDraft = persistedStoryboardVersion(storyboard, "draft", 3);
+        persistedStoryboardShot(forkDraft, assetId, oldVersionId, "SHOT-CURRENT-DRAFT");
+        storyboard.setCurrentLockedVersionId(immutableCurrent.getId());
+        storyboard.setCurrentDraftVersionId(forkDraft.getId());
+        storyboardMapper.updateById(storyboard);
+
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"lighting\":\"深夜\"}"))
+                .andExpect(status().isOk());
+        String body = mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.references.length()").value(2))
+                .andExpect(jsonPath("$.data.locked_references").value(1))
+                .andExpect(jsonPath("$.data.stale_references").value(1))
+                .andReturn().getResponse().getContentAsString();
+        java.util.List<String> keys = JsonPath.read(body, "$.data.references[*].consumer_key");
+        assertThat(keys).containsExactlyInAnyOrder("SHOT-CURRENT-LOCKED", "SHOT-CURRENT-DRAFT")
+                .doesNotContain("SHOT-HISTORICAL");
+        java.util.List<java.util.Map<String, Object>> refs = JsonPath.read(body, "$.data.references");
+        assertThat(refs).anySatisfy(ref -> {
+            assertThat(ref.get("consumer_key")).isEqualTo("SHOT-CURRENT-LOCKED");
+            assertThat(ref.get("sync_status")).isEqualTo("PINNED");
+            assertThat(ref.get("locked")).isEqualTo(true);
+        }).anySatisfy(ref -> {
+            assertThat(ref.get("consumer_key")).isEqualTo("SHOT-CURRENT-DRAFT");
+            assertThat(ref.get("sync_status")).isEqualTo("NEEDS_SYNC");
+            assertThat(ref.get("locked")).isEqualTo(false);
         });
     }
 
@@ -502,24 +592,39 @@ class ProjectSceneAssetLifecycleE2ETest {
 
     private void persistedStoryboardShot(long projectId, ContentUnit unit, long assetId, long assetVersionId,
                                           String versionStatus, String shotCode) {
+        Storyboard storyboard = persistedStoryboard(projectId, unit, shotCode);
+        StoryboardVersion version = persistedStoryboardVersion(storyboard, versionStatus, 1);
+        persistedStoryboardShot(version, assetId, assetVersionId, shotCode);
+        if ("draft".equalsIgnoreCase(versionStatus)) storyboard.setCurrentDraftVersionId(version.getId());
+        else if (com.aicp.module.storyboard.domain.StoryboardStateMachine.isLocked(
+                com.aicp.module.storyboard.domain.StoryboardEnums.VersionStatus.valueOf(versionStatus.toUpperCase()))) {
+            storyboard.setCurrentLockedVersionId(version.getId());
+        }
+        storyboardMapper.updateById(storyboard);
+    }
+
+    private Storyboard persistedStoryboard(long projectId, ContentUnit unit, String key) {
         Storyboard storyboard = new Storyboard();
         storyboard.setUuid(UUID.randomUUID().toString());
         storyboard.setProjectId(projectId);
         storyboard.setContentUnitId(unit.getId());
-        storyboard.setSourceContentVersionId((long) Math.abs(shotCode.hashCode()));
-        storyboard.setTitle(shotCode);
-        storyboard.setPurpose(shotCode);
+        storyboard.setSourceContentVersionId((long) Math.abs(key.hashCode()));
+        storyboard.setTitle(key);
+        storyboard.setPurpose(key);
         storyboard.setProductionStatus("not_ready");
         storyboard.setCreatedBy(ownerId);
         storyboard.setIsDeleted(0);
         storyboardMapper.insert(storyboard);
+        return storyboard;
+    }
 
+    private StoryboardVersion persistedStoryboardVersion(Storyboard storyboard, String versionStatus, int versionNo) {
         StoryboardVersion version = new StoryboardVersion();
         version.setUuid(UUID.randomUUID().toString());
         version.setStoryboardId(storyboard.getId());
         version.setSourceContentVersionId(storyboard.getSourceContentVersionId());
         version.setTier("A");
-        version.setVersionNo(1);
+        version.setVersionNo(versionNo);
         version.setStatus(versionStatus);
         version.setRevision(0);
         version.setSchemaVersion(1);
@@ -533,7 +638,11 @@ class ProjectSceneAssetLifecycleE2ETest {
             version.setLockedAt(java.time.LocalDateTime.now());
         }
         storyboardVersionMapper.insert(version);
+        return version;
+    }
 
+    private StoryboardShot persistedStoryboardShot(StoryboardVersion version, long assetId, long assetVersionId,
+                                                    String shotCode) {
         StoryboardShot shot = new StoryboardShot();
         shot.setUuid(UUID.randomUUID().toString());
         shot.setVersionId(version.getId());
@@ -547,6 +656,7 @@ class ProjectSceneAssetLifecycleE2ETest {
         shot.setStatus("draft");
         shot.setSortOrder(1);
         storyboardShotMapper.insert(shot);
+        return shot;
     }
 
     private String markdownContent(long projectId, long assetId) throws Exception {

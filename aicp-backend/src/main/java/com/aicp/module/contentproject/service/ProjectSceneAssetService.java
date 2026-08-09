@@ -35,6 +35,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.aicp.module.storyboard.entity.Storyboard;
 import com.aicp.module.storyboard.entity.StoryboardShot;
 import com.aicp.module.storyboard.entity.StoryboardVersion;
+import com.aicp.module.storyboard.domain.StoryboardEnums.VersionStatus;
+import com.aicp.module.storyboard.domain.StoryboardStateMachine;
 import com.aicp.module.storyboard.mapper.StoryboardMapper;
 import com.aicp.module.storyboard.mapper.StoryboardVersionMapper;
 import com.aicp.module.storyboard.mapper.StoryboardVersionShotMapper;
@@ -48,11 +50,14 @@ import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
@@ -83,11 +88,17 @@ public class ProjectSceneAssetService {
         projectAccess.require(projectId, userId, Action.VIEW);
         LambdaQueryWrapper<WorkspaceAsset> query = sceneQuery(projectId);
         if (status != null && !status.isBlank()) query.eq(WorkspaceAsset::getStatus, status.trim());
-        return assetMapper.selectList(query.orderByDesc(WorkspaceAsset::getUpdatedAt)).stream()
-                .map(this::toView)
-                .filter(view -> keyword == null || keyword.isBlank() || matchesKeyword(view, keyword.trim()))
-                .filter(view -> spaceType == null || spaceType.equals(view.master().get("space_type")))
-                .filter(view -> reusability == null || reusability.equals(view.master().get("reusability")))
+        List<WorkspaceAsset> assets = assetMapper.selectList(query.orderByDesc(WorkspaceAsset::getUpdatedAt));
+        Map<Long, AssetVersion> versions = versionsForAssets(assets);
+        List<SceneAssetBase> filtered = assets.stream()
+                .map(asset -> base(asset, versions.get(asset.getCurrentVersionId())))
+                .filter(base -> keyword == null || keyword.isBlank() || matchesKeyword(base, keyword.trim()))
+                .filter(base -> spaceType == null || spaceType.equals(base.master().get("space_type")))
+                .filter(base -> reusability == null || reusability.equals(base.master().get("reusability")))
+                .toList();
+        Map<Long, SceneAssetImpactView> impacts = impactsFor(projectId, filtered, versions);
+        return filtered.stream()
+                .map(base -> toView(base, impacts.getOrDefault(base.asset().getId(), emptyImpact(base.asset().getId()))))
                 .filter(view -> referenced == null || referenced == (view.referenceCount() > 0))
                 .toList();
     }
@@ -583,54 +594,126 @@ public class ProjectSceneAssetService {
 
     private SceneAssetImpactView impactFor(Long assetId) {
         WorkspaceAsset asset = assetMapper.selectById(assetId);
-        Long currentVersionId = asset == null ? null : asset.getCurrentVersionId();
-        List<ImpactReferenceView> refs = new ArrayList<>();
-        applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
-                        .eq(AssetApplication::getAssetId, assetId)
-                        .eq(AssetApplication::getStatus, "APPLIED"))
-                .forEach(application -> {
-                    ContentUnit unit = "CONTENT_UNIT".equals(application.getTargetType())
-                            && application.getTargetId() != null ? contentUnitMapper.selectById(application.getTargetId()) : null;
-                    refs.add(new ImpactReferenceView(
-                            application.getTargetType() == null || application.getTargetType().isBlank()
-                                    ? "APPLICATION" : application.getTargetType(),
-                            application.getId(), application.getTargetId(), unit == null ? null : unit.getStableKey(),
-                            null, application.getAssetVersionId(),
-                            syncStatus(application.getAssetVersionId(), currentVersionId), false, false, null,
-                            unit == null ? null : unit.getDisplayNo(), unit == null ? null : unit.getTitle()));
-                });
-        placementMapper.selectList(new LambdaQueryWrapper<CanvasAssetPlacement>()
-                        .eq(CanvasAssetPlacement::getAssetId, assetId).isNull(CanvasAssetPlacement::getReleasedAt))
-                .forEach(placement -> refs.add(new ImpactReferenceView(
-                        "CANVAS_PLACEMENT", placement.getId(), placement.getNodeId(), null,
-                        placement.getCanvasProjectId(), placement.getAssetVersionId(),
-                        syncStatus(placement.getAssetVersionId(), currentVersionId), false, false, null, null, null)));
+        if (asset == null) return emptyImpact(assetId);
+        Map<Long, AssetVersion> versions = versionsForAssets(List.of(asset));
+        SceneAssetBase base = base(asset, versions.get(asset.getCurrentVersionId()));
+        return impactsFor(asset.getContentProjectId(), List.of(base), versions)
+                .getOrDefault(assetId, emptyImpact(assetId));
+    }
 
-        storyboardVersionShotMapper.selectList(new LambdaQueryWrapper<StoryboardShot>()
-                        .eq(StoryboardShot::getSceneAssetId, assetId))
-                .forEach(shot -> {
-                    StoryboardVersion storyboardVersion = storyboardVersionMapper.selectById(shot.getVersionId());
-                    Storyboard storyboard = storyboardVersion == null ? null : storyboardMapper.selectById(storyboardVersion.getStoryboardId());
-                    if (storyboard == null || asset == null || !asset.getContentProjectId().equals(storyboard.getProjectId())) return;
-                    boolean locked = "locked".equalsIgnoreCase(storyboardVersion.getStatus())
-                            || Objects.equals(storyboard.getCurrentLockedVersionId(), storyboardVersion.getId());
-                    ContentUnit unit = contentUnitMapper.selectById(storyboard.getContentUnitId());
-                    refs.add(new ImpactReferenceView(
-                            "STORYBOARD_SHOT", shot.getId(), shot.getId(), shot.getShotCode(),
-                            storyboardVersion.getId(), shot.getSceneAssetVersionId(),
-                            locked ? "PINNED" : syncStatus(shot.getSceneAssetVersionId(), currentVersionId),
-                            locked, locked, snapshotFingerprint(shot.getSceneAssetSnapshot()),
-                            unit == null ? null : unit.getDisplayNo(), unit == null ? null : unit.getTitle()));
-                });
-        long lockedReferences = refs.stream().filter(ImpactReferenceView::locked).count();
-        long staleReferences = refs.stream().filter(reference -> "NEEDS_SYNC".equals(reference.syncStatus())).count();
-        return new SceneAssetImpactView(assetId, lockedReferences, staleReferences, List.copyOf(refs));
+    /**
+     * Builds active-reference summaries with a bounded set of repository reads.
+     * Storyboard consumers are authoritative only when their version is the storyboard's
+     * current draft, or its current locked pointer and immutable by the shared state machine.
+     */
+    private Map<Long, SceneAssetImpactView> impactsFor(Long projectId, List<SceneAssetBase> bases,
+                                                        Map<Long, AssetVersion> versions) {
+        if (bases.isEmpty()) return Map.of();
+        Set<Long> assetIds = bases.stream().map(base -> base.asset().getId())
+                .collect(java.util.stream.Collectors.toCollection(HashSet::new));
+        Map<Long, SceneAssetBase> baseByAsset = bases.stream()
+                .collect(java.util.stream.Collectors.toMap(base -> base.asset().getId(), base -> base));
+        List<AssetApplication> applications = applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
+                .in(AssetApplication::getAssetId, assetIds).eq(AssetApplication::getStatus, "APPLIED"));
+        List<CanvasAssetPlacement> placements = placementMapper.selectList(new LambdaQueryWrapper<CanvasAssetPlacement>()
+                .in(CanvasAssetPlacement::getAssetId, assetIds).isNull(CanvasAssetPlacement::getReleasedAt));
+
+        List<Storyboard> storyboards = storyboardMapper.selectList(new LambdaQueryWrapper<Storyboard>()
+                .eq(Storyboard::getProjectId, projectId));
+        Map<Long, Storyboard> storyboardById = storyboards.stream()
+                .collect(java.util.stream.Collectors.toMap(Storyboard::getId, storyboard -> storyboard));
+        Set<Long> authoritativeVersionIds = storyboards.stream()
+                .flatMap(storyboard -> java.util.stream.Stream.of(
+                        storyboard.getCurrentDraftVersionId(), storyboard.getCurrentLockedVersionId()))
+                .filter(Objects::nonNull).collect(java.util.stream.Collectors.toSet());
+        List<StoryboardVersion> storyboardVersions = authoritativeVersionIds.isEmpty() ? List.of()
+                : storyboardVersionMapper.selectBatchIds(authoritativeVersionIds);
+        Map<Long, StoryboardVersion> authoritativeVersions = new HashMap<>();
+        for (StoryboardVersion version : storyboardVersions) {
+            Storyboard storyboard = storyboardById.get(version.getStoryboardId());
+            if (storyboard == null) continue;
+            boolean currentDraft = Objects.equals(storyboard.getCurrentDraftVersionId(), version.getId())
+                    && storyboardVersionEditable(version);
+            boolean currentImmutable = Objects.equals(storyboard.getCurrentLockedVersionId(), version.getId())
+                    && storyboardVersionLocked(version);
+            if (currentDraft || currentImmutable) authoritativeVersions.put(version.getId(), version);
+        }
+        List<StoryboardShot> shots = authoritativeVersions.isEmpty() ? List.of()
+                : storyboardVersionShotMapper.selectList(new LambdaQueryWrapper<StoryboardShot>()
+                .in(StoryboardShot::getVersionId, authoritativeVersions.keySet())
+                .in(StoryboardShot::getSceneAssetId, assetIds));
+
+        Set<Long> unitIds = applications.stream()
+                .filter(application -> "CONTENT_UNIT".equals(application.getTargetType()))
+                .map(AssetApplication::getTargetId).filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toCollection(HashSet::new));
+        storyboards.stream().map(Storyboard::getContentUnitId).filter(Objects::nonNull).forEach(unitIds::add);
+        Map<Long, ContentUnit> units = unitIds.isEmpty() ? Map.of()
+                : contentUnitMapper.selectBatchIds(unitIds).stream()
+                .collect(java.util.stream.Collectors.toMap(ContentUnit::getId, unit -> unit));
+
+        Map<Long, List<ImpactReferenceView>> refsByAsset = new HashMap<>();
+        for (Long assetId : assetIds) refsByAsset.put(assetId, new ArrayList<>());
+        for (AssetApplication application : applications) {
+            SceneAssetBase base = baseByAsset.get(application.getAssetId());
+            if (base == null) continue;
+            ContentUnit unit = "CONTENT_UNIT".equals(application.getTargetType())
+                    ? units.get(application.getTargetId()) : null;
+            String type = application.getTargetType() == null || application.getTargetType().isBlank()
+                    ? "APPLICATION" : application.getTargetType();
+            String consumerKey = "SCRIPT_SCENE".equals(type) && application.getTargetId() != null
+                    ? String.valueOf(application.getTargetId()) : (unit == null ? null : unit.getStableKey());
+            refsByAsset.get(application.getAssetId()).add(new ImpactReferenceView(
+                    type, application.getId(), application.getTargetId(), consumerKey,
+                    null, application.getAssetVersionId(),
+                    syncStatus(application.getAssetVersionId(), base.current().getId(), versions),
+                    false, false, null,
+                    unit == null ? null : unit.getDisplayNo(), unit == null ? null : unit.getTitle()));
+        }
+        for (CanvasAssetPlacement placement : placements) {
+            SceneAssetBase base = baseByAsset.get(placement.getAssetId());
+            if (base == null) continue;
+            refsByAsset.get(placement.getAssetId()).add(new ImpactReferenceView(
+                    "CANVAS_PLACEMENT", placement.getId(), placement.getNodeId(), null,
+                    placement.getCanvasProjectId(), placement.getAssetVersionId(),
+                    syncStatus(placement.getAssetVersionId(), base.current().getId(), versions),
+                    false, false, null, null, null));
+        }
+        for (StoryboardShot shot : shots) {
+            SceneAssetBase base = baseByAsset.get(shot.getSceneAssetId());
+            StoryboardVersion version = authoritativeVersions.get(shot.getVersionId());
+            Storyboard storyboard = version == null ? null : storyboardById.get(version.getStoryboardId());
+            if (base == null || storyboard == null) continue;
+            boolean locked = storyboardVersionLocked(version);
+            ContentUnit unit = units.get(storyboard.getContentUnitId());
+            refsByAsset.get(shot.getSceneAssetId()).add(new ImpactReferenceView(
+                    "STORYBOARD_SHOT", shot.getId(), shot.getId(), shot.getShotCode(),
+                    version.getId(), shot.getSceneAssetVersionId(),
+                    locked ? "PINNED" : syncStatus(shot.getSceneAssetVersionId(), base.current().getId(), versions),
+                    locked, locked, snapshotFingerprint(shot.getSceneAssetSnapshot()),
+                    unit == null ? null : unit.getDisplayNo(), unit == null ? null : unit.getTitle()));
+        }
+        Map<Long, SceneAssetImpactView> result = new HashMap<>();
+        refsByAsset.forEach((assetId, mutableRefs) -> {
+            List<ImpactReferenceView> refs = List.copyOf(mutableRefs);
+            long locked = refs.stream().filter(ImpactReferenceView::locked).count();
+            long stale = refs.stream().filter(reference -> "NEEDS_SYNC".equals(reference.syncStatus())).count();
+            result.put(assetId, new SceneAssetImpactView(assetId, locked, stale, refs));
+        });
+        return result;
     }
 
     private SceneAssetView toView(WorkspaceAsset asset) {
-        Map<String, Object> metadata = currentMetadata(asset);
-        AssetVersion current = requireCurrentVersion(asset);
-        SceneAssetImpactView impact = impactFor(asset.getId());
+        Map<Long, AssetVersion> versions = versionsForAssets(List.of(asset));
+        SceneAssetBase base = base(asset, versions.get(asset.getCurrentVersionId()));
+        SceneAssetImpactView impact = impactsFor(asset.getContentProjectId(), List.of(base), versions)
+                .getOrDefault(asset.getId(), emptyImpact(asset.getId()));
+        return toView(base, impact);
+    }
+
+    private SceneAssetView toView(SceneAssetBase base, SceneAssetImpactView impact) {
+        WorkspaceAsset asset = base.asset();
+        AssetVersion current = base.current();
         List<String> episodeReferences = impact.references().stream()
                 .filter(reference -> reference.episodeNo() != null)
                 .map(reference -> "第" + reference.episodeNo() + "集 · "
@@ -638,10 +721,50 @@ public class ProjectSceneAssetService {
                 .distinct().sorted().toList();
         return new SceneAssetView(asset.getId(), asset.getUuid(), asset.getContentProjectId(), asset.getAssetType(),
                 asset.getName(), asset.getSourceType(), asset.getStatus(), asset.getCurrentVersionId(),
-                current == null ? 0 : current.getVersionNumber(), master(metadata), variantsFrom(metadata),
+                current.getVersionNumber(), base.master(), variantsFrom(base.metadata()),
                 impact.references().size(), episodeReferences, impact.staleReferences() > 0 ? "STALE" : "CURRENT",
                 asset.getCreatedAt(), asset.getUpdatedAt());
     }
+
+    private Map<Long, AssetVersion> versionsForAssets(List<WorkspaceAsset> assets) {
+        Set<Long> assetIds = assets.stream().map(WorkspaceAsset::getId).filter(Objects::nonNull)
+                .collect(java.util.stream.Collectors.toSet());
+        if (assetIds.isEmpty()) return Map.of();
+        return versionMapper.selectList(new LambdaQueryWrapper<AssetVersion>()
+                        .in(AssetVersion::getAssetId, assetIds)).stream()
+                .collect(java.util.stream.Collectors.toMap(AssetVersion::getId, version -> version));
+    }
+
+    private SceneAssetBase base(WorkspaceAsset asset, AssetVersion current) {
+        if (current == null || !Objects.equals(current.getAssetId(), asset.getId())) throw invalidMetadata();
+        Map<String, Object> metadata = parseMetadata(current.getMetadata());
+        return new SceneAssetBase(asset, current, metadata, master(metadata));
+    }
+
+    private SceneAssetImpactView emptyImpact(Long assetId) {
+        return new SceneAssetImpactView(assetId, 0, 0, List.of());
+    }
+
+    private boolean storyboardVersionLocked(StoryboardVersion version) {
+        if (version == null || version.getStatus() == null) return false;
+        try {
+            return StoryboardStateMachine.isLocked(VersionStatus.valueOf(version.getStatus().toUpperCase()));
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+    }
+
+    private boolean storyboardVersionEditable(StoryboardVersion version) {
+        if (version == null || version.getStatus() == null) return false;
+        try {
+            return StoryboardStateMachine.isEditable(VersionStatus.valueOf(version.getStatus().toUpperCase()));
+        } catch (IllegalArgumentException ignored) {
+            return false;
+        }
+    }
+
+    private record SceneAssetBase(WorkspaceAsset asset, AssetVersion current,
+                                  Map<String, Object> metadata, Map<String, Object> master) {}
 
     private SceneAssetVersionView toVersionView(AssetVersion version, String changeNote) {
         return new SceneAssetVersionView(version.getId(), version.getAssetId(), version.getVersionNumber(),
@@ -802,19 +925,45 @@ public class ProjectSceneAssetService {
         }
     }
 
-    private String syncStatus(Long referencedVersionId, Long currentVersionId) {
-        if (currentVersionId != null && !currentVersionId.equals(referencedVersionId)) {
-            return "NEEDS_SYNC";
-        }
-        return "CURRENT";
+    private String syncStatus(Long referencedVersionId, Long currentVersionId,
+                              Map<Long, AssetVersion> versions) {
+        if (Objects.equals(currentVersionId, referencedVersionId)) return "CURRENT";
+        AssetVersion referenced = versions.get(referencedVersionId);
+        AssetVersion current = versions.get(currentVersionId);
+        return referenced != null && current != null && semanticallyEquivalent(referenced, current)
+                ? "CURRENT" : "NEEDS_SYNC";
     }
 
-    private boolean matchesKeyword(SceneAssetView view, String keyword) {
+    private boolean semanticallyEquivalent(AssetVersion referenced, AssetVersion current) {
+        Map<String, Object> previousMetadata = parseMetadata(referenced.getMetadata());
+        Map<String, Object> currentMetadata = parseMetadata(current.getMetadata());
+        Map<String, Object> previousMaster = master(previousMetadata);
+        Map<String, Object> currentMaster = master(currentMetadata);
+        for (String key : List.of("space_type", "reality_type", "world_location_ref", "layout", "materials",
+                "palette", "lighting", "landmarks", "fixed_props", "movable_props", "entrances_exits",
+                "references", "prompts", "continuity_rules")) {
+            if (!Objects.equals(previousMaster.get(key), currentMaster.get(key))) return false;
+        }
+        Map<Object, Map<String, Object>> previousVariants = variantsFrom(previousMetadata).stream()
+                .collect(java.util.stream.Collectors.toMap(variant -> variant.get("id"), variant -> variant));
+        Map<Object, Map<String, Object>> currentVariants = variantsFrom(currentMetadata).stream()
+                .collect(java.util.stream.Collectors.toMap(variant -> variant.get("id"), variant -> variant));
+        for (Map.Entry<Object, Map<String, Object>> entry : previousVariants.entrySet()) {
+            Map<String, Object> next = currentVariants.get(entry.getKey());
+            if (next == null) return false;
+            for (String key : List.of("lighting_delta", "prompts", "references", "event_state", "time", "continuity_rules")) {
+                if (!Objects.equals(entry.getValue().get(key), next.get(key))) return false;
+            }
+        }
+        return true;
+    }
+
+    private boolean matchesKeyword(SceneAssetBase base, String keyword) {
         String normalized = keyword.toLowerCase(java.util.Locale.ROOT);
-        return containsKeyword(view.name(), normalized)
-                || containsKeyword(view.master().get("world_location_ref"), normalized)
-                || containsKeyword(view.master().get("landmarks"), normalized)
-                || containsKeyword(view.master().get("tags"), normalized);
+        return containsKeyword(base.asset().getName(), normalized)
+                || containsKeyword(base.master().get("world_location_ref"), normalized)
+                || containsKeyword(base.master().get("landmarks"), normalized)
+                || containsKeyword(base.master().get("tags"), normalized);
     }
 
     private boolean containsKeyword(Object value, String keyword) {

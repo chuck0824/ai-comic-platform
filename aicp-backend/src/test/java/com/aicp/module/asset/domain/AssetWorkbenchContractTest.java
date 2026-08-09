@@ -46,7 +46,9 @@ class AssetWorkbenchContractTest {
     @Test
     void assetLifecycleStatusesAreUppercase() {
         assertThat(AssetWorkbenchEnums.AssetStatus.values()).extracting(Enum::name)
-                .containsExactly("ACTIVE", "ARCHIVED", "TRASHED");
+                .containsExactly("ACTIVE", "DISABLED", "ARCHIVED", "TRASHED");
+        assertThat(AssetEnums.AssetStatus.values()).extracting(Enum::name)
+                .containsExactly("ACTIVE", "DISABLED", "ARCHIVED");
     }
 
     // ── Error-code contracts ──────────────────────────────────────────

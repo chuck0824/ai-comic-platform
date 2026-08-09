@@ -6,9 +6,11 @@ import {
   filterSceneAssets,
   impactConsumers,
   persistSceneAssetActionResult,
+  preservedImpactConsumers,
   readSceneAssetActionResults,
   sceneConsumerStatus
 } from '../src/views/content-project/workbench/sceneAssetUiModel.js'
+import { normalizeSceneAsset } from '../src/views/content-project/workbench/sceneAssetModel.js'
 
 const contentProjectDir = fileURLToPath(new URL('../src/views/content-project/', import.meta.url))
 const read = path => readFileSync(`${contentProjectDir}${path}`, 'utf8')
@@ -95,6 +97,39 @@ test('consumer status comes from the selected persistent action result instead o
   assert.equal(sceneConsumerStatus({ assetId: 3, type: 'STORYBOARD_SHOT', id: 22, locked: true, result: managementResult, fallback: 'STALE' }), 'PINNED')
 })
 
+test('reloaded DTO keeps one exact script scene current without aggregate asset fallback', () => {
+  const asset = normalizeSceneAsset({ id: 3, sync_status: 'CURRENT', reference_count: 2 })
+  const result = normalizeSceneAsset({
+    assetId: 3,
+    change: { downstreamStatus: 'STALE', affectedScopes: ['visual'] },
+    affectedConsumers: [
+      { type: 'SCRIPT_SCENE', consumer_id: 9001, consumer_key: '9001', downstreamStatus: 'STALE' },
+      { type: 'SCRIPT_SCENE', consumer_id: 9002, consumer_key: '9002', downstreamStatus: 'CURRENT' }
+    ]
+  })
+  assert.equal(sceneConsumerStatus({ assetId: asset.id, type: 'SCRIPT_SCENE', id: 9001, result, fallback: asset.syncStatus }), 'STALE')
+  assert.equal(sceneConsumerStatus({ assetId: asset.id, type: 'SCRIPT_SCENE', id: 9002, result, fallback: asset.syncStatus }), 'CURRENT')
+  assert.equal(sceneConsumerStatus({ assetId: asset.id, type: 'SCRIPT_SCENE', id: 9002, fallback: asset.syncStatus }), 'CURRENT')
+})
+
+test('script scene impact matches the stable consumer key used by the script stage', () => {
+  const result = normalizeSceneAsset({
+    assetId: 3,
+    affectedConsumers: [
+      { type: 'SCRIPT_SCENE', consumer_id: 9001, consumer_key: 'EP01-SCENE-003', downstream_status: 'STALE' }
+    ]
+  })
+  assert.equal(sceneConsumerStatus({
+    assetId: 3,
+    type: 'SCRIPT_SCENE',
+    id: 'local-render-id',
+    consumerKey: 'EP01-SCENE-003',
+    result,
+    fallback: 'CURRENT'
+  }), 'STALE')
+  assert.match(read('stages/ScriptBodyStage.vue'), /type:'SCRIPT_SCENE',id:scene\.id,consumerKey:String\(scene\.id\)/)
+})
+
 test('impactful action results persist by project and remain revisitable', () => {
   const storage = memoryStorage()
   const result = persistSceneAssetActionResult(9, {
@@ -159,6 +194,16 @@ test('referenced lifecycle uses reversible disable and keeps archive separate', 
   assert.match(library, /'archive-scene-asset':\s*'归档场景资产'/)
   assert.match(drawer, /sceneAssets\.disable/)
   assert.match(read('components/SceneAssetPicker.vue'), /\['ARCHIVED',\s*'DISABLED'\]/)
+})
+
+test('disable can preserve loaded authoritative consumers before selection clears impact', () => {
+  const references = [{ type: 'SCRIPT_SCENE', consumerId: 9001, consumerKey: '9001', syncStatus: 'CURRENT' }]
+  const captured = preservedImpactConsumers({ assetId: 3, references })
+  const clearedImpact = null
+  assert.deepEqual(captured, references)
+  assert.equal(clearedImpact, null)
+  const composable = read('workbench/useSceneAssets.js')
+  assert.match(composable, /const affectedConsumers = preservedImpactConsumers\(refreshedImpact\.impact\)[\s\S]*await adapter[\s\S]*affectedConsumers:/)
 })
 
 function memoryStorage() {

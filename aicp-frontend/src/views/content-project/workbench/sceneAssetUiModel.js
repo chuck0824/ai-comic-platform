@@ -64,6 +64,11 @@ export function impactConsumers(change = {}, impact = {}) {
   })
 }
 
+/** Captures authoritative consumers before selecting a refreshed asset clears transient impact state. */
+export function preservedImpactConsumers(impact = {}) {
+  return Array.isArray(impact?.references) ? impact.references.map(reference => ({ ...reference })) : []
+}
+
 function sameConsumer(reference, { type, id, consumerKey }) {
   if (type && reference.type !== type) return false
   if (consumerKey != null && reference.consumerKey === consumerKey) return true

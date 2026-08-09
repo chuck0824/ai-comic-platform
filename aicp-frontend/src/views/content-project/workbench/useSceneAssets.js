@@ -6,6 +6,7 @@ import {
   filterSceneAssets,
   impactConsumers,
   persistSceneAssetActionResult,
+  preservedImpactConsumers,
   readSceneAssetActionResults,
   sceneAssetIsReferenced
 } from './sceneAssetUiModel'
@@ -238,10 +239,11 @@ export function useSceneAssets(projectId, {
   async function disable(assetId) {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
+      const affectedConsumers = preservedImpactConsumers(impact.value)
       const asset = normalizeSceneAsset(await api.disable(resolvedProjectId, assetId))
       replaceAsset(asset)
       invalidateSceneAssetListCache(resolvedProjectId)
-      return { asset, result: recordResult({ action: 'disable-scene-asset', assetId, affectedConsumers: impact.value?.references || [] }) }
+      return { asset, result: recordResult({ action: 'disable-scene-asset', assetId, affectedConsumers }) }
     })
   }
 
@@ -296,12 +298,13 @@ export function useSceneAssets(projectId, {
     if (guarded) return guarded
     const refreshedImpact = await loadImpact(assetId)
     if (!refreshedImpact.ok) return refreshedImpact
+    const affectedConsumers = preservedImpactConsumers(refreshedImpact.impact)
     try {
       const response = await adapter({ assetId, replacement, impact: refreshedImpact.impact })
       if (!response?.persisted) return failure(response?.code || 'REFERENCE_REPLACEMENT_FAILED', response?.message || '引用迁移未持久化，请重试')
       const result = recordResult({
         action: 'replace-reference', assetId, replacement,
-        affectedConsumers: response.affectedConsumers || refreshedImpact.impact.references || [], response
+        affectedConsumers: response.affectedConsumers?.length ? response.affectedConsumers : affectedConsumers, response
       })
       return { ok: true, data: result }
     } catch (error) {
