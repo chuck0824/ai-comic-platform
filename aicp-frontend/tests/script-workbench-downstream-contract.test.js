@@ -78,6 +78,10 @@ test('script scene binding pins exact versions and rejects archived or degraded 
     id: 7, currentVersionId: 12, status: 'ARCHIVED'
   }, { id: 'VAR-001', version: 2 }, async () => ({ persisted: true }))
   assert.equal(archived.code, 'SCENE_ASSET_UNAVAILABLE')
+  const disabled = await bindScriptSceneAsset(state, 'SC-1', {
+    id: 7, currentVersionId: 12, status: 'DISABLED'
+  }, null, async () => ({ persisted: true }))
+  assert.equal(disabled.code, 'SCENE_ASSET_UNAVAILABLE')
 
   const degraded = await bindScriptSceneAsset(state, 'SC-1', {
     id: 7, currentVersionId: 12, status: 'ACTIVE'

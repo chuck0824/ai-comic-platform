@@ -227,9 +227,31 @@ export function useSceneAssets(projectId, {
     return mutate(async () => {
       const resolvedProjectId = activeProjectId()
       await api.archive(resolvedProjectId, assetId)
+      const archived = assets.value.find(asset => asset.id === assetId)
       assets.value = assets.value.map(asset => asset.id === assetId ? { ...asset, status: 'ARCHIVED' } : asset)
+      if (selectedAsset.value?.id === assetId && archived) selectAsset({ ...archived, status: 'ARCHIVED' })
       invalidateSceneAssetListCache(resolvedProjectId)
-      return recordResult({ action: 'deactivate-scene-asset', assetId, affectedConsumers: [] })
+      return recordResult({ action: 'archive-scene-asset', assetId, affectedConsumers: [] })
+    })
+  }
+
+  async function disable(assetId) {
+    return mutate(async () => {
+      const resolvedProjectId = activeProjectId()
+      const asset = normalizeSceneAsset(await api.disable(resolvedProjectId, assetId))
+      replaceAsset(asset)
+      invalidateSceneAssetListCache(resolvedProjectId)
+      return { asset, result: recordResult({ action: 'disable-scene-asset', assetId, affectedConsumers: impact.value?.references || [] }) }
+    })
+  }
+
+  async function activate(assetId) {
+    return mutate(async () => {
+      const resolvedProjectId = activeProjectId()
+      const asset = normalizeSceneAsset(await api.activate(resolvedProjectId, assetId))
+      replaceAsset(asset)
+      invalidateSceneAssetListCache(resolvedProjectId)
+      return { asset, result: recordResult({ action: 'activate-scene-asset', assetId, affectedConsumers: [] }) }
     })
   }
 
@@ -309,6 +331,6 @@ export function useSceneAssets(projectId, {
     state, assets, filteredAssets, filters, selectedAsset, selectedVersion, impact, markdown, actionResult,
     actionResults, referencedSelectedAsset, readOnly,
     load, loadAsset, selectAsset, setProjectArchived, create, update, createFromLocation, createVariant,
-    updateVariant, restore, archive, loadImpact, loadMarkdown, openActionResult, replaceReferences, resolveConsumer
+    updateVariant, restore, disable, activate, archive, loadImpact, loadMarkdown, openActionResult, replaceReferences, resolveConsumer
   }
 }

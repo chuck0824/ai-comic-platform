@@ -51,7 +51,7 @@ function isLocked(reference = {}) {
 export function impactConsumers(change = {}, impact = {}) {
   return (impact?.references || []).map(reference => {
     const locked = isLocked(reference)
-    const semanticStale = change.downstreamStatus === 'STALE'
+    const semanticStale = change.downstreamStatus === 'STALE' && reference.syncStatus !== 'CURRENT'
     return {
       ...reference,
       locked,
@@ -62,6 +62,24 @@ export function impactConsumers(change = {}, impact = {}) {
         : ['view-diff', 'keep-old', 'upgrade-new']
     }
   })
+}
+
+function sameConsumer(reference, { type, id, consumerKey }) {
+  if (type && reference.type !== type) return false
+  if (consumerKey != null && reference.consumerKey === consumerKey) return true
+  return [reference.consumerId, reference.id].some(value => value != null && String(value) === String(id))
+}
+
+/** Resolves one cross-stage badge from immutable action evidence before aggregate fallback state. */
+export function sceneConsumerStatus({ assetId, type, id, consumerKey, locked = false, result, fallback = 'CURRENT' } = {}) {
+  if (locked) return 'PINNED'
+  if (!result || String(result.assetId) !== String(assetId)) return fallback
+  const affected = (result.affectedConsumers || []).find(reference => sameConsumer(reference, { type, id, consumerKey }))
+  if (affected?.locked || affected?.snapshotLocked) return 'PINNED'
+  if (affected?.downstreamStatus) return affected.downstreamStatus
+  if (affected?.syncStatus === 'NEEDS_SYNC') return 'STALE'
+  if (result.change?.downstreamStatus === 'CURRENT') return 'CURRENT'
+  return fallback
 }
 
 function storageOrNull(storage) {

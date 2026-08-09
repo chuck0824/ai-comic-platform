@@ -102,6 +102,16 @@ public class ProjectSceneAssetController {
         return ApiResponse.success();
     }
 
+    @PostMapping("/{assetId}/disable")
+    public ApiResponse<SceneAssetView> disable(@PathVariable Long projectId, @PathVariable Long assetId) {
+        return ApiResponse.success(sceneAssets.disable(SecurityUtil.requireCurrentUserId(), projectId, assetId));
+    }
+
+    @PostMapping("/{assetId}/activate")
+    public ApiResponse<SceneAssetView> activate(@PathVariable Long projectId, @PathVariable Long assetId) {
+        return ApiResponse.success(sceneAssets.activate(SecurityUtil.requireCurrentUserId(), projectId, assetId));
+    }
+
     @GetMapping("/{assetId}/impact")
     public ApiResponse<SceneAssetImpactView> impact(@PathVariable Long projectId, @PathVariable Long assetId) {
         return ApiResponse.success(sceneAssets.impact(SecurityUtil.requireCurrentUserId(), projectId, assetId));

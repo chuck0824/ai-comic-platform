@@ -13,7 +13,7 @@
       <el-input v-model="sceneAssets.filters.keyword" clearable placeholder="搜索名称、来源地点、地标或标签" />
       <el-select v-model="sceneAssets.filters.spaceType" clearable placeholder="空间类型"><el-option label="室内" value="INTERIOR" /><el-option label="室外" value="EXTERIOR" /><el-option label="混合" value="MIXED" /></el-select>
       <el-select v-model="sceneAssets.filters.reusability" clearable placeholder="复用级别"><el-option label="高复用" value="HIGH" /><el-option label="中复用" value="MEDIUM" /><el-option label="低复用" value="LOW" /></el-select>
-      <el-select v-model="sceneAssets.filters.status" clearable placeholder="生命周期"><el-option label="启用" value="ACTIVE" /><el-option label="已停用" value="ARCHIVED" /></el-select>
+      <el-select v-model="sceneAssets.filters.status" clearable placeholder="生命周期"><el-option label="启用" value="ACTIVE" /><el-option label="已停用" value="DISABLED" /><el-option label="已归档" value="ARCHIVED" /></el-select>
       <el-select v-model="sceneAssets.filters.referenced" clearable placeholder="引用状态"><el-option label="已引用" :value="true" /><el-option label="未引用" :value="false" /></el-select>
       <el-button @click="reload">刷新</el-button>
     </div>
@@ -73,12 +73,12 @@ async function saveCreate() {
   if (!result.ok) { Object.assign(createErrors, result.fieldErrors || {}); return guide(result) }
   createVisible.value = false; drawerVisible.value = true; return result
 }
-function openResult(result) { const opened = sceneAssets.openActionResult(result); if (!opened.ok) return guide(opened); emit('open-result', result); drawerVisible.value = true }
+async function openResult(result) { if (result.assetId != null && sceneAssets.selectedAsset.value?.id !== result.assetId) { const loaded = await sceneAssets.loadAsset(result.assetId); if (!loaded.ok) return guide(loaded) } const opened = sceneAssets.openActionResult(result); if (!opened.ok) return guide(opened); emit('open-result', result); drawerVisible.value = true }
 function coverStyle(asset) { return asset.master?.coverUrl ? { backgroundImage: `url(${asset.master.coverUrl})` } : {} }
-function statusType(status) { return String(status).toUpperCase() === 'ARCHIVED' ? 'info' : 'success' }
-function lifecycleLabel(status) { return String(status).toUpperCase() === 'ARCHIVED' ? '已停用' : '启用中' }
+function statusType(status) { return String(status).toUpperCase() === 'ARCHIVED' ? 'info' : (String(status).toUpperCase() === 'DISABLED' ? 'warning' : 'success') }
+function lifecycleLabel(status) { return ({ ARCHIVED:'已归档', DISABLED:'已停用', ACTIVE:'启用中' })[String(status).toUpperCase()] || status }
 function syncType(status) { return String(status).toUpperCase() === 'STALE' || String(status).toUpperCase() === 'NEEDS_SYNC' ? 'warning' : 'success' }
-function actionLabel(action) { return ({ 'restore-version': '恢复历史版本', 'replace-reference': '迁移引用', 'update-scene-asset': '更新场景资产', 'deactivate-scene-asset': '停用场景资产' })[action] || action }
+function actionLabel(action) { return ({ 'restore-version': '恢复历史版本', 'replace-reference': '迁移引用', 'update-scene-asset': '更新场景资产', 'disable-scene-asset': '停用场景资产', 'activate-scene-asset': '重新启用场景资产', 'archive-scene-asset': '归档场景资产' })[action] || action }
 </script>
 
 <style scoped>

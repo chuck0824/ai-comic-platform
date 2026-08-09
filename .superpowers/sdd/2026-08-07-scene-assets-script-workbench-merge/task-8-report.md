@@ -49,3 +49,30 @@ GREEN:
 - The current scene-asset backend has a restore endpoint but no historical-version list endpoint. The drawer consumes `asset.versions` when an integration adapter supplies it and otherwise exposes an explicit historical-version primary-key input; a native history-list API remains desirable.
 - The current impact endpoint returns active asset applications and canvas placements. Modern storyboard snapshot rows are checked by the storyboard continuity/lock services but are not enumerated by this asset-impact endpoint. Task 9 should compose storyboard continuity/shot state into the drawer impact adapter so every unlocked storyboard is listed, while locked snapshots remain pinned.
 - Reference replacement and the three per-consumer decisions require Task 9 to provide project-scoped persistence adapters. The controls remain clickable before integration and return explicit guidance instead of mutating local data or reporting success.
+
+---
+
+## Review fix round 1/5 — authoritative impact, lifecycle, and persistent result context
+
+### Changes
+
+- Removed the backend name-only SQL keyword prefilter. Project scene search now evaluates the real current-version envelope across name, `world_location_ref`, landmarks, and tags. Tags are accepted and versioned by create/update requests.
+- `SceneAssetView` now returns authoritative `reference_count`, deduplicated episode labels, and aggregate `sync_status`. The referenced/unreferenced filter uses the complete active-reference set rather than the old misnamed locked count.
+- Impact references now carry consumer type/id/key/version, referenced asset version, episode information, lock flags, snapshot-lock state, and fingerprint. Modern `storyboard_version_shots` are enumerated through version/storyboard project ownership. Locked storyboard versions always emit `PINNED`; unlocked old versions emit `NEEDS_SYNC`.
+- Corrected lifecycle semantics. Archive now requires zero active consumers. Referenced assets use reversible `DISABLED` and `ACTIVE` endpoints, preserving existing immutable references while rejecting every new storyboard binding. After consumers are migrated/released, archive remains available. Picker and script binding logic reject both disabled and archived assets.
+- Drawer and all three stages now resolve status from the selected persistent result's Task 4 `change` plus exact `affectedConsumers`; management-only changes therefore remain `CURRENT`, even if some older aggregate impact result was stale. Locked shots remain `PINNED`.
+- Reopening a stored result first loads/selects `result.assetId`; failure leaves the drawer closed and returns guidance rather than showing blank or wrong context.
+- The visual editor now maintains `materials`, `palette`, and `lighting` as three independent draft/payload fields.
+- The basic editor now round-trips `tags` as line-based metadata, so the UI can author the same tags that project scene search indexes.
+
+### RED / GREEN evidence
+
+- Frontend RED: Task 8 contract failed at module load because `sceneConsumerStatus` did not exist. Follow-up REDs independently reproduced disabled assets still appearing/binding and a current-version consumer being incorrectly marked stale.
+- Backend RED: `ProjectSceneAssetLifecycleE2ETest` ran 13 tests with 3 failures: metadata search returned zero, impact returned no modern storyboard consumers, and disable/activate returned an unsupported-route error. A focused lifecycle RED then showed disabled binding returned asset-not-found semantics instead of lifecycle conflict.
+- Frontend GREEN: Task 4/5/6/7/8 selected regressions passed 77/77. The Task 8 UI contract passed 14/14, including tag persistence. The requested name-pattern suite passed across 20 test files/contracts with zero failures. Six affected SFCs passed parse, script, and template compilation; `node --check` passed.
+- Backend GREEN: `ProjectSceneAssetLifecycleE2ETest` passed 13/13; combined with `StoryboardSceneAssetSnapshotE2ETest`, 30/30 passed with zero failures/errors.
+- Vite production build passed (1,963 modules) to `/tmp/aicp-task8-fix1-dist`; `git diff --check` passed.
+
+### Remaining integration note
+
+- The three downstream consumer decisions still intentionally require Task 9 persistence adapters. The backend now supplies sufficient consumer/lock/snapshot identity for those adapters; the Task 8 UI will not report success when an adapter is absent or does not return `persisted: true`.

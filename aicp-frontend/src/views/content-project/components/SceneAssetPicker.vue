@@ -23,7 +23,7 @@ import { computed, reactive, ref, watch } from 'vue'
 const props = defineProps({ modelValue: Boolean, assets: { type: Array, default: () => [] }, degraded: Boolean })
 const emit = defineEmits(['update:modelValue', 'bind-existing', 'create-new', 'defer', 'guidance'])
 const mode = ref('existing'); const assetId = ref(null); const variantId = ref(null); const draft = reactive({ name: '', spaceType: '' })
-const bindableAssets = computed(() => props.assets.filter(asset => String(asset.status || '').toUpperCase() !== 'ARCHIVED'))
+const bindableAssets = computed(() => props.assets.filter(asset => !['ARCHIVED', 'DISABLED'].includes(String(asset.status || '').toUpperCase())))
 const selectedAsset = computed(() => bindableAssets.value.find(asset => asset.id === assetId.value) || null)
 watch(assetId, () => { variantId.value = null })
 function reject(code, message, targetAction) { const result = { allowed: false, code, title: '无法完成场景绑定', message, targetAction }; emit('guidance', result); return result }

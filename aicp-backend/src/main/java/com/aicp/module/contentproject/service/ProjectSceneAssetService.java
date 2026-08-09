@@ -82,13 +82,13 @@ public class ProjectSceneAssetService {
                                      String reusability, String status, Boolean referenced) {
         projectAccess.require(projectId, userId, Action.VIEW);
         LambdaQueryWrapper<WorkspaceAsset> query = sceneQuery(projectId);
-        if (keyword != null && !keyword.isBlank()) query.like(WorkspaceAsset::getName, keyword.trim());
         if (status != null && !status.isBlank()) query.eq(WorkspaceAsset::getStatus, status.trim());
         return assetMapper.selectList(query.orderByDesc(WorkspaceAsset::getUpdatedAt)).stream()
                 .map(this::toView)
+                .filter(view -> keyword == null || keyword.isBlank() || matchesKeyword(view, keyword.trim()))
                 .filter(view -> spaceType == null || spaceType.equals(view.master().get("space_type")))
                 .filter(view -> reusability == null || reusability.equals(view.master().get("reusability")))
-                .filter(view -> referenced == null || referenced == (impactFor(view.id()).lockedReferences() > 0))
+                .filter(view -> referenced == null || referenced == (view.referenceCount() > 0))
                 .toList();
     }
 
@@ -128,7 +128,7 @@ public class ProjectSceneAssetService {
         return create(userId, projectId, new CreateSceneAssetRequest(request.name(),
                 defaulted(request.spaceType(), "INTERIOR"), defaulted(request.reusability(), "PRIMARY"),
                 defaulted(request.realityType(), "REALISTIC"), request.worldLocationRef(), request.layout(), null,
-                null, request.lighting(), null, null, null, null, List.of(), null, null, List.of()));
+                null, request.lighting(), null, null, null, null, null, List.of(), null, null, List.of()));
     }
 
     public SceneAssetView get(Long userId, Long projectId, Long assetId) {
@@ -230,13 +230,40 @@ public class ProjectSceneAssetService {
         projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
         WorkspaceAsset asset = requireScene(projectId, assetId);
         SceneAssetImpactView impact = impactFor(assetId);
-        if (impact.lockedReferences() > 0) {
+        if (!impact.references().isEmpty()) {
             throw new BizException(ErrorCode.ASSET_LIFECYCLE_CONFLICT,
-                    "场景资产仍被锁定引用，请先替换或停用引用");
+                    "场景资产仍被引用，可先停用资产，或迁移全部引用后归档");
         }
         asset.setStatus("ARCHIVED");
         asset.setUpdatedBy(userId);
         assetMapper.updateById(asset);
+    }
+
+    /** Reversible lifecycle state: existing pinned references remain valid, new bindings must reject DISABLED. */
+    @Transactional
+    public SceneAssetView disable(Long userId, Long projectId, Long assetId) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        if ("ARCHIVED".equalsIgnoreCase(asset.getStatus())) {
+            throw new BizException(ErrorCode.ASSET_LIFECYCLE_CONFLICT, "已归档资产不能直接停用");
+        }
+        asset.setStatus("DISABLED");
+        asset.setUpdatedBy(userId);
+        assetMapper.updateById(asset);
+        return toView(requireScene(projectId, assetId));
+    }
+
+    @Transactional
+    public SceneAssetView activate(Long userId, Long projectId, Long assetId) {
+        projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
+        WorkspaceAsset asset = requireScene(projectId, assetId);
+        if (!"DISABLED".equalsIgnoreCase(asset.getStatus())) {
+            throw new BizException(ErrorCode.ASSET_LIFECYCLE_CONFLICT, "仅已停用场景资产可重新启用");
+        }
+        asset.setStatus("ACTIVE");
+        asset.setUpdatedBy(userId);
+        assetMapper.updateById(asset);
+        return toView(requireScene(projectId, assetId));
     }
 
     public SceneAssetImpactView impact(Long userId, Long projectId, Long assetId) {
@@ -252,6 +279,10 @@ public class ProjectSceneAssetService {
                                                            Map<String, Object> sceneOverride) {
         projectAccess.require(projectId, userId, Action.EDIT_CONTENT);
         WorkspaceAsset asset = requireScene(projectId, assetId);
+        if (!"ACTIVE".equalsIgnoreCase(asset.getStatus())) {
+            throw new BizException(ErrorCode.ASSET_LIFECYCLE_CONFLICT,
+                    "场景资产已停用或归档，不能创建新分镜引用");
+        }
         AssetVersion version = versionMapper.selectOne(new LambdaQueryWrapper<AssetVersion>()
                 .eq(AssetVersion::getId, assetVersionId).eq(AssetVersion::getAssetId, assetId));
         if (version == null) throw new BizException(ErrorCode.ASSET_NOT_FOUND, "场景资产版本不存在");
@@ -557,22 +588,58 @@ public class ProjectSceneAssetService {
         applicationMapper.selectList(new LambdaQueryWrapper<AssetApplication>()
                         .eq(AssetApplication::getAssetId, assetId)
                         .eq(AssetApplication::getStatus, "APPLIED"))
-                .forEach(application -> refs.add(new ImpactReferenceView("APPLICATION", application.getId(),
-                        application.getAssetVersionId(), syncStatus(application.getAssetVersionId(), currentVersionId))));
+                .forEach(application -> {
+                    ContentUnit unit = "CONTENT_UNIT".equals(application.getTargetType())
+                            && application.getTargetId() != null ? contentUnitMapper.selectById(application.getTargetId()) : null;
+                    refs.add(new ImpactReferenceView(
+                            application.getTargetType() == null || application.getTargetType().isBlank()
+                                    ? "APPLICATION" : application.getTargetType(),
+                            application.getId(), application.getTargetId(), unit == null ? null : unit.getStableKey(),
+                            null, application.getAssetVersionId(),
+                            syncStatus(application.getAssetVersionId(), currentVersionId), false, false, null,
+                            unit == null ? null : unit.getDisplayNo(), unit == null ? null : unit.getTitle()));
+                });
         placementMapper.selectList(new LambdaQueryWrapper<CanvasAssetPlacement>()
                         .eq(CanvasAssetPlacement::getAssetId, assetId).isNull(CanvasAssetPlacement::getReleasedAt))
-                .forEach(placement -> refs.add(new ImpactReferenceView("CANVAS_PLACEMENT", placement.getId(),
-                        placement.getAssetVersionId(), syncStatus(placement.getAssetVersionId(), currentVersionId))));
+                .forEach(placement -> refs.add(new ImpactReferenceView(
+                        "CANVAS_PLACEMENT", placement.getId(), placement.getNodeId(), null,
+                        placement.getCanvasProjectId(), placement.getAssetVersionId(),
+                        syncStatus(placement.getAssetVersionId(), currentVersionId), false, false, null, null, null)));
+
+        storyboardVersionShotMapper.selectList(new LambdaQueryWrapper<StoryboardShot>()
+                        .eq(StoryboardShot::getSceneAssetId, assetId))
+                .forEach(shot -> {
+                    StoryboardVersion storyboardVersion = storyboardVersionMapper.selectById(shot.getVersionId());
+                    Storyboard storyboard = storyboardVersion == null ? null : storyboardMapper.selectById(storyboardVersion.getStoryboardId());
+                    if (storyboard == null || asset == null || !asset.getContentProjectId().equals(storyboard.getProjectId())) return;
+                    boolean locked = "locked".equalsIgnoreCase(storyboardVersion.getStatus())
+                            || Objects.equals(storyboard.getCurrentLockedVersionId(), storyboardVersion.getId());
+                    ContentUnit unit = contentUnitMapper.selectById(storyboard.getContentUnitId());
+                    refs.add(new ImpactReferenceView(
+                            "STORYBOARD_SHOT", shot.getId(), shot.getId(), shot.getShotCode(),
+                            storyboardVersion.getId(), shot.getSceneAssetVersionId(),
+                            locked ? "PINNED" : syncStatus(shot.getSceneAssetVersionId(), currentVersionId),
+                            locked, locked, snapshotFingerprint(shot.getSceneAssetSnapshot()),
+                            unit == null ? null : unit.getDisplayNo(), unit == null ? null : unit.getTitle()));
+                });
+        long lockedReferences = refs.stream().filter(ImpactReferenceView::locked).count();
         long staleReferences = refs.stream().filter(reference -> "NEEDS_SYNC".equals(reference.syncStatus())).count();
-        return new SceneAssetImpactView(assetId, refs.size(), staleReferences, List.copyOf(refs));
+        return new SceneAssetImpactView(assetId, lockedReferences, staleReferences, List.copyOf(refs));
     }
 
     private SceneAssetView toView(WorkspaceAsset asset) {
         Map<String, Object> metadata = currentMetadata(asset);
         AssetVersion current = requireCurrentVersion(asset);
+        SceneAssetImpactView impact = impactFor(asset.getId());
+        List<String> episodeReferences = impact.references().stream()
+                .filter(reference -> reference.episodeNo() != null)
+                .map(reference -> "第" + reference.episodeNo() + "集 · "
+                        + (reference.episodeTitle() == null ? "未命名" : reference.episodeTitle()))
+                .distinct().sorted().toList();
         return new SceneAssetView(asset.getId(), asset.getUuid(), asset.getContentProjectId(), asset.getAssetType(),
                 asset.getName(), asset.getSourceType(), asset.getStatus(), asset.getCurrentVersionId(),
                 current == null ? 0 : current.getVersionNumber(), master(metadata), variantsFrom(metadata),
+                impact.references().size(), episodeReferences, impact.staleReferences() > 0 ? "STALE" : "CURRENT",
                 asset.getCreatedAt(), asset.getUpdatedAt());
     }
 
@@ -593,6 +660,7 @@ public class ProjectSceneAssetService {
         put(master, "palette", request.palette());
         put(master, "lighting", request.lighting());
         put(master, "landmarks", request.landmarks());
+        put(master, "tags", request.tags());
         put(master, "fixed_props", request.fixedProps());
         put(master, "movable_props", request.movableProps());
         put(master, "entrances_exits", request.entrancesExits());
@@ -616,6 +684,7 @@ public class ProjectSceneAssetService {
         put(master, "palette", request.palette());
         put(master, "lighting", request.lighting());
         put(master, "landmarks", request.landmarks());
+        put(master, "tags", request.tags());
         put(master, "fixed_props", request.fixedProps());
         put(master, "movable_props", request.movableProps());
         put(master, "entrances_exits", request.entrancesExits());
@@ -722,7 +791,7 @@ public class ProjectSceneAssetService {
         return request.name() != null || request.spaceType() != null || request.reusability() != null
                 || request.realityType() != null || request.worldLocationRef() != null || request.layout() != null
                 || request.materials() != null || request.palette() != null || request.lighting() != null
-                || request.landmarks() != null || request.fixedProps() != null || request.movableProps() != null
+                || request.landmarks() != null || request.tags() != null || request.fixedProps() != null || request.movableProps() != null
                 || request.entrancesExits() != null || request.continuityRules() != null || request.references() != null
                 || request.prompts() != null;
     }
@@ -738,6 +807,36 @@ public class ProjectSceneAssetService {
             return "NEEDS_SYNC";
         }
         return "CURRENT";
+    }
+
+    private boolean matchesKeyword(SceneAssetView view, String keyword) {
+        String normalized = keyword.toLowerCase(java.util.Locale.ROOT);
+        return containsKeyword(view.name(), normalized)
+                || containsKeyword(view.master().get("world_location_ref"), normalized)
+                || containsKeyword(view.master().get("landmarks"), normalized)
+                || containsKeyword(view.master().get("tags"), normalized);
+    }
+
+    private boolean containsKeyword(Object value, String keyword) {
+        if (value == null) return false;
+        if (value instanceof Iterable<?> iterable) {
+            for (Object item : iterable) if (containsKeyword(item, keyword)) return true;
+            return false;
+        }
+        if (value instanceof Map<?, ?> map) {
+            for (Object item : map.values()) if (containsKeyword(item, keyword)) return true;
+            return false;
+        }
+        return String.valueOf(value).toLowerCase(java.util.Locale.ROOT).contains(keyword);
+    }
+
+    private String snapshotFingerprint(String snapshot) {
+        if (snapshot == null || snapshot.isBlank()) return null;
+        try {
+            return objectMapper.readTree(snapshot).path("fingerprint").textValue();
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     private BizException invalidMetadata() {

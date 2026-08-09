@@ -157,7 +157,7 @@ export async function bindScriptSceneAsset(state, sceneId, asset, variant, adapt
   const scene = findScene(state, sceneId)
   if (!scene) return guidance('SCRIPT_SCENE_REQUIRED', '请选择场景', '选择正文场景后再绑定资产。', 'focus_script_scenes')
   if (context.degraded) return guidance('DEGRADED_READ_ONLY', '资产服务处于只读状态', '当前展示的是缓存资产，恢复连接后才能新增绑定。', 'retry_scene_assets')
-  if (String(asset?.status || '').toUpperCase() === 'ARCHIVED') {
+  if (['ARCHIVED', 'DISABLED'].includes(String(asset?.status || '').toUpperCase())) {
     return guidance('SCENE_ASSET_UNAVAILABLE', '场景资产不可绑定', '已归档资产不能创建新的场景引用。', 'choose_active_scene_asset')
   }
   const binding = normalizeBinding({

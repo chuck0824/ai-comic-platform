@@ -33,6 +33,8 @@ export const sceneAssetApi = {
   createVariant: (projectId, assetId, draft) => mapped(() => request.post(`${base(projectId)}/${assetId}/variants`, toSceneAssetPayload(draft))),
   updateVariant: (projectId, assetId, variantId, draft) => mapped(() => request.patch(`${base(projectId)}/${assetId}/variants/${variantId}`, toSceneAssetPayload(draft))),
   restore: (projectId, assetId, versionId, draft = {}) => mapped(() => request.post(`${base(projectId)}/${assetId}/versions/${versionId}/restore`, toSceneAssetPayload(draft))),
+  disable: (projectId, assetId) => mapped(() => request.post(`${base(projectId)}/${assetId}/disable`)),
+  activate: (projectId, assetId) => mapped(() => request.post(`${base(projectId)}/${assetId}/activate`)),
   archive: (projectId, assetId) => mapped(() => request.post(`${base(projectId)}/${assetId}/archive`)),
   impact: (projectId, assetId) => mapped(() => request.get(`${base(projectId)}/${assetId}/impact`)),
   markdown: (projectId, assetId) => mapped(() => request.get(`${base(projectId)}/${assetId}/markdown`))

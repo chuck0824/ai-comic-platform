@@ -6,7 +6,8 @@ import {
   filterSceneAssets,
   impactConsumers,
   persistSceneAssetActionResult,
-  readSceneAssetActionResults
+  readSceneAssetActionResults,
+  sceneConsumerStatus
 } from '../src/views/content-project/workbench/sceneAssetUiModel.js'
 
 const contentProjectDir = fileURLToPath(new URL('../src/views/content-project/', import.meta.url))
@@ -66,12 +67,32 @@ test('semantic changes mark unlocked consumers STALE while locked storyboard sho
   ])
 })
 
+test('semantic impact does not stale a consumer already bound to the new current version', () => {
+  const projected = impactConsumers({ downstreamStatus: 'STALE', affectedScopes: ['visual'] }, {
+    references: [
+      { type: 'SCRIPT_SCENE', id: 1, syncStatus: 'NEEDS_SYNC' },
+      { type: 'SCRIPT_SCENE', id: 2, syncStatus: 'CURRENT' }
+    ]
+  })
+  assert.deepEqual(projected.map(item => item.downstreamStatus), ['STALE', 'CURRENT'])
+})
+
 test('management-only changes keep consumers current', () => {
   const projected = impactConsumers({ downstreamStatus: 'CURRENT', affectedScopes: [] }, {
     references: [{ type: 'SCRIPT_SCENE', id: 11, syncStatus: 'APPLIED' }]
   })
   assert.equal(projected[0].downstreamStatus, 'CURRENT')
   assert.deepEqual(projected[0].actions, ['view-diff'])
+})
+
+test('consumer status comes from the selected persistent action result instead of aggregate stale count', () => {
+  const managementResult = {
+    assetId: 3,
+    change: { downstreamStatus: 'CURRENT', affectedScopes: [] },
+    affectedConsumers: [{ type: 'SCRIPT_SCENE', id: 11, downstreamStatus: 'CURRENT' }]
+  }
+  assert.equal(sceneConsumerStatus({ assetId: 3, type: 'SCRIPT_SCENE', id: 11, result: managementResult, fallback: 'STALE' }), 'CURRENT')
+  assert.equal(sceneConsumerStatus({ assetId: 3, type: 'STORYBOARD_SHOT', id: 22, locked: true, result: managementResult, fallback: 'STALE' }), 'PINNED')
 })
 
 test('impactful action results persist by project and remain revisitable', () => {
@@ -92,6 +113,52 @@ test('novel analysis script body and storyboard open one authoritative asset flo
     read('stages/TextStoryboardStage.vue')
   ].join('\n')
   for (const marker of ['open-scene-asset', 'open-scene-action-result', 'sceneAssetStatus']) assert.match(source, new RegExp(marker))
+})
+
+test('drawer and stages consume persistent change evidence and do not infer all consumers from staleReferences', () => {
+  const source = [
+    read('components/SceneAssetDetailDrawer.vue'),
+    read('stages/NovelAnalysisStage.vue'),
+    read('stages/ScriptBodyStage.vue'),
+    read('stages/TextStoryboardStage.vue')
+  ].join('\n')
+  assert.match(source, /currentResult(?:\.value)?\?\.change/)
+  assert.match(source, /currentResult(?:\.value)?\?\.affectedConsumers/)
+  assert.match(source, /sceneConsumerStatus/)
+})
+
+test('revisiting a stored result loads and selects its asset before opening the drawer', () => {
+  const source = read('components/SceneAssetLibrary.vue')
+  assert.match(source, /await sceneAssets\.loadAsset\(result\.assetId\)/)
+  assert.match(source, /if \(!loaded\.ok\)/)
+})
+
+test('visual editor preserves materials palette and lighting as separate fields', () => {
+  const source = read('components/SceneAssetDetailDrawer.vue')
+  for (const field of ['materialsText', 'paletteText', 'lighting']) {
+    assert.match(source, new RegExp(`draft\\.${field}`))
+  }
+  assert.match(source, /materials:\s*fromLines\(draft\.materialsText\)/)
+  assert.match(source, /palette:\s*fromLines\(draft\.paletteText\)/)
+  assert.match(source, /lighting:\s*draft\.lighting/)
+})
+
+test('basic editor persists searchable tags as management-only metadata', () => {
+  const source = read('components/SceneAssetDetailDrawer.vue')
+  assert.match(source, /draft\.tagsText/)
+  assert.match(source, /tags:\s*fromLines\(draft\.tagsText\)/)
+})
+
+test('referenced lifecycle uses reversible disable and keeps archive separate', () => {
+  const composable = read('workbench/useSceneAssets.js')
+  const drawer = read('components/SceneAssetDetailDrawer.vue')
+  const library = read('components/SceneAssetLibrary.vue')
+  assert.match(composable, /api\.disable/)
+  assert.match(composable, /api\.activate/)
+  assert.match(composable, /action:\s*'archive-scene-asset'/)
+  assert.match(library, /'archive-scene-asset':\s*'归档场景资产'/)
+  assert.match(drawer, /sceneAssets\.disable/)
+  assert.match(read('components/SceneAssetPicker.vue'), /\['ARCHIVED',\s*'DISABLED'\]/)
 })
 
 function memoryStorage() {

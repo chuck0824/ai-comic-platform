@@ -10,6 +10,13 @@ import com.aicp.module.contentproject.entity.ContentUnit;
 import com.aicp.module.contentproject.mapper.ContentProjectMapper;
 import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.aicp.module.contentproject.mapper.ProjectMemberMapper;
+import com.aicp.module.contentproject.service.ProjectSceneAssetService;
+import com.aicp.module.storyboard.entity.Storyboard;
+import com.aicp.module.storyboard.entity.StoryboardShot;
+import com.aicp.module.storyboard.entity.StoryboardVersion;
+import com.aicp.module.storyboard.mapper.StoryboardMapper;
+import com.aicp.module.storyboard.mapper.StoryboardVersionMapper;
+import com.aicp.module.storyboard.mapper.StoryboardVersionShotMapper;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -47,6 +54,10 @@ class ProjectSceneAssetLifecycleE2ETest {
     @Autowired private AssetVersionMapper versionMapper;
     @Autowired private AssetApplicationMapper applicationMapper;
     @Autowired private ContentUnitMapper contentUnitMapper;
+    @Autowired private StoryboardMapper storyboardMapper;
+    @Autowired private StoryboardVersionMapper storyboardVersionMapper;
+    @Autowired private StoryboardVersionShotMapper storyboardShotMapper;
+    @Autowired private ProjectSceneAssetService sceneAssetService;
 
     private final long ownerId = 501L;
     private final long otherUserId = 502L;
@@ -330,6 +341,103 @@ class ProjectSceneAssetLifecycleE2ETest {
         assertThat(alias).doesNotContain("..", "/", "\\", "#", "|", "[", "]", "\r", "\n", "\u0001");
     }
 
+    @Test
+    void listSearchesSceneMetadataAndReturnsAuthoritativeReferenceSummary() throws Exception {
+        long projectId = createProject(ownerId, "场景搜索契约测试");
+        authenticateAs(ownerId);
+        String created = mvc.perform(post("/api/v1/content-projects/{id}/scene-assets", projectId)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"name":"普通房间","space_type":"INTERIOR","reusability":"HIGH",
+                                 "reality_type":"REALISTIC","world_location_ref":"下城区地铁站",
+                                 "landmarks":["红色楼梯"],"tags":["主场景","追逐"]}
+                                """))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        long assetId = ((Number) JsonPath.read(created, "$.data.id")).longValue();
+        ContentUnit unit = persistedContentUnit(projectId, "UNIT-SEARCH", "地铁追逐");
+        persistedContentUnitApplication(projectId, assetId, unit);
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"lighting\":\"夜间警示灯\"}"))
+                .andExpect(status().isOk());
+
+        for (String keyword : java.util.List.of("下城区", "红色楼梯", "主场景")) {
+            mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets", projectId)
+                            .param("keyword", keyword).param("referenced", "true"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.length()").value(1))
+                    .andExpect(jsonPath("$.data[0].id").value(assetId))
+                    .andExpect(jsonPath("$.data[0].reference_count").value(1))
+                    .andExpect(jsonPath("$.data[0].episode_references[0]").value("第1集 · 地铁追逐"))
+                    .andExpect(jsonPath("$.data[0].sync_status").value("STALE"));
+        }
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets", projectId)
+                        .param("referenced", "false"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    void impactEnumeratesUnlockedAndLockedModernStoryboardConsumers() throws Exception {
+        long projectId = createProject(ownerId, "分镜影响契约测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "站台", "白天");
+        long oldVersionId = versionFor(assetId, 1).getId();
+        ContentUnit unit = persistedContentUnit(projectId, "UNIT-SB", "站台危机");
+        persistedStoryboardShot(projectId, unit, assetId, oldVersionId, "draft", "SHOT-DRAFT");
+        persistedStoryboardShot(projectId, unit, assetId, oldVersionId, "locked", "SHOT-LOCKED");
+        mvc.perform(patch("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId)
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"lighting\":\"深夜\"}"))
+                .andExpect(status().isOk());
+
+        String body = mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/impact", projectId, assetId))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString();
+        java.util.List<java.util.Map<String, Object>> refs = JsonPath.read(body, "$.data.references");
+        assertThat(refs).anySatisfy(ref -> {
+            assertThat(ref.get("type")).isEqualTo("STORYBOARD_SHOT");
+            assertThat(ref.get("consumer_key")).isEqualTo("SHOT-DRAFT");
+            assertThat(ref.get("locked")).isEqualTo(false);
+            assertThat(ref.get("sync_status")).isEqualTo("NEEDS_SYNC");
+        }).anySatisfy(ref -> {
+            assertThat(ref.get("type")).isEqualTo("STORYBOARD_SHOT");
+            assertThat(ref.get("consumer_key")).isEqualTo("SHOT-LOCKED");
+            assertThat(ref.get("locked")).isEqualTo(true);
+            assertThat(ref.get("snapshot_locked")).isEqualTo(true);
+            assertThat(ref.get("sync_status")).isEqualTo("PINNED");
+            assertThat(ref.get("snapshot_fingerprint")).isEqualTo("fp-SHOT-LOCKED");
+        });
+    }
+
+    @Test
+    void referencedSceneCanBeReversiblyDisabledButArchiveRequiresMigration() throws Exception {
+        long projectId = createProject(ownerId, "场景停用契约测试");
+        authenticateAs(ownerId);
+        long assetId = createSceneAsset(projectId, "仍被引用的场景", "白天");
+        ContentUnit unit = persistedContentUnit(projectId, "UNIT-DISABLE", "停用测试");
+        persistedContentUnitApplication(projectId, assetId, unit);
+
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/archive", projectId, assetId))
+                .andExpect(status().isConflict());
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/disable", projectId, assetId))
+                .andExpect(status().isOk());
+        mvc.perform(get("/api/v1/content-projects/{projectId}/scene-assets/{assetId}", projectId, assetId))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.status").value("DISABLED"));
+        com.aicp.common.exception.BizException disabledBinding = org.junit.jupiter.api.Assertions.assertThrows(com.aicp.common.exception.BizException.class,
+                () -> sceneAssetService.resolveStoryboardSnapshot(ownerId, projectId, assetId,
+                        versionFor(assetId, 1).getId(), null, null, java.util.Map.of()));
+        assertThat(disabledBinding.getCode()).isEqualTo(48009);
+        assertThat(disabledBinding.getMessage()).contains("已停用");
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/activate", projectId, assetId))
+                .andExpect(status().isOk());
+
+        AssetApplication application = applicationMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<AssetApplication>()
+                        .eq(AssetApplication::getAssetId, assetId));
+        application.setStatus("UNDONE");
+        applicationMapper.updateById(application);
+        mvc.perform(post("/api/v1/content-projects/{projectId}/scene-assets/{assetId}/archive", projectId, assetId))
+                .andExpect(status().isOk());
+    }
+
     private long createSceneAsset(long projectId, String name, String lighting) throws Exception {
         String body = mvc.perform(post("/api/v1/content-projects/{id}/scene-assets", projectId)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -390,6 +498,55 @@ class ProjectSceneAssetLifecycleE2ETest {
         application.setIdempotencyKey(UUID.randomUUID().toString());
         application.setStatus("APPLIED");
         applicationMapper.insert(application);
+    }
+
+    private void persistedStoryboardShot(long projectId, ContentUnit unit, long assetId, long assetVersionId,
+                                          String versionStatus, String shotCode) {
+        Storyboard storyboard = new Storyboard();
+        storyboard.setUuid(UUID.randomUUID().toString());
+        storyboard.setProjectId(projectId);
+        storyboard.setContentUnitId(unit.getId());
+        storyboard.setSourceContentVersionId((long) Math.abs(shotCode.hashCode()));
+        storyboard.setTitle(shotCode);
+        storyboard.setPurpose(shotCode);
+        storyboard.setProductionStatus("not_ready");
+        storyboard.setCreatedBy(ownerId);
+        storyboard.setIsDeleted(0);
+        storyboardMapper.insert(storyboard);
+
+        StoryboardVersion version = new StoryboardVersion();
+        version.setUuid(UUID.randomUUID().toString());
+        version.setStoryboardId(storyboard.getId());
+        version.setSourceContentVersionId(storyboard.getSourceContentVersionId());
+        version.setTier("A");
+        version.setVersionNo(1);
+        version.setStatus(versionStatus);
+        version.setRevision(0);
+        version.setSchemaVersion(1);
+        version.setTotalScenes(1);
+        version.setTotalShots(1);
+        version.setTotalDurationMs(1000L);
+        version.setCreatedFrom("manual");
+        version.setCreatedBy(ownerId);
+        if ("locked".equals(versionStatus)) {
+            version.setLockedBy(ownerId);
+            version.setLockedAt(java.time.LocalDateTime.now());
+        }
+        storyboardVersionMapper.insert(version);
+
+        StoryboardShot shot = new StoryboardShot();
+        shot.setUuid(UUID.randomUUID().toString());
+        shot.setVersionId(version.getId());
+        shot.setSceneId(1L);
+        shot.setShotKey(UUID.randomUUID().toString());
+        shot.setShotCode(shotCode);
+        shot.setDurationMs(1000L);
+        shot.setSceneAssetId(assetId);
+        shot.setSceneAssetVersionId(assetVersionId);
+        shot.setSceneAssetSnapshot("{\"fingerprint\":\"fp-" + shotCode + "\"}");
+        shot.setStatus("draft");
+        shot.setSortOrder(1);
+        storyboardShotMapper.insert(shot);
     }
 
     private String markdownContent(long projectId, long assetId) throws Exception {

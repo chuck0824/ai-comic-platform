@@ -23,6 +23,9 @@ public interface ProjectSceneAssetViews {
             Integer currentVersionNo,
             Map<String, Object> master,
             List<Map<String, Object>> variants,
+            long referenceCount,
+            List<String> episodeReferences,
+            String syncStatus,
             LocalDateTime createdAt,
             LocalDateTime updatedAt) {}
 
@@ -43,7 +46,19 @@ public interface ProjectSceneAssetViews {
             List<ImpactReferenceView> references) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
-    record ImpactReferenceView(String type, Long id, Long versionId, String syncStatus) {}
+    record ImpactReferenceView(
+            String type,
+            Long id,
+            Long consumerId,
+            String consumerKey,
+            Long consumerVersionId,
+            Long versionId,
+            String syncStatus,
+            boolean locked,
+            boolean snapshotLocked,
+            String snapshotFingerprint,
+            Integer episodeNo,
+            String episodeTitle) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record SceneAssetMarkdownView(String path, String content) {}
