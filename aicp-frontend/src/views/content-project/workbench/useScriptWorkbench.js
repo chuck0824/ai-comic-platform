@@ -1,6 +1,5 @@
 import { computed, reactive, ref } from 'vue'
 import {
-  STAGES,
   acceptGeneration,
   beginGeneration,
   canNavigateToStage,
@@ -9,6 +8,7 @@ import {
   discardGeneration,
   evaluateActionPrecondition,
   finishGeneration,
+  getOverallProgress,
   navigateToEnteredStage,
   requestStageTransition,
   updateGenerationProgress,
@@ -24,7 +24,7 @@ export function useScriptWorkbench({ persistStage } = {}) {
 
   const activeStage = computed(() => state.activeStage)
   const stages = computed(() => state.stages)
-  const progress = computed(() => Math.round((state.enteredStages.length / STAGES.length) * 100))
+  const progress = computed(() => getOverallProgress(state))
   const generationTaskRecord = computed(() => generationTask.value
     ? state.tasks.find(task => task.id === generationTask.value) || null
     : null)
@@ -40,6 +40,10 @@ export function useScriptWorkbench({ persistStage } = {}) {
 
   function begin(input) {
     const task = beginGeneration(state, input)
+    if (!task?.id) {
+      guidance.value = task?.allowed === false ? task : null
+      return task
+    }
     generationTask.value = task.id
     return task
   }
@@ -70,7 +74,8 @@ export function useScriptWorkbench({ persistStage } = {}) {
   }
 
   async function transition(targetStage) {
-    requestStageTransition(state, targetStage)
+    const request = requestStageTransition(state, targetStage)
+    if (request.status !== 'persisting') return request
     updateStageTransitionProgress(state, 15)
     try {
       if (!persistStage) throw new Error('阶段保存服务不可用')

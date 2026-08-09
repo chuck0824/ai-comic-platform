@@ -23,14 +23,18 @@ function findResult(state, taskId) {
   return state.results.find(item => item.taskId === taskId) || null
 }
 
+function findArtifactRecord(state, taskId) {
+  return state.artifacts.find(item => item.taskId === taskId) || null
+}
+
 function isDemoModel(model = {}) {
   return model.demo === true || model.isDemo === true || String(model.id || model.modelId || '').startsWith('demo')
 }
 
-function generationModel(model = {}) {
+function generationModel(model) {
   return {
-    id: model.id ?? model.modelId ?? 'demo-text',
-    name: model.name ?? model.modelName ?? model.id ?? model.modelId ?? '演示模型',
+    id: model.id ?? model.modelId,
+    name: model.name ?? model.modelName ?? model.id ?? model.modelId,
     demo: isDemoModel(model)
   }
 }
@@ -44,12 +48,30 @@ function clampPercentage(value) {
 }
 
 function refreshStageStatuses(state) {
-  const activeIndex = stageIndex(state.activeStage)
-  state.stages.forEach((stage, index) => {
-    if (stage.key === state.activeStage) stage.status = 'current'
-    else if (state.enteredStages.includes(stage.key) && index < activeIndex) stage.status = 'completed'
-    else if (stage.status !== 'error') stage.status = 'pending'
+  state.stages.forEach(stage => {
+    if (state.completedStages.includes(stage.key)) stage.status = 'completed'
+    else if (stage.key === state.activeStage) stage.status = 'current'
+    else stage.status = 'pending'
   })
+}
+
+function transitionError(state, targetStage, message) {
+  state.transition = {
+    targetStage,
+    sourceStage: state.activeStage,
+    percentage: 0,
+    status: 'error',
+    message
+  }
+  return state.transition
+}
+
+function isNextStage(fromStage, targetStage) {
+  return stageIndex(targetStage) === stageIndex(fromStage) + 1
+}
+
+function generationRejection(code, title, message) {
+  return result(false, code, title, message, 'focus_generation_result')
 }
 
 /** Returns an explanation for unmet business conditions without disabling an action. */
@@ -60,7 +82,7 @@ export function evaluateActionPrecondition(context = {}, action) {
   if (action === 'ai_continue' && !context.selectedBlockId) {
     return result(false, 'SCRIPT_BLOCK_REQUIRED', '请先选择正文块', '选择动作、对白或旁白正文块后才能执行此操作。', 'focus_script_blocks')
   }
-  if (['generate', 'begin_generation'].includes(action) && !context.model) {
+  if (['generate', 'begin_generation'].includes(action) && (!context.model || !(context.model.id ?? context.model.modelId))) {
     return result(false, 'MODEL_REQUIRED', '请选择模型', '选择可用模型后才能开始生成。', 'select_generation_model')
   }
   if (action === 'novel_analysis' && !context.novelUploaded) {
@@ -78,6 +100,7 @@ export function createWorkbenchState() {
   return {
     activeStage: initialStage,
     enteredStages: [initialStage],
+    completedStages: [],
     stages: STAGES.map(stage => ({ ...stage, status: stage.key === initialStage ? 'current' : 'pending' })),
     transition: null,
     tasks: [],
@@ -91,10 +114,18 @@ export function createWorkbenchState() {
 /** Starts a persistence-backed stage transition without moving the active stage yet. */
 export function requestStageTransition(state, targetStage) {
   if (!STAGE_KEYS.has(targetStage)) {
-    state.transition = { targetStage, percentage: 0, status: 'error', message: '未知创作阶段' }
-    return state.transition
+    return transitionError(state, targetStage, '未知创作阶段')
   }
-  state.transition = { targetStage, percentage: 0, status: 'persisting', message: '正在保存阶段进度…' }
+  if (!isNextStage(state.activeStage, targetStage)) {
+    return transitionError(state, targetStage, '只能确认并进入下一阶段。')
+  }
+  state.transition = {
+    targetStage,
+    sourceStage: state.activeStage,
+    percentage: 0,
+    status: 'persisting',
+    message: '正在保存阶段进度…'
+  }
   return state.transition
 }
 
@@ -107,12 +138,16 @@ export function updateStageTransitionProgress(state, percentage) {
 /** Applies a requested transition only when the caller confirms persistence succeeded. */
 export function completeStageTransition(state, outcome = {}) {
   if (!state.transition) return null
+  const { targetStage, sourceStage } = state.transition
+  if (state.transition.status !== 'persisting' || sourceStage !== state.activeStage || !isNextStage(sourceStage, targetStage)) {
+    return transitionError(state, targetStage, '没有可完成的有效阶段转换。')
+  }
   if (!outcome.persisted) {
     state.transition.status = 'error'
     state.transition.message = outcome.message || '保存失败，请重试。'
     return state.transition
   }
-  const targetStage = state.transition.targetStage
+  if (!state.completedStages.includes(sourceStage)) state.completedStages.push(sourceStage)
   state.activeStage = targetStage
   if (!state.enteredStages.includes(targetStage)) state.enteredStages.push(targetStage)
   refreshStageStatuses(state)
@@ -120,6 +155,20 @@ export function completeStageTransition(state, outcome = {}) {
   state.transition.status = 'completed'
   state.transition.message = outcome.message || '阶段已保存'
   return state.transition
+}
+
+/** Completes the last stage after its own persistence operation succeeds. */
+export function completeFinalStage(state, outcome = {}) {
+  const finalStage = STAGES.at(-1).key
+  if (state.activeStage !== finalStage || !outcome.persisted) return null
+  if (!state.completedStages.includes(finalStage)) state.completedStages.push(finalStage)
+  refreshStageStatuses(state)
+  return state.stages.at(-1)
+}
+
+/** Progress represents durable completed work, never merely visited stages. */
+export function getOverallProgress(state) {
+  return Math.round((state.completedStages.length / STAGES.length) * 100)
 }
 
 /** A rail may navigate only to a stage the user has already entered. */
@@ -136,6 +185,10 @@ export function navigateToEnteredStage(state, targetStage) {
 
 /** Begins one task record shared by progress, result, acceptance, and discard. */
 export function beginGeneration(state, input = {}) {
+  const condition = evaluateActionPrecondition({ model: input.model }, 'begin_generation')
+  if (!condition.allowed) return condition
+  const existingTask = input.id != null ? findTask(state, input.id) : null
+  if (existingTask) return generationRejection('GENERATION_TASK_EXISTS', '生成任务已存在', '该任务已经创建，不能重复开始。')
   const model = generationModel(input.model)
   const task = {
     id: input.id ?? `generation-${state.tasks.length + 1}`,
@@ -166,8 +219,14 @@ export function updateGenerationProgress(state, taskId, update = {}) {
 /** Stores completed or failed output as a result; it never treats it as accepted output. */
 export function finishGeneration(state, taskId, outcome = {}) {
   const task = findTask(state, taskId)
-  if (!task) return null
+  if (!task) return generationRejection('GENERATION_TASK_NOT_FOUND', '未找到生成任务', '生成任务不存在或已被清理。')
+  if (task.status !== 'running') {
+    return generationRejection('GENERATION_NOT_RUNNING', '生成任务不能完成', '只有运行中的生成任务可以完成。')
+  }
   const status = outcome.status || 'completed'
+  if (!['completed', 'failed', 'cancelled'].includes(status)) {
+    return generationRejection('GENERATION_OUTCOME_INVALID', '生成结果无效', '生成任务只能完成、失败或取消。')
+  }
   task.status = status
   task.cancelable = false
   task.progress = status === 'completed' ? 100 : task.progress
@@ -190,7 +249,15 @@ export function finishGeneration(state, taskId, outcome = {}) {
 export function acceptGeneration(state, taskId) {
   const task = findTask(state, taskId)
   const generated = findResult(state, taskId)
-  if (!task || !generated || generated.status !== 'completed' || !generated.artifact) return null
+  if (!task || !generated) {
+    return generationRejection('GENERATION_RESULT_REQUIRED', '暂无可采用结果', '等待生成任务产出有效结果后再采用。')
+  }
+  if (task.status !== 'completed' || generated.status !== 'completed' || !generated.artifact) {
+    return generationRejection('GENERATION_NOT_ACCEPTABLE', '生成结果不能采用', '只有已完成且未处理的生成结果可以采用。')
+  }
+  if (findArtifactRecord(state, taskId)) {
+    return generationRejection('GENERATION_ALREADY_RECORDED', '生成结果已记录', '该任务的产物和积分记录已经创建。')
+  }
   const record = {
     taskId,
     artifactPath: generated.artifact.path ?? null,
@@ -211,7 +278,12 @@ export function acceptGeneration(state, taskId) {
 export function discardGeneration(state, taskId) {
   const task = findTask(state, taskId)
   const generated = findResult(state, taskId)
-  if (!task || !generated) return null
+  if (!task || !generated) {
+    return generationRejection('GENERATION_RESULT_REQUIRED', '暂无可丢弃结果', '等待生成任务产出有效结果后再丢弃。')
+  }
+  if (task.status !== 'completed' || generated.status !== 'completed') {
+    return generationRejection('GENERATION_NOT_DISCARDABLE', '生成结果不能丢弃', '只有已完成且未处理的生成结果可以丢弃。')
+  }
   task.status = 'discarded'
   task.artifact = null
   generated.status = 'discarded'

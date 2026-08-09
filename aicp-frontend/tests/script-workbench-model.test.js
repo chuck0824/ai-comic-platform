@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import * as workbenchModel from '../src/views/content-project/workbench/scriptWorkbenchModel.js'
 import {
   STAGES,
   createWorkbenchState,
@@ -7,6 +8,7 @@ import {
   requestStageTransition,
   updateStageTransitionProgress,
   completeStageTransition,
+  canNavigateToStage,
   beginGeneration,
   updateGenerationProgress,
   finishGeneration,
@@ -100,4 +102,86 @@ test('discarding a generation preserves its task record without changing an arti
   assert.equal(state.tasks[0].artifact, null)
   assert.equal(state.tasks[0].estimatedPoints, 0)
   assert.equal(state.pointsRecords.length, 0)
+})
+
+test('stage navigation authorizes only explicitly entered stages regardless of display status', () => {
+  const state = createWorkbenchState()
+  state.stages[2].status = 'completed'
+  state.stages[3].status = 'error'
+
+  assert.equal(canNavigateToStage(state, 'novel_analysis'), false)
+  assert.equal(canNavigateToStage(state, 'adaptation'), false)
+  assert.equal(canNavigateToStage(state, 'creation_settings'), true)
+})
+
+test('stage transition rejects invalid, skipped, and stale persistence completions', () => {
+  const state = createWorkbenchState()
+
+  const invalid = requestStageTransition(state, 'not-a-stage')
+  assert.equal(invalid.status, 'error')
+  assert.equal(state.activeStage, 'creation_settings')
+
+  const skipped = requestStageTransition(state, 'novel_analysis')
+  assert.equal(skipped.status, 'error')
+  assert.equal(state.activeStage, 'creation_settings')
+
+  const completion = completeStageTransition(state, { persisted: true })
+  assert.equal(completion.status, 'error')
+  assert.equal(state.activeStage, 'creation_settings')
+})
+
+test('generation requires an explicitly selected model and only selected demos are free', () => {
+  const state = createWorkbenchState()
+  const missingModel = beginGeneration(state, { id: 'no-model' })
+
+  assert.deepEqual(missingModel, {
+    allowed: false,
+    code: 'MODEL_REQUIRED',
+    title: '请选择模型',
+    message: '选择可用模型后才能开始生成。',
+    targetAction: 'select_generation_model'
+  })
+  assert.equal(state.tasks.length, 0)
+
+  const demo = beginGeneration(state, { id: 'selected-demo', model: { id: 'demo-text', demo: true }, estimatedPoints: 9 })
+  assert.equal(demo.estimatedPoints, 0)
+})
+
+test('generation lifecycle is idempotent and prevents terminal-state rewrites or double charges', () => {
+  const state = createWorkbenchState()
+  beginGeneration(state, { id: 'task-idempotent', model: { id: 'qwen-plus' }, estimatedPoints: 12 })
+  finishGeneration(state, 'task-idempotent', {
+    artifact: { path: '06-剧本正文/EP01.md', version: 1 }, actualPoints: 9
+  })
+  const accepted = acceptGeneration(state, 'task-idempotent')
+
+  const finishedAgain = finishGeneration(state, 'task-idempotent', {
+    artifact: { path: '06-剧本正文/EP02.md', version: 2 }, actualPoints: 99
+  })
+  const acceptedAgain = acceptGeneration(state, 'task-idempotent')
+  const discardedAfterAccept = discardGeneration(state, 'task-idempotent')
+
+  assert.equal(accepted.actualPoints, 9)
+  assert.equal(finishedAgain.allowed, false)
+  assert.equal(acceptedAgain.allowed, false)
+  assert.equal(discardedAfterAccept.allowed, false)
+  assert.equal(state.results[0].artifact.path, '06-剧本正文/EP01.md')
+  assert.equal(state.artifacts.length, 1)
+  assert.equal(state.pointsRecords.length, 1)
+})
+
+test('overall progress counts completed stages and reaches 100 only after final completion', () => {
+  const state = createWorkbenchState()
+  assert.equal(typeof workbenchModel.getOverallProgress, 'function')
+  assert.equal(typeof workbenchModel.completeFinalStage, 'function')
+  assert.equal(workbenchModel.getOverallProgress(state), 0)
+
+  for (const stage of STAGES.slice(1)) {
+    requestStageTransition(state, stage.key)
+    completeStageTransition(state, { persisted: true })
+  }
+
+  assert.equal(workbenchModel.getOverallProgress(state), 88)
+  workbenchModel.completeFinalStage(state, { persisted: true })
+  assert.equal(workbenchModel.getOverallProgress(state), 100)
 })

@@ -56,7 +56,6 @@ function stageLabel(key, fallback) {
 
 function canNavigate(stage) {
   return props.enteredStages.includes(stage.key)
-    || stage.status === 'current' || stage.status === 'completed' || stage.status === 'error'
 }
 
 function navigate(stage) {
