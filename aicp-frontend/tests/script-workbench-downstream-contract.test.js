@@ -171,13 +171,13 @@ test('continuity groups typed issues and archive requires a pass plus locked sna
 test('canvas creation sends locked versions and immutable scene snapshots only', async () => {
   const lockedShot = createStoryboardShot({
     id: 'SHOT-1', sceneId: 'SC-1', snapshotLocked: true,
-    sceneAssetSnapshotRef: { shotId: 'SHOT-1', fingerprint: 'sha256:abc', sceneAssetVersionId: 12 }
+    sceneAssetSnapshotRef: { shotId: 'SHOT-1', fingerprint: 'sha256:abc', sceneAssetId: 7, sceneAssetVersionId: 12 }
   })
   const state = createStoryboardState({ contentVersionId: 31, contentVersionLocked: true, storyboardVersionId: 41, storyboardVersionLocked: true, continuity: { status: 'PASSED', passed: true }, shots: [lockedShot] })
   const payload = buildCanvasCreationPayload(state, { name: '第一集画布', purpose: 'production' })
   assert.deepEqual(payload, {
     name: '第一集画布', purpose: 'production', content_version_id: 31, storyboard_version_id: 41,
-    scene_snapshot_references: [{ shot_id: 'SHOT-1', fingerprint: 'sha256:abc', scene_asset_version_id: 12 }]
+    scene_snapshot_references: [{ shot_id: 'SHOT-1', fingerprint: 'sha256:abc', scene_asset_id: 7, scene_asset_version_id: 12 }]
   })
   let sent
   const created = await createCanvasProject(state, { name: '第一集画布', purpose: 'production' }, async value => { sent = value; return { persisted: true, canvasProjectId: 'CANVAS-1' } })
@@ -208,4 +208,97 @@ test('adding storyboard shots executes persistence and keeps exact binding', asy
   const result = await addStoryboardShot(state, { sceneId: 'SC-1', assetBinding: binding }, async payload => ({ persisted: true, shot: payload }))
   assert.equal(result.id, 'SHOT-001')
   assert.deepEqual(result.assetBinding, binding)
+})
+
+test('adding a storyboard shot requires an existing stable scene ID and never persists a placeholder', async () => {
+  const state = createStoryboardState()
+  let calls = 0
+  const blocked = await addStoryboardShot(state, { description: '新镜头' }, async () => { calls += 1 })
+  assert.equal(blocked.code, 'STORYBOARD_SCENE_REQUIRED')
+  assert.equal(calls, 0)
+  const source = fs.readFileSync(path.join(contentProject, 'stages/TextStoryboardStage.vue'), 'utf8')
+  assert.doesNotMatch(source, /SCENE-PENDING/)
+})
+
+test('scene asset binding accepts a master-only version and requires optional variant fields as a pair', async () => {
+  const makeState = () => createScriptBodyState({ episodes: [{ id: 'EP-1', scenes: [{ id: 'SC-1', blocks: [] }] }] })
+  let sent
+  const masterOnly = await bindScriptSceneAsset(makeState(), 'SC-1', { id: 7, currentVersionId: 12, status: 'ACTIVE' }, null, async payload => {
+    sent = payload
+    return { persisted: true }
+  })
+  assert.equal(masterOnly.bindingState, 'BOUND')
+  assert.deepEqual(sent, { sceneAssetId: 7, sceneAssetVersionId: 12, sceneVariantId: null, sceneVariantVersion: null, sceneOverride: {} })
+  assert.equal((await bindScriptSceneAsset(makeState(), 'SC-1', { id: 7, currentVersionId: 12 }, { id: 'VAR-1' }, async () => ({ persisted: true }))).code, 'SCENE_ASSET_VARIANT_PAIR_REQUIRED')
+  assert.equal((await bindScriptSceneAsset(makeState(), 'SC-1', { id: 7, currentVersionId: 12 }, { version: 2 }, async () => ({ persisted: true }))).code, 'SCENE_ASSET_VARIANT_PAIR_REQUIRED')
+})
+
+test('master-space updates atomically repin the current scene to the returned asset version', async () => {
+  const state = createScriptBodyState({ episodes: [{ id: 'EP-1', scenes: [{ id: 'SC-1', space: '仓库', blocks: [], assetBinding: { sceneAssetId: 7, sceneAssetVersionId: 12, sceneVariantId: null, sceneVariantVersion: null, sceneOverride: {} } }] }] })
+  const result = await changeSceneSpace(state, 'SC-1', '码头', 'MASTER_ASSET', async () => ({ persisted: true, sceneAssetVersionId: 13, sceneAssetVersionNo: 4 }))
+  assert.equal(result.assetBinding.sceneAssetVersionId, 13)
+  assert.equal(result.assetBinding.sceneAssetVersionNo, 4)
+  assert.equal(result.space, '码头')
+  const rejectedState = createScriptBodyState({ episodes: [{ id: 'EP-1', scenes: [{ id: 'SC-1', space: '仓库', blocks: [], assetBinding: { sceneAssetId: 7, sceneAssetVersionId: 12, sceneVariantId: null, sceneVariantVersion: null, sceneOverride: {} } }] }] })
+  const rejected = await changeSceneSpace(rejectedState, 'SC-1', '码头', 'MASTER_ASSET', async () => ({ persisted: true }))
+  assert.equal(rejected.code, 'SCENE_ASSET_VERSION_REQUIRED')
+  assert.equal(rejectedState.episodes[0].scenes[0].space, '仓库')
+  assert.equal(rejectedState.episodes[0].scenes[0].assetBinding.sceneAssetVersionId, 12)
+})
+
+test('blocked review approval clears stale single filters and shows every unresolved high risk issue', async () => {
+  const state = createReviewState({
+    filters: { severity: 'LOW', status: 'OPEN', severities: [], statuses: [] },
+    issues: [
+      { id: 'I-1', severity: 'HIGH', status: 'OPEN' },
+      { id: 'I-2', severity: 'BLOCKER', status: 'IN_PROGRESS' },
+      { id: 'I-3', severity: 'HIGH', status: 'RESOLVED' },
+      { id: 'I-4', severity: 'BLOCKER', status: 'WAIVED' }
+    ]
+  })
+  await approveReviewEpisode(state, 'EP-1', async () => ({ persisted: true }))
+  assert.equal('severity' in state.filters, false)
+  assert.equal('status' in state.filters, false)
+  assert.deepEqual(filterReviewIssues(state).map(issue => issue.id), ['I-1', 'I-2'])
+  assert.equal(state.focusIssueList, true)
+})
+
+test('split rejects empty duplicate or globally conflicting stable IDs without replacing the source', async () => {
+  const original = createStoryboardShot({ id: 'SHOT-1', sceneId: 'SC-1' })
+  const other = createStoryboardShot({ id: 'SHOT-9', sceneId: 'SC-1' })
+  for (const replacements of [
+    [{ id: '', sceneId: 'SC-1' }, { id: 'SHOT-2', sceneId: 'SC-1' }],
+    [{ id: 'SHOT-2', sceneId: 'SC-1' }, { id: 'SHOT-2', sceneId: 'SC-1' }],
+    [{ id: 'SHOT-9', sceneId: 'SC-1' }, { id: 'SHOT-2', sceneId: 'SC-1' }]
+  ]) {
+    const state = createStoryboardState({ shots: [original, other] })
+    const result = await splitStoryboardShot(state, 'SHOT-1', async () => ({ persisted: true, shots: replacements }))
+    assert.equal(result.code, 'SHOT_STABLE_ID_CONFLICT')
+    assert.deepEqual(state.shots.map(shot => shot.id), ['SHOT-1', 'SHOT-9'])
+  }
+})
+
+test('archive and canvas reject incomplete locked snapshot references and omit absent optional variants', async () => {
+  const base = { id: 'SHOT-1', sceneId: 'SC-1', snapshotLocked: true }
+  const project = { contentVersionId: 31, contentVersionLocked: true, storyboardVersionId: 41, storyboardVersionLocked: true, continuity: { status: 'PASSED', passed: true } }
+  const invalidRefs = [
+    { fingerprint: 'sha256:x', sceneAssetId: 7, sceneAssetVersionId: 12 },
+    { shotId: 'SHOT-1', fingerprint: 'sha256:x', sceneAssetVersionId: 12 },
+    { shotId: 'SHOT-1', fingerprint: 'sha256:x', sceneAssetId: 7 },
+    { shotId: 'SHOT-1', fingerprint: 'sha256:x', sceneAssetId: '', sceneAssetVersionId: 12 },
+    { shotId: 'SHOT-1', fingerprint: 'sha256:x', sceneAssetId: 7, sceneAssetVersionId: 0 },
+    { shotId: 'SHOT-X', fingerprint: 'sha256:x', sceneAssetId: 7, sceneAssetVersionId: 12 },
+    { shotId: 'SHOT-1', fingerprint: 'sha256:x', sceneAssetId: 7, sceneAssetVersionId: 12, sceneVariantId: 'VAR-1' },
+    { shotId: 'SHOT-1', fingerprint: 'sha256:x', sceneAssetId: 7, sceneAssetVersionId: 12, sceneVariantVersion: 2 },
+    { shotId: 'SHOT-1', fingerprint: 'sha256:x', sceneAssetId: 7, sceneAssetVersionId: 12, sceneVariantId: '', sceneVariantVersion: 0 }
+  ]
+  for (const sceneAssetSnapshotRef of invalidRefs) {
+    const state = createStoryboardState({ ...project, shots: [{ ...base, sceneAssetSnapshotRef }] })
+    assert.equal((await archiveStoryboard(state, async () => ({ persisted: true }))).code, 'LOCKED_SNAPSHOTS_REQUIRED')
+    assert.equal((await createCanvasProject(state, {}, async () => ({ persisted: true }))).code, 'LOCKED_SNAPSHOTS_REQUIRED')
+  }
+  const valid = createStoryboardState({ ...project, shots: [{ ...base, sceneAssetSnapshotRef: { shotId: 'SHOT-1', fingerprint: 'sha256:x', sceneAssetId: 7, sceneAssetVersionId: 12 } }] })
+  assert.deepEqual(buildCanvasCreationPayload(valid, { name: '画布', purpose: 'production' }).scene_snapshot_references, [{
+    shot_id: 'SHOT-1', fingerprint: 'sha256:x', scene_asset_id: 7, scene_asset_version_id: 12
+  }])
 })

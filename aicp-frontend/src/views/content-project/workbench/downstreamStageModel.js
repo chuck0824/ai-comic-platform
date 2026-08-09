@@ -167,8 +167,13 @@ export async function bindScriptSceneAsset(state, sceneId, asset, variant, adapt
     sceneVariantVersion: variant?.version,
     sceneOverride: {}
   })
-  if ([binding.sceneAssetId, binding.sceneAssetVersionId, binding.sceneVariantId, binding.sceneVariantVersion].some(value => value == null || value === '')) {
-    return guidance('SCENE_ASSET_VERSION_REQUIRED', '请选择完整资产版本', '绑定必须包含母资产、母资产版本、变体和变体版本。', 'choose_scene_asset_version')
+  if ([binding.sceneAssetId, binding.sceneAssetVersionId].some(value => value == null || value === '')) {
+    return guidance('SCENE_ASSET_VERSION_REQUIRED', '请选择完整资产版本', '绑定必须包含母资产和母资产版本。', 'choose_scene_asset_version')
+  }
+  const hasVariantId = binding.sceneVariantId != null && binding.sceneVariantId !== ''
+  const hasVariantVersion = binding.sceneVariantVersion != null && binding.sceneVariantVersion !== ''
+  if (hasVariantId !== hasVariantVersion) {
+    return guidance('SCENE_ASSET_VARIANT_PAIR_REQUIRED', '场景变体版本不完整', '变体为可选；选择变体时必须同时包含变体 ID 和变体版本。', 'choose_scene_asset_version')
   }
   const response = await persist(adapter, binding, '绑定场景资产')
   if (response.allowed === false) return response
@@ -194,13 +199,22 @@ export async function changeSceneSpace(state, sceneId, space, scope, adapter) {
   if (!['CURRENT_SCENE', 'MASTER_ASSET'].includes(scope)) {
     return guidance('SPACE_CHANGE_SCOPE_REQUIRED', '请选择空间修改范围', '明确选择“仅当前场景”或“更新母资产”。', 'choose_space_change_scope')
   }
+  if (scope === 'MASTER_ASSET' && !scene.assetBinding) {
+    return guidance('SCENE_ASSET_VERSION_REQUIRED', '场景尚未绑定母资产', '先绑定母资产版本，再选择更新母资产。', 'choose_scene_asset_version')
+  }
   const response = await persist(adapter, { sceneId, space, scope, assetBinding: scene.assetBinding }, scope === 'MASTER_ASSET' ? '更新母资产' : '更新当前场景')
   if (response.allowed === false) return response
+  if (scope === 'MASTER_ASSET' && !(Number(response.sceneAssetVersionId) > 0)) {
+    return guidance('SCENE_ASSET_VERSION_REQUIRED', '母资产版本未更新', '服务未返回新的母资产版本，当前场景仍保留原绑定。', 'retry_master_asset_update')
+  }
   scene.space = space
   if (scope === 'CURRENT_SCENE' && scene.assetBinding) {
     scene.assetBinding.sceneOverride = { ...(scene.assetBinding.sceneOverride || {}), space }
   }
-  if (scope === 'MASTER_ASSET') scene.assetVersionId = response.sceneAssetVersionId ?? scene.assetVersionId
+  if (scope === 'MASTER_ASSET' && scene.assetBinding) {
+    scene.assetBinding.sceneAssetVersionId = response.sceneAssetVersionId ?? scene.assetBinding.sceneAssetVersionId
+    if (response.sceneAssetVersionNo != null) scene.assetBinding.sceneAssetVersionNo = response.sceneAssetVersionNo
+  }
   return scene
 }
 
@@ -234,8 +248,10 @@ export function filterReviewIssues(state, filters = state.filters) {
   state.filters = { ...state.filters, ...clone(filters) }
   const severitySet = new Set(state.filters.severity ? [state.filters.severity] : (state.filters.severities || []))
   const statusSet = new Set(state.filters.status ? [state.filters.status] : (state.filters.statuses || []))
+  const excludedStatusSet = new Set(state.filters.excludedStatuses || [])
   return state.issues.filter(issue => (!severitySet.size || severitySet.has(issue.severity)) &&
-    (!statusSet.size || statusSet.has(issue.status)) && (!state.filters.sceneId || issue.sceneId === state.filters.sceneId))
+    (!statusSet.size || statusSet.has(issue.status)) && !excludedStatusSet.has(issue.status) &&
+    (!state.filters.sceneId || issue.sceneId === state.filters.sceneId))
 }
 
 export async function saveLocalRevision(state, issueId, draft, adapter) {
@@ -260,7 +276,10 @@ export function compareReviewRevision(state, revisionId) {
 export async function approveReviewEpisode(state, episodeId, adapter) {
   const blockers = state.issues.filter(issue => ['BLOCKER', 'HIGH'].includes(issue.severity) && !['RESOLVED', 'WAIVED'].includes(issue.status))
   if (blockers.length) {
-    state.filters = { ...state.filters, severities: ['BLOCKER', 'HIGH'], statuses: ['OPEN'] }
+    const filters = { ...state.filters }
+    delete filters.severity
+    delete filters.status
+    state.filters = { ...filters, severities: ['BLOCKER', 'HIGH'], statuses: [], excludedStatuses: ['RESOLVED', 'WAIVED'] }
     state.focusIssueList = true
     return guidance('REVIEW_BLOCKERS_REMAIN', '仍有高风险问题', `解决 ${blockers.length} 个 HIGH/BLOCKER 问题后才能审核通过。`, 'focus_filtered_review_issues')
   }
@@ -299,6 +318,9 @@ export function createStoryboardState(input = {}) {
 }
 
 export async function addStoryboardShot(state, draft, adapter) {
+  if (draft?.sceneId == null || String(draft.sceneId).trim() === '') {
+    return guidance('STORYBOARD_SCENE_REQUIRED', '请选择分镜场景', '从已有场景中选择一个稳定场景 ID 后再新增镜头。', 'choose_storyboard_scene')
+  }
   const candidate = createStoryboardShot({ ...draft, id: nextStableId(state.shots, 'SHOT') })
   const response = await persist(adapter, candidate, '新增镜头')
   if (response.allowed === false) return response
@@ -315,6 +337,14 @@ export async function splitStoryboardShot(state, shotId, adapter) {
   const response = await persist(adapter, { shotId, source: clone(source) }, '拆分镜头')
   if (response.allowed === false) return response
   const replacements = (response.shots ?? []).map(createStoryboardShot)
+  const replacementIds = replacements.map(item => item.id)
+  const remainingIds = new Set(state.shots.filter(item => item.id !== shotId).map(item => String(item.id)))
+  const validIds = replacementIds.every(id => id != null && String(id).trim() !== '')
+  const uniqueIds = new Set(replacementIds.map(id => String(id))).size === replacementIds.length
+  const conflictFreeIds = replacementIds.every(id => !remainingIds.has(String(id)))
+  if (!validIds || !uniqueIds || !conflictFreeIds) {
+    return guidance('SHOT_STABLE_ID_CONFLICT', '拆分镜头 ID 无效', '服务返回了空、重复或与现有镜头冲突的 ID，原镜头已保留。', 'retry_split_shot')
+  }
   if (replacements.length < 2 || replacements.some(item => !sameBinding(item.assetBinding, source.assetBinding))) {
     return guidance('SHOT_BINDING_CONFLICT', '拆分后的场景绑定不一致', '请选择统一绑定或显式解除绑定后再完成拆分。', 'resolve_shot_binding_conflict')
   }
@@ -369,8 +399,35 @@ export async function runContinuityCheck(state, adapter) {
   return state.continuity
 }
 
+function completeSnapshotReference(shot) {
+  const reference = shot.sceneAssetSnapshotRef
+  const nonBlank = value => value != null && String(value).trim() !== ''
+  const positiveVersion = value => Number.isInteger(Number(value)) && Number(value) > 0
+  if (!shot.snapshotLocked || !reference || !nonBlank(reference.fingerprint) || !nonBlank(reference.shotId)) return false
+  if (String(reference.shotId) !== String(shot.id)) return false
+  if (!positiveVersion(reference.sceneAssetId) || !positiveVersion(reference.sceneAssetVersionId)) return false
+  const variantIdProvided = reference.sceneVariantId != null
+  const variantVersionProvided = reference.sceneVariantVersion != null
+  if (variantIdProvided !== variantVersionProvided) return false
+  if (!variantIdProvided) return true
+  return nonBlank(reference.sceneVariantId) && positiveVersion(reference.sceneVariantVersion)
+}
+
 function allSnapshotsLocked(state) {
-  return state.shots.length > 0 && state.shots.every(shot => shot.snapshotLocked && shot.sceneAssetSnapshotRef?.fingerprint)
+  return state.shots.length > 0 && state.shots.every(completeSnapshotReference)
+}
+
+function snapshotReferencePayload(shot) {
+  const reference = shot.sceneAssetSnapshotRef
+  const payload = {
+    shot_id: reference.shotId,
+    fingerprint: reference.fingerprint,
+    scene_asset_id: reference.sceneAssetId,
+    scene_asset_version_id: reference.sceneAssetVersionId
+  }
+  if (reference.sceneVariantId != null) payload.scene_variant_id = reference.sceneVariantId
+  if (reference.sceneVariantVersion != null) payload.scene_variant_version = reference.sceneVariantVersion
+  return payload
 }
 
 export async function archiveStoryboard(state, adapter) {
@@ -406,11 +463,7 @@ export function buildCanvasCreationPayload(state, draft = {}) {
     purpose: draft.purpose,
     content_version_id: state.contentVersionId,
     storyboard_version_id: state.storyboardVersionId,
-    scene_snapshot_references: state.shots.map(shot => ({
-      shot_id: shot.sceneAssetSnapshotRef?.shotId ?? shot.id,
-      fingerprint: shot.sceneAssetSnapshotRef?.fingerprint,
-      scene_asset_version_id: shot.sceneAssetSnapshotRef?.sceneAssetVersionId
-    }))
+    scene_snapshot_references: state.shots.map(snapshotReferencePayload)
   }
 }
 

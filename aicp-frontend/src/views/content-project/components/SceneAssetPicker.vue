@@ -6,7 +6,7 @@
         <el-select v-model="assetId" placeholder="选择可用母资产" filterable class="full-width">
           <el-option v-for="asset in bindableAssets" :key="asset.id" :label="`${asset.name} · v${asset.currentVersionNo || asset.version || 1}`" :value="asset.id" />
         </el-select>
-        <el-select v-model="variantId" placeholder="选择场景变体" class="full-width">
+        <el-select v-model="variantId" placeholder="可选：选择场景变体" clearable class="full-width">
           <el-option v-for="variant in selectedAsset?.variants || []" :key="variant.id" :label="`${variant.name || variant.id} · v${variant.version}`" :value="variant.id" />
         </el-select>
       </el-tab-pane>
@@ -34,8 +34,9 @@ function confirm() {
     if (!draft.name.trim() || !draft.spaceType.trim()) return reject('SCENE_ASSET_FIELDS_REQUIRED', '填写资产名称和空间类型。', 'focus_scene_asset_draft')
     emit('create-new', { ...draft }); return
   }
-  const variant = selectedAsset.value?.variants?.find(item => item.id === variantId.value)
-  if (!selectedAsset.value || !variant) return reject('SCENE_ASSET_VERSION_REQUIRED', '请选择母资产及其变体版本。', 'choose_scene_asset_version')
+  if (!selectedAsset.value) return reject('SCENE_ASSET_VERSION_REQUIRED', '请选择母资产及其版本。', 'choose_scene_asset_version')
+  const variant = variantId.value == null ? null : selectedAsset.value.variants?.find(item => item.id === variantId.value)
+  if (variantId.value != null && (!variant || variant.version == null)) return reject('SCENE_ASSET_VARIANT_PAIR_REQUIRED', '选择变体时必须包含变体 ID 和版本。', 'choose_scene_asset_version')
   emit('bind-existing', { asset: selectedAsset.value, variant })
 }
 </script>
