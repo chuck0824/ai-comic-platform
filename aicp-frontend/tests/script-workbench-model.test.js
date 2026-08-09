@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import * as workbenchModel from '../src/views/content-project/workbench/scriptWorkbenchModel.js'
 import { useScriptWorkbench } from '../src/views/content-project/workbench/useScriptWorkbench.js'
 import {
@@ -89,6 +90,44 @@ test('accepting a generation records artifact, task, points, and impact', () => 
     estimatedPoints: 12, actualPoints: 10, impact: '正文块已更新'
   })
   assert.deepEqual(state.pointsRecords, [accepted])
+})
+
+test('generation preserves before-after diff through result display, accept, and discard audit paths', () => {
+  const acceptedState = createWorkbenchState()
+  beginGeneration(acceptedState, { id: 'diff-accept', model: { id: 'qwen-plus' }, estimatedPoints: 12 })
+  const acceptedResult = finishGeneration(acceptedState, 'diff-accept', {
+    actualPoints: 10,
+    artifact: { path: '04-改编方案/改编方案.md', version: 4, impact: '分集结构待更新' },
+    diff: { summary: '增强首集冲突', before: '主角回家。', after: '主角回家却发现债主堵门。', changes: ['高压开场'] }
+  })
+  assert.deepEqual(acceptedResult.diff, {
+    summary: '增强首集冲突', before: '主角回家。', after: '主角回家却发现债主堵门。', changes: ['高压开场']
+  })
+  assert.deepEqual(workbenchModel.generationDiffView(acceptedResult), {
+    visible: true,
+    summary: '增强首集冲突',
+    before: '主角回家。',
+    after: '主角回家却发现债主堵门。',
+    changes: ['高压开场']
+  })
+  const accepted = acceptGeneration(acceptedState, 'diff-accept')
+  assert.deepEqual(accepted.diff, acceptedResult.diff)
+  assert.deepEqual(acceptedState.results[0].diff, acceptedResult.diff)
+
+  const discardedState = createWorkbenchState()
+  beginGeneration(discardedState, { id: 'diff-discard', model: { id: 'qwen-plus' }, estimatedPoints: 12 })
+  finishGeneration(discardedState, 'diff-discard', {
+    artifact: { path: '04-改编方案/改编方案.md', version: 5 },
+    diff: acceptedResult.diff
+  })
+  const discarded = discardGeneration(discardedState, 'diff-discard')
+  assert.equal(discarded.artifact, null)
+  assert.deepEqual(discarded.diff, acceptedResult.diff)
+
+  const drawerSource = readFileSync(new URL('../src/views/content-project/components/ActionResultDrawer.vue', import.meta.url), 'utf8')
+  assert.match(drawerSource, /generationDiffView/)
+  assert.match(drawerSource, /修订前/)
+  assert.match(drawerSource, /修订后/)
 })
 
 test('discarding a generation preserves its task record without changing an artifact', () => {

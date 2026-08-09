@@ -79,6 +79,23 @@ function hasPositivePointEstimate(estimatedPoints) {
   return Number.isFinite(value) && value > 0
 }
 
+function copySerializable(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value))
+}
+
+/** Produces the shared result drawer's before/after projection from the authoritative task result. */
+export function generationDiffView(resultItem = {}) {
+  const diff = resultItem.diff
+  if (!diff || typeof diff !== 'object') return { visible: false, summary: '', before: null, after: null, changes: [] }
+  return {
+    visible: true,
+    summary: diff.summary ?? '',
+    before: copySerializable(diff.before ?? null),
+    after: copySerializable(diff.after ?? null),
+    changes: Array.isArray(diff.changes) ? copySerializable(diff.changes) : []
+  }
+}
+
 /** Returns an explanation for unmet business conditions without disabling an action. */
 export function evaluateActionPrecondition(context = {}, action) {
   if (context.projectArchived) {
@@ -248,6 +265,8 @@ export function finishGeneration(state, taskId, outcome = {}) {
     error: task.error,
     impact: outcome.artifact?.impact ?? outcome.impact ?? null
   }
+  const diff = copySerializable(outcome.diff ?? outcome.artifact?.diff ?? null)
+  if (diff != null) item.diff = diff
   if (existing) Object.assign(existing, item)
   else state.results.push(item)
   return item
@@ -274,6 +293,7 @@ export function acceptGeneration(state, taskId) {
     actualPoints: task.actualPoints,
     impact: generated.impact
   }
+  if (generated.diff != null) record.diff = copySerializable(generated.diff)
   task.status = 'accepted'
   task.artifact = generated.artifact
   generated.status = 'accepted'

@@ -238,13 +238,16 @@ export function createAdaptationState(seed = {}) {
 }
 
 export async function persistHookSelection(state, hookId, persistHook) {
+  const guarded = ensureAdaptationDraft(state)
+  if (guarded) return guarded
   if (!state.hooks.some(hook => hook.id === hookId)) return rejected('HOOK_NOT_FOUND', '开场方案不存在', '请重新选择高压开场。', 'focus_high_pressure_hooks')
   if (typeof persistHook !== 'function') return rejected('HOOK_PERSISTENCE_FAILED', '开场方案未保存', '保存服务不可用。', 'retry_hook_save')
   try {
     const response = await persistHook(hookId)
     if (response?.persisted !== true) return rejected('HOOK_PERSISTENCE_FAILED', '开场方案未保存', response?.message || '请稍后重试。', 'retry_hook_save')
+    if (!(Number(response.version) > state.hookVersion)) return rejected('HOOK_PERSISTENCE_FAILED', '开场方案未保存', '服务端未返回新的开场版本，请重试。', 'retry_hook_save')
     state.selectedHookId = hookId
-    state.hookVersion = Number(response.version) || state.hookVersion + 1
+    state.hookVersion = Number(response.version)
     return { ok: true, hookId, version: state.hookVersion }
   } catch (error) {
     return rejected('HOOK_PERSISTENCE_FAILED', '开场方案未保存', error?.message || '请稍后重试。', 'retry_hook_save')
@@ -287,6 +290,7 @@ export function removeAdaptationRule(state, ruleId) {
 
 export async function confirmAdaptationPlan(state, creationSettings, persistPlan) {
   if (!state.selectedHookId) return rejected('HIGH_PRESSURE_HOOK_REQUIRED', '请选择高压开场', '必须先选择并保存一个高压开场。', 'focus_high_pressure_hooks')
+  if (!(Number(state.hookVersion) > 0)) return rejected('HOOK_PERSISTENCE_REQUIRED', '高压开场尚未保存', '请重新选择当前开场并完成保存，再确认改编方案。', 'retry_hook_save')
   const settingValidation = validateCreationSettings(creationSettings)
   if (!settingValidation.allowed) return settingValidation
   if (state.rules.some(rule => !text(rule.title) || !text(rule.instruction))) return rejected('ADAPTATION_RULE_REQUIRED', '请补全改编规则', '存在未完成的改编规则。', 'focus_adaptation_rules')

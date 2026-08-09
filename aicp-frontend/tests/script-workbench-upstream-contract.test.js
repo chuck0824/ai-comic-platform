@@ -143,6 +143,11 @@ test('adaptation persists hook before confirmation and keeps draft rules editabl
   assert.equal(failed.code, 'HOOK_PERSISTENCE_FAILED')
   assert.equal(state.selectedHookId, null)
 
+  const unversioned = await persistHookSelection(state, 'hook-1', async () => ({ persisted: true }))
+  assert.equal(unversioned.code, 'HOOK_PERSISTENCE_FAILED')
+  assert.equal(state.selectedHookId, null)
+  assert.equal(state.hookVersion, 0)
+
   const selected = await persistHookSelection(state, 'hook-1', async hookId => ({ persisted: hookId === 'hook-1', version: 2 }))
   assert.equal(selected.ok, true)
   assert.equal(state.selectedHookId, 'hook-1')
@@ -163,6 +168,43 @@ test('adaptation persists hook before confirmation and keeps draft rules editabl
   assert.equal(state.version, 3)
 
   assert.equal(addAdaptationRule(state, { title: '过晚', instruction: '不应添加' }).code, 'ADAPTATION_CONFIRMED')
+})
+
+test('adaptation confirmation requires durable hook proof and never calls plan persistence without it', async () => {
+  const state = createAdaptationState({
+    hooks: [{ id: 'hook-1', title: '债主堵门' }],
+    selectedHookId: 'hook-1',
+    hookVersion: 0
+  })
+  let persistenceCalls = 0
+  const rejected = await confirmAdaptationPlan(state, {
+    creationType: 'novel_adaptation', genre: '悬疑', tone: '紧张', audience: '成年', episodeCount: 12,
+    episodeDuration: 90, adaptationStrength: 'balanced', outputFormat: 'vertical_short_drama',
+    model: { id: 'demo-text', demo: true }, estimatedPoints: 0
+  }, async () => { persistenceCalls += 1; return { persisted: true, version: 1 } })
+
+  assert.equal(rejected.allowed, false)
+  assert.equal(rejected.code, 'HOOK_PERSISTENCE_REQUIRED')
+  assert.equal(rejected.targetAction, 'retry_hook_save')
+  assert.equal(persistenceCalls, 0)
+  assert.equal(state.confirmed, false)
+  assert.equal(state.version, 0)
+})
+
+test('confirmed adaptation keeps its persisted hook immutable until a new version is created', async () => {
+  const state = createAdaptationState({
+    hooks: [{ id: 'hook-1', title: '债主堵门' }, { id: 'hook-2', title: '主角被迫跳楼' }],
+    selectedHookId: 'hook-1', hookVersion: 3, confirmed: true, version: 5
+  })
+  let persistenceCalls = 0
+  const rejected = await persistHookSelection(state, 'hook-2', async () => { persistenceCalls += 1; return { persisted: true, version: 4 } })
+
+  assert.equal(rejected.allowed, false)
+  assert.equal(rejected.code, 'ADAPTATION_CONFIRMED')
+  assert.equal(rejected.targetAction, 'create_adaptation_version')
+  assert.equal(persistenceCalls, 0)
+  assert.equal(state.selectedHookId, 'hook-1')
+  assert.equal(state.hookVersion, 3)
 })
 
 test('adaptation regeneration delegates to the shared task/progress/result flow', async () => {
