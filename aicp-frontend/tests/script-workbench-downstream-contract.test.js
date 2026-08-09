@@ -263,6 +263,28 @@ test('blocked review approval clears stale single filters and shows every unreso
   assert.equal(state.focusIssueList, true)
 })
 
+test('blocked review approval resets scene and every hiding filter to show cross-scene blockers', async () => {
+  const state = createReviewState({
+    filters: { sceneId: 'SC-1', severity: 'LOW', status: 'OPEN', severities: ['LOW'], statuses: ['OPEN'], assignee: 'me' },
+    issues: [
+      { id: 'I-1', sceneId: 'SC-1', severity: 'LOW', status: 'OPEN' },
+      { id: 'I-2', sceneId: 'SC-2', severity: 'HIGH', status: 'OPEN' },
+      { id: 'I-3', sceneId: 'SC-3', severity: 'BLOCKER', status: 'IN_PROGRESS' },
+      { id: 'I-4', sceneId: 'SC-4', severity: 'HIGH', status: 'RESOLVED' }
+    ]
+  })
+  const result = await approveReviewEpisode(state, 'EP-1', async () => ({ persisted: true }))
+  assert.equal(result.code, 'REVIEW_BLOCKERS_REMAIN')
+  assert.deepEqual(state.filters, { severities: ['BLOCKER', 'HIGH'], statuses: [], excludedStatuses: ['RESOLVED', 'WAIVED'] })
+  assert.deepEqual(filterReviewIssues(state).map(issue => issue.id), ['I-2', 'I-3'])
+})
+
+test('review severity control uses authoritative state filters and cannot restore stale local severity', () => {
+  const source = fs.readFileSync(path.join(contentProject, 'stages/ReviewRevisionStage.vue'), 'utf8')
+  assert.match(source, /v-model=["']state\.filters\.severities["']/)
+  assert.doesNotMatch(source, /const severity\s*=\s*ref/)
+})
+
 test('split rejects empty duplicate or globally conflicting stable IDs without replacing the source', async () => {
   const original = createStoryboardShot({ id: 'SHOT-1', sceneId: 'SC-1' })
   const other = createStoryboardShot({ id: 'SHOT-9', sceneId: 'SC-1' })

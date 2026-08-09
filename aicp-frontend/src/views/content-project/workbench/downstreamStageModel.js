@@ -276,10 +276,7 @@ export function compareReviewRevision(state, revisionId) {
 export async function approveReviewEpisode(state, episodeId, adapter) {
   const blockers = state.issues.filter(issue => ['BLOCKER', 'HIGH'].includes(issue.severity) && !['RESOLVED', 'WAIVED'].includes(issue.status))
   if (blockers.length) {
-    const filters = { ...state.filters }
-    delete filters.severity
-    delete filters.status
-    state.filters = { ...filters, severities: ['BLOCKER', 'HIGH'], statuses: [], excludedStatuses: ['RESOLVED', 'WAIVED'] }
+    state.filters = { severities: ['BLOCKER', 'HIGH'], statuses: [], excludedStatuses: ['RESOLVED', 'WAIVED'] }
     state.focusIssueList = true
     return guidance('REVIEW_BLOCKERS_REMAIN', '仍有高风险问题', `解决 ${blockers.length} 个 HIGH/BLOCKER 问题后才能审核通过。`, 'focus_filtered_review_issues')
   }
