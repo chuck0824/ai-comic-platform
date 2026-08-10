@@ -10,6 +10,7 @@ import com.aicp.module.asset.mapper.AssetVersionMapper;
 import com.aicp.module.asset.mapper.WorkspaceAssetMapper;
 import com.aicp.module.canvas.entity.CanvasProject;
 import com.aicp.module.canvas.mapper.CanvasProjectMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -28,6 +29,8 @@ import static org.mockito.Mockito.when;
 @ExtendWith(MockitoExtension.class)
 class AssetApplicationServiceTest {
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Mock AssetLibraryService libraryService;
     @Mock WorkspaceAssetMapper assetMapper;
     @Mock AssetVersionMapper versionMapper;
@@ -37,6 +40,17 @@ class AssetApplicationServiceTest {
 
     @Test
     void applyPersistsStableTextConsumerKey() {
+        WorkspaceContext context = configureApplicationDependencies();
+        service.apply(context, 3L, new AssetRequests.ApplyAssetRequest(
+                7L, "SCRIPT_SCENE", 9001L, "EP-007-SCENE-001", "request-1"));
+
+        ArgumentCaptor<AssetApplication> captor = ArgumentCaptor.forClass(AssetApplication.class);
+        verify(applicationMapper).insert(captor.capture());
+        assertThat(captor.getValue().getTargetId()).isEqualTo(9001L);
+        assertThat(captor.getValue().getTargetKey()).isEqualTo("EP-007-SCENE-001");
+    }
+
+    private WorkspaceContext configureApplicationDependencies() {
         WorkspaceContext context = new WorkspaceContext("project_7", "project", 501L, Set.of("asset.use"));
         WorkspaceAsset asset = new WorkspaceAsset();
         asset.setId(3L);
@@ -56,13 +70,54 @@ class AssetApplicationServiceTest {
             invocation.<AssetApplication>getArgument(0).setId(41L);
             return 1;
         }).when(applicationMapper).insert(any(AssetApplication.class));
+        return context;
+    }
 
-        service.apply(context, 3L, new AssetRequests.ApplyAssetRequest(
-                7L, "SCRIPT_SCENE", 9001L, "EP-007-SCENE-001", "request-1"));
+    @Test
+    void deserializeApplyRequestFromSnakeCaseWirePayload() throws Exception {
+        AssetRequests.ApplyAssetRequest request = objectMapper.readValue("""
+                {"project_id":7,"target_type":"SCRIPT_SCENE","target_id":9001,
+                 "target_key":"EP-007-SCENE-001","idempotency_key":"request-snake"}
+                """, AssetRequests.ApplyAssetRequest.class);
 
+        assertThat(request.projectId()).isEqualTo(7L);
+        assertThat(request.targetType()).isEqualTo("SCRIPT_SCENE");
+        assertThat(request.targetId()).isEqualTo(9001L);
+        assertThat(request.targetKey()).isEqualTo("EP-007-SCENE-001");
+        assertThat(request.idempotencyKey()).isEqualTo("request-snake");
+
+        WorkspaceContext context = configureApplicationDependencies();
+        service.apply(context, 3L, request);
         ArgumentCaptor<AssetApplication> captor = ArgumentCaptor.forClass(AssetApplication.class);
         verify(applicationMapper).insert(captor.capture());
-        assertThat(captor.getValue().getTargetId()).isEqualTo(9001L);
         assertThat(captor.getValue().getTargetKey()).isEqualTo("EP-007-SCENE-001");
+    }
+
+    @Test
+    void deserializeApplyRequestFromMixedWirePayload() throws Exception {
+        AssetRequests.ApplyAssetRequest request = objectMapper.readValue("""
+                {"projectId":7,"targetType":"SCRIPT_SCENE","targetId":9001,
+                 "target_key":"EP-007-SCENE-001","idempotencyKey":"request-mixed"}
+                """, AssetRequests.ApplyAssetRequest.class);
+
+        assertThat(request.projectId()).isEqualTo(7L);
+        assertThat(request.targetType()).isEqualTo("SCRIPT_SCENE");
+        assertThat(request.targetId()).isEqualTo(9001L);
+        assertThat(request.targetKey()).isEqualTo("EP-007-SCENE-001");
+        assertThat(request.idempotencyKey()).isEqualTo("request-mixed");
+    }
+
+    @Test
+    void deserializeApplyRequestFromCamelCaseWirePayload() throws Exception {
+        AssetRequests.ApplyAssetRequest request = objectMapper.readValue("""
+                {"projectId":7,"targetType":"SCRIPT_SCENE","targetId":9001,
+                 "targetKey":"EP-007-SCENE-001","idempotencyKey":"request-camel"}
+                """, AssetRequests.ApplyAssetRequest.class);
+
+        assertThat(request.projectId()).isEqualTo(7L);
+        assertThat(request.targetType()).isEqualTo("SCRIPT_SCENE");
+        assertThat(request.targetId()).isEqualTo(9001L);
+        assertThat(request.targetKey()).isEqualTo("EP-007-SCENE-001");
+        assertThat(request.idempotencyKey()).isEqualTo("request-camel");
     }
 }

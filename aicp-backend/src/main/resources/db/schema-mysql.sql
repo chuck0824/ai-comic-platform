@@ -790,7 +790,8 @@ CREATE TABLE IF NOT EXISTS asset_applications (
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_application_workspace_key (workspace_id, idempotency_key),
     INDEX idx_aa_workspace (workspace_id),
-    INDEX idx_aa_project (project_id)
+    INDEX idx_aa_project (project_id),
+    INDEX idx_aa_target_key (target_type, target_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资产应用记录';
 
 -- ── Asset workbench tables ──────────────────────────────────────────

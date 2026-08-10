@@ -500,6 +500,7 @@ CREATE TABLE IF NOT EXISTS asset_applications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_application_workspace_key UNIQUE (workspace_id, idempotency_key)
 );
+CREATE INDEX IF NOT EXISTS idx_aa_target_key ON asset_applications(target_type, target_key);
 
 -- ── Asset workbench tables ──────────────────────────────────────────
 

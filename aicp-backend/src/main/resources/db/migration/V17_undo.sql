@@ -1,3 +1,3 @@
 -- V17 undo
-DROP INDEX IF EXISTS idx_aa_target_key;
-ALTER TABLE asset_applications DROP COLUMN IF EXISTS target_key;
+DROP INDEX idx_aa_target_key ON asset_applications;
+ALTER TABLE asset_applications DROP COLUMN target_key;

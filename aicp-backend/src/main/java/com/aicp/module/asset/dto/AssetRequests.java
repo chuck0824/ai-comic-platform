@@ -1,5 +1,6 @@
 package com.aicp.module.asset.dto;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
@@ -47,11 +48,11 @@ public class AssetRequests {
     }
 
     public record ApplyAssetRequest(
-            @NotNull @Positive Long projectId,
-            String targetType,
-            Long targetId,
-            @Size(max = 128) String targetKey,
-            @NotBlank String idempotencyKey) {
+            @JsonAlias("project_id") @NotNull @Positive Long projectId,
+            @JsonAlias("target_type") String targetType,
+            @JsonAlias("target_id") Long targetId,
+            @JsonAlias("target_key") @Size(max = 128) String targetKey,
+            @JsonAlias("idempotency_key") @NotBlank String idempotencyKey) {
         public ApplyAssetRequest(Long projectId, String targetType, Long targetId, String idempotencyKey) {
             this(projectId, targetType, targetId, null, idempotencyKey);
         }

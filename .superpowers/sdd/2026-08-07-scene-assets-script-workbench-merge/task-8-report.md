@@ -129,3 +129,28 @@ GREEN:
 ### Scope note
 
 - `ContentProjectWorkspace.vue` remains untouched.
+
+---
+
+## Review fix round 4/5 — MySQL migration grammar and apply-request wire compatibility
+
+### Changes
+
+- V17 now follows Flyway's once-only versioned migration semantics and MySQL 8.0 DDL grammar: plain `ALTER TABLE ... ADD COLUMN` followed by plain `CREATE INDEX ... ON ...`. The undo script uses MySQL's required `DROP INDEX ... ON asset_applications` form and a plain `DROP COLUMN`.
+- Removed the misleading cross-database idempotency claim from the H2 migration test. It now executes V17 once against a legacy table, while the fresh H2 schema verifies the actual `TARGET_KEY` column and `IDX_AA_TARGET_KEY` index. Both canonical H2 and MySQL schemas declare the `(target_type, target_key)` index.
+- Every `ApplyAssetRequest` record component accepts its snake_case HTTP alias through `@JsonAlias`, while the existing camelCase property names and four-argument Java constructor remain unchanged.
+- Real Jackson deserialization tests cover all-snake_case, mixed camelCase plus `target_key`, and all-camelCase payloads. The deserialized snake_case request is passed into `AssetApplicationService`, where the captured persisted application retains `EP-007-SCENE-001`.
+
+### RED / GREEN evidence
+
+- RED: `AssetWorkbenchSchemaTest` rejected the previous V17 because `ADD COLUMN IF NOT EXISTS` did not match the MySQL/Flyway contract. `AssetApplicationServiceTest` failed with `UnrecognizedPropertyException` for both `project_id` and mixed `target_key` payloads.
+- GREEN: `AssetWorkbenchSchemaTest` 9/9, `AssetWorkbenchContractTest` 20/20, `AssetApplicationServiceTest` 4/4, and `ProjectSceneAssetLifecycleE2ETest` 17/17 passed in isolated runs.
+- Frontend Task 8 regression remained green at 19/19; affected JavaScript syntax check and `git diff --check` passed.
+
+### MySQL validation boundary
+
+- A local MySQL client and server endpoint were present, but the available session had no database credentials; Docker was installed without an available daemon. The migration was therefore not executed against a live MySQL 8 container in this round. Validation is limited to MySQL 8.0's documented DDL forms, the canonical MySQL schema contract, single-run H2 migration execution in MySQL mode, and fresh-schema index verification.
+
+### Scope note
+
+- Only the two requested Important findings were changed. `ContentProjectWorkspace.vue` remains untouched.
