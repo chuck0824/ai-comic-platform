@@ -12,6 +12,7 @@ export const contentProjectApi = {
   workflow: (id) => request.get(`/content-projects/${id}/workflow`),
   saveResume: (id, data) => request.put(`/content-projects/${id}/resume-position`, data),
   addParameters: (id, data) => request.post(`/content-projects/${id}/parameter-versions`, data),
+  listParameterVersions: (id) => request.get(`/content-projects/${id}/parameter-versions`),
   setStoryboardIntent: (id, intent, sourceVersionId) => request.put(
     `/content-projects/${id}/storyboard-intent`,
     { intent, source_version_id: sourceVersionId }

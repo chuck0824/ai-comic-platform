@@ -49,8 +49,8 @@ function clampPercentage(value) {
 
 function refreshStageStatuses(state) {
   state.stages.forEach(stage => {
-    if (state.completedStages.includes(stage.key)) stage.status = 'completed'
-    else if (stage.key === state.activeStage) stage.status = 'current'
+    if (stage.key === state.activeStage) stage.status = 'current'
+    else if (state.completedStages.includes(stage.key)) stage.status = 'completed'
     else stage.status = 'pending'
   })
 }

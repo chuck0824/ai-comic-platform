@@ -37,5 +37,12 @@ export const sceneAssetApi = {
   activate: (projectId, assetId) => mapped(() => request.post(`${base(projectId)}/${assetId}/activate`)),
   archive: (projectId, assetId) => mapped(() => request.post(`${base(projectId)}/${assetId}/archive`)),
   impact: (projectId, assetId) => mapped(() => request.get(`${base(projectId)}/${assetId}/impact`)),
-  markdown: (projectId, assetId) => mapped(() => request.get(`${base(projectId)}/${assetId}/markdown`))
+  markdown: (projectId, assetId) => mapped(() => request.get(`${base(projectId)}/${assetId}/markdown`)),
+  apply: (projectId, assetId, target) => mapped(() => request.post(`/asset/library/${assetId}/applications`, toSceneAssetPayload({
+    projectId,
+    targetType: target.targetType,
+    targetId: target.targetId ?? null,
+    targetKey: target.targetKey ?? null,
+    idempotencyKey: target.idempotencyKey
+  })))
 }

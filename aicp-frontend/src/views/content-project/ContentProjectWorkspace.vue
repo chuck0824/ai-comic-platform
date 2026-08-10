@@ -1,780 +1,690 @@
 <template>
   <div class="workspace">
-    <!-- Left Rail -->
-    <WorkflowRail :stages="workflow?.stages || []" :progress="workflow?.progress || 0" />
-
-    <!-- Center: Main Content -->
-    <div class="workspace-main">
-      <!-- Header -->
-      <div class="workspace-header">
-        <div>
-          <h1 class="workspace-title">{{ project?.name || '加载中…' }}</h1>
-          <div class="workspace-meta">
-            <span class="meta-item">
-              <el-icon :size="14"><VideoCamera /></el-icon>
-              {{ modeLabel(project?.creation_mode) }}
-            </span>
-            <span class="meta-separator">·</span>
-            <span class="meta-item">
-              <el-tag :type="statusTagType(project?.content_status)" size="small">{{ statusLabel(project?.content_status) }}</el-tag>
-            </span>
-            <span v-if="autosaveState" class="meta-item autosave-text">{{ autosaveState }}</span>
-            <span v-if="generating" class="meta-item generating-badge">
-              <el-icon class="is-loading"><Loading /></el-icon> AI生成中…
-            </span>
-          </div>
-        </div>
-        <div class="workspace-header-actions">
-          <el-button size="small" @click="$router.push('/script-gen')">返回列表</el-button>
-        </div>
-      </div>
-
-      <!-- Loading -->
-      <div v-if="loading" class="workspace-loading">
-        <el-icon class="is-loading" :size="32"><Loading /></el-icon>
-        <p class="loading-text">正在加载项目…</p>
-      </div>
-
-      <!-- Error -->
-      <div v-else-if="error" class="workspace-error">
-        <div class="empty-state">
-          <div class="empty-state-icon">⚠️</div>
-          <div class="empty-state-title">加载失败</div>
-          <div class="empty-state-desc">{{ error }}</div>
-          <el-button @click="loadProject">重试</el-button>
-        </div>
-      </div>
-
-      <!-- Current Stage Card -->
-      <div v-else-if="currentStageInfo" class="stage-card card">
-        <div class="stage-card-header">
-          <div class="flex items-center gap-sm">
-            <h3 class="stage-title">{{ stageLabel(currentStageInfo.key) }}</h3>
-            <el-tag v-if="currentStageInfo.status === 'current'" type="primary" size="small" effect="light">当前阶段</el-tag>
-            <el-tag v-else-if="currentStageInfo.status === 'completed'" type="success" size="small" effect="light">已完成</el-tag>
-          </div>
-        </div>
-        <p v-if="currentStageInfo.primary_action" class="stage-desc">{{ currentStageInfo.primary_action }}</p>
-
-        <!-- Generation error -->
-        <el-alert v-if="genError" :title="genError" type="error" class="stage-alert" closable @close="genError=''" />
-
-        <!-- Stage: story_seed -->
-        <div v-if="currentStageInfo.key === 'story_seed'" class="stage-body">
-          <p class="stage-hint">输入故事种子，AI将以此为基础生成完整剧本。</p>
-          <el-input v-model="draftContent" type="textarea" :rows="6" class="stage-textarea"
-                    placeholder="输入故事种子，如：林夏发现公司账本被篡改，背后牵扯到..." />
-          <div class="stage-actions">
-            <el-button type="primary" :loading="generating" @click="generateStage('story_seed_generate')">
-              <el-icon><Cpu /></el-icon> AI 扩展故事种子
-            </el-button>
-            <el-button @click="saveDraft" :loading="autosaveState === '保存中…'">保存草稿</el-button>
-          </div>
-        </div>
-
-        <!-- Stage: characters -->
-        <div v-else-if="currentStageInfo.key === 'characters'" class="stage-body">
-          <p class="stage-hint">AI将根据故事种子生成角色设定。</p>
-          <div v-if="generatedContent" class="generated-content">{{ generatedContent }}</div>
-          <div class="stage-actions">
-            <el-button type="primary" :loading="generating" @click="generateStage('characters_generate')">
-              <el-icon><Cpu /></el-icon> 生成角色设定
-            </el-button>
-            <el-button v-if="generatedContent" @click="acceptGenerated">采用此版本</el-button>
-          </div>
-        </div>
-
-        <!-- Stage: synopsis -->
-        <div v-else-if="currentStageInfo.key === 'synopsis'" class="stage-body">
-          <p class="stage-hint">AI将根据故事种子和角色设定生成故事梗概。</p>
-          <div v-if="generatedContent" class="generated-content">{{ generatedContent }}</div>
-          <div class="stage-actions">
-            <el-button type="primary" :loading="generating" @click="generateStage('synopsis_generate')">
-              <el-icon><Cpu /></el-icon> 生成梗概
-            </el-button>
-            <el-button v-if="generatedContent" @click="acceptGenerated">采用此版本</el-button>
-          </div>
-        </div>
-
-        <!-- Stage: outline -->
-        <div v-else-if="currentStageInfo.key === 'outline'" class="stage-body">
-          <p class="stage-hint">AI将生成分集大纲。</p>
-          <div v-if="generatedContent" class="generated-content">{{ generatedContent }}</div>
-          <div class="stage-actions">
-            <el-button type="primary" :loading="generating" @click="generateStage('outline_generate')">
-              <el-icon><Cpu /></el-icon> 生成大纲
-            </el-button>
-            <el-button v-if="generatedContent" @click="acceptGenerated">采用此版本</el-button>
-          </div>
-        </div>
-
-        <!-- Stage: content -->
-        <div v-else-if="currentStageInfo.key === 'content'" class="stage-body">
-          <p class="stage-hint">AI将生成单集完整剧本。</p>
-          <div v-if="generatedContent" class="generated-content">{{ generatedContent }}</div>
-          <div class="stage-actions">
-            <el-button type="primary" :loading="generating" @click="generateStage('content_generate')">
-              <el-icon><Cpu /></el-icon> 生成正文
-            </el-button>
-            <el-button v-if="generatedContent" @click="acceptGenerated">采用此版本</el-button>
-          </div>
-        </div>
-
-        <!-- Stage: review -->
-        <div v-else-if="currentStageInfo.key === 'review'" class="stage-body">
-          <p class="stage-hint">AI将从多个维度审核剧本质量。</p>
-          <div v-if="generatedContent" class="generated-content">{{ generatedContent }}</div>
-          <div class="stage-actions">
-            <el-button type="primary" :loading="generating" @click="generateStage('review_generate')">
-              <el-icon><Cpu /></el-icon> 运行审核
-            </el-button>
-            <el-button v-if="generatedContent" @click="acceptGenerated">确认审核结果</el-button>
-          </div>
-        </div>
-
-        <!-- Stage: destination -->
-        <div v-else-if="currentStageInfo.key === 'destination'" class="stage-body">
-          <p class="stage-hint">内容已完成，选择下一步操作。</p>
-          <div class="stage-actions">
-            <el-button type="success" @click="skipStoryboard">
-              <el-icon><CircleCheck /></el-icon> 完成并返回项目
-            </el-button>
-            <el-button v-if="project?.storyboard_intent_status !== 'requested'"
-                       type="warning" @click="requestStoryboard">
-              <el-icon><PictureFilled /></el-icon> 制作分镜
-            </el-button>
-          </div>
-        </div>
-
-        <!-- Stage: storyboard -->
-        <div v-else-if="currentStageInfo.key === 'storyboard'" class="stage-body">
-          <StoryboardPanel
-            :master="storyboardMaster"
-            :scenes="storyboardScenes"
-            :shots="storyboardShots"
-            :generating="storyboardGenerating"
-            @generate="handleGenerateStoryboard"
-            @lock="handleLockStoryboard"
-          />
-        </div>
-
-        <!-- Fallback for other stages -->
-        <div v-else class="stage-body">
-          <p class="stage-hint">此阶段的创作工具将在后续版本上线。</p>
-        </div>
-
-        <!-- Generation progress bar -->
-        <div v-if="generating" class="stage-progress">
-          <el-progress :percentage="100" :indeterminate="true" :duration="2" />
-          <p class="progress-text">AI正在生成内容，请稍候…</p>
-        </div>
-      </div>
-
-      <!-- Generated Content History -->
-      <div v-if="contentVersions.length > 0" class="version-history card">
-        <h4 class="version-title">版本历史</h4>
-        <div v-for="v in contentVersions.slice(0, 5)" :key="v.id" class="version-item">
-          <div class="version-info">
-            <span class="version-badge">v{{ v.version_no }}</span>
-            <span class="version-source">{{ v.source === 'ai_generated' ? 'AI生成' : '手动' }}</span>
-          </div>
-          <span class="version-time">{{ formatTime(v.created_at) }}</span>
-        </div>
-      </div>
-
-      <!-- Conflict Panel -->
-      <div v-if="conflict" class="conflict-panel">
-        <div class="conflict-header">
-          <el-icon :size="18"><WarningFilled /></el-icon>
-          <h4>编辑冲突</h4>
-        </div>
-        <p class="conflict-text">服务器版本与本地版本不一致，本地内容已保留。</p>
-        <el-button size="small" @click="conflict = null">知道了</el-button>
-      </div>
-    </div>
-
-    <!-- Right Panel -->
-    <ContextPanel
-      :versions="contextVersions"
-      :locked-facts="lockedFacts"
-      :impact-summary="impactSummary"
-      :storyboard-intent="project?.storyboard_intent_status"
-      :bible-health="bibleHealth"
-      :selected-context="currentJob?.selected_context"
+    <WorkflowRail
+      :stages="workbench.stages.value"
+      :progress="workbench.progress.value"
+      :entered-stages="workbench.state.enteredStages"
+      @navigate="navigateStage"
+      @previous="previousStage"
+      @save-draft="saveCurrentDraft"
+      @confirm-next="confirmNextStage"
     />
+
+    <main class="workspace-main">
+      <header class="workspace-header">
+        <div>
+          <h1>{{ project?.name || '加载中…' }}</h1>
+          <div class="workspace-meta">
+            <el-tag size="small">{{ modeLabel(project?.creation_mode) }}</el-tag>
+            <el-tag size="small" :type="statusTagType(project?.content_status)">{{ statusLabel(project?.content_status) }}</el-tag>
+            <span>{{ activeStageLabel }}</span>
+            <span v-if="autosaveState">{{ autosaveState }}</span>
+          </div>
+        </div>
+        <div class="workspace-actions">
+          <span class="model-context">{{ modelContext }}</span>
+          <el-button @click="sceneLibraryVisible = !sceneLibraryVisible">场景资产</el-button>
+          <el-button @click="openTaskEntry">任务 {{ workbench.state.tasks.length }}</el-button>
+          <el-button @click="openResultEntry">结果 {{ workbench.state.results.length }}</el-button>
+          <el-button @click="router.push('/script-gen')">返回启动台</el-button>
+        </div>
+      </header>
+
+      <div v-if="loading" class="workspace-state"><el-icon class="is-loading" :size="32"><Loading /></el-icon><p>正在加载项目…</p></div>
+      <div v-else-if="error" class="workspace-state"><el-result icon="error" title="加载失败" :sub-title="error"><template #extra><el-button @click="loadProject">重试</el-button></template></el-result></div>
+
+      <template v-else>
+        <el-alert v-if="routeNotice" type="warning" :title="routeNotice" show-icon :closable="false" class="route-notice" />
+
+        <section v-if="sceneLibraryVisible" class="shared-panel card">
+          <SceneAssetLibrary :scene-assets="sceneAssets" @guidance="showGuidance" @open-result="openSceneResult" />
+        </section>
+
+        <section class="stage-card card" :data-stage="workbench.activeStage.value">
+          <CreationSettingsStage
+            v-if="workbench.activeStage.value === 'creation_settings'"
+            v-model="stageData.creationSettings"
+            :persist-settings="persistSettings"
+            @guidance="showGuidance"
+            @saved="handleSettingsSaved"
+          />
+          <NovelUploadStage
+            v-else-if="workbench.activeStage.value === 'novel_upload'"
+            :upload-file="uploadNovelFile"
+            :persist-pasted-text="persistPastedNovel"
+            @guidance="showGuidance"
+            @uploaded="handleNovelUploaded"
+          />
+          <NovelAnalysisStage
+            v-else-if="workbench.activeStage.value === 'novel_analysis'"
+            v-model="stageData.novelAnalysis"
+            :persist-artifact="persistAnalysisArtifact"
+            :scene-assets="sceneAssets"
+            @guidance="showGuidance"
+            @open-scene-asset="sceneLibraryVisible = true"
+            @open-scene-action-result="openSceneResult"
+          />
+          <AdaptationStage
+            v-else-if="workbench.activeStage.value === 'adaptation'"
+            v-model="stageData.adaptation"
+            :creation-settings="stageData.creationSettings"
+            :persist-hook="persistAdaptationHook"
+            :persist-plan="persistAdaptationPlan"
+            :regenerate-artifact="() => submitStageGeneration('adaptation')"
+            :workbench="workbench"
+            @guidance="showGuidance"
+            @regenerated="handleGenerationResult"
+          />
+          <StructuredScriptStage
+            v-else-if="workbench.activeStage.value === 'structured_script'"
+            v-model="stageData.structuredScript"
+            :open-episode-adapter="persistStructuredAction"
+            :add-beat-adapter="persistStructuredAction"
+            :regenerate-beat-adapter="persistStructuredAction"
+            :regenerate-artifact-adapter="() => submitStageGeneration('structured_script')"
+            :workbench="workbench"
+            :generation-input="generationInput"
+            @guidance="showGuidance"
+            @result="handleStageResult"
+          />
+          <ScriptBodyStage
+            v-else-if="workbench.activeStage.value === 'script_body'"
+            v-model="stageData.scriptBody"
+            :scene-asset-state="sceneAssets"
+            :scene-assets-degraded="sceneAssets.state.value === 'readonly'"
+            :block-action-adapter="submitScriptBlockAction"
+            :bind-scene-asset-adapter="bindScriptSceneAsset"
+            :create-scene-asset-adapter="createAndReturnSceneAsset"
+            :space-change-adapter="persistScriptBodyAction"
+            :script-check-adapter="runScriptBodyCheck"
+            :export-adapter="exportScriptBody"
+            :regenerate-artifact-adapter="() => submitStageGeneration('script_body')"
+            :workbench="workbench"
+            :generation-input="generationInput"
+            @guidance="showGuidance"
+            @result="handleStageResult"
+            @open-scene-asset="sceneLibraryVisible = true"
+            @open-scene-action-result="openSceneResult"
+          />
+          <ReviewRevisionStage
+            v-else-if="workbench.activeStage.value === 'review_revision'"
+            v-model="stageData.reviewRevision"
+            episode-id="EP-001"
+            :save-revision-adapter="persistReviewAction"
+            :approve-adapter="approveReviewEpisode"
+            :regenerate-artifact-adapter="() => submitStageGeneration('review_revision')"
+            :workbench="workbench"
+            :generation-input="generationInput"
+            @guidance="showGuidance"
+            @result="handleStageResult"
+          />
+          <TextStoryboardStage
+            v-else-if="workbench.activeStage.value === 'text_storyboard'"
+            v-model="stageData.textStoryboard"
+            :storyboard-scenes="storyboardScenes"
+            :scene-asset-state="sceneAssets"
+            :add-shot-adapter="addStoryboardShot"
+            :split-shot-adapter="splitStoryboardShot"
+            :merge-shot-adapter="mergeStoryboardShots"
+            :continuity-adapter="runStoryboardContinuity"
+            :archive-adapter="archiveStoryboard"
+            :mindmap-adapter="persistMindmap"
+            :canvas-adapter="createCanvasProject"
+            :regenerate-artifact-adapter="() => submitStageGeneration('text_storyboard')"
+            :workbench="workbench"
+            :generation-input="generationInput"
+            @guidance="showGuidance"
+            @result="handleStageResult"
+            @archived="completeFinalStage"
+            @canvas-created="handoffCanvas"
+            @open-scene-asset="sceneLibraryVisible = true"
+            @open-scene-action-result="openSceneResult"
+          />
+        </section>
+      </template>
+    </main>
+
+    <ActionGuidanceDialog :visible="Boolean(guidance)" :guidance="guidance" @close="guidance = null" @target="guidance = null" />
+    <GenerationProgressDialog
+      :visible="Boolean(workbench.generationTaskRecord.value)"
+      :task="workbench.generationTaskRecord.value"
+      @cancel="cancelGenerationTask"
+      @close="noop"
+    />
+    <ActionResultDrawer
+      :visible="resultVisible"
+      :result="selectedResult"
+      @accept="acceptGenerationResult"
+      @discard="discardGenerationResult"
+      @close="resultVisible = false"
+    />
+    <el-dialog :model-value="transitionVisible" title="正在保存并进入下一步" width="440px" :show-close="false" :close-on-click-modal="false">
+      <el-progress :percentage="workbench.state.transition?.percentage || 0" />
+      <p>{{ workbench.state.transition?.message || '正在保存阶段产物…' }}</p>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watchEffect } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Cpu, Loading, VideoCamera, CircleCheck, PictureFilled, WarningFilled } from '@element-plus/icons-vue'
+import { Loading } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { contentProjectApi } from '@/api/contentProject'
-import { currentStage, stageLabel } from './utils/workflowPath'
-import { useGeneration } from './composables/useGeneration'
+import { sceneAssetApi } from '@/api/sceneAsset'
+import { storyboardV2Api } from '@/api/storyboardV2'
 import WorkflowRail from './components/WorkflowRail.vue'
-import ContextPanel from './components/ContextPanel.vue'
-import StoryboardPanel from './components/StoryboardPanel.vue'
+import SceneAssetLibrary from './components/SceneAssetLibrary.vue'
+import ActionGuidanceDialog from './components/ActionGuidanceDialog.vue'
+import GenerationProgressDialog from './components/GenerationProgressDialog.vue'
+import ActionResultDrawer from './components/ActionResultDrawer.vue'
+import CreationSettingsStage from './stages/CreationSettingsStage.vue'
+import NovelUploadStage from './stages/NovelUploadStage.vue'
+import NovelAnalysisStage from './stages/NovelAnalysisStage.vue'
+import AdaptationStage from './stages/AdaptationStage.vue'
+import StructuredScriptStage from './stages/StructuredScriptStage.vue'
+import ScriptBodyStage from './stages/ScriptBodyStage.vue'
+import ReviewRevisionStage from './stages/ReviewRevisionStage.vue'
+import TextStoryboardStage from './stages/TextStoryboardStage.vue'
+import { STAGES } from './workbench/scriptWorkbenchModel.js'
+import { useScriptWorkbench } from './workbench/useScriptWorkbench.js'
+import { useSceneAssets } from './workbench/useSceneAssets.js'
+import { createWorkspaceAdapters } from './workbench/workspaceAdapters.js'
+import { nextStageKey, resolveWorkspaceStage, restoreWorkbenchStage } from './workbench/workspaceRouting.js'
+import { validateAnalysisSection, validateCreationSettings } from './workbench/upstreamStageModel.js'
 
 const route = useRoute()
 const router = useRouter()
-const projectId = computed(() => route.params.projectId)
-
+const projectId = computed(() => Number(route.params.projectId))
 const project = ref(null)
-const workflow = ref(null)
 const units = ref([])
 const loading = ref(true)
 const error = ref('')
+const routeNotice = ref('')
 const autosaveState = ref('')
-const conflict = ref(null)
-const draftContent = ref('')
-const generatedContent = ref('')
-const contentVersions = ref([])
-const contextVersions = ref([])
-const lockedFacts = ref([])
-const impactSummary = ref('')
-const bibleHealth = ref(null)
-const bibleLoading = ref(false)
-
-let currentUnitId = null
+const guidance = ref(null)
+const sceneLibraryVisible = ref(false)
+const resultVisible = ref(false)
+const selectedResult = ref(null)
+const storyboard = reactive({ id: null, versionId: null, revision: 0, locked: false })
+const storyboardScenes = ref([])
+const storyboardShotIds = new Map()
 let autosaveTimer = null
 
-// Storyboard state
-const storyboardMaster = ref(null)
-const storyboardScenes = ref([])
-const storyboardShots = ref([])
-const storyboardGenerating = ref(false)
-
-const { generating, genError, currentJob, triggerGeneration, cancelGeneration } = useGeneration(projectId)
-
-// Load current unit when units are loaded
-watchEffect(() => {
-  if (units.value.length > 0 && currentStageInfo.value) {
-    const stageKey = currentStageInfo.value.key
-    const matchedUnit = units.value.find(u => u.unit_type === stageKey || u.title?.includes(stageLabel(stageKey)))
-    if (matchedUnit) {
-      currentUnitId = matchedUnit.id
-      loadDraftForUnit(matchedUnit.id)
-      loadVersionsForUnit(matchedUnit.id)
-    }
-  }
+const defaultEpisode = () => ({ id: 'EP-001', title: '第 1 集', beats: [], scenes: [] })
+const stageData = reactive({
+  creationSettings: {},
+  novelUpload: {},
+  novelAnalysis: {},
+  adaptation: { hooks: [] },
+  structuredScript: { episodes: [defaultEpisode()] },
+  scriptBody: { episodes: [defaultEpisode()] },
+  reviewRevision: { issues: [] },
+  textStoryboard: { shots: [] }
 })
 
-onMounted(() => loadProject())
-onBeforeUnmount(() => {
+const sceneAssets = useSceneAssets(projectId, {
+  isProjectArchived: () => String(project.value?.content_status).toLowerCase() === 'archived'
+})
+
+const adapters = createWorkspaceAdapters({
+  projectId: () => projectId.value,
+  project: () => project.value,
+  api: contentProjectApi,
+  sceneApi: sceneAssetApi,
+  activeUnitId: () => units.value.find(item => item.unit_type === workbench.activeStage.value)?.id ?? null
+})
+
+const workbench = useScriptWorkbench({ persistStage, persistFinalStage })
+const activeStageLabel = computed(() => STAGES.find(stage => stage.key === workbench.activeStage.value)?.label || workbench.activeStage.value)
+const modelContext = computed(() => {
+  const settings = stageData.creationSettings
+  if (!settings.model) return '未选择模型'
+  return `${settings.model.name || settings.model.id} · ${settings.model.demo ? '0' : (settings.estimatedPoints ?? '—')} 积分`
+})
+const generationInput = computed(() => ({ model: stageData.creationSettings.model, estimatedPoints: stageData.creationSettings.estimatedPoints }))
+const transitionVisible = computed(() => workbench.state.transition?.status === 'persisting')
+
+onMounted(loadProject)
+onBeforeUnmount(() => { if (autosaveTimer) clearTimeout(autosaveTimer) })
+watch(() => route.params.projectId, (next, previous) => { if (next !== previous) loadProject() })
+watch(() => route.query.stage, stage => {
+  if (!project.value) return
+  const resolved = resolveWorkspaceStage({ persistedStage: project.value.last_stage_key, queryStage: stage })
+  if (resolved !== stage) replaceStageQuery(resolved)
+  workbench.navigate(resolved)
+})
+watch(stageData, () => {
+  if (loading.value) return
   if (autosaveTimer) clearTimeout(autosaveTimer)
-})
+  autosaveTimer = setTimeout(saveCurrentDraft, 2000)
+}, { deep: true })
+
+function responseData(response) { return response?.data?.data ?? response?.data ?? response ?? {} }
+function clone(value) { return JSON.parse(JSON.stringify(value ?? {})) }
+function stageDataKey(stage) {
+  return ({
+    creation_settings: 'creationSettings', novel_upload: 'novelUpload', novel_analysis: 'novelAnalysis', adaptation: 'adaptation',
+    structured_script: 'structuredScript', script_body: 'scriptBody', review_revision: 'reviewRevision', text_storyboard: 'textStoryboard'
+  })[stage]
+}
+function currentStagePayload() { return clone(stageData[stageDataKey(workbench.activeStage.value)]) }
+function replaceStageQuery(stage) { router.replace({ name: 'ScriptGenWorkspace', params: { projectId: projectId.value }, query: { ...route.query, stage } }) }
+function showGuidance(value) {
+  guidance.value = {
+    title: value?.title || '操作未完成',
+    message: value?.message || '请根据提示补全条件后重试。',
+    targetAction: value?.targetAction,
+    code: value?.code
+  }
+  return value
+}
 
 async function loadProject() {
-  loading.value = true
-  error.value = ''
+  loading.value = true; error.value = ''; routeNotice.value = ''
   try {
-    const [projectRes, workflowRes, unitsRes] = await Promise.all([
-      contentProjectApi.get(projectId.value),
-      contentProjectApi.workflow(projectId.value),
-      contentProjectApi.listUnits(projectId.value)
+    const [projectResponse, unitResponse, parameterResponse] = await Promise.all([
+      contentProjectApi.get(projectId.value), contentProjectApi.listUnits(projectId.value), contentProjectApi.listParameterVersions(projectId.value)
     ])
-    project.value = projectRes.data
-    workflow.value = workflowRes.data
-    units.value = unitsRes.data?.items || unitsRes.data || []
-
-    // load bible health (non-blocking)
-    loadBibleHealth()
-
-    // load draft for last content unit
-    if (project.value.last_content_unit_id) {
-      currentUnitId = project.value.last_content_unit_id
-      await loadDraftForUnit(currentUnitId)
-      await loadVersionsForUnit(currentUnitId)
-    }
-    // load storyboard if available
-    await loadStoryboard()
-  } catch (e) {
-    error.value = e.response?.data?.message || '加载项目失败'
-  } finally {
-    loading.value = false
-  }
+    project.value = responseData(projectResponse)
+    units.value = responseData(unitResponse)?.items || responseData(unitResponse) || []
+    const parameters = responseData(parameterResponse) || []
+    // Backend returns parameter versions by version_no DESC, so index 0 is authoritative.
+    if (parameters.length) Object.assign(stageData.creationSettings, parameters[0]?.payload || {})
+    await loadUnitDrafts()
+    await loadAdaptationHooks()
+    await Promise.all([loadStoryboard(), sceneAssets.load()])
+    const requestedStage = String(route.query.stage || '')
+    const resolvedStage = resolveWorkspaceStage({ persistedStage: project.value.last_stage_key, queryStage: requestedStage })
+    if (requestedStage && requestedStage !== resolvedStage) routeNotice.value = '已拦截未完成阶段跳转，并恢复到最近保存位置。'
+    restoreWorkbenchStage(workbench.state, resolvedStage, project.value.last_stage_key)
+    replaceStageQuery(resolvedStage)
+  } catch (caught) {
+    error.value = caught?.response?.data?.message || caught?.message || '加载项目失败'
+  } finally { loading.value = false }
 }
 
-async function loadBibleHealth() {
-  bibleLoading.value = true
-  try {
-    const res = await contentProjectApi.getCreativeBibleHealth(projectId.value)
-    bibleHealth.value = res.data ?? res
-  } catch (e) {
-    bibleHealth.value = { status: 'error', ready_for_generation: false, message: '圣经状态获取失败' }
-  } finally {
-    bibleLoading.value = false
-  }
-}
-
-async function loadDraftForUnit(unitId) {
-  try {
-    const res = await contentProjectApi.getDraft(unitId)
-    const draft = res.data
-    draftContent.value = draft?.plain_text || ''
-    generatedContent.value = draft?.source === 'ai_generated' ? (draft?.plain_text || '') : ''
-  } catch (e) { /* no draft yet */ }
-}
-
-async function loadVersionsForUnit(unitId) {
-  try {
-    const res = await contentProjectApi.listVersions(unitId)
-    contentVersions.value = res.data || []
-  } catch (e) { contentVersions.value = [] }
-}
-
-const currentStageInfo = computed(() => currentStage(workflow.value?.stages || []))
-
-// M1: Trigger AI generation for current stage
-async function generateStage(jobType) {
-  // Bible readiness gate — block generation if bible not confirmed
-  if (bibleHealth.value && !bibleHealth.value.ready_for_generation) {
-    ElMessage.warning('创作圣经尚未确认，请先确认生态或实体设定')
-    router.push(`/script-gen/${projectId.value}/edit/bible-overview`)
-    return
-  }
-
-  if (!currentUnitId) {
-    // create a content unit for this stage
+async function loadUnitDrafts() {
+  await Promise.all(units.value.map(async unit => {
+    const key = stageDataKey(unit.unit_type)
+    if (!key || unit.unit_type === 'novel_upload') return
     try {
-      const stageKey = currentStageInfo.value.key
-      const res = await contentProjectApi.createUnit(projectId.value, {
-        unit_type: stageKey,
-        display_no: units.value.length + 1,
-        title: stageLabel(stageKey)
-      })
-      currentUnitId = res.data.id
-      // reload units
-      const unitsRes = await contentProjectApi.listUnits(projectId.value)
-      units.value = unitsRes.data?.items || unitsRes.data || []
-    } catch (e) {
-      genError.value = '创建内容单元失败: ' + (e.response?.data?.message || e.message)
-      return
-    }
-  }
-
-  // Build selected versions from context
-  const selectedVersions = {}
-  if (project.value?.current_parameter_version_id) {
-    selectedVersions.parameter = project.value.current_parameter_version_id
-  }
-  // Add existing content units' current versions
-  for (const u of units.value) {
-    if (u.current_version_id && u.id !== currentUnitId) {
-      selectedVersions[u.unit_type] = u.current_version_id
-    }
-  }
-
-  const job = await triggerGeneration(jobType, 'content_unit', currentUnitId, selectedVersions, '')
-  if (job) {
-    // Poll until complete, then reload draft
-    const pollInterval = setInterval(async () => {
-      if (!generating.value) {
-        clearInterval(pollInterval)
-        await loadDraftForUnit(currentUnitId)
-        await loadVersionsForUnit(currentUnitId)
-        // Reload workflow
-        try {
-          const wfRes = await contentProjectApi.workflow(projectId.value)
-          workflow.value = wfRes.data
-        } catch (e) { /* ignore */ }
-      }
-    }, 1000)
-  }
+      const draft = responseData(await contentProjectApi.getDraft(unit.id))
+      const parsed = JSON.parse(draft.content_json || '{}')
+      Object.assign(stageData[key], parsed)
+      unit.revision = draft.revision ?? unit.revision
+    } catch { /* a content unit may not have a draft yet */ }
+  }))
 }
 
-async function acceptGenerated() {
-  if (!currentUnitId) return
+async function loadAdaptationHooks() {
   try {
-    await contentProjectApi.createVersion(currentUnitId, { status: 'approved' })
-    ElMessage.success('版本已确认')
-    await loadVersionsForUnit(currentUnitId)
-    // Advance workflow
-    await saveResumePosition()
-    await loadProject()
-  } catch (e) {
-    ElMessage.error('操作失败: ' + (e.response?.data?.message || e.message))
-  }
+    const payload = responseData(await contentProjectApi.hookSummary(projectId.value))
+    const hooks = payload.hooks || payload.items || (Array.isArray(payload) ? payload : [])
+    if (hooks.length) stageData.adaptation.hooks = hooks
+  } catch { /* the stage remains usable and explains missing hook prerequisites */ }
 }
-
-async function saveResumePosition() {
-  const stage = currentStageInfo.value
-  if (!stage || !project.value) return
-  try {
-    const stages = workflow.value?.stages || []
-    const idx = stages.findIndex(s => s.key === stage.key)
-    const nextStage = idx >= 0 && idx < stages.length - 1 ? stages[idx + 1] : null
-    if (nextStage && nextStage.status !== 'skipped') {
-      await contentProjectApi.saveResume(projectId.value, {
-        stage_key: nextStage.key,
-        task_key: nextStage.primary_action || nextStage.key,
-        content_unit_id: currentUnitId,
-        revision: project.value.revision
-      })
-    }
-  } catch (e) { /* non-critical */ }
-}
-
-// Autosave
-function onDraftChange() {
-  if (autosaveTimer) clearTimeout(autosaveTimer)
-  autosaveTimer = setTimeout(() => saveDraft(), 2000)
-}
-
-async function saveDraft() {
-  if (!currentUnitId) return
-  autosaveState.value = '保存中…'
-  try {
-    const res = await contentProjectApi.saveDraft(currentUnitId, {
-      revision: project.value?.revision || 0,
-      content_json: JSON.stringify({ blocks: [draftContent.value || generatedContent.value] }),
-      plain_text: draftContent.value || generatedContent.value
-    })
-    if (project.value) project.value.revision = res.data?.revision
-    autosaveState.value = '已保存'
-    setTimeout(() => { autosaveState.value = '' }, 2000)
-  } catch (e) {
-    if (e.response?.status === 409) {
-      conflict.value = { serverRevision: '?', localRevision: project.value?.revision }
-      autosaveState.value = '冲突'
-    } else {
-      autosaveState.value = '保存失败'
-    }
-  }
-}
-
-// Keyboard save
-function onKeyDown(e) {
-  if ((e.metaKey || e.ctrlKey) && e.key === 's') {
-    e.preventDefault()
-    saveDraft()
-  }
-}
-if (typeof window !== 'undefined') {
-  window.addEventListener('keydown', onKeyDown)
-  onBeforeUnmount(() => window.removeEventListener('keydown', onKeyDown))
-}
-
-async function skipStoryboard() {
-  try {
-    await contentProjectApi.setStoryboardIntent(projectId.value, 'skipped')
-    ElMessage.success('项目已完成')
-    await loadProject()
-  } catch (e) {
-    error.value = '操作失败: ' + (e.response?.data?.message || e.message)
-  }
-}
-
-async function requestStoryboard() {
-  try {
-    await contentProjectApi.setStoryboardIntent(projectId.value, 'requested')
-    ElMessage.success('分镜制作已请求')
-    await loadProject()
-  } catch (e) {
-    error.value = '操作失败: ' + (e.response?.data?.message || e.message)
-  }
-}
-
-// ===== Storyboard handlers =====
 
 async function loadStoryboard() {
   try {
-    const res = await contentProjectApi.listStoryboardMasters(projectId.value)
-    const masters = res.data || []
-    if (masters.length > 0) {
-      storyboardMaster.value = masters[0]
-      const [scenesRes, shotsRes] = await Promise.all([
-        contentProjectApi.listStoryboardScenes(projectId.value, storyboardMaster.value.id),
-        contentProjectApi.listStoryboardShots(projectId.value, storyboardMaster.value.id)
-      ])
-      storyboardScenes.value = scenesRes.data || []
-      storyboardShots.value = shotsRes.data || []
+    const masters = responseData(await contentProjectApi.listStoryboardMasters(projectId.value)) || []
+    const master = masters[0]
+    if (!master) return
+    const detail = responseData(await contentProjectApi.getStoryboardMaster(projectId.value, master.id))
+    storyboard.id = detail.id
+    storyboard.versionId = detail.currentDraftVersionId || detail.current_draft_version_id || detail.currentLockedVersionId || detail.current_locked_version_id
+    if (!storyboard.versionId) return
+    const version = responseData(await storyboardV2Api.getVersion(projectId.value, storyboard.id, storyboard.versionId))
+    storyboard.revision = version.revision || 0
+    storyboard.locked = ['LOCKED', 'SUPERSEDED'].includes(String(version.state || version.status).toUpperCase())
+    const [scenesResponse, shotsResponse] = await Promise.all([
+      contentProjectApi.listStoryboardVersionScenes(projectId.value, storyboard.id, storyboard.versionId),
+      contentProjectApi.listStoryboardVersionShots(projectId.value, storyboard.id, storyboard.versionId)
+    ])
+    storyboardScenes.value = responseData(scenesResponse) || []
+    const shots = (responseData(shotsResponse)?.items || responseData(shotsResponse) || []).map(toWorkbenchShot)
+    storyboardShotIds.clear()
+    shots.forEach(shot => storyboardShotIds.set(shot.id, shot.id))
+    const contentUnit = units.value.find(item => item.unit_type === 'script_body')
+    let contentVersionLocked = false
+    if (contentUnit?.current_version_id) {
+      try {
+        const versions = responseData(await contentProjectApi.listVersions(contentUnit.id)) || []
+        const active = versions.find(item => item.id === contentUnit.current_version_id)
+        contentVersionLocked = ['approved', 'locked'].includes(String(active?.status).toLowerCase())
+      } catch { /* the final gate remains blocked when version proof is unavailable */ }
     }
-  } catch (e) { /* no storyboard yet */ }
-}
-
-async function handleGenerateStoryboard() {
-  storyboardGenerating.value = true
-  try {
-    const contentUnitId = currentUnitId || units.value.find(u => u.unit_type === 'content')?.id
-    if (!contentUnitId) {
-      ElMessage.warning('请先生成正文内容')
-      storyboardGenerating.value = false
-      return
-    }
-    await contentProjectApi.generateStoryboard(projectId.value, contentUnitId)
-    ElMessage.success('分镜生成成功')
-    await loadStoryboard()
-  } catch (e) {
-    ElMessage.error('分镜生成失败: ' + (e.response?.data?.message || e.message))
-  } finally {
-    storyboardGenerating.value = false
+    Object.assign(stageData.textStoryboard, {
+      contentVersionId: contentUnit?.current_version_id || null,
+      contentVersionLocked,
+      storyboardVersionId: storyboard.versionId,
+      storyboardVersionLocked: storyboard.locked,
+      shots
+    })
+  } catch (caught) {
+    showGuidance({ code: 'STORYBOARD_LOAD_FAILED', title: '分镜数据未加载', message: caught?.message || '请稍后重试。', targetAction: 'retry_storyboard_load' })
   }
 }
 
-async function handleLockStoryboard(masterId) {
-  try {
-    await contentProjectApi.lockStoryboardMaster(projectId.value, masterId)
-    ElMessage.success('分镜已锁定')
-    await loadStoryboard()
-  } catch (e) {
-    ElMessage.error('锁定失败: ' + (e.response?.data?.message || e.message))
+function toWorkbenchShot(shot) {
+  const snapshot = shot.sceneAssetSnapshot || shot.scene_asset_snapshot || null
+  const hasBinding = shot.sceneAssetId != null || shot.scene_asset_id != null
+  return {
+    ...shot,
+    id: shot.id,
+    sceneId: shot.sceneId ?? shot.scene_id,
+    description: shot.visualDescription || shot.visual_description || shot.description || '',
+    durationMs: shot.durationMs ?? shot.duration_ms ?? 3000,
+    assetBinding: hasBinding ? {
+      sceneAssetId: shot.sceneAssetId ?? shot.scene_asset_id,
+      sceneAssetVersionId: shot.sceneAssetVersionId ?? shot.scene_asset_version_id,
+      sceneVariantId: shot.sceneVariantId ?? shot.scene_variant_id,
+      sceneVariantVersion: shot.sceneVariantVersion ?? shot.scene_variant_version,
+      sceneOverride: {}
+    } : null,
+    snapshotLocked: Boolean(snapshot),
+    sceneAssetSnapshotRef: snapshot ? {
+      shotId: shot.id,
+      fingerprint: snapshot.fingerprint,
+      sceneAssetId: snapshot.sceneAssetId ?? snapshot.scene_asset_id,
+      sceneAssetVersionId: snapshot.sceneAssetVersionId ?? snapshot.scene_asset_version_id,
+      sceneVariantId: snapshot.sceneVariantId ?? snapshot.scene_variant_id,
+      sceneVariantVersion: snapshot.sceneVariantVersion ?? snapshot.scene_variant_version
+    } : null
   }
 }
 
-function modeLabel(m) {
-  return { short_drama: '短剧', long_form: '长篇', tvc: 'TVC' }[m] || m
+async function ensureUnit(stage) {
+  let unit = units.value.find(item => item.unit_type === stage)
+  if (unit) return unit
+  const created = responseData(await contentProjectApi.createUnit(projectId.value, {
+    unit_type: stage, display_no: units.value.length + 1, title: STAGES.find(item => item.key === stage)?.label || stage
+  }))
+  units.value.push(created)
+  return created
 }
 
-function statusLabel(s) {
-  return { draft: '草稿', reviewing: '审核中', approved: '已通过', needs_revision: '需修改', locked: '已锁定' }[s] || s
+async function persistUnit(stage, payload) {
+  const unit = await ensureUnit(stage)
+  const saved = responseData(await contentProjectApi.saveDraft(unit.id, {
+    revision: unit.revision || 0,
+    content_json: JSON.stringify(payload),
+    plain_text: JSON.stringify(payload, null, 2)
+  }))
+  unit.revision = saved.revision ?? unit.revision
+  return { persisted: true, version: unit.revision, unitId: unit.id, artifactPath: `content-units/${unit.id}/draft` }
 }
 
-function statusTagType(s) {
-  return { draft: 'info', reviewing: 'warning', approved: 'success', needs_revision: 'danger', locked: '' }[s] || 'info'
+async function refreshProjectRevision() {
+  project.value = responseData(await contentProjectApi.get(projectId.value))
+  return project.value
 }
 
-function formatTime(t) {
-  if (!t) return ''
-  const d = new Date(t)
-  return d.toLocaleDateString('zh-CN') + ' ' + d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+async function persistSettings(settings) {
+  try {
+    const persisted = await adapters.persistSettings(clone(settings))
+    Object.assign(stageData.creationSettings, clone(settings))
+    await refreshProjectRevision()
+    return { ...persisted, version: project.value.current_parameter_version_id }
+  } catch (caught) { return { persisted: false, message: caught?.message || '创作设置保存失败' } }
 }
+
+function handleSettingsSaved() {
+  if (route.query.next === 'novel_upload') routeNotice.value = '创作设置已保存，确认进入下一步后将打开小说上传。'
+}
+
+async function persistStage(targetStage) {
+  const current = workbench.activeStage.value
+  const saved = current === 'creation_settings'
+    ? await persistSettings(stageData.creationSettings)
+    : await persistUnit(current, currentStagePayload())
+  if (!saved.persisted) return saved
+  const persistedIndex = STAGES.findIndex(stage => stage.key === project.value.last_stage_key)
+  const targetIndex = STAGES.findIndex(stage => stage.key === targetStage)
+  if (targetIndex > persistedIndex) await adapters.persistStage(targetStage)
+  return { persisted: true, message: '阶段产物与恢复位置已保存' }
+}
+
+async function persistFinalStage() {
+  const saved = await persistUnit('text_storyboard', clone(stageData.textStoryboard))
+  if (!saved.persisted) return saved
+  project.value = responseData(await contentProjectApi.saveResume(projectId.value, {
+    stage_key: 'text_storyboard', task_key: 'completed', content_unit_id: saved.unitId, revision: project.value.revision
+  }))
+  return { persisted: true }
+}
+
+async function saveCurrentDraft() {
+  if (loading.value || !project.value) return
+  autosaveState.value = '保存中…'
+  try {
+    const result = workbench.activeStage.value === 'creation_settings'
+      ? await persistSettings(stageData.creationSettings)
+      : await persistUnit(workbench.activeStage.value, currentStagePayload())
+    if (!result.persisted) throw new Error(result.message)
+    autosaveState.value = '已保存'
+    setTimeout(() => { if (autosaveState.value === '已保存') autosaveState.value = '' }, 1500)
+    return result
+  } catch (caught) {
+    autosaveState.value = '保存失败'
+    return showGuidance({ code: 'STAGE_SAVE_FAILED', title: '草稿保存失败', message: caught?.message, targetAction: 'retry_stage_save' })
+  }
+}
+
+async function confirmNextStage() {
+  const guarded = transitionGuard()
+  if (guarded) return showGuidance(guarded)
+  const next = nextStageKey(workbench.activeStage.value)
+  if (!next) return completeFinalStage()
+  const transition = await workbench.transition(next)
+  if (transition.status === 'completed') {
+    replaceStageQuery(next)
+    if (route.query.next === next) router.replace({ name: 'ScriptGenWorkspace', params: { projectId: projectId.value }, query: { stage: next, ...(route.query.variant ? { variant: route.query.variant } : {}) } })
+  } else showGuidance({ code: 'STAGE_TRANSITION_FAILED', title: '无法进入下一步', message: transition.message, targetAction: 'retry_stage_transition' })
+}
+
+function transitionGuard() {
+  const stage = workbench.activeStage.value
+  if (stage === 'creation_settings') {
+    const validation = validateCreationSettings(stageData.creationSettings)
+    return validation.allowed ? null : validation
+  }
+  if (stage === 'novel_upload' && !stageData.novelUpload.source) return { code: 'NOVEL_UPLOAD_REQUIRED', title: '请先上传小说', message: '上传文件或保存粘贴文本后才能进入小说分析。', targetAction: 'focus_novel_upload' }
+  if (stage === 'novel_analysis') {
+    for (const [section, value] of Object.entries({
+      synopsis: stageData.novelAnalysis.synopsis,
+      events: stageData.novelAnalysis.events,
+      chapterOutline: stageData.novelAnalysis.chapterOutline,
+      worldview: { ...(stageData.novelAnalysis.worldview || {}), locations: stageData.novelAnalysis.locations || [] },
+      characters: stageData.novelAnalysis.characters
+    })) {
+      const validation = validateAnalysisSection(section, value)
+      if (!validation.allowed) return validation
+    }
+  }
+  if (stage === 'adaptation' && !stageData.adaptation.confirmed) return { code: 'ADAPTATION_CONFIRMATION_REQUIRED', title: '请先确认改编方案', message: '持久化高压开场并确认改编方案后才能进入结构化剧本。', targetAction: 'confirm_adaptation' }
+  if (stage === 'structured_script' && !stageData.structuredScript.episodes?.some(episode => episode.beats?.length)) return { code: 'STRUCTURED_SCRIPT_REQUIRED', title: '请先完成单集结构', message: '至少为一集新增并保存一个节拍。', targetAction: 'focus_episode_structure' }
+  if (stage === 'script_body') {
+    const scenes = (stageData.scriptBody.episodes || []).flatMap(episode => episode.scenes || [])
+    if (!scenes.length) return { code: 'SCRIPT_SCENE_REQUIRED', title: '请先新增剧本场景', message: '剧本正文至少需要一个场景。', targetAction: 'focus_script_scenes' }
+    if (scenes.some(scene => !scene.assetBinding && scene.bindingState !== 'DEFERRED')) return { code: 'SCENE_ASSET_BINDING_REQUIRED', title: '请处理场景资产绑定', message: '绑定场景资产，或明确选择稍后绑定后再进入审阅。', targetAction: 'focus_scene_asset_binding' }
+  }
+  if (stage === 'review_revision' && !stageData.reviewRevision.approvedEpisodeIds?.length) return { code: 'REVIEW_APPROVAL_REQUIRED', title: '请先审核通过本集', message: '解决 HIGH/BLOCKER 问题并完成审核通过后才能进入文字分镜。', targetAction: 'approve_review_episode' }
+  if (stage === 'text_storyboard' && !stageData.textStoryboard.archived) return { code: 'STORYBOARD_ARCHIVE_REQUIRED', title: '请先完成并归档', message: '通过连续性检查并锁定所有场景快照后，再完成八阶段流程。', targetAction: 'complete_storyboard_archive' }
+  return null
+}
+
+function previousStage() {
+  const index = STAGES.findIndex(stage => stage.key === workbench.activeStage.value)
+  if (index <= 0) return showGuidance({ code: 'FIRST_STAGE', title: '已是第一步', message: '当前已在创作设置。' })
+  navigateStage(STAGES[index - 1].key)
+}
+function navigateStage(stage) {
+  if (!workbench.navigate(stage)) return showGuidance({ code: 'STAGE_NOT_ENTERED', title: '阶段尚未解锁', message: '请按创作顺序完成前置阶段。' })
+  replaceStageQuery(stage)
+}
+
+async function uploadNovelFile(file) {
+  const form = new FormData(); form.append('file', file)
+  const upload = responseData(await contentProjectApi.uploadFile(form))
+  stageData.novelUpload = { source: 'file', uploadId: upload.id || upload.upload_id, fileName: file.name }
+  await persistUnit('novel_upload', stageData.novelUpload)
+  return { uploaded: true, persisted: true, upload }
+}
+async function persistPastedNovel(payload) {
+  stageData.novelUpload = { source: 'paste', ...payload }
+  return persistUnit('novel_upload', stageData.novelUpload)
+}
+function handleNovelUploaded(payload) { Object.assign(stageData.novelUpload, payload) }
+
+async function persistAnalysisArtifact({ section, value, previousVersion }) {
+  const next = clone(stageData.novelAnalysis); next[section] = value
+  const persisted = await persistUnit('novel_analysis', next)
+  if (persisted.persisted) Object.assign(stageData.novelAnalysis, next)
+  return { ...persisted, version: Math.max(Number(persisted.version) || 0, Number(previousVersion) + 1), impact: { stale: ['adaptation', 'structured_script', 'script_body'] } }
+}
+async function persistAdaptationHook(hookId) {
+  const persisted = await persistUnit('adaptation', { ...clone(stageData.adaptation), selectedHookId: hookId })
+  return { ...persisted, version: Math.max(Number(persisted.version) || 1, Number(stageData.adaptation.hookVersion || 0) + 1) }
+}
+async function persistAdaptationPlan(payload) {
+  const persisted = await persistUnit('adaptation', payload)
+  return { ...persisted, version: Math.max(Number(persisted.version) || 1, Number(stageData.adaptation.version || 0) + 1), impact: { stale: ['structured_script', 'script_body'] } }
+}
+async function persistStructuredAction(payload) {
+  const persisted = await persistUnit('structured_script', { ...clone(stageData.structuredScript), pendingAction: payload })
+  return { ...persisted, beat: payload }
+}
+async function persistScriptBodyAction(payload) { return persistUnit('script_body', { ...clone(stageData.scriptBody), pendingAction: payload }) }
+async function persistReviewAction(payload) { return { ...(await persistUnit('review_revision', { ...clone(stageData.reviewRevision), pendingAction: payload })), version: Date.now(), revision: payload } }
+async function persistMindmap(configuration) { return { ...(await persistUnit('text_storyboard', { ...clone(stageData.textStoryboard), mindmap: configuration })), configuration } }
+
+async function runScriptBodyCheck() {
+  const unit = await ensureUnit('script_body')
+  const check = responseData(await contentProjectApi.reviewUnit(unit.id))
+  return { persisted: true, check }
+}
+
+async function approveReviewEpisode(payload) {
+  const unit = units.value.find(item => String(item.id) === String(payload.episodeId)) || await ensureUnit('review_revision')
+  const version = responseData(await contentProjectApi.createVersion(unit.id, { status: 'approved' }))
+  await persistUnit('review_revision', { ...clone(stageData.reviewRevision), approval: payload, versionId: version.id })
+  return { persisted: true, version: version.id, approval: payload }
+}
+
+async function submitStageGeneration(stage, payload = {}) {
+  const unit = await ensureUnit(stage)
+  const response = responseData(await contentProjectApi.batchGenerate(projectId.value, [unit.id], `${stage}_generate`))
+  const taskId = response.taskId || response.task_id || response.id
+  if (!taskId) throw new Error('生成服务已响应，但未返回可跟踪的任务 ID。')
+  return {
+    artifact: { path: `/generation/tasks/${taskId}`, version: response.version || null },
+    actualPoints: response.actualPoints ?? response.actual_points ?? stageData.creationSettings.estimatedPoints,
+    impact: response.impact || '当前阶段与关联下游产物',
+    request: payload
+  }
+}
+
+async function submitScriptBlockAction(payload) {
+  const outcome = await submitStageGeneration('script_body', payload)
+  await persistUnit('script_body', { ...clone(stageData.scriptBody), pendingGeneration: { payload, taskPath: outcome.artifact.path } })
+  return { persisted: true, result: outcome }
+}
+
+async function createAndReturnSceneAsset(draft) {
+  const result = await sceneAssets.create(draft)
+  return result.ok ? { persisted: true, asset: result.data || sceneAssets.selectedAsset.value } : result
+}
+async function bindScriptSceneAsset(binding, { sceneId }) {
+  const application = await adapters.bindScriptScene(binding, { sceneId })
+  if (!application.persisted) return application
+  await persistUnit('script_body', { ...clone(stageData.scriptBody), bindingEvidence: { sceneId, binding, application } })
+  return application
+}
+async function exportScriptBody() {
+  const unit = await ensureUnit('script_body')
+  const versions = responseData(await contentProjectApi.listVersions(unit.id)) || []
+  return { persisted: true, format: 'markdown', artifactPath: `content-units/${unit.id}/versions`, versions: versions.length }
+}
+
+function storyboardRequired() {
+  if (storyboard.id && storyboard.versionId) return null
+  return { persisted: false, message: '请先在分镜专业编辑器创建可编辑分镜版本。' }
+}
+async function addStoryboardShot(payload) {
+  const missing = storyboardRequired(); if (missing) return missing
+  const shot = responseData(await contentProjectApi.createStoryboardShot(projectId.value, storyboard.id, storyboard.versionId, {
+    sceneId: payload.sceneId,
+    durationMs: payload.durationMs,
+    visualDescription: payload.description
+  }))
+  storyboardShotIds.set(payload.id, shot.id)
+  return { persisted: true, shot }
+}
+async function splitStoryboardShot(payload) {
+  const missing = storyboardRequired(); if (missing) return missing
+  const serverShotId = storyboardShotIds.get(payload.shotId) ?? payload.shotId
+  const firstDurationMs = Math.max(1, Math.floor(Number(payload.source?.durationMs || 3000) / 2))
+  const shots = responseData(await contentProjectApi.splitStoryboardShot(projectId.value, storyboard.id, storyboard.versionId, serverShotId, { firstDurationMs }))
+  return { persisted: true, shots: (shots.items || shots).map(toWorkbenchShot) }
+}
+async function mergeStoryboardShots(payload) {
+  const missing = storyboardRequired(); if (missing) return missing
+  const shotIds = payload.shotIds.map(id => storyboardShotIds.get(id) ?? id)
+  const shot = responseData(await contentProjectApi.mergeStoryboardShots(projectId.value, storyboard.id, storyboard.versionId, { shotIds, revision: storyboard.revision }))
+  return { persisted: true, shot: toWorkbenchShot(shot) }
+}
+async function runStoryboardContinuity() {
+  const missing = storyboardRequired(); if (missing) return missing
+  const result = responseData(await contentProjectApi.runStoryboardContinuityCheck(projectId.value, storyboard.id, storyboard.versionId))
+  return { persisted: true, passed: result.valid === true || result.passed === true, issues: result.issues || [] }
+}
+async function archiveStoryboard() {
+  const missing = storyboardRequired(); if (missing) return missing
+  const locked = responseData(await contentProjectApi.lockStoryboardVersion(projectId.value, storyboard.id, storyboard.versionId, storyboard.revision))
+  storyboard.locked = true
+  return { persisted: true, locked }
+}
+async function createCanvasProject(payload) {
+  const missing = storyboardRequired(); if (missing) return missing
+  const job = responseData(await contentProjectApi.createStoryboardCanvasSnapshot(projectId.value, storyboard.id, storyboard.versionId, {
+    snapshotType: 'production', idempotencyKey: `canvas-${projectId.value}-${storyboard.versionId}-${Date.now()}`, ...payload
+  }))
+  return { persisted: true, job, projectId: job.canvasProjectId || job.canvas_project_id }
+}
+function handoffCanvas(result) {
+  const canvasId = result?.projectId || result?.canvasProjectId
+  if (canvasId) router.push(`/canvas/${canvasId}`)
+  else showGuidance({ code: 'CANVAS_JOB_CREATED', title: '画布任务已创建', message: '快照任务已持久化，请在画布项目中查看生成结果。', targetAction: 'open_canvas_projects' })
+}
+
+async function completeFinalStage() {
+  const completed = await workbench.completeFinalStageWithPersistence()
+  if (completed?.allowed === false) return showGuidance(completed)
+  ElMessage.success('八阶段创作流程已完成')
+}
+function handleStageResult(result) { if (result?.allowed === false || result?.ok === false) showGuidance(result) }
+function handleGenerationResult(result) { selectedResult.value = result; resultVisible.value = true }
+function openSceneResult(result) { selectedResult.value = result; sceneLibraryVisible.value = true }
+function openTaskEntry() {
+  const task = workbench.state.tasks.at(-1)
+  if (!task) showGuidance({ code: 'NO_TASKS', title: '暂无生成任务', message: '在阶段内执行重新生成后，可在此跟踪进度。' })
+  else if (task.status !== 'running') openResultEntry()
+}
+function openResultEntry() {
+  selectedResult.value = workbench.state.results.at(-1) || null
+  if (!selectedResult.value) return showGuidance({ code: 'NO_RESULTS', title: '暂无生成结果', message: '完成一次生成任务后可在此对比与采用。' })
+  resultVisible.value = true
+}
+function cancelGenerationTask(taskId) { workbench.finishGeneration(taskId, { status: 'cancelled' }); openResultEntry() }
+function acceptGenerationResult(taskId) { const result = workbench.acceptGeneration(taskId); if (result?.allowed === false) showGuidance(result); else resultVisible.value = false }
+function discardGenerationResult(taskId) { const result = workbench.discardGeneration(taskId); if (result?.allowed === false) showGuidance(result); else resultVisible.value = false }
+function noop() {}
+function modeLabel(mode) { return ({ short_drama: '短剧', long_form: '长篇', tvc: 'TVC' })[mode] || mode || '未知' }
+function statusLabel(status) { return ({ draft: '草稿', reviewing: '审核中', approved: '已通过', needs_revision: '需修订', locked: '已锁定', archived: '已归档' })[status] || status || '草稿' }
+function statusTagType(status) { return ({ reviewing: 'warning', approved: 'success', needs_revision: 'danger', archived: 'info' })[status] || 'info' }
 </script>
 
 <style scoped>
-/* ===== Workspace Layout ===== */
-.workspace {
-  display: flex;
-  height: calc(100vh - var(--topbar-h));
-}
-
-.workspace-main {
-  flex: 1;
-  padding: 20px 24px;
-  overflow-y: auto;
-  min-width: 0;
-}
-
-/* ===== Header ===== */
-.workspace-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-.workspace-title {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -.01em;
-  margin: 0 0 6px 0;
-}
-.workspace-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-.meta-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-.meta-separator {
-  color: var(--text-tertiary);
-}
-.autosave-text {
-  color: var(--text-tertiary);
-  font-size: 12px;
-}
-.generating-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 10px;
-  border-radius: 100px;
-  background: var(--warning-bg);
-  color: var(--warning);
-  font-size: 12px;
-  font-weight: 600;
-}
-.workspace-header-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-/* ===== Loading & Error ===== */
-.workspace-loading {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12px;
-  padding: 64px 0;
-  color: var(--text-secondary);
-}
-.loading-text {
-  font-size: 14px;
-}
-.workspace-error {
-  padding: 48px 0;
-}
-
-/* ===== Stage Card ===== */
-.stage-card {
-  margin-bottom: 20px;
-}
-.stage-card-header {
-  margin-bottom: 8px;
-}
-.stage-title {
-  font-size: 17px;
-  font-weight: 600;
-  margin: 0;
-}
-.stage-desc {
-  color: var(--text-secondary);
-  font-size: 14px;
-  margin: 0 0 16px 0;
-  line-height: 1.5;
-}
-.stage-alert {
-  margin-bottom: 16px;
-}
-.stage-body {
-  /* content area within stage */
-}
-.stage-hint {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0 0 12px 0;
-  line-height: 1.5;
-}
-.stage-textarea {
-  margin-bottom: 16px;
-}
-.stage-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 16px;
-}
-
-/* ===== Generated Content ===== */
-.generated-content {
-  background: var(--bg-app);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 16px;
-  white-space: pre-wrap;
-  max-height: 400px;
-  overflow-y: auto;
-  font-size: 14px;
-  line-height: 1.7;
-  color: var(--text-primary);
-}
-
-/* ===== Stage Progress ===== */
-.stage-progress {
-  margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border-light);
-}
-.progress-text {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin-top: 6px;
-}
-
-/* ===== Version History ===== */
-.version-history {
-  margin-bottom: 20px;
-}
-.version-title {
-  font-size: 14px;
-  font-weight: 600;
-  margin: 0 0 10px 0;
-}
-.version-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--border-light);
-  font-size: 13px;
-}
-.version-item:last-child {
-  border-bottom: none;
-}
-.version-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.version-badge {
-  font-weight: 600;
-  color: var(--accent);
-}
-.version-source {
-  color: var(--text-secondary);
-}
-.version-time {
-  color: var(--text-tertiary);
-  font-size: 12px;
-}
-
-/* ===== Conflict Panel ===== */
-.conflict-panel {
-  background: var(--warning-bg);
-  border: 1px solid var(--warning);
-  border-radius: var(--radius-md);
-  padding: 16px;
-  margin-bottom: 20px;
-}
-.conflict-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--warning);
-  margin-bottom: 8px;
-}
-.conflict-header h4 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-}
-.conflict-text {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin: 0 0 12px 0;
-  line-height: 1.5;
-}
-
-/* ===== Responsive ===== */
-@media (max-width: 1024px) {
-  .workspace-main {
-    padding: 16px;
-  }
-}
-
-@media (max-width: 768px) {
-  .workspace {
-    flex-direction: column;
-    height: auto;
-  }
-  .workspace-main {
-    padding: 12px;
-  }
-  .workspace-header {
-    flex-direction: column;
-    gap: 12px;
-  }
-  .stage-actions {
-    flex-direction: column;
-  }
-}
+.workspace{display:flex;height:calc(100vh - var(--topbar-h));min-height:680px}.workspace-main{flex:1;min-width:0;overflow:auto;padding:20px 24px;background:var(--bg-app)}.workspace-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.workspace-header h1{margin:0 0 8px;font-size:20px}.workspace-meta,.workspace-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.workspace-meta{color:var(--text-secondary);font-size:13px}.workspace-actions{justify-content:flex-end}.model-context{font-size:12px;color:var(--text-secondary);padding:6px 10px;border:1px solid var(--border);border-radius:8px}.workspace-state{display:grid;place-items:center;padding:70px;color:var(--text-secondary)}.stage-card,.shared-panel{padding:20px;margin-bottom:18px}.route-notice{margin-bottom:16px}@media(max-width:1000px){.workspace-header{flex-direction:column}.workspace-actions{justify-content:flex-start}}@media(max-width:760px){.workspace{display:block;height:auto}.workspace-main{padding:12px}.workspace-actions{align-items:stretch}.workspace-actions .el-button{margin-left:0}}
 </style>

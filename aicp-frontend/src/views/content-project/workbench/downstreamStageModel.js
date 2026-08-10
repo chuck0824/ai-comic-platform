@@ -175,7 +175,11 @@ export async function bindScriptSceneAsset(state, sceneId, asset, variant, adapt
   if (hasVariantId !== hasVariantVersion) {
     return guidance('SCENE_ASSET_VARIANT_PAIR_REQUIRED', '场景变体版本不完整', '变体为可选；选择变体时必须同时包含变体 ID 和变体版本。', 'choose_scene_asset_version')
   }
-  const response = await persist(adapter, binding, '绑定场景资产')
+  const response = await persist(
+    typeof adapter === 'function' ? payload => adapter(payload, { sceneId }) : adapter,
+    binding,
+    '绑定场景资产'
+  )
   if (response.allowed === false) return response
   scene.assetBinding = binding
   scene.bindingState = 'BOUND'

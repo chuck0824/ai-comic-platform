@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { currentStage, primaryAction } from '../src/views/content-project/utils/workflowPath.js'
+import { STAGES } from '../src/views/content-project/workbench/scriptWorkbenchModel.js'
 
 test('uses the first current stage and ignores skipped storyboard', () => {
   const stages = [
@@ -75,4 +76,11 @@ test('context panel shows bible version when available', () => {
   assert.equal(bibleHealth.current_version_no, 2)
   assert.equal(context.bible_version_id, 11)
   assert.ok(context.payload_hash.length >= 12)
+})
+
+test('native script workflow uses the approved eight-stage order', () => {
+  assert.deepEqual(STAGES.map(stage => stage.key), [
+    'creation_settings', 'novel_upload', 'novel_analysis', 'adaptation',
+    'structured_script', 'script_body', 'review_revision', 'text_storyboard'
+  ])
 })

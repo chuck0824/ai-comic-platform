@@ -102,6 +102,7 @@ import { useRouter } from 'vue-router'
 import { ArrowRight, EditPen } from '@element-plus/icons-vue'
 import { contentProjectApi } from '@/api/contentProject'
 import { CREATION_METHODS } from './scriptCreationHomeViewModel'
+import { workspaceTarget } from './workbench/workspaceRouting.js'
 import { CONTENT_STATUS_LABELS, CREATION_MODE_LABELS, primaryActionRoute } from '../warehouse/projectWarehouseViewModel'
 import dayjs from 'dayjs'
 
@@ -124,7 +125,6 @@ async function loadData() {
     todos.value = todosRes.status === 'fulfilled' ? (todosRes.value.data?.data || []) : []
   } catch (e) {
     error.value = '加载失败，请检查网络后重试'
-    console.error('ScriptCreationHome load error:', e)
   } finally {
     loading.value = false
   }
@@ -135,7 +135,7 @@ function openDetail(project) {
 }
 
 function continueCreation(project) {
-  router.push(`/script-gen/${project.id}/workspace`)
+  router.push(workspaceTarget({ id: project.id, stage: project.last_stage_key }))
 }
 
 function modeLabel(mode) {
