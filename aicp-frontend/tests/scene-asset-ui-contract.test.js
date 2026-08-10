@@ -12,6 +12,7 @@ import {
 } from '../src/views/content-project/workbench/sceneAssetUiModel.js'
 import { normalizeSceneAsset } from '../src/views/content-project/workbench/sceneAssetModel.js'
 import { useSceneAssets } from '../src/views/content-project/workbench/useSceneAssets.js'
+import { ref } from 'vue'
 
 const contentProjectDir = fileURLToPath(new URL('../src/views/content-project/', import.meta.url))
 const read = path => readFileSync(`${contentProjectDir}${path}`, 'utf8')
@@ -242,6 +243,27 @@ test('composable disable guides on impact load failure and never fakes mutation 
   assert.equal(result.code, 'SCENE_ASSET_IMPACT_FAILED')
   assert.match(result.message, /影响范围加载失败/)
   assert.equal(disableCalls, 0)
+})
+
+test('scene asset load ignores a stale response after project switch', async () => {
+  const pending = new Map()
+  const projectId = ref(9)
+  const api = {
+    list: id => new Promise(resolve => pending.set(id, resolve))
+  }
+  const sceneAssets = useSceneAssets(projectId, { api, resultStorage: memoryStorage() })
+  const oldLoad = sceneAssets.load()
+  projectId.value = 10
+  const newLoad = sceneAssets.load()
+  pending.get(10)([{ id: 10, name: '新项目场景', current_version_id: 1 }])
+  await newLoad
+  pending.get(9)([{ id: 9, name: '旧项目场景', current_version_id: 1 }])
+
+  const staleResult = await oldLoad
+
+  assert.equal(staleResult.ok, false)
+  assert.equal(staleResult.code, 'STALE_PROJECT_RESPONSE')
+  assert.deepEqual(sceneAssets.assets.value.map(asset => asset.id), [10])
 })
 
 function memoryStorage() {

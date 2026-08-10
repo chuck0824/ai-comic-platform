@@ -11,6 +11,20 @@ function stableIdempotencyKey(sceneId, assetId, versionId) {
   return `script-scene:${String(sceneId)}:asset:${String(assetId)}:version:${String(versionId ?? 'current')}`
 }
 
+export function normalizeBatchGeneration(response = {}) {
+  const body = payload(response)
+  const jobs = Array.isArray(body.jobs) ? body.jobs : []
+  const total = Number(body.total ?? jobs.length)
+  if (!jobs.length || jobs[0]?.id == null) {
+    return {
+      ok: false,
+      code: 'GENERATION_JOB_MISSING',
+      message: `生成服务未返回可跟踪任务（声明 ${Number.isFinite(total) ? total : 0} 个，实际 ${jobs.length} 个）。`
+    }
+  }
+  return { ok: true, total: Number.isFinite(total) ? total : jobs.length, job: jobs[0], jobs }
+}
+
 /** Real HTTP adapters shared by the native eight-stage shell. */
 export function createWorkspaceAdapters({ projectId, project, api, sceneApi, activeUnitId }) {
   const id = () => Number(typeof projectId === 'function' ? projectId() : projectId)

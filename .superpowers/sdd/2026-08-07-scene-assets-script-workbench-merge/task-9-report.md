@@ -40,3 +40,20 @@ GREEN:
 
 - The current content-generation controller derives `projectId` from `target_id`, while the executor interprets the same `target_id` as a content-unit ID. Task 9 therefore does not claim a successful real model regeneration through that contradictory endpoint; the UI records an explicit failed task/result until a safe project/unit contract is available.
 - Storyboard creation itself remains in the professional storyboard editor. If no editable storyboard version exists, text-storyboard persistence buttons remain clickable and explain the required next action.
+
+## Fix Round 1 — Reviewer Findings
+
+- Credit estimates now send the backend-required generation `type`, selected `model_id`, and operation parameters. A positive remote estimate is stored as `estimatedPoints`; missing or failed estimates keep the action clickable and show retry guidance.
+- Batch generation now reads the real `{ total, jobs }` contract, selects the first returned job as the tracked job, preserves every returned job ID for audit, and reports a detailed `GENERATION_JOB_MISSING` failure when no task can be tracked.
+- `SCRIPT_SCENE` applications now validate the referenced `ContentProject`, project workspace, and `EDIT_CONTENT` membership instead of treating a content-project ID as a `CanvasProject` ID. Legacy canvas targets retain their existing canvas validation and mutation path.
+- Persisted legacy stage keys are mapped into the authoritative eight-stage sequence both when resolving the route and when restoring entered/completed rail state.
+- Route project changes now invalidate prior loads and atomically clear project, stage, storyboard, scene-asset, task, result, artifact, and point state. All async project loaders check a project/generation token before mutating state; scene-asset loads also reject stale responses independently.
+
+### Fix Round 1 Verification
+
+- Focused frontend regression: 38/38 passed (`script-workbench-routing`, `script-workbench-upstream-contract`, `scene-asset-ui-contract`).
+- Backend service compatibility: `AssetApplicationServiceTest` 5/5 passed.
+- Backend scene-asset lifecycle E2E: `ProjectSceneAssetLifecycleE2ETest` 17/17 passed.
+- Production frontend build passed after transforming 1,998 modules to `/tmp/aicp-task9-fix1-dist`.
+- Full frontend suite: 204 passed, 1 failed. The only failure remains the pre-existing `agent-config-state.test.js` identity mismatch documented above; no Task 9 file participates in that assertion.
+- `git diff --check` passed.

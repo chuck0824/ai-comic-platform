@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import {
   addAdaptationRule,
+  buildCreditEstimateRequest,
   confirmAdaptationPlan,
   convertLocationToSceneAsset,
   countChineseCharacters,
@@ -76,6 +77,14 @@ test('creation settings use real usable models and only fall back to explicit fr
   })
   assert.equal(invalidRealSettings.allowed, false)
   assert.equal(invalidRealSettings.code, 'POINT_ESTIMATE_REQUIRED')
+})
+
+test('credit estimate request matches the backend generation contract', () => {
+  assert.deepEqual(buildCreditEstimateRequest({ id: 'gpt-script-pro' }), {
+    type: 'agent',
+    model_id: 'gpt-script-pro',
+    parameters: { operation: 'script_workbench' }
+  })
 })
 
 test('analysis saves validate fields and record artifact version plus impact only after persistence', async () => {

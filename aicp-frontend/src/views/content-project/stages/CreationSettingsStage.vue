@@ -61,7 +61,7 @@
 import { onMounted, reactive, ref, watch } from 'vue'
 import { canvasAgentApi } from '@/api/canvas'
 import { generationApi } from '@/api/generation'
-import { loadCreationModels, validateCreationSettings } from '../workbench/upstreamStageModel.js'
+import { buildCreditEstimateRequest, loadCreationModels, validateCreationSettings } from '../workbench/upstreamStageModel.js'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
@@ -109,7 +109,7 @@ async function selectModel(modelId) {
     try {
       const estimate = props.estimatePoints
         ? await props.estimatePoints({ modelId: model.id, operation: 'script_workbench' })
-        : await generationApi.estimateCredits({ model_id: model.id, operation: 'script_workbench' })
+        : await generationApi.estimateCredits(buildCreditEstimateRequest(model))
       const payload = estimate?.data?.data ?? estimate?.data ?? estimate ?? {}
       const points = Number(payload.estimated_points ?? payload.estimatedCredits ?? payload.credits)
       draft.estimatedPoints = Number.isFinite(points) && points > 0 ? points : null

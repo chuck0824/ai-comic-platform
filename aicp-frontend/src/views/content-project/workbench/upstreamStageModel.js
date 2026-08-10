@@ -11,6 +11,15 @@ export const BUILT_IN_DEMO_MODELS = Object.freeze([
   }
 ])
 
+/** Matches GenerationController#estimateCredits: type is a required generation enum. */
+export function buildCreditEstimateRequest(model = {}) {
+  return {
+    type: 'agent',
+    model_id: model.id ?? model.modelId,
+    parameters: { operation: 'script_workbench' }
+  }
+}
+
 function rejected(code, title, message, targetAction = null) {
   return { allowed: false, code, title, message, targetAction }
 }

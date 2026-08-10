@@ -20,6 +20,37 @@ test('persisted and query stages are validated without allowing skips', async ()
   assert.equal(resolveWorkspaceStage({ persistedStage: 'script_body', queryStage: 'novel_analysis' }), 'novel_analysis')
   assert.equal(resolveWorkspaceStage({ persistedStage: 'script_body', queryStage: 'text_storyboard' }), 'script_body')
   assert.equal(resolveWorkspaceStage({ persistedStage: 'legacy_destination', queryStage: 'hacked' }), 'creation_settings')
+  const legacy = {
+    story_seed: 'creation_settings', characters: 'novel_analysis', synopsis: 'novel_analysis',
+    outline: 'structured_script', content: 'script_body', review: 'review_revision',
+    destination: 'text_storyboard', storyboard: 'text_storyboard'
+  }
+  for (const [persistedStage, expected] of Object.entries(legacy)) {
+    assert.equal(resolveWorkspaceStage({ persistedStage }), expected)
+  }
+})
+
+test('batch generation response chooses the first real job and preserves failure detail', async () => {
+  const { normalizeBatchGeneration } = await import('../src/views/content-project/workbench/workspaceAdapters.js')
+  assert.deepEqual(normalizeBatchGeneration({ total: 2, jobs: [{ id: 71, status: 'queued' }, { id: 72 }] }), {
+    ok: true, total: 2, job: { id: 71, status: 'queued' }, jobs: [{ id: 71, status: 'queued' }, { id: 72 }]
+  })
+  assert.deepEqual(normalizeBatchGeneration({ total: 1, jobs: [] }), {
+    ok: false, code: 'GENERATION_JOB_MISSING', message: '生成服务未返回可跟踪任务（声明 1 个，实际 0 个）。'
+  })
+})
+
+test('project load generations reject stale responses and reset missing project fields', async () => {
+  const { createProjectLoadGuard, resetProjectWorkspaceData } = await import('../src/views/content-project/workbench/workspaceLoadState.js')
+  const guard = createProjectLoadGuard()
+  const first = guard.begin(1); const second = guard.begin(2)
+  assert.equal(guard.accept(first, 1), false)
+  assert.equal(guard.accept(second, 2), true)
+  const state = { creationSettings: { genre: '旧题材', tone: '旧基调' }, novelAnalysis: { synopsis: '旧梗概' }, adaptation: { hooks: [{ id: 1 }] } }
+  resetProjectWorkspaceData(state)
+  assert.deepEqual(state.creationSettings, {})
+  assert.deepEqual(state.novelAnalysis, {})
+  assert.deepEqual(state.adaptation, { hooks: [] })
 })
 
 test('workspace adapters persist stages and preserve stable script scene identities', async () => {
@@ -69,6 +100,7 @@ test('workspace mounts the authoritative shell and removes legacy stage conditio
   assert.match(source, /GenerationProgressDialog/)
   assert.match(source, /ActionResultDrawer/)
   assert.match(source, /ActionGuidanceDialog/)
+  assert.match(source, /Object\.assign\(workbench\.state, createWorkbenchState\(\)\)/)
   assert.doesNotMatch(source, /alert\s*\(/)
   assert.doesNotMatch(source, /console\.log\s*\(/)
 })

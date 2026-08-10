@@ -77,6 +77,9 @@ export function useSceneAssets(projectId, {
     const filterSnapshot = { ...filters }
     try {
       const response = await client.list(resolvedProjectId, filterSnapshot)
+      if (resolvedProjectId !== activeProjectId()) {
+        return failure('STALE_PROJECT_RESPONSE', '已忽略上一项目的场景资产响应')
+      }
       const list = Array.isArray(response) ? response : response.items ?? []
       assets.value = list.map(normalizeSceneAsset)
       writeSuccessfulSceneAssetListCache(resolvedProjectId, filterSnapshot, assets.value)
@@ -84,6 +87,9 @@ export function useSceneAssets(projectId, {
       actionResults.value = readSceneAssetActionResults(resolvedProjectId, resultStorage)
       return { ok: true, items: assets.value }
     } catch (error) {
+      if (resolvedProjectId !== activeProjectId()) {
+        return failure('STALE_PROJECT_RESPONSE', '已忽略上一项目的场景资产响应')
+      }
       const cached = readSceneAssetListCache(resolvedProjectId, filterSnapshot)
       if (cached.found) {
         assets.value = cached.items.map(normalizeSceneAsset)
@@ -93,6 +99,18 @@ export function useSceneAssets(projectId, {
       state.value = 'error'
       return failure(error?.code || 'SCENE_ASSET_LOAD_FAILED', error?.message || '场景资产加载失败')
     }
+  }
+
+  function reset() {
+    state.value = 'loading'
+    assets.value = []
+    selectedAsset.value = null
+    selectedVersion.value = null
+    impact.value = null
+    markdown.value = null
+    actionResult.value = null
+    actionResults.value = []
+    projectArchived.value = false
   }
 
   async function loadAsset(assetId) {
@@ -346,7 +364,7 @@ export function useSceneAssets(projectId, {
   return {
     state, assets, filteredAssets, filters, selectedAsset, selectedVersion, impact, markdown, actionResult,
     actionResults, referencedSelectedAsset, readOnly,
-    load, loadAsset, selectAsset, setProjectArchived, create, update, createFromLocation, createVariant,
+    load, reset, loadAsset, selectAsset, setProjectArchived, create, update, createFromLocation, createVariant,
     updateVariant, restore, disable, activate, archive, loadImpact, loadMarkdown, openActionResult, replaceReferences, resolveConsumer
   }
 }

@@ -186,12 +186,13 @@ import StructuredScriptStage from './stages/StructuredScriptStage.vue'
 import ScriptBodyStage from './stages/ScriptBodyStage.vue'
 import ReviewRevisionStage from './stages/ReviewRevisionStage.vue'
 import TextStoryboardStage from './stages/TextStoryboardStage.vue'
-import { STAGES } from './workbench/scriptWorkbenchModel.js'
+import { STAGES, createWorkbenchState } from './workbench/scriptWorkbenchModel.js'
 import { useScriptWorkbench } from './workbench/useScriptWorkbench.js'
 import { useSceneAssets } from './workbench/useSceneAssets.js'
-import { createWorkspaceAdapters } from './workbench/workspaceAdapters.js'
+import { createWorkspaceAdapters, normalizeBatchGeneration } from './workbench/workspaceAdapters.js'
 import { nextStageKey, resolveWorkspaceStage, restoreWorkbenchStage } from './workbench/workspaceRouting.js'
 import { validateAnalysisSection, validateCreationSettings } from './workbench/upstreamStageModel.js'
+import { createProjectLoadGuard, resetProjectWorkspaceData } from './workbench/workspaceLoadState.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -210,6 +211,7 @@ const storyboard = reactive({ id: null, versionId: null, revision: 0, locked: fa
 const storyboardScenes = ref([])
 const storyboardShotIds = new Map()
 let autosaveTimer = null
+const projectLoadGuard = createProjectLoadGuard()
 
 const defaultEpisode = () => ({ id: 'EP-001', title: '第 1 集', beats: [], scenes: [] })
 const stageData = reactive({
@@ -249,7 +251,7 @@ onMounted(loadProject)
 onBeforeUnmount(() => { if (autosaveTimer) clearTimeout(autosaveTimer) })
 watch(() => route.params.projectId, (next, previous) => { if (next !== previous) loadProject() })
 watch(() => route.query.stage, stage => {
-  if (!project.value) return
+  if (!project.value || Number(project.value.id) !== projectId.value) return
   const resolved = resolveWorkspaceStage({ persistedStage: project.value.last_stage_key, queryStage: stage })
   if (resolved !== stage) replaceStageQuery(resolved)
   workbench.navigate(resolved)
@@ -281,35 +283,67 @@ function showGuidance(value) {
 }
 
 async function loadProject() {
-  loading.value = true; error.value = ''; routeNotice.value = ''
+  const requestedProjectId = Number(route.params.projectId)
+  const loadToken = projectLoadGuard.begin(requestedProjectId)
+  resetWorkspaceForProject()
+  loading.value = true
   try {
     const [projectResponse, unitResponse, parameterResponse] = await Promise.all([
-      contentProjectApi.get(projectId.value), contentProjectApi.listUnits(projectId.value), contentProjectApi.listParameterVersions(projectId.value)
+      contentProjectApi.get(requestedProjectId), contentProjectApi.listUnits(requestedProjectId), contentProjectApi.listParameterVersions(requestedProjectId)
     ])
+    if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
     project.value = responseData(projectResponse)
     units.value = responseData(unitResponse)?.items || responseData(unitResponse) || []
     const parameters = responseData(parameterResponse) || []
     // Backend returns parameter versions by version_no DESC, so index 0 is authoritative.
     if (parameters.length) Object.assign(stageData.creationSettings, parameters[0]?.payload || {})
-    await loadUnitDrafts()
-    await loadAdaptationHooks()
-    await Promise.all([loadStoryboard(), sceneAssets.load()])
+    await loadUnitDrafts(loadToken, requestedProjectId)
+    await loadAdaptationHooks(loadToken, requestedProjectId)
+    await Promise.all([loadStoryboard(loadToken, requestedProjectId), sceneAssets.load()])
+    if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
     const requestedStage = String(route.query.stage || '')
     const resolvedStage = resolveWorkspaceStage({ persistedStage: project.value.last_stage_key, queryStage: requestedStage })
     if (requestedStage && requestedStage !== resolvedStage) routeNotice.value = '已拦截未完成阶段跳转，并恢复到最近保存位置。'
     restoreWorkbenchStage(workbench.state, resolvedStage, project.value.last_stage_key)
     replaceStageQuery(resolvedStage)
   } catch (caught) {
-    error.value = caught?.response?.data?.message || caught?.message || '加载项目失败'
-  } finally { loading.value = false }
+    if (projectLoadGuard.accept(loadToken, requestedProjectId)) {
+      error.value = caught?.response?.data?.message || caught?.message || '加载项目失败'
+    }
+  } finally {
+    if (projectLoadGuard.accept(loadToken, requestedProjectId)) loading.value = false
+  }
 }
 
-async function loadUnitDrafts() {
+function resetWorkspaceForProject() {
+  if (autosaveTimer) clearTimeout(autosaveTimer)
+  autosaveTimer = null
+  project.value = null
+  units.value = []
+  error.value = ''
+  routeNotice.value = ''
+  autosaveState.value = ''
+  guidance.value = null
+  sceneLibraryVisible.value = false
+  resultVisible.value = false
+  selectedResult.value = null
+  Object.assign(storyboard, { id: null, versionId: null, revision: 0, locked: false })
+  storyboardScenes.value = []
+  storyboardShotIds.clear()
+  resetProjectWorkspaceData(stageData)
+  stageData.structuredScript.episodes = [defaultEpisode()]
+  stageData.scriptBody.episodes = [defaultEpisode()]
+  sceneAssets.reset()
+  Object.assign(workbench.state, createWorkbenchState())
+}
+
+async function loadUnitDrafts(loadToken, requestedProjectId) {
   await Promise.all(units.value.map(async unit => {
     const key = stageDataKey(unit.unit_type)
     if (!key || unit.unit_type === 'novel_upload') return
     try {
       const draft = responseData(await contentProjectApi.getDraft(unit.id))
+      if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
       const parsed = JSON.parse(draft.content_json || '{}')
       Object.assign(stageData[key], parsed)
       unit.revision = draft.revision ?? unit.revision
@@ -317,52 +351,62 @@ async function loadUnitDrafts() {
   }))
 }
 
-async function loadAdaptationHooks() {
+async function loadAdaptationHooks(loadToken, requestedProjectId) {
   try {
-    const payload = responseData(await contentProjectApi.hookSummary(projectId.value))
+    const payload = responseData(await contentProjectApi.hookSummary(requestedProjectId))
+    if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
     const hooks = payload.hooks || payload.items || (Array.isArray(payload) ? payload : [])
     if (hooks.length) stageData.adaptation.hooks = hooks
   } catch { /* the stage remains usable and explains missing hook prerequisites */ }
 }
 
-async function loadStoryboard() {
+async function loadStoryboard(loadToken, requestedProjectId) {
   try {
-    const masters = responseData(await contentProjectApi.listStoryboardMasters(projectId.value)) || []
+    const masters = responseData(await contentProjectApi.listStoryboardMasters(requestedProjectId)) || []
+    if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
     const master = masters[0]
     if (!master) return
-    const detail = responseData(await contentProjectApi.getStoryboardMaster(projectId.value, master.id))
-    storyboard.id = detail.id
-    storyboard.versionId = detail.currentDraftVersionId || detail.current_draft_version_id || detail.currentLockedVersionId || detail.current_locked_version_id
-    if (!storyboard.versionId) return
-    const version = responseData(await storyboardV2Api.getVersion(projectId.value, storyboard.id, storyboard.versionId))
-    storyboard.revision = version.revision || 0
-    storyboard.locked = ['LOCKED', 'SUPERSEDED'].includes(String(version.state || version.status).toUpperCase())
+    const detail = responseData(await contentProjectApi.getStoryboardMaster(requestedProjectId, master.id))
+    if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
+    const storyboardId = detail.id
+    const storyboardVersionId = detail.currentDraftVersionId || detail.current_draft_version_id || detail.currentLockedVersionId || detail.current_locked_version_id
+    if (!storyboardVersionId) return
+    const version = responseData(await storyboardV2Api.getVersion(requestedProjectId, storyboardId, storyboardVersionId))
+    if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
+    const storyboardLocked = ['LOCKED', 'SUPERSEDED'].includes(String(version.state || version.status).toUpperCase())
     const [scenesResponse, shotsResponse] = await Promise.all([
-      contentProjectApi.listStoryboardVersionScenes(projectId.value, storyboard.id, storyboard.versionId),
-      contentProjectApi.listStoryboardVersionShots(projectId.value, storyboard.id, storyboard.versionId)
+      contentProjectApi.listStoryboardVersionScenes(requestedProjectId, storyboardId, storyboardVersionId),
+      contentProjectApi.listStoryboardVersionShots(requestedProjectId, storyboardId, storyboardVersionId)
     ])
-    storyboardScenes.value = responseData(scenesResponse) || []
+    if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
+    const loadedScenes = responseData(scenesResponse) || []
     const shots = (responseData(shotsResponse)?.items || responseData(shotsResponse) || []).map(toWorkbenchShot)
-    storyboardShotIds.clear()
-    shots.forEach(shot => storyboardShotIds.set(shot.id, shot.id))
     const contentUnit = units.value.find(item => item.unit_type === 'script_body')
     let contentVersionLocked = false
     if (contentUnit?.current_version_id) {
       try {
         const versions = responseData(await contentProjectApi.listVersions(contentUnit.id)) || []
+        if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
         const active = versions.find(item => item.id === contentUnit.current_version_id)
         contentVersionLocked = ['approved', 'locked'].includes(String(active?.status).toLowerCase())
       } catch { /* the final gate remains blocked when version proof is unavailable */ }
     }
+    if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
+    Object.assign(storyboard, { id: storyboardId, versionId: storyboardVersionId, revision: version.revision || 0, locked: storyboardLocked })
+    storyboardScenes.value = loadedScenes
+    storyboardShotIds.clear()
+    shots.forEach(shot => storyboardShotIds.set(shot.id, shot.id))
     Object.assign(stageData.textStoryboard, {
       contentVersionId: contentUnit?.current_version_id || null,
       contentVersionLocked,
-      storyboardVersionId: storyboard.versionId,
-      storyboardVersionLocked: storyboard.locked,
+      storyboardVersionId,
+      storyboardVersionLocked: storyboardLocked,
       shots
     })
   } catch (caught) {
-    showGuidance({ code: 'STORYBOARD_LOAD_FAILED', title: '分镜数据未加载', message: caught?.message || '请稍后重试。', targetAction: 'retry_storyboard_load' })
+    if (projectLoadGuard.accept(loadToken, requestedProjectId)) {
+      showGuidance({ code: 'STORYBOARD_LOAD_FAILED', title: '分镜数据未加载', message: caught?.message || '请稍后重试。', targetAction: 'retry_storyboard_load' })
+    }
   }
 }
 
@@ -574,13 +618,19 @@ async function approveReviewEpisode(payload) {
 
 async function submitStageGeneration(stage, payload = {}) {
   const unit = await ensureUnit(stage)
-  const response = responseData(await contentProjectApi.batchGenerate(projectId.value, [unit.id], `${stage}_generate`))
-  const taskId = response.taskId || response.task_id || response.id
-  if (!taskId) throw new Error('生成服务已响应，但未返回可跟踪的任务 ID。')
+  const batch = normalizeBatchGeneration(await contentProjectApi.batchGenerate(projectId.value, [unit.id], `${stage}_generate`))
+  if (!batch.ok) throw Object.assign(new Error(batch.message), { code: batch.code })
+  const job = batch.job
   return {
-    artifact: { path: `/generation/tasks/${taskId}`, version: response.version || null },
-    actualPoints: response.actualPoints ?? response.actual_points ?? stageData.creationSettings.estimatedPoints,
-    impact: response.impact || '当前阶段与关联下游产物',
+    artifact: {
+      path: `/content-projects/${projectId.value}/generation-jobs/${job.id}`,
+      jobId: job.id,
+      status: job.status || 'queued',
+      version: job.resultVersionId ?? job.result_version_id ?? null
+    },
+    actualPoints: job.actualPoints ?? job.actual_points ?? stageData.creationSettings.estimatedPoints,
+    impact: job.impact || '当前阶段与关联下游产物',
+    batch: { total: batch.total, jobIds: batch.jobs.map(item => item.id) },
     request: payload
   }
 }
