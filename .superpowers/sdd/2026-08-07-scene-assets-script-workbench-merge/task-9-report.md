@@ -1,38 +1,42 @@
-## Task 9 report — Native Workspace Merge and Launchpad Routing
+# Task 9 Report — Native Workspace Merge and Launchpad Routing
 
-### Outcome
+## Status
 
-- Kept `/script-gen` as the four-card launchpad with recent-project continuation.
-- Routed quick/professional/upload/TVC creation through the native `/script-gen/:projectId/workspace` shell.
-- Project creation now persists its initial parameter version before navigation; TVC retains product, campaign objective, and duration fields.
-- Replaced the legacy `story_seed/characters/synopsis/...` workspace body with the authoritative eight-stage Tasks 5–8 components.
-- Mounted shared workflow, scene asset library, model/point context, guidance, generation progress, result drawer, transition progress, autosave, route validation, and final completion.
-- Restores per-stage drafts from content units and restores the active stage without allowing unknown or skipped direct navigation.
-- Injected real content-project, generation, review, storyboard, scene-asset application, and canvas-snapshot APIs where endpoints exist. Missing prerequisites return actionable guidance instead of false success.
-- `SCRIPT_SCENE` application preserves legacy numeric `target_id` when possible and always sends stable `target_key`/`sceneId` plus a deterministic idempotency key.
+DONE_WITH_KNOWN_BASELINE_FAILURE
 
-### TDD / verification
+## Implementation
 
-- RED added for launch routes, stage validation, native-shell mounting, draft restoration, real adapter injection, and stable scene identity.
-- Focused Task 4–9 suite: **86/86 passed**.
-- Route/entry suite: **14/14 passed**.
-- Full frontend suite: **200/201 passed**. The sole failure is the acknowledged pre-existing `agent-config-state.test.js` expectation (`identity: null` versus the existing `{ name: '', description: '' }` implementation); Task 9 does not touch those files.
-- Vue SFC production build to isolated `/tmp/aicp-task9-build`: **passed** (1997 modules transformed). Only the existing Rollup annotation and mixed static/dynamic scene API chunk warnings were emitted.
-- `git diff --check`: **passed**.
+- Kept `/script-gen` as the four-card launchpad with recent projects and todos. Recent projects now resume through the validated authoritative stage rather than opening an unqualified workspace URL.
+- Added pure routing and restore rules for quick, professional, upload, TVC, and resumed projects. Upload enters `creation_settings` with `next=novel_upload`; TVC retains its specialized product, campaign objective, and duration fields and enters the shared shell with `variant=tvc`.
+- Project creation now waits for both project creation and a durable parameter-version write before navigating. A failed settings write leaves the user on the create page with a retryable error instead of reporting success.
+- Replaced the legacy `story_seed/characters/synopsis/outline/content/review/destination/storyboard` workspace body with the Tasks 5–8 shell: authoritative rail, all eight stages, scene asset library/detail/result flow, model and point context, task/progress/result/guidance feedback, percentage transition dialog, transition footer, final completion, autosave, route reactivity, and canvas handoff.
+- Restores project-scoped stage content from content-unit drafts and creation settings from parameter versions. Query stages are validated against `STAGES`; unknown or skipped forward navigation is restored to the latest allowed persisted stage. Revisiting completed stages does not regress the backend resume pointer.
+- Added transition guards for required creation settings and positive paid-model points, novel upload, complete novel analysis, confirmed adaptation, structured beats, script scenes and asset decisions, review approval, and storyboard archive. Actions remain clickable and return actionable guidance when their prerequisites are missing.
+- Connected real adapters for parameter versions, resume position, content-unit drafts, file/text upload, 3001-compatible model loading and point estimates, project scene assets, stable `SCRIPT_SCENE` applications, modern storyboard shots/split/merge/continuity/lock, and canvas snapshot jobs. The script-scene adapter now receives the stable scene ID as backward-compatible second-argument context.
+- Generation controls keep the Task 5 task/result audit flow. Stage generation APIs that do not have a safe model-aware backend contract do not synthesize success; they produce an explicit failed result explaining that the generation adapter is unavailable.
 
-### Main files
+## TDD Evidence
 
-- `aicp-frontend/src/views/content-project/ContentProjectWorkspace.vue`
-- `aicp-frontend/src/views/content-project/ContentProjectCreate.vue`
-- `aicp-frontend/src/views/content-project/ScriptCreationHome.vue`
-- `aicp-frontend/src/views/content-project/workbench/workspaceRouting.js`
-- `aicp-frontend/src/views/content-project/workbench/workspaceAdapters.js`
-- `aicp-frontend/src/api/contentProject.js`
-- `aicp-frontend/src/api/sceneAsset.js`
-- `aicp-frontend/tests/script-workbench-routing.test.js`
-- `aicp-frontend/tests/content-project-workflow.test.js`
+RED:
 
-### Known boundary
+- `node --test tests/script-workbench-routing.test.js tests/content-project-workflow.test.js`
+- 9 passed, 4 failed as expected: missing routing helper, legacy workspace conditionals, unqualified recent-project continuation, and create navigation without durable settings persistence.
 
-- Generation endpoints return accepted task identifiers. The shared drawer records the real task path; downstream generated artifact bodies continue to arrive through the existing generation/content-unit backend lifecycle.
-- Canvas creation uses the existing locked storyboard snapshot job. If the job does not immediately expose a canvas project ID, the UI reports that the durable job was created instead of fabricating a redirect.
+GREEN:
+
+- Route/entry/workspace: 14/14 passed.
+- Task 4–8 focused regression: 82/82 passed.
+- Combined workflow/model/upstream/downstream focused run: 60/60 passed after final transition guards and storyboard adapter normalization.
+- All modified entry/workspace SFCs and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`.
+- `node --check` passed for routing, adapter, and API JavaScript; `git diff --check` passed.
+- Final Vite production build passed after transforming 1,997 modules to `/tmp/aicp-task9-final-dist`.
+
+## Full Frontend Suite
+
+- `npm test`: 200 passed, 1 failed.
+- The sole failure is the acknowledged pre-existing `agent-config-state.test.js` identity mismatch: production initializes `{ name: '', description: '' }`, while the old test expects `null`. No Task 9 file participates in that assertion.
+
+## Integration Notes
+
+- The current content-generation controller derives `projectId` from `target_id`, while the executor interprets the same `target_id` as a content-unit ID. Task 9 therefore does not claim a successful real model regeneration through that contradictory endpoint; the UI records an explicit failed task/result until a safe project/unit contract is available.
+- Storyboard creation itself remains in the professional storyboard editor. If no editable storyboard version exists, text-storyboard persistence buttons remain clickable and explain the required next action.
