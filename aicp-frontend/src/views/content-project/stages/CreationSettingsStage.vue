@@ -61,7 +61,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { canvasAgentApi } from '@/api/canvas'
 import { generationApi } from '@/api/generation'
-import { buildCreditEstimateRequest, creationCatalogPresentation, loadCreationModels, validateCreationSettings } from '../workbench/upstreamStageModel.js'
+import { buildCreditEstimateRequest, creationCatalogPresentation, loadCreationModels, resolveCreationModelSelection, validateCreationSettings } from '../workbench/upstreamStageModel.js'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
@@ -94,19 +94,18 @@ async function refreshModels() {
   modelMode.value = catalog.mode
   localGuidance.value = catalog.guidance
   if (catalog.guidance) emit('guidance', catalog.guidance)
-  if (!models.value.some(model => model.id === selectedModelId.value)) {
-    selectedModelId.value = models.value[0]?.id ?? ''
-    if (selectedModelId.value) await selectModel(selectedModelId.value)
-  }
+  await selectModel(selectedModelId.value)
   emit('models-loaded', catalog)
   modelLoading.value = false
 }
 
 async function selectModel(modelId) {
-  const model = models.value.find(item => item.id === modelId) || null
-  draft.model = model
-  draft.estimatedPoints = model?.demo ? 0 : model?.estimatedPoints
-  if (model && !model.demo && !draft.estimatedPoints) {
+  const selection = resolveCreationModelSelection(models.value, modelId)
+  selectedModelId.value = selection.selectedModelId
+  draft.model = selection.model
+  draft.estimatedPoints = selection.estimatedPoints
+  if (selection.needsEstimate) {
+    const model = selection.model
     try {
       const estimate = props.estimatePoints
         ? await props.estimatePoints({ modelId: model.id, operation: 'script_workbench' })

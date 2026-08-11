@@ -14,6 +14,7 @@ import {
   loadCreationModels,
   persistHookSelection,
   removeAdaptationRule,
+  resolveCreationModelSelection,
   runArtifactRegeneration,
   saveAnalysisSection,
   updateAdaptationRule,
@@ -55,7 +56,7 @@ test('pasted novel enforces the 2000 Chinese-character product rule', () => {
 
 test('creation settings use real usable models and only fall back to explicit free demos', async () => {
   const real = await loadCreationModels(async () => ({
-    data: { catalog_provenance: 'remote_3001', billing_provenance: '3001_credits', models: [
+    data: { catalog_provenance: 'remote_3001', billing_provenance: '3001_credits', accounting_authoritative: true, models: [
       { model_id: 'qwen-plus', model_name: 'Qwen Plus', status: 'available', provider: 'qwen', point_rule: '按实际 Token 结算', estimated_points: 8 },
       { model_id: 'offline', model_name: 'Offline', status: 'unavailable' }
     ] }
@@ -109,6 +110,18 @@ test('local or unspecified model catalogs never claim a 3001 connection or accou
   assert.equal(remoteCatalogWithLocalEstimate.mode, 'remote')
   assert.equal(remoteCatalogWithLocalEstimate.models[0].sourceBadge, '3001 平台')
   assert.match(remoteCatalogWithLocalEstimate.models[0].pointRule, /非 3001 账务结算/)
+
+  for (const accounting_authoritative of [false, undefined]) {
+    const nonAuthoritative = await loadCreationModels(async () => ({ data: {
+      catalog_provenance: 'remote_3001',
+      billing_provenance: '3001_credits',
+      accounting_authoritative,
+      models: [{ model_id: 'qwen-plus', status: 'available' }]
+    } }))
+    assert.equal(nonAuthoritative.mode, 'remote')
+    assert.match(nonAuthoritative.models[0].pointRule, /非 3001 账务结算/)
+    assert.doesNotMatch(nonAuthoritative.models[0].pointRule, /按 3001 平台实际用量结算/)
+  }
 })
 
 test('credit estimate request matches the backend generation contract', () => {
@@ -117,6 +130,27 @@ test('credit estimate request matches the backend generation contract', () => {
     model_id: 'gpt-script-pro',
     parameters: { operation: 'script_workbench' }
   })
+})
+
+test('catalog refresh rebinds a same-id persisted model to current provenance and requests a fresh estimate', () => {
+  const persistedRemote = {
+    id: 'qwen-plus', source: 'remote_3001', sourceBadge: '3001 平台',
+    pointRule: '按 3001 平台实际用量结算', estimatedPoints: 99, demo: false
+  }
+  const currentLocal = {
+    id: 'qwen-plus', source: 'local_registry', sourceBadge: '本地模型目录',
+    pointRule: '本地积分预估，仅供参考，非 3001 账务结算', estimatedPoints: null, demo: false
+  }
+
+  const selection = resolveCreationModelSelection([currentLocal], persistedRemote.id)
+
+  assert.deepEqual(selection, {
+    selectedModelId: 'qwen-plus',
+    model: currentLocal,
+    estimatedPoints: null,
+    needsEstimate: true
+  })
+  assert.notEqual(selection.model, persistedRemote)
 })
 
 test('analysis saves validate fields and record artifact version plus impact only after persistence', async () => {

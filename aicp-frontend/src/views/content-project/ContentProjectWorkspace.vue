@@ -557,7 +557,7 @@ function transitionGuard() {
       if (!validation.allowed) return validation
     }
   }
-  if (stage === 'adaptation' && !stageData.adaptation.confirmed) return { code: 'ADAPTATION_CONFIRMATION_REQUIRED', title: '请先确认改编方案', message: '持久化高压开场并确认改编方案后才能进入结构化剧本。', targetAction: 'confirm_adaptation' }
+  if (stage === 'adaptation' && !stageData.adaptation.confirmed) return { code: 'ADAPTATION_CONFIRMATION_REQUIRED', title: '请先确认改编方案', message: '持久化高压开场并确认改编方案后才能进入结构化文字剧本。', targetAction: 'confirm_adaptation' }
   if (stage === 'structured_script' && !stageData.structuredScript.episodes?.some(episode => episode.beats?.length)) return { code: 'STRUCTURED_SCRIPT_REQUIRED', title: '请先完成单集结构', message: '至少为一集新增并保存一个节拍。', targetAction: 'focus_episode_structure' }
   if (stage === 'script_body') {
     const scenes = (stageData.scriptBody.episodes || []).flatMap(episode => episode.scenes || [])

@@ -29,6 +29,18 @@ test('workbench uses the approved eight-stage creative order', () => {
   ])
 })
 
+test('user-visible workflow copy never falls back to legacy stage aliases', () => {
+  const sources = [
+    '../src/views/content-project/ContentProjectWorkspace.vue',
+    '../src/views/content-project/stages/StructuredScriptStage.vue',
+    '../src/views/content-project/workbench/scriptWorkbenchModel.js'
+  ].map(path => readFileSync(new URL(path, import.meta.url), 'utf8')).join('\n')
+
+  assert.match(sources, /结构化文字剧本/)
+  assert.match(sources, /审核修订/)
+  assert.doesNotMatch(sources, /结构化剧本|审阅与修订/)
+})
+
 test('all actions stay clickable and explain unmet conditions', () => {
   assert.deepEqual(
     evaluateActionPrecondition({ selectedBlockId: null }, 'ai_continue'),

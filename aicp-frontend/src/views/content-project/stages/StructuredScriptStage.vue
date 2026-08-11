@@ -21,6 +21,6 @@ const sync=()=>emit('update:modelValue',JSON.parse(JSON.stringify(state)));const
 async function openEpisode(id){return handle(await openEpisodeStructure(state,id,props.openEpisodeAdapter))}
 async function addOne(id){return handle(await addBeat(state,id,{title:'新节拍'},props.addBeatAdapter))}
 async function regenerateOne(episodeId,beatId){return handle(await regenerateBeat(state,episodeId,beatId,props.regenerateBeatAdapter))}
-async function regenerateArtifact(){return handle(await runArtifactRegeneration({workbench:props.workbench,input:{...props.generationInput,subtask:'重新生成结构化剧本'},execute:props.regenerateArtifactAdapter}))}
+async function regenerateArtifact(){return handle(await runArtifactRegeneration({workbench:props.workbench,input:{...props.generationInput,subtask:'重新生成结构化文字剧本'},execute:props.regenerateArtifactAdapter}))}
 </script>
 <style scoped>.stage-panel{display:grid;gap:16px}.eyebrow{color:var(--el-color-primary);font-weight:700}.card{border:1px solid var(--el-border-color);border-radius:12px;padding:16px}.row,.beat,footer{display:flex;justify-content:space-between;align-items:center;gap:12px}.row div,.beat div{display:grid}.beats{display:grid;gap:10px;margin-top:14px}.beat{padding:10px;background:var(--el-fill-color-light);border-radius:8px}small,header p{color:var(--el-text-color-secondary)}footer{justify-content:flex-end}</style>

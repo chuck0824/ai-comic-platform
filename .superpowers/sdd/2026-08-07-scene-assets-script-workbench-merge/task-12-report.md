@@ -98,9 +98,10 @@ Both regressions were first locked with failing tests:
 
 - `AiModelController` now declares `catalog_provenance=local_registry`, `billing_provenance=local_estimate`, and `accounting_authoritative=false`.
 - The frontend defaults unspecified provenance to local, not remote. Only explicit `3001`/`remote_3001` catalog provenance shows the 3001 connection badge.
-- A remote catalog shows 3001 settlement language only when billing provenance separately declares authoritative 3001 credits. Local estimates are labelled `仅供参考，非 3001 账务结算`.
+- A remote catalog shows 3001 settlement language only when `billing_provenance` is a supported 3001 value **and** `accounting_authoritative === true`; omission defaults to `false`. All other estimates are labelled `仅供参考，非 3001 账务结算`.
 - Empty or failed catalogs use the explicit built-in demo fallback without implying that a 3001 connection was attempted.
-- Rail stage keys and routes were not changed; only the two display labels were corrected.
+- Every catalog refresh rebinds the selected ID to the newly normalized model object and replaces or re-fetches its estimate, so persisted remote metadata cannot survive a same-ID switch to the local catalog.
+- Rail stage keys and routes were not changed. Rail labels, transition guidance, and structured-script generation subtask copy consistently use `结构化文字剧本` / `审核修订`; focused tests reject the legacy aliases.
 
 No 3001 remote adapter or accounting integration was fabricated by this fix.
 
@@ -109,8 +110,8 @@ No 3001 remote adapter or accounting integration was fabricated by this fix.
 | Check | Result | Evidence |
 |---|---|---|
 | Backend focused contract | PASS | `mvn -Dtest=AiModelControllerTest test`: 1 test, 0 failures/errors |
-| Frontend focused + SFC contracts | PASS | 36 tests, 36 pass, 0 fail |
-| Frontend production build | PASS | Vite transformed 2,001 modules; build completed in 6.21s |
+| Frontend focused + SFC contracts | PASS | 38 tests, 38 pass, 0 fail |
+| Frontend production build | PASS | Vite transformed 2,001 modules; build completed in 5.93s |
 | Diff hygiene | PASS | generated static build artifacts restored/removed; `git diff --check` clean |
 
 The verification above proves the source and build contracts. A running 8080 process must be restarted or redeployed from the new build before the live browser can display the corrected labels.

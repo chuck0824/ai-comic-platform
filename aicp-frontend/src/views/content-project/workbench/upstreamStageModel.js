@@ -34,11 +34,12 @@ function text(value) {
 
 function unwrapCatalog(response) {
   const payload = response?.data?.data ?? response?.data ?? response ?? {}
-  if (Array.isArray(payload)) return { models: payload, catalogProvenance: null, billingProvenance: null }
+  if (Array.isArray(payload)) return { models: payload, catalogProvenance: null, billingProvenance: null, accountingAuthoritative: false }
   return {
     models: payload.models ?? payload.items ?? [],
     catalogProvenance: text(payload.catalog_provenance ?? payload.catalogProvenance ?? payload.provenance).toLowerCase() || null,
-    billingProvenance: text(payload.billing_provenance ?? payload.billingProvenance).toLowerCase() || null
+    billingProvenance: text(payload.billing_provenance ?? payload.billingProvenance).toLowerCase() || null,
+    accountingAuthoritative: (payload.accounting_authoritative ?? payload.accountingAuthoritative) === true
   }
 }
 
@@ -56,7 +57,7 @@ function normalizeCatalogModel(model, mode, catalog) {
   if (!id || !['available', 'active', 'enabled', 'ready'].includes(status)) return null
   const estimated = Number(model.estimatedPoints ?? model.estimated_points ?? model.estimatedCredits ?? model.estimated_credits)
   const remote = mode === 'remote'
-  const authoritative3001Billing = remote && REMOTE_3001_BILLING.has(catalog.billingProvenance)
+  const authoritative3001Billing = remote && catalog.accountingAuthoritative === true && REMOTE_3001_BILLING.has(catalog.billingProvenance)
   return {
     id,
     name,
@@ -76,6 +77,18 @@ export function creationCatalogPresentation(mode) {
   if (mode === 'local') return { label: '本地模型目录', type: 'info' }
   if (mode === 'loading') return { label: '正在加载模型', type: 'info' }
   return { label: '内置演示模式', type: 'warning' }
+}
+
+export function resolveCreationModelSelection(models = [], preferredModelId = '') {
+  const model = models.find(item => item.id === preferredModelId) ?? models[0] ?? null
+  const estimated = Number(model?.estimatedPoints)
+  const estimatedPoints = model?.demo === true ? 0 : (Number.isFinite(estimated) && estimated > 0 ? estimated : null)
+  return {
+    selectedModelId: model?.id ?? '',
+    model,
+    estimatedPoints,
+    needsEstimate: Boolean(model && model.demo !== true && estimatedPoints == null)
+  }
 }
 
 /** Only an explicit backend provenance can promote a catalog to remote 3001 mode. */
