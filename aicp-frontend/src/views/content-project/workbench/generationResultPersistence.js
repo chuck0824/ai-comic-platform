@@ -40,13 +40,25 @@ export function createGenerationDecisionGuard() {
   const pending = new Map()
   return {
     run(taskId, decision, execute) {
-      const key = String(taskId)
+      const taskKey = String(taskId)
+      const key = `${taskKey}:${decision}`
+      const opposite = `${taskKey}:${decision === 'accept' ? 'discard' : 'accept'}`
       if (pending.has(key)) return pending.get(key)
+      if (pending.has(opposite)) return Promise.resolve({
+        ok: false,
+        code: 'IN_FLIGHT_CONFLICT',
+        message: '该生成结果正在执行相反操作，请等待当前操作完成'
+      })
       const promise = Promise.resolve().then(() => execute(decision)).finally(() => pending.delete(key))
       pending.set(key, promise)
       return promise
     },
-    isPending(taskId) { return pending.has(String(taskId)) }
+    isPending(taskId, decision) {
+      const taskKey = String(taskId)
+      return decision
+        ? pending.has(`${taskKey}:${decision}`)
+        : pending.has(`${taskKey}:accept`) || pending.has(`${taskKey}:discard`)
+    }
   }
 }
 

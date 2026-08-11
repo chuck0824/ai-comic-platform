@@ -150,3 +150,29 @@ test('decision guard deduplicates double clicks and same disposition is locally 
   })
   assert.equal(idempotent.ok, true)
 })
+
+test('decision guard rejects accept-discard races in both directions without invoking the second action', async () => {
+  for (const [firstDecision, secondDecision] of [['accept', 'discard'], ['discard', 'accept']]) {
+    const guard = createGenerationDecisionGuard()
+    const calls = []
+    let release
+    const blocked = new Promise(resolve => { release = resolve })
+    const first = guard.run('task-race', firstDecision, async decision => {
+      calls.push(decision)
+      await blocked
+      return { ok: true }
+    })
+    const conflict = await guard.run('task-race', secondDecision, async decision => {
+      calls.push(decision)
+      return { ok: true }
+    })
+    assert.deepEqual(conflict, {
+      ok: false,
+      code: 'IN_FLIGHT_CONFLICT',
+      message: '该生成结果正在执行相反操作，请等待当前操作完成'
+    })
+    assert.deepEqual(calls, [firstDecision])
+    release()
+    await first
+  }
+})

@@ -212,7 +212,7 @@ public class ContentUnitService {
                         .notIn(ContentVersion::getStatus, "candidate", "discarded")
                         .orderByDesc(ContentVersion::getVersionNo))
                 .stream()
-                .filter(v -> !"candidate".equals(v.getStatus()) && !"discarded".equals(v.getStatus()))
+                .filter(ContentVersionSelector::isPublic)
                 .map(v -> new ContentVersionView(v.getId(), v.getVersionNo(),
                         v.getStatus(), v.getContentJson(), v.getPlainText(),
                         v.getSource(), v.getContentHash(), v.getCreatedBy(),
@@ -233,7 +233,7 @@ public class ContentUnitService {
         if (source == null || !source.getContentUnitId().equals(unitId)) {
             throw new BizException(ErrorCode.NOT_FOUND);
         }
-        if ("candidate".equals(source.getStatus()) || "discarded".equals(source.getStatus())) {
+        if (!ContentVersionSelector.isPublic(source)) {
             throw new BizException(ErrorCode.PARAM_INVALID, "未采用或已丢弃的生成版本不能恢复");
         }
 

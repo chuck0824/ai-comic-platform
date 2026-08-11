@@ -5,6 +5,7 @@ import com.aicp.module.contentproject.dto.ContentProjectRequests.GenerationJobRe
 import com.aicp.module.contentproject.dto.ContentProjectViews.ContextSnapshot;
 import com.aicp.module.contentproject.dto.CreativeBibleViews.ResolvedWritingGuideView;
 import com.aicp.module.contentproject.entity.ContentProject;
+import com.aicp.module.contentproject.entity.ContentVersion;
 import com.aicp.module.contentproject.entity.CreativeBibleVersion;
 import com.aicp.module.contentproject.entity.EcosystemRule;
 import com.aicp.module.contentproject.mapper.*;
@@ -53,7 +54,6 @@ class ContextAssemblerCreativeBibleTest {
     @DisplayName("缺少已确认圣经时抛出异常")
     void assembleThrowsWhenNoConfirmedBibleExists() {
         when(projectMapper.selectById(3L)).thenReturn(activeProject(3L));
-        when(bibleMapper.selectOne(any())).thenReturn(null);
         GenerationJobRequest request = new GenerationJobRequest(
                 "synopsis", "project", 3L, Map.of(), "v1", null);
 
@@ -104,6 +104,27 @@ class ContextAssemblerCreativeBibleTest {
         assertThat(snapshot.bibleVersionId()).isEqualTo(11L);
         assertThat(snapshot.projectGuideId()).isEqualTo(1L);
         assertThat(snapshot.resolvedGuideJson()).contains("pace");
+    }
+
+    @Test
+    @DisplayName("显式选择的候选或已丢弃版本不得进入生成上下文")
+    void explicitSelectedVersionMustBePublic() {
+        when(projectMapper.selectById(3L)).thenReturn(activeProject(3L));
+        GenerationJobRequest request = new GenerationJobRequest(
+                "content_generate", "content_unit", 8L, Map.of("script_body", 55L),
+                "{\"allow_unconfirmed_bible\":true}", null);
+
+        for (String status : List.of("candidate", "discarded")) {
+            ContentVersion hidden = new ContentVersion();
+            hidden.setId(55L);
+            hidden.setProjectId(3L);
+            hidden.setStatus(status);
+            hidden.setContentJson("{}");
+            when(contentVersionMapper.selectById(55L)).thenReturn(hidden);
+            assertThatThrownBy(() -> assembler.assemble(3L, request))
+                    .isInstanceOf(BizException.class)
+                    .hasMessageContaining("未采用");
+        }
     }
 
     // ── helpers ──

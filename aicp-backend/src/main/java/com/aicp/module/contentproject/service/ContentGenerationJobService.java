@@ -134,8 +134,8 @@ public class ContentGenerationJobService {
     @Transactional
     public GenerationJobView acceptJob(Long userId, Long jobId) {
         ContentGenerationJob job = requireCompleted(userId, jobId, Action.EDIT_CONTENT);
-        ContentVersion candidate = requireResultVersion(jobId);
         ContentUnit unit = requireTargetUnit(job);
+        ContentVersion candidate = requireResultVersion(jobId);
         if (!candidate.getContentUnitId().equals(unit.getId())) {
             throw new BizException(ErrorCode.NOT_FOUND, "生成结果对应的内容单元不存在");
         }
@@ -183,9 +183,9 @@ public class ContentGenerationJobService {
     @Transactional
     public GenerationJobView discardJob(Long userId, Long jobId) {
         ContentGenerationJob job = requireCompleted(userId, jobId, Action.EDIT_CONTENT);
+        ContentUnit unit = requireTargetUnit(job);
         ContentVersion candidate = requireResultVersion(jobId);
         if ("discarded".equals(candidate.getStatus())) return toView(job);
-        ContentUnit unit = requireTargetUnit(job);
         if (!candidate.getContentUnitId().equals(unit.getId())) {
             throw new BizException(ErrorCode.NOT_FOUND, "生成结果对应的内容单元不存在");
         }
@@ -220,12 +220,12 @@ public class ContentGenerationJobService {
         ContentGenerationJob job = jobMapper.selectById(jobId);
         if (job == null) throw new BizException(ErrorCode.NOT_FOUND);
         projectAccessService.require(job.getProjectId(), userId, action);
-        requireTargetUnit(job);
+        if (isContentUnitTarget(job.getTargetType())) requireTargetUnit(job);
         return job;
     }
 
     private ContentUnit requireTargetUnit(ContentGenerationJob job) {
-        if (!"content_unit".equals(job.getTargetType()) || job.getTargetId() == null) {
+        if (!isContentUnitTarget(job.getTargetType()) || job.getTargetId() == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "生成任务目标不是内容单元");
         }
         ContentUnit unit = unitMapper.selectById(job.getTargetId());
@@ -248,7 +248,7 @@ public class ContentGenerationJobService {
     }
 
     private JobSnapshot snapshotForJob(Long projectId, GenerationJobRequest request, ContextSnapshot snapshot) {
-        if (!"content_unit".equals(request.targetType()) || request.targetId() == null) {
+        if (!isContentUnitTarget(request.targetType()) || request.targetId() == null) {
             return new JobSnapshot(snapshot.payload(), snapshot.contentHash());
         }
         ContentUnit unit = unitMapper.selectById(request.targetId());
@@ -272,19 +272,29 @@ public class ContentGenerationJobService {
 
     private TargetBaseline targetBaseline(ContentGenerationJob job, ContentUnit fallback) {
         try {
-            JsonNode target = objectMapper.readTree(job.getInputSnapshotJson()).path("_generation_target");
-            if (!target.isMissingNode() && target.path("unit_id").asLong() == fallback.getId()) {
-                JsonNode current = target.get("current_version_id");
+            JsonNode root = objectMapper.readTree(job.getInputSnapshotJson());
+            JsonNode target = root != null ? root.path("_generation_target") : null;
+            JsonNode unitId = target != null ? target.get("unit_id") : null;
+            JsonNode revision = target != null ? target.get("revision") : null;
+            JsonNode current = target != null ? target.get("current_version_id") : null;
+            if (target != null && target.isObject()
+                    && unitId != null && unitId.isIntegralNumber() && unitId.asLong() == fallback.getId()
+                    && revision != null && revision.isIntegralNumber() && revision.canConvertToInt()
+                    && revision.asInt() >= 0
+                    && current != null && (current.isNull() || (current.isIntegralNumber() && current.asLong() > 0))) {
                 return new TargetBaseline(
-                        target.path("revision").asInt(0),
-                        current == null || current.isNull() ? null : current.asLong());
+                        revision.asInt(), current.isNull() ? null : current.asLong());
             }
         } catch (Exception e) {
-            log.warn("Generation job {} has no readable target baseline; using legacy acceptance semantics", job.getId());
+            log.warn("Generation job {} has no readable target baseline", job.getId());
         }
-        return new TargetBaseline(
-                fallback.getRevision() == null ? 0 : fallback.getRevision(),
-                fallback.getCurrentVersionId());
+        throw new BizException(ErrorCode.GENERATION_BASELINE_REQUIRED,
+                "GENERATION_BASELINE_REQUIRED：该旧候选缺少可验证的生成基线，请重新生成后再采用");
+    }
+
+    private boolean isContentUnitTarget(String targetType) {
+        return "content_unit".equals(targetType) || "unit".equals(targetType)
+                || "content-unit".equals(targetType) || "contentUnit".equals(targetType);
     }
 
     private String sha256(String input) {

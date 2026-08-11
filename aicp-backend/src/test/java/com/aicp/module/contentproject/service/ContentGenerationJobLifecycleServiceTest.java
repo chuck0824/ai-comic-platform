@@ -233,6 +233,61 @@ class ContentGenerationJobLifecycleServiceTest {
     }
 
     @Test
+    void projectTargetJobsCanBeViewedAndCancelledWithoutPretendingTheProjectIdIsAUnitId() {
+        ContentGenerationJob projectJob = job(85L, "pending");
+        projectJob.setTargetType("project");
+        projectJob.setTargetId(9L);
+        when(jobMapper.selectById(85L)).thenReturn(projectJob);
+        when(jobMapper.update(isNull(), any())).thenAnswer(invocation -> {
+            projectJob.setStatus("cancelled");
+            return 1;
+        });
+
+        assertThat(service.getJob(501L, 85L).targetType()).isEqualTo("project");
+        service.cancelJob(501L, 85L);
+
+        assertThat(projectJob.getStatus()).isEqualTo("cancelled");
+        verify(projectAccessService).require(9L, 501L, Action.VIEW);
+        verify(projectAccessService).require(9L, 501L, Action.EDIT_CONTENT);
+        verify(unitMapper, never()).selectById(9L);
+
+        ContentGenerationJob completedProjectJob = job(88L, "completed");
+        completedProjectJob.setTargetType("project");
+        completedProjectJob.setTargetId(9L);
+        when(jobMapper.selectById(88L)).thenReturn(completedProjectJob);
+        assertThatThrownBy(() -> service.acceptJob(501L, 88L))
+                .isInstanceOf(BizException.class).hasMessageContaining("不是内容单元");
+        assertThatThrownBy(() -> service.discardJob(501L, 88L))
+                .isInstanceOf(BizException.class).hasMessageContaining("不是内容单元");
+        verify(versionMapper, never()).selectOne(any());
+    }
+
+    @Test
+    void legacyCandidateWithoutGenerationBaselineCannotBeAcceptedButTerminalDecisionsStayIdempotent() {
+        ContentGenerationJob legacy = job(86L, "completed");
+        legacy.setInputSnapshotJson("{}");
+        ContentVersion candidate = version(186L, "candidate");
+        when(jobMapper.selectById(86L)).thenReturn(legacy);
+        when(versionMapper.selectOne(any())).thenReturn(candidate);
+
+        assertThatThrownBy(() -> service.acceptJob(501L, 86L))
+                .isInstanceOf(BizException.class)
+                .hasMessageContaining("GENERATION_BASELINE_REQUIRED");
+        verify(unitMapper, never()).update(isNull(), any());
+
+        candidate.setStatus("accepted");
+        ContentUnit unit = unit(17L, 186L);
+        when(unitMapper.selectById(17L)).thenReturn(unit);
+        assertThat(service.acceptJob(501L, 86L).resultDisposition()).isEqualTo("accepted");
+
+        ContentGenerationJob discardedJob = job(87L, "completed");
+        ContentVersion discarded = version(187L, "discarded");
+        when(jobMapper.selectById(87L)).thenReturn(discardedJob);
+        when(versionMapper.selectOne(any())).thenReturn(discarded);
+        assertThat(service.discardJob(501L, 87L).resultDisposition()).isEqualTo("discarded");
+    }
+
+    @Test
     void onlyOneCandidateCanWinTheSameUnitRevision() {
         ContentGenerationJob firstJob = job(81L, "completed");
         ContentGenerationJob secondJob = job(82L, "completed");

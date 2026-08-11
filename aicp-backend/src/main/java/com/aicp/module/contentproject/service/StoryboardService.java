@@ -29,7 +29,7 @@ public class StoryboardService {
     private final ContentStoryboardSceneMapper sceneMapper;
     private final ContentStoryboardShotMapper shotMapper;
     private final ContentUnitMapper unitMapper;
-    private final ContentVersionMapper versionMapper;
+    private final ContentVersionSelector versionSelector;
     private final AiRouter aiRouter;
     private final AiResponseParser parser;
 
@@ -75,12 +75,7 @@ public class StoryboardService {
         }
 
         // Get source content
-        ContentVersion version = versionMapper.selectOne(
-                new LambdaQueryWrapper<ContentVersion>()
-                        .eq(ContentVersion::getContentUnitId, contentUnitId)
-                        .gt(ContentVersion::getVersionNo, 0)
-                        .orderByDesc(ContentVersion::getVersionNo)
-                        .last("limit 1"));
+        ContentVersion version = versionSelector.resolvePublic(unit);
         if (version == null) {
             throw new BizException(ErrorCode.PARAM_INVALID, "没有可用的内容版本");
         }

@@ -28,6 +28,7 @@ public class PromotionService {
 
     private final ContentUnitMapper unitMapper;
     private final ContentVersionMapper versionMapper;
+    private final ContentVersionSelector versionSelector;
     private final AiRouter aiRouter;
     private final AiResponseParser parser;
 
@@ -50,12 +51,7 @@ public class PromotionService {
         ContentUnit unit = unitMapper.selectById(sourceUnitId);
         if (unit == null) throw new BizException(ErrorCode.NOT_FOUND);
 
-        ContentVersion version = versionMapper.selectOne(
-                new LambdaQueryWrapper<ContentVersion>()
-                        .eq(ContentVersion::getContentUnitId, sourceUnitId)
-                        .gt(ContentVersion::getVersionNo, 0)
-                        .orderByDesc(ContentVersion::getVersionNo)
-                        .last("limit 1"));
+        ContentVersion version = versionSelector.resolvePublic(unit);
         if (version == null) throw new BizException(ErrorCode.PARAM_INVALID, "没有可用的内容版本");
 
         String content = version.getPlainText();

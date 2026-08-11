@@ -4,8 +4,6 @@ import com.aicp.common.ai.AiRouter;
 import com.aicp.module.contentproject.entity.ContentUnit;
 import com.aicp.module.contentproject.entity.ContentVersion;
 import com.aicp.module.contentproject.mapper.ContentUnitMapper;
-import com.aicp.module.contentproject.mapper.ContentVersionMapper;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +21,7 @@ import java.util.*;
 public class ContentReviewService {
 
     private final ContentUnitMapper unitMapper;
-    private final ContentVersionMapper versionMapper;
+    private final ContentVersionSelector versionSelector;
     private final AiRouter aiRouter;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -65,23 +63,9 @@ public class ContentReviewService {
         if (unit == null) return Map.of("error", "unit_not_found");
 
         // Get latest version content
-        ContentVersion version = versionMapper.selectOne(
-                new LambdaQueryWrapper<ContentVersion>()
-                        .eq(ContentVersion::getContentUnitId, unitId)
-                        .gt(ContentVersion::getVersionNo, 0)
-                        .orderByDesc(ContentVersion::getVersionNo)
-                        .last("limit 1"));
+        ContentVersion version = versionSelector.resolvePublic(unit);
 
         String content = version != null ? version.getPlainText() : "";
-        if (content == null || content.isBlank()) {
-            // try draft
-            ContentVersion draft = versionMapper.selectOne(
-                    new LambdaQueryWrapper<ContentVersion>()
-                            .eq(ContentVersion::getContentUnitId, unitId)
-                            .eq(ContentVersion::getStatus, "draft"));
-            content = draft != null ? draft.getPlainText() : "";
-        }
-
         if (content.isBlank()) {
             return Map.of("error", "no_content", "message", "没有可审核的内容");
         }

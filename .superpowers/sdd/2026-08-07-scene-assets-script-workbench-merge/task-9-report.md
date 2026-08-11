@@ -112,3 +112,19 @@ GREEN:
 - `ContentProjectWorkspace.vue`, `ActionResultDrawer.vue`, and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`; modified JavaScript passed `node --check`.
 - Vite production build passed after transforming 2,001 modules to `/tmp/aicp-task9-fix4-dist`.
 - `git diff --check` passed.
+
+## Fix Round 5 — Generic Job Compatibility and Unified Version Visibility
+
+- Generation-job view and cancellation authorize by the job's project for generic and legacy targets such as `project`; they no longer reinterpret every target ID as a content-unit ID. Content-unit aliases still receive project/unit consistency validation, while accept/discard explicitly reject non-content-unit targets.
+- Legacy candidate jobs without a complete, verifiable `_generation_target` unit/revision/current baseline now fail adoption with `GENERATION_BASELINE_REQUIRED` guidance to regenerate. Already accepted or discarded results remain idempotent because their matching terminal disposition is resolved before candidate adoption validation.
+- Added one `ContentVersionSelector` policy for public visibility and downstream source selection. Explicit generation context rejects candidate/discarded versions. Storyboard, three-agent review, hook generation, and promotion use `ContentUnit.currentVersionId` as the authoritative source; only units without a current pointer fall back to the latest public draft/accepted version, never candidate/discarded content. Public version list and restore reuse the same predicate.
+- Generation decision locking is keyed by task plus decision. Repeated accepts or repeated discards share one in-flight promise; an accept/discard race in either direction returns `IN_FLIGHT_CONFLICT` immediately and never invokes the second server action.
+
+### Fix Round 5 TDD and Verification
+
+- RED reproduced project-target GET/cancel rejection, legacy candidate adoption using accept-time unit state, candidate entry into generation context, all four downstream prompts consuming a higher candidate, and opposite UI decisions sharing the wrong in-flight promise. Each failure became GREEN after the scoped implementation.
+- Backend generation/context/downstream regression: 35/35 passed across lifecycle, candidate isolation, context assembly, four downstream consumers, and M1/M2 compatibility. Real-filter generation decision E2E remained 4/4.
+- Frontend Task 4–9 focused regression: 117/117 passed. Full frontend suite: 221 passed, 1 failed; the only failure remains the pre-existing `agent-config-state.test.js` identity mismatch outside Task 9 files.
+- `ContentProjectWorkspace.vue`, `ActionResultDrawer.vue`, and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`; modified JavaScript passed `node --check`.
+- Vite production build passed after transforming 2,001 modules to `/tmp/aicp-task9-fix5-dist`.
+- `git diff --check` passed.
