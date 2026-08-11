@@ -18,7 +18,7 @@ public interface CanvasProjectRequests {
             Long sourceContentVersionId,
             Long sourceStoryboardVersionId,
             @Pattern(regexp = "official|alternative|experiment") String purpose,
-            @NotNull Long ownerId,
+            Long ownerId,
             @NotBlank @Size(max = 200) String idempotencyKey) {}
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)

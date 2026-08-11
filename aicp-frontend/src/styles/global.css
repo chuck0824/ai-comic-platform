@@ -191,8 +191,11 @@ a { color: var(--accent); text-decoration: none; }
 .topbar-actions { display: flex; align-items: center; gap: 12px; }
 .content { flex: 1; padding: 24px; max-width: 1400px; width: 100%; }
 .app-layout.canvas-shell { height: 100vh; min-height: 100vh; overflow: hidden; }
-.main-area.canvas-main { height: 100vh; min-height: 0; overflow: hidden; }
+.main-area.canvas-main { margin-left: 0; height: 100vh; min-height: 0; overflow: hidden; }
 .content.canvas-content { padding: 0; max-width: none; height: 100vh; overflow: hidden; }
+/* 沉浸式画布：侧栏不占位 */
+.app-layout.canvas-shell .sidebar,
+.app-layout.canvas-shell .sidebar-overlay { display: none !important; }
 
 /* ===== CARDS ===== */
 .card {

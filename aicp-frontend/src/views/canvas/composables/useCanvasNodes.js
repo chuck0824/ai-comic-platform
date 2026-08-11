@@ -171,8 +171,13 @@ export function useCanvasNodes(projectId) {
       workflows.value = []
       return
     }
-    const res = await canvasApi.getWorkflows(projectId.value)
-    workflows.value = res.data || []
+    try {
+      const res = await canvasApi.getWorkflows(projectId.value)
+      workflows.value = res.data || []
+    } catch (e) {
+      console.error('加载工作流失败', e)
+      workflows.value = []
+    }
   }
 
   async function createWorkflow(name, description, nodeIds) {

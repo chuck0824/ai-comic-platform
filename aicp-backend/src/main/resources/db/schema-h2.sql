@@ -47,6 +47,10 @@ CREATE TABLE IF NOT EXISTS canvas_projects (
     thumbnail_url VARCHAR(500),
     idempotency_key VARCHAR(200),
     archived_at TIMESTAMP,
+    -- V12 Canvas 生产内核
+    canvas_mode VARCHAR(16) DEFAULT 'EXPLORATION',
+    schema_version INT DEFAULT 1,
+    storyboard_revision INT,
     revision INT DEFAULT 0,
     is_deleted TINYINT DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -66,6 +70,9 @@ CREATE TABLE IF NOT EXISTS canvas_nodes (
     x INT DEFAULT 80, y INT DEFAULT 80, width INT DEFAULT 200, height INT DEFAULT 180,
     input_data VARCHAR(8000), output_data VARCHAR(8000),
     status VARCHAR(20) DEFAULT 'ready', group_id BIGINT, locked_by BIGINT,
+    -- V12 生产内核
+    shot_unit_id BIGINT,
+    node_schema_version VARCHAR(32) DEFAULT 'legacy',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -76,6 +83,10 @@ CREATE TABLE IF NOT EXISTS canvas_edges (
     project_id BIGINT NOT NULL, source_node_id BIGINT NOT NULL, target_node_id BIGINT NOT NULL,
     source_port VARCHAR(20) DEFAULT 'out', target_port VARCHAR(20) DEFAULT 'in',
     edge_type VARCHAR(20) DEFAULT 'data', metadata VARCHAR(2000),
+    -- V12 类型化端口
+    port_contract_version VARCHAR(32) DEFAULT 'legacy',
+    status VARCHAR(32) DEFAULT 'NEEDS_CONFIRMATION',
+    role VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -101,13 +112,16 @@ CREATE TABLE IF NOT EXISTS canvas_workflows (
     id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36) NOT NULL UNIQUE,
     project_id BIGINT NOT NULL, name VARCHAR(200), description VARCHAR(500),
     node_ids VARCHAR(4000), config VARCHAR(4000), status VARCHAR(20) DEFAULT 'draft',
+    template_version VARCHAR(64),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS workflow_templates (
     id BIGINT AUTO_INCREMENT PRIMARY KEY, uuid VARCHAR(36) NOT NULL UNIQUE,
+    owner_id BIGINT,
     name VARCHAR(200) NOT NULL, description VARCHAR(500), category VARCHAR(50),
-    config VARCHAR(4000), variables VARCHAR(4000), visibility VARCHAR(20) DEFAULT 'private',
+    config VARCHAR(4000), variables VARCHAR(4000), thumbnail_url VARCHAR(500),
+    visibility VARCHAR(20) DEFAULT 'private', status VARCHAR(20) DEFAULT 'active',
     usage_count INT DEFAULT 0, rating DECIMAL(3,2) DEFAULT 0,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -117,6 +131,80 @@ CREATE TABLE IF NOT EXISTS canvas_groups (
     project_id BIGINT NOT NULL, name VARCHAR(200), node_ids VARCHAR(4000),
     color VARCHAR(20), workflow_template_id BIGINT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- V12: ShotWorkUnit / 候选 / 采用 / 迁移
+CREATE TABLE IF NOT EXISTS canvas_shot_units (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    mode VARCHAR(16) NOT NULL DEFAULT 'EXPLORATION',
+    provisional_shot_id VARCHAR(64),
+    source_shot_id BIGINT,
+    source_shot_revision INT,
+    target_duration_ms INT NOT NULL DEFAULT 5000,
+    fps INT NOT NULL DEFAULT 24,
+    aspect_ratio VARCHAR(16) NOT NULL DEFAULT '16:9',
+    sort_order INT NOT NULL DEFAULT 0,
+    row_version INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS generation_request_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    node_id BIGINT NOT NULL,
+    shot_unit_id BIGINT NOT NULL,
+    payload_json CLOB NOT NULL,
+    payload_hash VARCHAR(64) NOT NULL,
+    resolved_model_id VARCHAR(128) NOT NULL,
+    resolved_model_version VARCHAR(128),
+    adapter_version VARCHAR(64) NOT NULL,
+    estimated_credits INT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS generation_candidates (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    request_snapshot_id BIGINT NOT NULL,
+    task_id BIGINT,
+    attempt_no INT NOT NULL DEFAULT 1,
+    asset_version_id BIGINT,
+    model_id VARCHAR(128),
+    seed BIGINT,
+    actual_credits INT,
+    safety_status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    is_selected BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS shot_adoptions (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    shot_unit_id BIGINT NOT NULL,
+    revision INT NOT NULL,
+    candidate_id BIGINT NOT NULL,
+    adopted_by BIGINT NOT NULL,
+    reason VARCHAR(500),
+    override_reason VARCHAR(500),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS canvas_migration_reports (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    uuid VARCHAR(36) NOT NULL UNIQUE,
+    project_id BIGINT NOT NULL,
+    backup_json CLOB NOT NULL,
+    backup_checksum VARCHAR(64) NOT NULL,
+    node_count INT NOT NULL DEFAULT 0,
+    edge_count INT NOT NULL DEFAULT 0,
+    ambiguous_items_json CLOB,
+    status VARCHAR(32) NOT NULL DEFAULT 'UPGRADED',
+    idempotency_key VARCHAR(128),
+    error_detail VARCHAR(2000),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS generation_tasks (

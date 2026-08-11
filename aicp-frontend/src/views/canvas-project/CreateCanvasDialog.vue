@@ -198,12 +198,18 @@ async function checkAdmission() {
 
 async function submit() {
   const valid = await formRef.value?.validate().catch(() => false)
-  if (!valid) return
+  if (!valid) {
+    ElMessage.warning('请先填写画布名称')
+    return
+  }
 
   submitting.value = true
   try {
-    const userId = auth.user?.id
-    if (!userId) { ElMessage.error('用户信息未加载'); return }
+    const userId = auth.getUserId()
+    if (!userId) {
+      ElMessage.error('用户信息未加载，请重新登录')
+      return
+    }
     const key = buildIdempotencyKey(
       userId,
       linkContent.value ? form.value.contentProjectId : null,
@@ -229,7 +235,7 @@ async function submit() {
       ElMessage.warning('画布已创建，请从列表进入')
     }
   } catch (e) {
-    ElMessage.error(e?.response?.data?.message || '创建失败')
+    ElMessage.error(e?.response?.data?.message || e?.message || '创建失败')
   } finally {
     submitting.value = false
   }

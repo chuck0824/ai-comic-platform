@@ -3,11 +3,14 @@
     <!-- Toolbar -->
     <div class="canvas-toolbar">
       <div class="flex items-center gap-md">
+        <el-button size="small" text class="canvas-back-btn" @click="router.push('/canvas-projects')">
+          ← 项目中心
+        </el-button>
         <el-dropdown trigger="click">
           <button class="project-menu-btn"><el-icon style="vertical-align:-2px"><Brush /></el-icon> {{ state.projectName.value }} ▾</button>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item @click="ElMessage.info('全部项目入口待接入项目列表')">全部项目</el-dropdown-item>
+              <el-dropdown-item @click="router.push('/canvas-projects')">全部项目</el-dropdown-item>
               <el-dropdown-item @click="resetLocalCanvas">新建空白画布</el-dropdown-item>
               <el-dropdown-item @click="renameCanvas">重命名画布</el-dropdown-item>
             </el-dropdown-menu>
@@ -2892,6 +2895,8 @@ function estimatedCostForNode(type) {
 
 <style scoped>
 .canvas-page { position:relative; display:flex; flex-direction:column; height:100vh; min-height:0; overflow:hidden; background:#0f172a; color:#e0e0e0; }
+.canvas-back-btn { color:#94a3b8 !important; margin-right:4px; }
+.canvas-back-btn:hover { color:#e2e8f0 !important; }
 .canvas-toolbar { display:flex; align-items:center; justify-content:space-between; padding:8px 16px;
   background:#1a1a2e; border-bottom:1px solid #2a2a3e; flex-shrink:0; color:#e0e0e0; }
 .project-menu-btn { border:1px solid #2a2a3e; background:#111827; color:#e0e7ff; border-radius:6px; padding:5px 9px; font-size:13px; font-weight:800; cursor:pointer; }

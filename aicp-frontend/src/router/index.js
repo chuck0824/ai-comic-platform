@@ -14,6 +14,19 @@ const routes = [
     component: () => import('@/views/Sso.vue'),
     meta: { public: true }
   },
+  // 画布编辑器 / 导演台：独立全屏 layout（不挂工作台侧栏）
+  {
+    path: '/canvas/:projectId/shot-units/:shotUnitId/director',
+    name: 'DirectorWorkspace',
+    component: () => import('@/views/canvas/director/DirectorWorkspace.vue'),
+    meta: { title: '导演台', directorV2: true, immersive: true }
+  },
+  {
+    path: '/canvas/:projectId',
+    name: 'Canvas',
+    component: () => import('@/views/Canvas.vue'),
+    meta: { title: '画布编辑器', canvasWorkspace: true, immersive: true }
+  },
   {
     path: '/',
     component: () => import('@/components/AppLayout.vue'),
@@ -77,20 +90,8 @@ const routes = [
         redirect: '/canvas-projects'
       },
       {
-        path: 'canvas/:projectId',
-        name: 'Canvas',
-        component: () => import('@/views/Canvas.vue'),
-        meta: { title: '画布编辑器', canvasWorkspace: true }
-      },
-      {
-        path: 'canvas/:projectId/shot-units/:shotUnitId/director',
-        name: 'DirectorWorkspace',
-        component: () => import('@/views/canvas/director/DirectorWorkspace.vue'),
-        meta: { title: '导演台', directorV2: true }
-      },
-      {
         path: '画布工作台/:projectId?',
-        redirect: to => `/canvas-projects`
+        redirect: () => '/canvas-projects'
       },
       {
         path: 'warehouse',
