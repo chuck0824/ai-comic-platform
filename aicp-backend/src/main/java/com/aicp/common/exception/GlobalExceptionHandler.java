@@ -127,6 +127,7 @@ public class GlobalExceptionHandler {
             case 40005 -> HttpStatus.NOT_FOUND;
             case 40006 -> HttpStatus.CONFLICT;
             case 40001 -> HttpStatus.TOO_MANY_REQUESTS;
+            case 41012 -> HttpStatus.SERVICE_UNAVAILABLE; // WORKSPACE_UPSTREAM_UNAVAILABLE
             default -> HttpStatus.BAD_REQUEST;
         };
     }

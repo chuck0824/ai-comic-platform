@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -32,6 +33,14 @@ func AicpJwtAuth() gin.HandlerFunc {
 		// Only attempt AICP JWT auth if no session already exists
 		session := sessions.Default(c)
 		if id := session.Get("id"); id != nil {
+			// Still try to attach aicp_user_id from Bearer JWT for BFF calls
+			if token := extractAicpJWT(c); token != "" {
+				if claims, err := validateAicpJWT(token); err == nil {
+					if userID, ok := claimInt64(claims, "uid", "userId"); ok {
+						c.Set("aicp_user_id", userID)
+					}
+				}
+			}
 			c.Next()
 			return
 		}
@@ -49,17 +58,12 @@ func AicpJwtAuth() gin.HandlerFunc {
 		}
 
 		// Extract user identity from AICP JWT claims.
-		// The 8080 JwtUtil writes claims["uid"] (Long), not claims["userId"].
-		// Read "uid" first, fall back to "userId" for backward compatibility.
-		userIDFloat, ok := claims["uid"].(float64)
-		if !ok {
-			userIDFloat, ok = claims["userId"].(float64)
-		}
+		// Prefer string / json.Number to avoid float64 precision loss on snowflake IDs.
+		userID, ok := claimInt64(claims, "uid", "userId")
 		if !ok {
 			c.Next()
 			return
 		}
-		userID := int64(userIDFloat)
 		userUUID, _ := claims["uuid"].(string)
 		if userUUID == "" {
 			// JwtUtil puts uuid in subject when "uuid" claim is absent (older tokens).
@@ -79,6 +83,11 @@ func AicpJwtAuth() gin.HandlerFunc {
 		if user == nil || user.Status != common.UserStatusEnabled {
 			c.Next()
 			return
+		}
+
+		// Ensure personal workspace exists for AICP BFF membership checks
+		if _, err := model.EnsurePersonalWorkspace(userID, user.DisplayName); err != nil {
+			common.SysError("ensure personal workspace failed: " + err.Error())
 		}
 
 		// Set session values (same pattern as authHelper)
@@ -118,7 +127,7 @@ func extractAicpJWT(c *gin.Context) string {
 }
 
 // validateAicpJWT validates an AICP-issued JWT using the shared secret.
-// AICP_SECRET env var must match aicp-backend's JWT_SECRET.
+// AICP_JWT_SECRET env var must match aicp-backend's JWT_SECRET.
 func validateAicpJWT(tokenString string) (jwt.MapClaims, error) {
 	secret := os.Getenv("AICP_JWT_SECRET")
 	if secret == "" {
@@ -131,7 +140,7 @@ func validateAicpJWT(tokenString string) (jwt.MapClaims, error) {
 			return nil, jwt.ErrSignatureInvalid
 		}
 		return []byte(secret), nil
-	})
+	}, jwt.WithJSONNumber())
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +149,35 @@ func validateAicpJWT(tokenString string) (jwt.MapClaims, error) {
 		return claims, nil
 	}
 	return nil, jwt.ErrSignatureInvalid
+}
+
+// claimInt64 reads a JWT claim as int64 without float64 precision loss.
+func claimInt64(claims jwt.MapClaims, keys ...string) (int64, bool) {
+	for _, key := range keys {
+		v, ok := claims[key]
+		if !ok || v == nil {
+			continue
+		}
+		switch t := v.(type) {
+		case json.Number:
+			i, err := t.Int64()
+			if err == nil {
+				return i, true
+			}
+		case string:
+			i, err := strconv.ParseInt(strings.TrimSpace(t), 10, 64)
+			if err == nil {
+				return i, true
+			}
+		case float64:
+			return int64(t), true
+		case int64:
+			return t, true
+		case int:
+			return int64(t), true
+		}
+	}
+	return 0, false
 }
 
 // AicpJwtOptional is a lighter variant that sets aicp_user_id in context
@@ -157,13 +195,8 @@ func AicpJwtOptional() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		// Read "uid" first (8080 JwtUtil emits "uid"), fall back to "userId"
-		var userID int64
-		if uid, ok := claims["uid"].(float64); ok {
-			userID = int64(uid)
-		} else if uid, ok := claims["userId"].(float64); ok {
-			userID = int64(uid)
-		} else {
+		userID, ok := claimInt64(claims, "uid", "userId")
+		if !ok {
 			c.Next()
 			return
 		}
@@ -171,4 +204,3 @@ func AicpJwtOptional() gin.HandlerFunc {
 		c.Next()
 	}
 }
-

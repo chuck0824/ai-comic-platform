@@ -77,6 +77,15 @@ func ListAicpWorkspaces(c *gin.Context) {
 		return
 	}
 
+	// Lazily provision personal workspace so 8080 personal_{uid} headers resolve.
+	if _, err := model.EnsurePersonalWorkspace(userID, ""); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "failed to ensure personal workspace",
+		})
+		return
+	}
+
 	results, err := model.ListActiveWorkspacesForUser(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
@@ -125,6 +134,18 @@ func GetAicpWorkspaceMembership(c *gin.Context) {
 			"message": "failed to lookup workspace membership",
 		})
 		return
+	}
+
+	// Auto-provision personal workspace when 8080 asks for personal_{self}
+	if result == nil && workspaceID == model.PersonalWorkspaceID(userID) {
+		result, err = model.EnsurePersonalWorkspace(userID, "")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"success": false,
+				"message": "failed to ensure personal workspace",
+			})
+			return
+		}
 	}
 
 	// Unified 404: workspace not found OR user has no active membership

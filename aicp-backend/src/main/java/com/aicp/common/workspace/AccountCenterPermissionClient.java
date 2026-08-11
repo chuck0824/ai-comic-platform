@@ -7,13 +7,14 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.*;
 
 /**
- * HTTP client that calls the 3001 account-center for workspace membership
+ * HTTP client that calls the new-api account-center for workspace membership
  * verification. Forwards the original Bearer token to maintain end-to-end
  * authentication.
  */
@@ -21,7 +22,7 @@ import java.util.*;
 @Component
 public class AccountCenterPermissionClient {
 
-    @Value("${new-api.base-url:http://localhost:3001}")
+    @Value("${new-api.base-url:http://localhost:3000}")
     private String baseUrl;
 
     private final RestTemplate restTemplate;
@@ -67,6 +68,16 @@ public class AccountCenterPermissionClient {
 
             return parseMembershipResponse(response.getBody());
 
+        } catch (HttpClientErrorException.NotFound e) {
+            // RestTemplate 默认对 4xx 抛异常；404 表示无工作区/无成员，不是上游宕机
+            return null;
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().is4xxClientError()) {
+                log.warn("账户中心成员查询客户端错误({}): {}", e.getStatusCode(), e.getMessage());
+                return null;
+            }
+            log.error("账户中心({})不可用: {}", url, e.getMessage());
+            throw new UpstreamUnavailableException("账户中心暂不可用，请稍后重试", e);
         } catch (RestClientException e) {
             log.error("账户中心({})不可用: {}", url, e.getMessage());
             throw new UpstreamUnavailableException("账户中心暂不可用，请稍后重试", e);
@@ -116,6 +127,13 @@ public class AccountCenterPermissionClient {
             }
             return results;
 
+        } catch (HttpClientErrorException e) {
+            if (e.getStatusCode().is4xxClientError()) {
+                log.warn("账户中心工作区列表客户端错误({}): {}", e.getStatusCode(), e.getMessage());
+                return Collections.emptyList();
+            }
+            log.error("账户中心工作区列表不可用: {}", e.getMessage());
+            throw new UpstreamUnavailableException("账户中心暂不可用，请稍后重试", e);
         } catch (RestClientException e) {
             log.error("账户中心工作区列表不可用: {}", e.getMessage());
             throw new UpstreamUnavailableException("账户中心暂不可用，请稍后重试", e);

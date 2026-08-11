@@ -3,6 +3,7 @@ package model
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -124,6 +125,92 @@ type AicpWorkspaceInvitation struct {
 
 func (AicpWorkspaceInvitation) TableName() string {
 	return "aicp_workspace_invitations"
+}
+
+// PersonalWorkspaceID returns the canonical personal workspace id for an AICP user.
+func PersonalWorkspaceID(userID int64) string {
+	return fmt.Sprintf("personal_%d", userID)
+}
+
+// personalOwnerPermissions are granted to the owner of a personal workspace.
+var personalOwnerPermissions = []string{
+	"asset.view",
+	"asset.use",
+	"asset.manage",
+}
+
+// EnsurePersonalWorkspace creates personal_{userID} + owner membership if missing.
+// Idempotent; safe to call on every authenticated AICP JWT request.
+func EnsurePersonalWorkspace(userID int64, displayName string) (*MembershipResult, error) {
+	if userID <= 0 {
+		return nil, errors.New("invalid user id")
+	}
+	wsID := PersonalWorkspaceID(userID)
+
+	existing, err := FindActiveWorkspaceMembership(wsID, userID)
+	if err != nil {
+		return nil, err
+	}
+	if existing != nil {
+		return existing, nil
+	}
+
+	if displayName == "" {
+		displayName = fmt.Sprintf("用户%d", userID)
+	}
+	permsJSON, err := json.Marshal(personalOwnerPermissions)
+	if err != nil {
+		return nil, err
+	}
+
+	err = DB.Transaction(func(tx *gorm.DB) error {
+		var ws AicpWorkspace
+		if err := tx.Where("id = ?", wsID).First(&ws).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			ws = AicpWorkspace{
+				ID:           wsID,
+				Type:         "personal",
+				Name:         displayName + "的工作区",
+				Status:       "active",
+				VerifyStatus: "unverified",
+				OwnerUserID:  userID,
+				MemberLimit:  1,
+			}
+			if err := tx.Create(&ws).Error; err != nil {
+				return err
+			}
+		}
+
+		var member AicpWorkspaceMember
+		if err := tx.Where("workspace_id = ? AND user_id = ?", wsID, userID).First(&member).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return err
+			}
+			member = AicpWorkspaceMember{
+				WorkspaceID:  wsID,
+				UserID:       userID,
+				DepartmentID: "",
+				RoleID:       "",
+				Status:       "active",
+				Permissions:  string(permsJSON),
+				JoinedAt:     time.Now(),
+			}
+			return tx.Create(&member).Error
+		}
+		if member.Status != "active" {
+			return tx.Model(&member).Updates(map[string]interface{}{
+				"status":      "active",
+				"permissions": string(permsJSON),
+			}).Error
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return FindActiveWorkspaceMembership(wsID, userID)
 }
 
 // FindActiveWorkspaceMembership looks up a workspace and active membership for the given user.

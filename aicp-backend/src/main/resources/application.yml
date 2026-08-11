@@ -82,7 +82,8 @@ mybatis-plus:
 jwt:
   secret: aicp-jwt-secret-key-2026-very-long-secret-key-for-hs256
 new-api:
-  base-url: http://localhost:3001
+  # 8080 → Go API（3000），勿指向营销前端 3001
+  base-url: ${NEW_API_URL:http://localhost:3000}
   api-key: dev-mock-key
   timeout: 120000
 
@@ -143,7 +144,7 @@ mybatis-plus:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 new-api:
-  base-url: ${NEW_API_URL:http://localhost:3001}
+  base-url: ${NEW_API_URL:http://localhost:3000}
   api-key: ${NEW_API_KEY:}
   timeout: 120000
 

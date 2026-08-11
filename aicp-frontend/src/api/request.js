@@ -1,34 +1,15 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
-
-/** UTF-8-safe JWT payload decoder (mirrors @/stores/auth.js). */
-function decodeJwtPayload(token) {
-  try {
-    const base64Url = token.split('.')[1]
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-    const json = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    )
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
+import { extractJwtUid } from '@/lib/jwt'
 
 /** Persist personal workspace context from a JWT access token. */
 function deriveAndStoreWorkspace(token) {
-  const payload = decodeJwtPayload(token)
-  if (payload) {
-    const uid = payload.uid ?? payload.userId ?? payload.user_id ?? payload.sub
-    if (uid != null) {
-      localStorage.setItem('active_workspace_id', `personal_${uid}`)
-      localStorage.setItem('active_workspace_type', 'personal')
-      return true
-    }
+  const uid = extractJwtUid(token)
+  if (uid != null) {
+    localStorage.setItem('active_workspace_id', `personal_${uid}`)
+    localStorage.setItem('active_workspace_type', 'personal')
+    return true
   }
   return false
 }
@@ -47,24 +28,18 @@ request.interceptors.request.use(
     }
     // Attach active workspace context for tenant-safe asset operations
     let workspaceId = localStorage.getItem('active_workspace_id')
-    // Fallback: derive personal workspace from token if not yet stored (e.g. sessions
-    // created before this logic was deployed).
-    if (!workspaceId && token) {
-      try {
-        const payload = decodeJwtPayload(token)
-        if (payload) {
-          // Support both 'uid' (JWT claim name) and 'userId' as fallback
-          const uid = payload.uid ?? payload.userId ?? payload.user_id ?? payload.sub
-          if (uid != null) {
-            workspaceId = `personal_${uid}`
-            localStorage.setItem('active_workspace_id', workspaceId)
-            localStorage.setItem('active_workspace_type', 'personal')
-          } else {
-            console.warn('[request] 无法从 JWT 中提取用户ID，payload keys:', Object.keys(payload))
-          }
+    if (token) {
+      const uid = extractJwtUid(token)
+      if (uid != null) {
+        const expectedPersonal = `personal_${uid}`
+        // Heal corrupted personal_* ids from JSON number precision loss
+        if (!workspaceId || (workspaceId.startsWith('personal_') && workspaceId !== expectedPersonal)) {
+          workspaceId = expectedPersonal
+          localStorage.setItem('active_workspace_id', workspaceId)
+          localStorage.setItem('active_workspace_type', 'personal')
         }
-      } catch (e) {
-        console.warn('[request] JWT 解码失败，无法推导 workspace ID:', e)
+      } else if (!workspaceId) {
+        console.warn('[request] 无法从 JWT 中提取用户ID')
       }
     }
     if (workspaceId) {
@@ -131,11 +106,16 @@ request.interceptors.response.use(
   (response) => {
     const res = response.data
     if (res.code !== 0) {
-      ElMessage.error(res.message || '请求失败')
       if (res.code === 40003 || res.code === 41007) {
+        ElMessage.error(res.message || '请求失败')
         clearAuthAndRedirect()
+      } else {
+        ElMessage.error({ message: res.message || '请求失败', offset: 48 })
       }
-      return Promise.reject(new Error(res.message || '请求失败'))
+      const err = new Error(res.message || '请求失败')
+      err.code = res.code
+      err.response = { status: response.status, data: res }
+      return Promise.reject(err)
     }
     return res
   },
