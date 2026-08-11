@@ -392,7 +392,7 @@
               <h1>重生后，我在三集内揭开命运系统</h1>
               <div class="meta"><span class="tag">短剧</span><span class="tag">都市逆袭</span><span>自动保存于 15:42</span></div>
             </div>
-            <div class="workspace-head-tools"><button class="ghost stage-version-action" id="stage-version-action" data-action="open-version-history">V1 · 历史版本</button><div class="workspace-more-wrap"><button class="ghost" id="workspace-more-action" data-action="toggle-workspace-more" aria-haspopup="menu" aria-expanded="false">更多</button><div class="workspace-more-menu" id="workspace-more-menu" role="menu"><button role="menuitem" data-action="open-settings-menu">项目设置</button><button role="menuitem" data-action="open-project-detail">项目详情</button><button role="menuitem" class="danger" data-action="archive-project">归档项目</button></div></div></div>
+            <div class="workspace-head-tools"><button class="ghost" data-action="open-scene-assets">项目场景资产</button><button class="ghost stage-version-action" id="stage-version-action" data-action="open-version-history">V1 · 历史版本</button><div class="workspace-more-wrap"><button class="ghost" id="workspace-more-action" data-action="toggle-workspace-more" aria-haspopup="menu" aria-expanded="false">更多</button><div class="workspace-more-menu" id="workspace-more-menu" role="menu"><button role="menuitem" data-action="open-settings-menu">项目设置</button><button role="menuitem" data-action="open-project-detail">项目详情</button><button role="menuitem" class="danger" data-action="archive-project">归档项目</button></div></div></div>
           </div>
           <div id="stage-content"></div>
           <div id="stage-transition-view" class="hidden"></div>
@@ -441,6 +441,35 @@
       const TASK_STATUS = ['QUEUED','RUNNING','SUCCEEDED','FAILED','CANCELED'];
       const versionKeys = ['settings','source','analysis','adaptation','structure','script','review','storyboard'];
 
+      function createDemoSceneAssets() {
+        return {
+          selectedAssetId:'SCENE-ASSET-001',
+          selectedVariantId:'SCENE-VARIANT-001',
+          locations:[
+            { id:'LOCATION-001', name:'林野出租屋', source:'03-小说分析/世界观/主要地点.md', sceneAssetId:'SCENE-ASSET-001' },
+            { id:'LOCATION-002', name:'旧港区夜渡拍卖会', source:'03-小说分析/世界观/主要地点.md', sceneAssetId:null }
+          ],
+          masters:[{
+            id:'SCENE-ASSET-001', stableId:'SCENE-ASSET-001', name:'林野出租屋', type:'INTERIOR', status:'ACTIVE', version:1,
+            sourceLocationId:'LOCATION-001', description:'老城区六层步梯房，狭窄、潮湿，窗外可见临渊市霓虹。',
+            obsidianPath:'04-场景资产/SCENE-ASSET-001-林野出租屋.md',
+            variants:[
+              { id:'SCENE-VARIANT-001', name:'暴雨夜', version:1, status:'ACTIVE', lighting:'冷蓝霓虹与频闪顶灯', weather:'暴雨', time:'夜' },
+              { id:'SCENE-VARIANT-002', name:'清晨停电后', version:1, status:'ACTIVE', lighting:'灰白天光', weather:'雨后', time:'清晨' }
+            ]
+          }],
+          scriptInstances:[{
+            id:'SCRIPT-SCENE-001', episodeId:'EP-001', scriptArtifactId:'EP-001-SCRIPT', title:'出租屋惊醒',
+            sceneAssetId:'SCENE-ASSET-001', sceneAssetVersion:1, variantId:'SCENE-VARIANT-001', variantVersion:1, status:'CURRENT'
+          }],
+          storyboardSnapshots:[{
+            id:'SNAPSHOT-001', shotId:'SHOT-001', storyboardArtifactId:'EP-001-STORYBOARD', sceneInstanceId:'SCRIPT-SCENE-001',
+            sceneAssetId:'SCENE-ASSET-001', sceneAssetVersion:1, variantId:'SCENE-VARIANT-001', variantVersion:1,
+            assetName:'林野出租屋', variantName:'暴雨夜', status:'PINNED', immutable:true
+          }]
+        };
+      }
+
       function createInitialState() {
         return {
           screen: 'home',
@@ -455,6 +484,7 @@
           impacts: [],
           billingEntries: [],
           actionResults: [],
+          sceneAssets:createDemoSceneAssets(),
           generation: { visible:false, status:null, progress:0, spec:null, taskId:null, result:null },
           models: { source:'fallback', loading:false, error:null, items:[], selectedId:null, vendors:[], groupRatio:{}, usableGroup:{}, supportedEndpoint:{}, autoGroups:[], pricingVersion:'' },
           editor: { selectedBlockId:null, storyboardView:'cards', reviewFilters:{ severity:'全部', status:'全部' } },
@@ -889,7 +919,8 @@
         'save-episode-structure','save-beat','confirm-beat-regeneration','confirm-episode-structure','add-scene','save-scene','add-script-block','save-script-block',
         'ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check','accept-generation-result','discard-generation-result','run-script-check','export-script','confirm-script-export',
         'save-review-edit','resolve-review-issue','approve-episode','add-shot','save-shot','split-shot','merge-shot','undo-storyboard','run-continuity-check','lock-storyboard',
-        'open-regenerate','confirm-regenerate','apply-stale-impact','archive-project','archive-project-complete','confirm-archive','confirm-project-export','handoff-canvas','retry-task'
+        'open-regenerate','confirm-regenerate','apply-stale-impact','archive-project','archive-project-complete','confirm-archive','confirm-project-export','handoff-canvas','retry-task',
+        'create-scene-asset','confirm-create-scene-asset','create-scene-variant','confirm-create-scene-variant','convert-location-to-scene-asset','confirm-convert-location','bind-scene-asset','confirm-bind-scene-asset','refresh-scene-binding'
       ]);
 
       function isWriteAction(action = '') {
@@ -968,6 +999,13 @@
           const artifact = state.artifacts[id];
           if (artifact) files[artifact.path] = renderMarkdown(state,id);
         }
+        const sceneAssets = state.sceneAssets || { masters:[], scriptInstances:[], storyboardSnapshots:[] };
+        files['04-场景资产/00-场景资产索引.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: scene_asset_index\n---\n\n# 场景资产索引\n\n> 场景资产是项目级共享基础设施，不是第九阶段。\n\n${sceneAssets.masters.map(asset => `- [[${asset.obsidianPath.replace(/\.md$/,'')}|${asset.id} · ${asset.name}]] · V${asset.version} · ${asset.status}`).join('\n') || '暂无场景资产。'}\n`;
+        for (const asset of sceneAssets.masters) {
+          const instances = sceneAssets.scriptInstances.filter(item => item.sceneAssetId === asset.id);
+          const snapshots = sceneAssets.storyboardSnapshots.filter(item => item.sceneAssetId === asset.id);
+          files[asset.obsidianPath] = `---\nproject_id: ${state.project.id}\nartifact_type: scene_master_asset\nscene_asset_id: ${asset.id}\nversion: ${asset.version}\nstatus: ${asset.status}\n---\n\n# ${asset.name}\n\n${asset.description}\n\n## 场景变体\n\n${asset.variants.map(variant => `- ${variant.id} · ${variant.name} · V${variant.version} · ${variant.status}`).join('\n') || '暂无变体。'}\n\n## 剧本场景实例\n\n${instances.map(instance => `- ${instance.id} · ${instance.episodeId} · ${instance.status} · asset V${instance.sceneAssetVersion} / variant V${instance.variantVersion}`).join('\n') || '暂无绑定。'}\n\n## 分镜锁定快照\n\n${snapshots.map(snapshot => `- ${snapshot.id} · ${snapshot.shotId} · ${snapshot.status} · immutable=${snapshot.immutable} · asset V${snapshot.sceneAssetVersion} / variant V${snapshot.variantVersion}`).join('\n') || '暂无快照。'}\n`;
+        }
         const chapters = state.artifactOrder.map(id => state.artifacts[id]).filter(artifact => artifact?.type === 'source').flatMap(artifact => Array.isArray(artifact.data.章节) ? artifact.data.章节 : []);
         if (chapters.length) {
           const chapterLinks = [];
@@ -1005,6 +1043,79 @@
         }).join('\n') || '| - | 暂无生成记录 | - | 0 | 0 | 0 | 0 | `{}` |';
         files['99-生成与计费记录.md'] = `---\nproject_id: ${state.project.id}\nartifact_type: billing_log\nunit: 积分\n---\n\n# 生成与计费记录\n\n> 与 3001 配额一比一：1 quota = 1 积分。\n\n| 任务 | 操作 | 模型 | 预计积分 | 预扣积分 | 实际积分 | 返还积分 | 3001 计价快照 |\n|---|---|---|---:|---:|---:|---:|---|\n${billingRows}\n`;
         return files;
+      }
+
+      function createSceneAsset(state, spec = {}) {
+        const name = String(spec.name || '').trim();
+        if (!name) return { allowed:false, code:'SCENE_ASSET_NAME_REQUIRED', message:'请填写场景资产名称。' };
+        const index = state.sceneAssets.masters.length + 1;
+        const id = spec.id || `SCENE-ASSET-${String(index).padStart(3,'0')}`;
+        const asset = {
+          id, stableId:id, name, type:spec.type || 'INTERIOR', status:'ACTIVE', version:1,
+          sourceLocationId:spec.sourceLocationId || null,
+          description:String(spec.description || '待补充空间结构、光线、材质与连续性锚点。'),
+          obsidianPath:`04-场景资产/${id}-${name}.md`, variants:[]
+        };
+        state.sceneAssets.masters.push(asset);
+        state.sceneAssets.selectedAssetId = id;
+        const location = state.sceneAssets.locations.find(item => item.id === asset.sourceLocationId);
+        if (location) location.sceneAssetId = id;
+        return { allowed:true, code:'ALLOW', asset };
+      }
+
+      function createSceneVariant(state, assetId, spec = {}) {
+        const asset = state.sceneAssets.masters.find(item => item.id === assetId);
+        if (!asset) return { allowed:false, code:'SCENE_ASSET_REQUIRED', message:'请先选择场景母资产。' };
+        const name = String(spec.name || '').trim();
+        if (!name) return { allowed:false, code:'SCENE_VARIANT_NAME_REQUIRED', message:'请填写场景变体名称。' };
+        const sequence = state.sceneAssets.masters.flatMap(item => item.variants).length + 1;
+        const variant = { id:spec.id || `SCENE-VARIANT-${String(sequence).padStart(3,'0')}`, name, version:1, status:'ACTIVE', lighting:spec.lighting || '待补充', weather:spec.weather || '室内', time:spec.time || '日' };
+        asset.variants.push(variant);
+        asset.version += 1;
+        state.sceneAssets.selectedVariantId = variant.id;
+        return { allowed:true, code:'ALLOW', asset, variant };
+      }
+
+      function convertLocationToSceneAsset(state, locationId) {
+        const location = state.sceneAssets.locations.find(item => item.id === locationId);
+        if (!location) return { allowed:false, code:'LOCATION_REQUIRED', message:'请先选择小说分析中的主要地点。' };
+        if (location.sceneAssetId) {
+          const asset = state.sceneAssets.masters.find(item => item.id === location.sceneAssetId);
+          return { allowed:true, code:'ALREADY_CONVERTED', asset, location };
+        }
+        const outcome = createSceneAsset(state, { name:location.name, sourceLocationId:location.id, description:`由小说分析地点“${location.name}”转换，等待补充制作规格。` });
+        return { ...outcome, location };
+      }
+
+      function bindSceneAsset(state, spec = {}) {
+        const asset = state.sceneAssets.masters.find(item => item.id === spec.sceneAssetId);
+        const variant = asset?.variants.find(item => item.id === spec.variantId);
+        if (!asset || !variant) return { allowed:false, code:'SCENE_ASSET_BINDING_REQUIRED', message:'请选择场景母资产及变体。' };
+        let instance = state.sceneAssets.scriptInstances.find(item => item.id === spec.scriptSceneId);
+        if (!instance) {
+          instance = { id:spec.scriptSceneId || `SCRIPT-SCENE-${String(state.sceneAssets.scriptInstances.length + 1).padStart(3,'0')}`, episodeId:spec.episodeId || 'EP-001', scriptArtifactId:'EP-001-SCRIPT', title:spec.title || '新剧本场景' };
+          state.sceneAssets.scriptInstances.push(instance);
+        }
+        Object.assign(instance, { sceneAssetId:asset.id, sceneAssetVersion:asset.version, variantId:variant.id, variantVersion:variant.version, status:'CURRENT' });
+        return { allowed:true, code:'ALLOW', instance, asset, variant };
+      }
+
+      function updateSceneAsset(state, assetId, patch = {}) {
+        const asset = state.sceneAssets.masters.find(item => item.id === assetId);
+        if (!asset) return null;
+        Object.assign(asset, cloneValue(patch), { id:asset.id, stableId:asset.stableId, version:asset.version + 1 });
+        for (const instance of state.sceneAssets.scriptInstances.filter(item => item.sceneAssetId === assetId)) instance.status = 'STALE';
+        return asset;
+      }
+
+      function getSceneAssetImpact(state, assetId) {
+        const asset = state.sceneAssets.masters.find(item => item.id === assetId) || null;
+        return {
+          asset,
+          variants:asset ? asset.variants : [],
+          scriptInstances:state.sceneAssets.scriptInstances.filter(item => item.sceneAssetId === assetId),
+          storyboardSnapshots:state.sceneAssets.storyboardSnapshots.filter(item => item.sceneAssetId === assetId)
+        };
       }
 
       function normalizePricingPayload(payload = {}) {
@@ -1188,7 +1299,7 @@
         return { ...precondition, transition:stage < state.stages.length - 1 ? startStageTransition(state, stage) : null };
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, listArtifactVersions, compareArtifactVersions, renderSourcePreview, recordPoints, createActionResult, startGeneration, setGenerationStatus, settleGeneration, acceptGenerationResult, discardGenerationResult, completeManualAction, completeExportAction, completeProjectExportAction, restoreArchivedProject, saveAdaptationRule, restoreArtifactVersion, retryTask, simulateFileSelection, ensureStageArtifactForGeneration, saveStageDraft, applyReviewRevision, canApproveReview, isWriteAction, evaluateActionPrecondition, evaluateStageConfirmation, beginStageConfirmation, estimatePoints, generationPricing, createPricingSnapshot, buildVaultFiles, normalizePricingPayload, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, listArtifactVersions, compareArtifactVersions, renderSourcePreview, recordPoints, createActionResult, startGeneration, setGenerationStatus, settleGeneration, acceptGenerationResult, discardGenerationResult, completeManualAction, completeExportAction, completeProjectExportAction, restoreArchivedProject, saveAdaptationRule, restoreArtifactVersion, retryTask, simulateFileSelection, ensureStageArtifactForGeneration, saveStageDraft, applyReviewRevision, canApproveReview, isWriteAction, evaluateActionPrecondition, evaluateStageConfirmation, beginStageConfirmation, estimatePoints, generationPricing, createPricingSnapshot, buildVaultFiles, createSceneAsset, createSceneVariant, convertLocationToSceneAsset, bindSceneAsset, updateSceneAsset, getSceneAssetImpact, normalizePricingPayload, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -1233,7 +1344,7 @@
 
     function renderNav() {
       document.getElementById('stage-list').innerHTML = stages.map((stage, index) => `
-        <button class="stage ${appState.stages[index].status === 'COMPLETED' ? 'done' : ''} ${index === activeIndex ? 'active' : ''}" data-index="${index}" aria-disabled="${appState.stages[index].status === 'LOCKED'}">
+        <button class="stage ${appState.stages[index].status === 'COMPLETED' ? 'done' : ''} ${index === activeIndex ? 'active' : ''}" data-stage-key="${stage.key}" data-index="${index}" aria-disabled="${appState.stages[index].status === 'LOCKED'}">
           <span class="stage-num">${index + 1}</span>
           <strong>${stage.name}</strong><small>${stage.sub} · ${stageStatusLabel(appState.stages[index].status)}</small>
         </button>`).join('');
@@ -1358,7 +1469,7 @@
     }
 
     function scriptArtifactData() {
-      return { 集数:'第 1 集', 场景:scriptState.scenes.map(scene => ({ id:scene.id, 标题:scene.title, 正文块:scene.blocks })) };
+      return { 集数:'第 1 集', 场景:scriptState.scenes.map(scene => ({ id:scene.id, 标题:scene.title, 正文块:scene.blocks })), 场景资产引用:appState.sceneAssets.scriptInstances };
     }
 
     function saveScriptArtifact(status = 'draft') {
@@ -1397,7 +1508,7 @@
     }
 
     function saveStoryboardArtifact(status = 'draft') {
-      return upsertArtifact({ id:'EP-001-STORYBOARD', type:'storyboard', stage:7, title:'EP-001 文字分镜', path:'08-文字分镜/EP-001-文字分镜.md', status, dependsOn:['EP-001-REVIEW','CHAR-001','WORLD-001'], affects:[], data:{ 展示方式:storyboardState.view, 镜头列表:storyboardState.shots, 连续性检查:storyboardState.continuity } });
+      return upsertArtifact({ id:'EP-001-STORYBOARD', type:'storyboard', stage:7, title:'EP-001 文字分镜', path:'08-文字分镜/EP-001-文字分镜.md', status, dependsOn:['EP-001-REVIEW','CHAR-001','WORLD-001'], affects:[], data:{ 展示方式:storyboardState.view, 镜头列表:storyboardState.shots, 场景锁定快照:appState.sceneAssets.storyboardSnapshots, 连续性检查:storyboardState.continuity } });
     }
 
     function serializeCurrentStageDraft() {
@@ -1610,7 +1721,7 @@
     function scriptView() {
       return `<section class="card">${cardHead('正文编辑器', '以场景、动作、对白和旁白为最小编辑单元')}
         <div class="editor-shell"><div class="episode-nav"><button class="active" data-action="switch-episode" data-episode="1">第 01 集</button><button data-action="switch-episode" data-episode="2">第 02 集</button><button data-action="switch-episode" data-episode="3">第 03 集</button><button data-action="switch-episode" data-episode="4">第 04 集</button></div>
-          <div class="script-editor">${scriptState.scenes.map((scene,sceneIndex) => `<div class="scene-label">场景 ${String(sceneIndex + 1).padStart(2,'0')}　${escapeHtml(scene.title)}</div>${scene.blocks.map(block => `<button class="script-block ${scriptState.selectedBlockId === block.id ? 'selected' : ''} ${scriptState.focusBlocks ? 'guidance-focus' : ''}" data-action="select-script-block" data-block-id="${block.id}" aria-pressed="${scriptState.selectedBlockId === block.id}"><span class="tag">${block.type}</span> ${block.speaker ? `<strong>${escapeHtml(block.speaker)}：</strong>` : '△ '}${escapeHtml(block.text)}</button>`).join('')}`).join('')}
+          <div class="script-editor">${scriptState.scenes.map((scene,sceneIndex) => { const binding = appState.sceneAssets.scriptInstances[sceneIndex]; return `<div class="scene-label">场景 ${String(sceneIndex + 1).padStart(2,'0')}　${escapeHtml(scene.title)} ${binding ? `<span class="tag">${binding.sceneAssetId} / ${binding.variantId} · ${binding.status}</span>` : ''} <button class="btn secondary" data-action="bind-scene-asset">绑定场景资产</button></div>${scene.blocks.map(block => `<button class="script-block ${scriptState.selectedBlockId === block.id ? 'selected' : ''} ${scriptState.focusBlocks ? 'guidance-focus' : ''}" data-action="select-script-block" data-block-id="${block.id}" aria-pressed="${scriptState.selectedBlockId === block.id}"><span class="tag">${block.type}</span> ${block.speaker ? `<strong>${escapeHtml(block.speaker)}：</strong>` : '△ '}${escapeHtml(block.text)}</button>`).join('')}`; }).join('')}
           <div class="ai-tools"><button data-action="ai-continue">续写选中段落</button><button data-action="ai-conflict">增强冲突</button><button data-action="ai-condense-dialogue">精简对白</button><button data-action="ai-rewrite-tone">改写语气</button><button data-action="ai-character-check">检查角色一致性</button></div>${scriptState.selectedBlockId ? '<div class="notice" style="margin-top:10px">已选择正文块，可执行 AI 操作；采纳结果后才会写入新版本。</div>' : '<div class="notice" style="margin-top:10px">请先选择一个正文块，再使用 AI 工具。<button class="btn secondary" data-action="focus-script-blocks">高亮可选正文块</button></div>'}</div>
         </div><div class="notice">正文块类型：ACTION · DIALOGUE · VOICE_OVER · OFF_SCREEN · SUBTITLE · SFX · VFX · TRANSITION</div><div class="actions"><button class="btn primary" data-action="add-scene">新增场景</button><button class="btn secondary" data-action="add-script-block">新增正文块</button><button class="btn secondary" data-action="open-script-check">运行正文检查</button><button class="btn secondary" data-action="open-script-export">导出正文</button><button class="btn secondary" data-action="view-script-result">查看最近保存结果</button></div>
       </section>`;
@@ -1637,7 +1748,7 @@
     function storyboardView() {
       return `<section class="card">${cardHead('文字分镜脚本', '由审核通过的正文生成可编辑镜头表、画面描述和提示词')}
         <div class="segmented"><button class="active" data-action="switch-episode" data-episode="1">第 01 集</button><button data-action="switch-episode" data-episode="2">第 02 集</button><button data-action="switch-episode" data-episode="3">第 03 集</button></div>
-        <div class="notice">当前以${storyboardState.view === 'table' ? '表格' : '卡片'}视图查看镜头；切换仅保留在本次本地查看，不会保存产物或创建任务。</div>
+        <div class="notice">当前以${storyboardState.view === 'table' ? '表格' : '卡片'}视图查看镜头；切换仅保留在本次本地查看，不会保存产物或创建任务。<br>SHOT-001 已锁定 SNAPSHOT-001：SCENE-ASSET-001 / SCENE-VARIANT-001 · <strong>PINNED</strong>，后续母资产更新不会改写快照。</div>
         ${storyboardState.view === 'table' ? `<table class="shot-table" style="margin-top:12px"><thead><tr><th>镜号</th><th>景别 / 运镜</th><th>画面内容</th><th>对白 / 声音</th><th>时长</th><th>状态</th></tr></thead><tbody>${storyboardState.shots.map((shot,index) => `<tr class="${storyboardState.selectedShotId === shot.id ? 'selected' : ''} ${storyboardState.focusShots ? 'guidance-focus' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><td class="shot-no">#${String(index + 1).padStart(2,'0')}</td><td>${escapeHtml(shot.size)}<br>${escapeHtml(shot.movement)}</td><td>${escapeHtml(shot.visual)}</td><td>${escapeHtml(shot.audio)}</td><td>${shot.duration}s</td><td><span class="tag">${shot.status}</span></td></tr>`).join('')}</tbody></table>` : `<div class="grid-2" style="margin-top:12px">${storyboardState.shots.map((shot,index) => `<button class="mini-card selectable-card ${storyboardState.selectedShotId === shot.id ? 'selected' : ''} ${storyboardState.focusShots ? 'guidance-focus' : ''}" data-action="select-shot" data-shot-id="${shot.id}"><h3>#${String(index + 1).padStart(2,'0')} · ${escapeHtml(shot.size)}</h3><p>${escapeHtml(shot.visual)}</p><small>${shot.duration}s · ${escapeHtml(shot.movement)}</small></button>`).join('')}</div>`}
         <div class="notice">镜头字段：shot_size · camera_angle · camera_movement · composition · generation_prompt · negative_prompt · continuity_note</div>
         <div class="actions"><button class="btn primary" data-action="add-shot">新增镜头</button><button class="btn secondary" data-action="split-shot">拆分镜头</button><button class="btn secondary" data-action="merge-shot">合并镜头</button><button class="btn secondary" data-action="toggle-storyboard-view">切换为${storyboardState.view === 'table' ? '卡片' : '表格'}视图</button><button class="btn secondary" data-action="run-continuity-check">连续性检查</button><button class="btn secondary" data-action="undo-storyboard">撤销</button></div>
@@ -1921,6 +2032,14 @@
         'review-approval': () => overlayFrame('review-approval','审核通过本集','仅当高风险问题全部解决时可确认',`<div class="notice">${WorkflowModel.canApproveReview(reviewState.issues) ? '当前无未解决的高风险问题，可以通过本集审核。' : '仍存在未解决的高风险问题，请先定位修订并标记解决。'}</div>`,`<button class="btn secondary" data-action="close-overlay">返回</button><button class="btn primary" data-action="approve-episode">确认审核通过</button>`),
         'shot-editor': () => { const shot = storyboardState.shots.find(item => item.id === storyboardState.selectedShotId); return overlayFrame('shot-editor',shot ? `编辑镜头 · ${shot.id}` : '新增镜头','保存到 08-文字分镜/EP-001-文字分镜.md',`<div class="field-grid"><div class="field"><label>景别</label><select id="shot-size"><option ${shot?.size === '近景' ? 'selected' : ''}>近景</option><option ${shot?.size === '大全景' ? 'selected' : ''}>大全景</option><option ${shot?.size === '主观镜头' ? 'selected' : ''}>主观镜头</option></select></div><div class="field"><label>运镜</label><input id="shot-movement" value="${escapeHtml(shot?.movement || '缓慢推进')}"></div><div class="field"><label>时长（秒）</label><input id="shot-duration" type="number" min="1" value="${shot?.duration || 4}"></div><div class="field"><label>声音</label><input id="shot-audio" value="${escapeHtml(shot?.audio || '环境音')}"></div></div><div class="field" style="margin-top:12px"><label>画面内容</label><textarea id="shot-visual" style="min-height:110px">${escapeHtml(shot?.visual || '林野走进昏暗的出租屋，门后影子一闪而过。')}</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-shot">保存镜头</button>`); },
         'continuity-check': () => overlayFrame('continuity-check','连续性检查','角色、场景、道具与镜头轴线',`<div class="surface-list">${storyboardState.continuity.map(item => `<div class="surface-row"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div><span class="tag">通过</span></div>`).join('')}</div>`,`<button class="btn primary" data-action="close-overlay">完成</button>`),
+        'scene-asset-library': () => overlayFrame('scene-asset-library','项目场景资产库','场景资产是项目级共享基础设施，不是第九阶段',`<div class="notice"><strong>四层关联模型</strong>：场景母资产 → 场景变体 → 剧本场景实例 → 分镜锁定快照。<br>静态演示仅在当前页面内模拟保存，不会写入外部后端。</div><div class="mini-card" style="margin-top:12px"><h3>完整演示链路</h3><p>小说地点 LOCATION-001 · 林野出租屋 → 场景母资产 SCENE-ASSET-001 → 场景变体 SCENE-VARIANT-001 · 暴雨夜 → 剧本场景实例 SCRIPT-SCENE-001 → 分镜锁定快照 SNAPSHOT-001 · PINNED</p></div><div class="surface-list" style="margin-top:12px">${appState.sceneAssets.masters.map(asset => `<div class="surface-row"><div><strong>${escapeHtml(asset.id)} · ${escapeHtml(asset.name)}</strong><p>${escapeHtml(asset.obsidianPath)} · V${asset.version} · ${asset.variants.length} 个变体</p></div><div><button class="btn secondary" data-action="open-scene-asset-detail" data-scene-asset-id="${asset.id}">查看详情</button> <button class="btn secondary" data-action="view-scene-asset-impact" data-scene-asset-id="${asset.id}">影响</button></div></div>`).join('')}</div>`,`<button class="btn secondary" data-action="convert-location-to-scene-asset">从小说地点转换</button><button class="btn secondary" data-action="bind-scene-asset">绑定剧本场景</button><button class="btn secondary" data-action="create-scene-variant">新增场景变体</button><button class="btn primary" data-action="create-scene-asset">新建场景母资产</button>`),
+        'scene-asset-detail': () => { const asset = appState.sceneAssets.masters.find(item => item.id === (overlayState.payload.sceneAssetId || appState.sceneAssets.selectedAssetId)); const impact = WorkflowModel.getSceneAssetImpact(appState, asset?.id); return overlayFrame('scene-asset-detail',`${escapeHtml(asset?.id || '')} · ${escapeHtml(asset?.name || '场景资产详情')}`,'稳定 ID 不随名称和版本变化；引用按版本显式追踪',`<div class="grid-2"><div class="mini-card"><h3>场景母资产</h3><p>${escapeHtml(asset?.description || '')}<br>${escapeHtml(asset?.obsidianPath || '')} · V${asset?.version || '-'}</p></div><div class="mini-card"><h3>影响概览</h3><p>${impact.variants.length} 个场景变体 · ${impact.scriptInstances.length} 个剧本场景实例 · ${impact.storyboardSnapshots.length} 个分镜锁定快照</p></div></div><div class="surface-list" style="margin-top:12px">${(asset?.variants || []).map(variant => `<div class="surface-row"><div><strong>${escapeHtml(variant.id)} · ${escapeHtml(variant.name)}</strong><p>${escapeHtml(variant.time)} · ${escapeHtml(variant.weather)} · ${escapeHtml(variant.lighting)}</p></div><span class="tag">V${variant.version}</span></div>`).join('')}</div>`,`<button class="btn secondary" data-action="open-scene-assets">返回资产库</button><button class="btn secondary" data-action="view-scene-asset-impact" data-scene-asset-id="${asset?.id || ''}">查看依赖影响</button><button class="btn primary" data-action="create-scene-variant">新增变体</button>`); },
+        'scene-asset-editor': () => overlayFrame('scene-asset-editor','新建场景母资产','创建项目级稳定 ID，并生成 Obsidian 场景资产 Markdown',`<div class="field-grid"><div class="field"><label>资产名称</label><input id="scene-asset-name" value="管理局审讯室"></div><div class="field"><label>空间类型</label><select id="scene-asset-type"><option>INTERIOR</option><option>EXTERIOR</option><option>HYBRID</option></select></div></div><div class="field" style="margin-top:12px"><label>空间结构与连续性锚点</label><textarea id="scene-asset-description" style="min-height:100px">无窗审讯室，单向玻璃位于北墙，桌面固定一盏冷白台灯。</textarea></div><div class="notice">保存只更新当前静态演示状态；不会声称已写入后端。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-create-scene-asset">保存演示资产</button>`),
+        'scene-variant-editor': () => { const asset = appState.sceneAssets.masters.find(item => item.id === appState.sceneAssets.selectedAssetId); return overlayFrame('scene-variant-editor','新增场景变体',`归属场景母资产：${asset?.id || '未选择'}`,`<div class="field-grid"><div class="field"><label>变体名称</label><input id="scene-variant-name" value="断电警报"></div><div class="field"><label>时间</label><select id="scene-variant-time"><option>夜</option><option>日</option><option>清晨</option></select></div><div class="field"><label>天气 / 环境</label><input id="scene-variant-weather" value="暴雨"></div><div class="field"><label>光线</label><input id="scene-variant-lighting" value="红色应急灯"></div></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-create-scene-variant">保存演示变体</button>`); },
+        'location-to-scene-asset': () => { const locations = appState.sceneAssets.locations.filter(item => !item.sceneAssetId); return overlayFrame('location-to-scene-asset','小说地点转换为场景资产','保留地点事实源，并创建可制作的场景母资产',locations.length ? `<div class="field"><label>待转换地点</label><select id="scene-location-picker">${locations.map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('')}</select></div><div class="notice">来源：03-小说分析/世界观/主要地点.md</div>` : '<div class="empty">全部小说地点均已关联场景资产；可返回资产库新建母资产。</div>',locations.length ? `<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-convert-location">确认转换</button>` : `<button class="btn primary" data-action="open-scene-assets">返回资产库</button>`); },
+        'scene-asset-picker': () => { const asset = appState.sceneAssets.masters.find(item => item.id === appState.sceneAssets.selectedAssetId) || appState.sceneAssets.masters[0]; return overlayFrame('scene-asset-picker','绑定剧本场景资产','把当前剧本场景实例绑定到指定母资产与变体',`<div class="field-grid"><div class="field"><label>剧本场景实例</label><select id="script-scene-picker">${appState.sceneAssets.scriptInstances.map(item => `<option value="${item.id}">${item.id} · ${escapeHtml(item.title)}</option>`).join('')}</select></div><div class="field"><label>场景母资产</label><select id="scene-master-picker">${appState.sceneAssets.masters.map(item => `<option value="${item.id}" ${item.id === asset?.id ? 'selected' : ''}>${item.id} · ${escapeHtml(item.name)}</option>`).join('')}</select></div><div class="field"><label>场景变体</label><select id="scene-variant-picker">${(asset?.variants || []).map(item => `<option value="${item.id}">${item.id} · ${escapeHtml(item.name)}</option>`).join('')}</select></div></div><div class="notice">绑定后剧本场景实例记录 asset / variant 版本；分镜快照仍保持不可变。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-bind-scene-asset">确认绑定</button>`); },
+        'scene-asset-impact': () => { const assetId = overlayState.payload.sceneAssetId || appState.sceneAssets.selectedAssetId; const impact = WorkflowModel.getSceneAssetImpact(appState, assetId); return overlayFrame('scene-asset-impact','场景资产影响范围','母资产更新只标记引用，绝不改写已锁定快照',`<div class="surface-list"><div class="surface-row"><div><strong>场景变体</strong><p>${impact.variants.map(item => `${item.id} · V${item.version}`).join('；') || '暂无'}</p></div><span class="tag">CURRENT</span></div>${impact.scriptInstances.map(item => `<div class="surface-row"><div><strong>剧本场景实例 · ${item.id}</strong><p>绑定 asset V${item.sceneAssetVersion} / variant V${item.variantVersion}</p></div><span class="tag">${item.status}</span></div>`).join('')}${impact.storyboardSnapshots.map(item => `<div class="surface-row"><div><strong>分镜锁定快照 · ${item.id}</strong><p>${item.shotId} · immutable=true · asset V${item.sceneAssetVersion}</p></div><span class="tag">PINNED</span></div>`).join('')}</div><div class="notice">STALE：可刷新到当前资产版本；PINNED：继续使用已锁定版本，保证已确认分镜可复现。</div>`,`<button class="btn secondary" data-action="keep-pinned-scene">保留锁定版本</button><button class="btn primary" data-action="refresh-scene-binding">刷新剧本场景引用</button>`); },
+        'scene-pinned-result': () => overlayFrame('scene-pinned-result','已保留锁定版本','这是当前页面内的演示决策，不会写入外部后端。',`<div class="mini-card"><h3>分镜锁定快照 · SNAPSHOT-001</h3><p>状态：PINNED · 已确认镜头继续引用 asset V1 / variant V1；母资产当前版本不被回写。</p></div>`,`<button class="btn primary" data-action="view-scene-asset-impact">返回影响范围</button>`),
         'canvas-handoff': () => overlayFrame('canvas-handoff','创建画布项目','将锁定文字分镜与关联资产交给视频生产工作台',`<div class="mini-card"><h3>交接内容</h3><p>${storyboardState.shots.length} 个镜头 · 人物资产 · 世界观 · 场景连续性锚点</p></div><div class="notice">静态演示不会真实创建外部项目；产品实现时调用画布项目创建接口。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="handoff-canvas">确认创建</button>`),
         'archive-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('archive-result','项目已归档','静态演示已将本项目切换为只读状态；不会修改外部后端。',`<div class="mini-card"><h3>${escapeHtml(config.projectName)}</h3><p>状态：ARCHIVED（只读） · 任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p><p>全部产物、版本、任务与导出记录均已保留。</p></div>`,`<button class="btn secondary" data-action="view-archive-result" data-result-id="${escapeHtml(result.id || '')}">查看项目详情</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
         'export-result': () => { const result = overlayState.payload.result || {}; const fileCount = Object.keys(WorkflowModel.buildVaultFiles(appState)).length; return overlayFrame('export-result','创作包导出已完成','静态演示已保存导出记录，不会创建外部文件。',`<div class="mini-card"><h3>${escapeHtml(result.packagePath || result.path || '创作包')}</h3><p>格式：${escapeHtml(result.exportFormat || '-')} · 范围：${escapeHtml(result.exportRange || '-')}</p><p>Vault 文件：${fileCount} 个 · 任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p></div>`,`<button class="btn secondary" data-action="view-export-result" data-result-id="${escapeHtml(result.id || '')}">查看导出结果</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
@@ -2112,6 +2231,71 @@
       const handlers = {
         'open-project-list': showProjectList,
         'close-project-list': showHome,
+        'open-scene-assets': () => openOverlay('scene-asset-library'),
+        'open-scene-asset-detail': () => {
+          const sceneAssetId = element?.dataset?.sceneAssetId || appState.sceneAssets.selectedAssetId;
+          appState.sceneAssets.selectedAssetId = sceneAssetId;
+          openOverlay('scene-asset-detail', { sceneAssetId });
+        },
+        'create-scene-asset': () => openOverlay('scene-asset-editor'),
+        'confirm-create-scene-asset': () => {
+          const outcome = WorkflowModel.createSceneAsset(appState, {
+            name:document.getElementById('scene-asset-name').value,
+            type:document.getElementById('scene-asset-type').value,
+            description:document.getElementById('scene-asset-description').value
+          });
+          if (!outcome.allowed) return openOverlay('action-guidance', { title:'暂不能创建场景资产', message:outcome.message, targetAction:'create-scene-asset' });
+          openOverlay('scene-asset-detail', { sceneAssetId:outcome.asset.id });
+          notify(`${outcome.asset.id} 已保存到当前页面演示状态。`);
+        },
+        'create-scene-variant': () => openOverlay('scene-variant-editor'),
+        'confirm-create-scene-variant': () => {
+          const outcome = WorkflowModel.createSceneVariant(appState, appState.sceneAssets.selectedAssetId, {
+            name:document.getElementById('scene-variant-name').value,
+            time:document.getElementById('scene-variant-time').value,
+            weather:document.getElementById('scene-variant-weather').value,
+            lighting:document.getElementById('scene-variant-lighting').value
+          });
+          if (!outcome.allowed) return openOverlay('action-guidance', { title:'暂不能创建场景变体', message:outcome.message, targetAction:'open-scene-assets' });
+          openOverlay('scene-asset-detail', { sceneAssetId:outcome.asset.id });
+          notify(`${outcome.variant.id} 已保存，场景母资产演示版本更新为 V${outcome.asset.version}。`);
+        },
+        'convert-location-to-scene-asset': () => openOverlay('location-to-scene-asset'),
+        'confirm-convert-location': () => {
+          const outcome = WorkflowModel.convertLocationToSceneAsset(appState, document.getElementById('scene-location-picker').value);
+          if (!outcome.allowed) return openOverlay('action-guidance', { title:'暂不能转换地点', message:outcome.message, targetAction:'convert-location-to-scene-asset' });
+          openOverlay('scene-asset-detail', { sceneAssetId:outcome.asset.id });
+          notify(`小说地点“${outcome.location.name}”已转换为 ${outcome.asset.id}（仅当前页面演示）。`);
+        },
+        'bind-scene-asset': () => openOverlay('scene-asset-picker'),
+        'confirm-bind-scene-asset': () => {
+          const outcome = WorkflowModel.bindSceneAsset(appState, {
+            scriptSceneId:document.getElementById('script-scene-picker').value,
+            sceneAssetId:document.getElementById('scene-master-picker').value,
+            variantId:document.getElementById('scene-variant-picker').value
+          });
+          if (!outcome.allowed) return openOverlay('action-guidance', { title:'暂不能绑定场景资产', message:outcome.message, targetAction:'bind-scene-asset' });
+          openOverlay('scene-asset-impact', { sceneAssetId:outcome.asset.id });
+          notify(`${outcome.instance.id} 已绑定 ${outcome.asset.id} / ${outcome.variant.id}。`);
+        },
+        'view-scene-asset-impact': () => {
+          const sceneAssetId = element?.dataset?.sceneAssetId || appState.sceneAssets.selectedAssetId;
+          appState.sceneAssets.selectedAssetId = sceneAssetId;
+          openOverlay('scene-asset-impact', { sceneAssetId });
+        },
+        'keep-pinned-scene': () => openOverlay('scene-pinned-result'),
+        'refresh-scene-binding': () => {
+          const asset = appState.sceneAssets.masters.find(item => item.id === appState.sceneAssets.selectedAssetId);
+          for (const instance of appState.sceneAssets.scriptInstances.filter(item => item.sceneAssetId === asset?.id)) {
+            const variant = asset.variants.find(item => item.id === instance.variantId) || asset.variants[0];
+            instance.sceneAssetVersion = asset.version;
+            instance.variantId = variant?.id || null;
+            instance.variantVersion = variant?.version || null;
+            instance.status = 'CURRENT';
+          }
+          openOverlay('scene-asset-impact', { sceneAssetId:asset?.id });
+          notify('剧本场景实例已刷新到当前演示版本；PINNED 分镜快照保持不变。');
+        },
         'open-project-detail': () => openOverlay('project-detail'),
         'open-task-center': () => openOverlay('task-center'),
         'open-version-history': () => openOverlay('version-history', { artifactId:element?.dataset?.artifactId }),

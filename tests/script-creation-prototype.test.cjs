@@ -1349,3 +1349,67 @@ test('vault export contains project index impact and billing markdown', () => {
 test('PRD specifies Obsidian vault model fallback and full points settlement', () => {
   for (const term of ['Obsidian','00-项目主页.md','90-变更影响.md','99-生成与计费记录.md','1 quota = 1 积分','演示模型','预计积分','预扣积分','实际积分','返还积分']) assert.ok(prd.includes(term), `missing ${term}`);
 });
+
+test('prototype keeps exactly eight creative stages and exposes project scene asset infrastructure', () => {
+  const model = loadModel();
+  assert.equal(model.createInitialState().stages.length, 8);
+  for (const action of ['open-scene-assets','create-scene-asset','create-scene-variant','convert-location-to-scene-asset','bind-scene-asset','view-scene-asset-impact']) {
+    assert.match(html, new RegExp(`data-action="${action}"`), action);
+  }
+  for (const label of ['场景母资产','场景变体','剧本场景实例','分镜锁定快照']) assert.match(html, new RegExp(label), label);
+  assert.match(html, /场景资产是项目级共享基础设施，不是第九阶段/);
+});
+
+test('scene asset demo links a novel location through an immutable storyboard snapshot', () => {
+  const model = loadModel();
+  const state = model.createInitialState();
+  const asset = state.sceneAssets.masters.find(item => item.id === 'SCENE-ASSET-001');
+  assert.ok(asset);
+  assert.equal(asset.variants.length, 2);
+  assert.equal(state.sceneAssets.locations[0].sceneAssetId, asset.id);
+  assert.equal(state.sceneAssets.scriptInstances[0].sceneAssetId, asset.id);
+  assert.equal(state.sceneAssets.scriptInstances[0].variantId, asset.variants[0].id);
+  assert.equal(state.sceneAssets.storyboardSnapshots[0].sceneAssetId, asset.id);
+  assert.equal(state.sceneAssets.storyboardSnapshots[0].immutable, true);
+
+  const locked = JSON.parse(JSON.stringify(state.sceneAssets.storyboardSnapshots[0]));
+  model.updateSceneAsset(state, asset.id, { description:'出租屋被暴雨浸湿，电路闪烁。' });
+  assert.equal(asset.version, 2);
+  assert.equal(state.sceneAssets.scriptInstances[0].status, 'STALE');
+  assert.equal(state.sceneAssets.storyboardSnapshots[0].status, 'PINNED');
+  assert.deepEqual(JSON.parse(JSON.stringify(state.sceneAssets.storyboardSnapshots[0])), locked);
+
+  const impact = model.getSceneAssetImpact(state, asset.id);
+  assert.equal(impact.variants.length, 2);
+  assert.equal(impact.scriptInstances[0].status, 'STALE');
+  assert.equal(impact.storyboardSnapshots[0].status, 'PINNED');
+});
+
+test('scene asset actions have executable demo outcomes rather than dead controls', () => {
+  const dom = loadPrototypeDom();
+  assert.ok(dom.app);
+  const expectedSurface = {
+    'open-scene-assets':'scene-asset-library',
+    'create-scene-asset':'scene-asset-editor',
+    'create-scene-variant':'scene-variant-editor',
+    'convert-location-to-scene-asset':'location-to-scene-asset',
+    'bind-scene-asset':'scene-asset-picker',
+    'view-scene-asset-impact':'scene-asset-impact'
+  };
+  for (const [action, surface] of Object.entries(expectedSurface)) {
+    dom.click(action);
+    assert.equal(dom.app.getOverlayState().type, surface, action);
+  }
+});
+
+test('scene asset Obsidian export contains a stable index master variants and pinned references', () => {
+  const model = loadModel();
+  const files = model.buildVaultFiles(model.createInitialState());
+  assert.ok(files['04-场景资产/00-场景资产索引.md']);
+  assert.ok(files['04-场景资产/SCENE-ASSET-001-林野出租屋.md']);
+  assert.match(files['04-场景资产/00-场景资产索引.md'], /SCENE-ASSET-001/);
+  assert.match(files['04-场景资产/SCENE-ASSET-001-林野出租屋.md'], /SCENE-VARIANT-001/);
+  assert.match(files['04-场景资产/SCENE-ASSET-001-林野出租屋.md'], /SCRIPT-SCENE-001/);
+  assert.match(files['04-场景资产/SCENE-ASSET-001-林野出租屋.md'], /SNAPSHOT-001/);
+  assert.match(html, /静态演示仅在当前页面内模拟保存，不会写入外部后端/);
+});
