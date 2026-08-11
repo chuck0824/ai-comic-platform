@@ -62,6 +62,13 @@ export function createGenerationDecisionGuard() {
   }
 }
 
+/** Awaits a guarded decision and publishes failures even when the UI event caller ignores the returned promise. */
+export async function runGuardedGenerationDecision({ guard, taskId, decision, execute, onFailure }) {
+  const result = await guard.run(taskId, decision, execute)
+  if (result?.ok === false && typeof onFailure === 'function') onFailure(result)
+  return result
+}
+
 /** Persists the candidate decision before mutating the local workbench audit state. */
 export async function persistGenerationDecision({ decision, serverJobId, localTaskId, api, workbench, refresh }) {
   const accepted = decision === 'accept'

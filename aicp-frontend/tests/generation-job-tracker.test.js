@@ -5,7 +5,8 @@ import {
   createGenerationDecisionGuard,
   loadAcceptedGeneration,
   loadUnitWorkspaceContent,
-  persistGenerationDecision
+  persistGenerationDecision,
+  runGuardedGenerationDecision
 } from '../src/views/content-project/workbench/generationResultPersistence.js'
 
 test('tracks queued through running to completed and preserves the real artifact response', async () => {
@@ -175,4 +176,30 @@ test('decision guard rejects accept-discard races in both directions without inv
     release()
     await first
   }
+})
+
+test('guarded workspace decision publishes conflict guidance even when the drawer ignores its promise', async () => {
+  const guard = createGenerationDecisionGuard()
+  const serverCalls = []
+  const guidance = []
+  let releaseAccept
+  const acceptBlocked = new Promise(resolve => { releaseAccept = resolve })
+  const accept = runGuardedGenerationDecision({
+    guard, taskId: 'task-visible-conflict', decision: 'accept',
+    execute: async decision => { serverCalls.push(decision); await acceptBlocked; return { ok: true } },
+    onFailure: result => guidance.push(result)
+  })
+
+  void runGuardedGenerationDecision({
+    guard, taskId: 'task-visible-conflict', decision: 'discard',
+    execute: async decision => { serverCalls.push(decision); return { ok: true } },
+    onFailure: result => guidance.push(result)
+  })
+  await new Promise(resolve => setImmediate(resolve))
+
+  assert.deepEqual(serverCalls, ['accept'])
+  assert.equal(guidance.length, 1)
+  assert.equal(guidance[0].code, 'IN_FLIGHT_CONFLICT')
+  releaseAccept()
+  await accept
 })

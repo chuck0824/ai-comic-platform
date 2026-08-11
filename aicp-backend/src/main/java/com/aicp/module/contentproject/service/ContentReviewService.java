@@ -65,8 +65,12 @@ public class ContentReviewService {
         // Get latest version content
         ContentVersion version = versionSelector.resolvePublic(unit);
 
-        String content = version != null ? version.getPlainText() : "";
-        if (content.isBlank()) {
+        String content = "";
+        if (version != null) {
+            content = version.getPlainText();
+            if (content == null || content.isBlank()) content = version.getContentJson();
+        }
+        if (content == null || content.isBlank()) {
             return Map.of("error", "no_content", "message", "没有可审核的内容");
         }
 

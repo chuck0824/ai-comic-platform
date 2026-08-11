@@ -194,7 +194,7 @@ import { nextStageKey, resolveWorkspaceStage, restoreWorkbenchStage, shouldAdvan
 import { validateAnalysisSection, validateCreationSettings } from './workbench/upstreamStageModel.js'
 import { createProjectLoadGuard, resetProjectWorkspaceData } from './workbench/workspaceLoadState.js'
 import { trackGenerationJob } from './workbench/generationJobTracker.js'
-import { createGenerationDecisionGuard, loadAcceptedGeneration, loadUnitWorkspaceContent, persistGenerationDecision } from './workbench/generationResultPersistence.js'
+import { createGenerationDecisionGuard, loadAcceptedGeneration, loadUnitWorkspaceContent, persistGenerationDecision, runGuardedGenerationDecision } from './workbench/generationResultPersistence.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -780,21 +780,27 @@ async function refreshAcceptedGeneration(response) {
   Object.assign(stageData[key], loaded.content)
 }
 async function decideGenerationResult(taskId, decision) {
-  return decisionGuard.run(taskId, decision, async () => {
-    const result = workbench.state.results.find(item => item.taskId === taskId)
-    const persisted = await persistGenerationDecision({
-      decision,
-      serverJobId: result?.artifact?.jobId,
-      localTaskId: taskId,
-      api: contentProjectApi,
-      workbench,
-      refresh: refreshAcceptedGeneration
-    })
-    if (!persisted.ok) return showGuidance({ ...persisted, title: decision === 'accept' ? '采用失败' : '丢弃失败', targetAction: `retry_generation_${decision}` })
-    resultVisible.value = false
-    if (persisted.refreshFailure) showGuidance({ ...persisted.refreshFailure, title: '候选版本已采用，但页面刷新失败', targetAction: 'refresh_project_units' })
-    return persisted
+  const persisted = await runGuardedGenerationDecision({
+    guard: decisionGuard,
+    taskId,
+    decision,
+    execute: async () => {
+      const result = workbench.state.results.find(item => item.taskId === taskId)
+      return persistGenerationDecision({
+        decision,
+        serverJobId: result?.artifact?.jobId,
+        localTaskId: taskId,
+        api: contentProjectApi,
+        workbench,
+        refresh: refreshAcceptedGeneration
+      })
+    },
+    onFailure: failure => showGuidance({ ...failure, title: decision === 'accept' ? '采用失败' : '丢弃失败', targetAction: `retry_generation_${decision}` })
   })
+  if (!persisted.ok) return persisted
+  resultVisible.value = false
+  if (persisted.refreshFailure) showGuidance({ ...persisted.refreshFailure, title: '候选版本已采用，但页面刷新失败', targetAction: 'refresh_project_units' })
+  return persisted
 }
 function acceptGenerationResult(taskId) { return decideGenerationResult(taskId, 'accept') }
 function discardGenerationResult(taskId) { return decideGenerationResult(taskId, 'discard') }

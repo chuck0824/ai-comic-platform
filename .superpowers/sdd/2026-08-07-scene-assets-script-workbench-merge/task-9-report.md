@@ -128,3 +128,17 @@ GREEN:
 - `ContentProjectWorkspace.vue`, `ActionResultDrawer.vue`, and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`; modified JavaScript passed `node --check`.
 - Vite production build passed after transforming 2,001 modules to `/tmp/aicp-task9-fix5-dist`.
 - `git diff --check` passed.
+
+## Fix Round 5 Final Subfix — Decision Guidance and Review Content Fallback
+
+- The workspace now awaits the generation-decision guard itself and publishes every denied result through the existing actionable-guidance surface. If accept is already running and the result drawer fires discard without consuming its promise, the second server API is not called and the user still sees `IN_FLIGHT_CONFLICT` guidance.
+- Three-agent review now prefers nonblank `plainText`, falls back to the authoritative public version's `contentJson`, and reports `no_content` only when both representations are empty. A current accepted JSON-only version therefore reaches all review prompts without a null dereference.
+
+### Final Subfix TDD and Verification
+
+- RED reproduced both defects: the frontend helper export was absent for the ignored-promise conflict scenario, and a current public version with `plainText = null` raised a `NullPointerException` before review. Both focused regressions passed after the minimal implementations.
+- Backend generation/context/downstream regression: 36/36 passed across lifecycle, candidate isolation, context assembly, four downstream consumers, and M1/M2 compatibility.
+- Frontend Task 4–9 focused regression: 118/118 passed. Full frontend suite: 222 passed, 1 failed; the only failure remains the acknowledged pre-existing `agent-config-state.test.js` identity mismatch outside Task 9 files.
+- `ContentProjectWorkspace.vue`, `ActionResultDrawer.vue`, and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`; modified JavaScript passed `node --check`.
+- Vite production build passed after transforming 2,001 modules to `/tmp/aicp-task9-fix5-final-dist`.
+- `git diff --check` passed.

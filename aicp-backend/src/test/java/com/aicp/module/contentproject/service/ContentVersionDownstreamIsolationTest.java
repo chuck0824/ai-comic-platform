@@ -65,6 +65,29 @@ class ContentVersionDownstreamIsolationTest {
     }
 
     @Test
+    void reviewFallsBackToCurrentPublicContentJsonWhenPlainTextIsMissing() {
+        ContentUnit unit = new ContentUnit();
+        unit.setId(17L);
+        unit.setProjectId(9L);
+        unit.setCurrentVersionId(101L);
+        ContentVersion current = version(101L, "accepted", null);
+        current.setContentJson("{\"scenes\":[\"json-public\"]}");
+        when(unitMapper.selectById(17L)).thenReturn(unit);
+        when(versionMapper.selectById(101L)).thenReturn(current);
+        when(aiRouter.chatCompletion(any())).thenReturn(aiResponse(
+                "{\"hook_score\":80,\"director_score\":80,\"production_score\":80}"));
+        ContentReviewService service = new ContentReviewService(unitMapper, versionSelector, aiRouter);
+
+        Map<String, Object> result = service.reviewUnit(17L);
+
+        assertThat(result).doesNotContainKey("error");
+        ArgumentCaptor<Map<String, Object>> params = ArgumentCaptor.forClass(Map.class);
+        org.mockito.Mockito.verify(aiRouter, org.mockito.Mockito.times(3)).chatCompletion(params.capture());
+        assertThat(params.getAllValues()).allSatisfy(value ->
+                assertThat(String.valueOf(value.get("prompt"))).contains("json-public"));
+    }
+
+    @Test
     void hookUsesAuthoritativeCurrentVersionInsteadOfHigherCandidate() {
         stubCurrentAndCandidate();
         when(hookMapper.selectOne(any())).thenReturn(null);
