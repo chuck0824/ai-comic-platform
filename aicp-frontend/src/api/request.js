@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { ElMessage } from 'element-plus'
+import { ElNotification } from 'element-plus'
 import router from '@/router'
 import { extractJwtUid } from '@/lib/jwt'
 
@@ -18,6 +18,24 @@ const request = axios.create({
   baseURL: '/api/v1',
   timeout: 30000
 })
+
+function notifyError(message) {
+  ElNotification.error({
+    title: '请求失败',
+    message: message || '请求失败',
+    position: 'top-right',
+    duration: 4000
+  })
+}
+
+function notifyWarning(message) {
+  ElNotification.warning({
+    title: '提示',
+    message: message || '操作异常',
+    position: 'top-right',
+    duration: 4000
+  })
+}
 
 // 请求拦截器
 request.interceptors.request.use(
@@ -107,10 +125,10 @@ request.interceptors.response.use(
     const res = response.data
     if (res.code !== 0) {
       if (res.code === 40003 || res.code === 41007) {
-        ElMessage.error(res.message || '请求失败')
+        notifyError(res.message || '请求失败')
         clearAuthAndRedirect()
       } else {
-        ElMessage.error({ message: res.message || '请求失败', offset: 48 })
+        notifyError(res.message || '请求失败')
       }
       const err = new Error(res.message || '请求失败')
       err.code = res.code
@@ -150,18 +168,18 @@ request.interceptors.response.use(
       }
 
       // 刷新失败，清除登录并跳转
-      ElMessage.warning(msg || '登录已过期，请重新登录')
+      notifyWarning(msg || '登录已过期，请重新登录')
       clearAuthAndRedirect()
       return Promise.reject(error)
     }
 
     // 403 / 其他错误
     if (status === 403) {
-      ElMessage.warning(msg || '无权限')
+      notifyWarning(msg || '无权限')
       return Promise.reject(error)
     }
 
-    ElMessage.error(msg)
+    notifyError(msg)
     return Promise.reject(error)
   }
 )
