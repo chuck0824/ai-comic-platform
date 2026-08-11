@@ -34,7 +34,7 @@ Full prototype suite:
 node --test tests/script-creation-prototype.test.cjs
 ```
 
-Result: `93 / 93` tests passed.
+Initial implementation result: `93 / 93` tests passed.
 
 ## Implemented behavior
 
@@ -69,3 +69,38 @@ Result: `93 / 93` tests passed.
 ## Known boundary
 
 This is an acceptance prototype. State changes are intentionally limited to the current page session; no backend persistence is claimed. Native API persistence remains owned by the already implemented native workbench tasks.
+
+## Review fix round 1/5
+
+The scoped review found two Important interaction gaps and one DOM coverage gap. The prototype now closes all three:
+
+1. Editing a scene master is an executable semantic update. It creates the next master version, changes only `CURRENT` script instances to `STALE`, preserves their referenced version, and never mutates the immutable storyboard snapshot. The impact surface exposes refresh/keep-old decisions only while a stale instance exists.
+2. Refresh updates only `STALE` script instances to the current master version and returns an actionable `SCENE_BINDING_CURRENT` prerequisite message when there is nothing to refresh. Keep-old changes only stale script instances to `PINNED` and preserves their old version reference; it does not pretend that the already locked storyboard snapshot is the decision target.
+3. Changing `scene-master-picker` immediately rerenders `scene-variant-picker` from the selected master. DOM tests now exercise create master, create variant, convert location, bind with a changed master, semantic update, refresh, and keep-old paths.
+
+Variant creation remains management-only and does not increment the scene master semantic version.
+
+### Fix verification
+
+Focused executable DOM suite:
+
+```bash
+node --test --test-name-pattern='DOM semantic scene asset|DOM keep-old resolution|DOM secondary scene asset actions' tests/script-creation-prototype.test.cjs
+```
+
+Result: `3 / 3` tests passed.
+
+Full prototype suite:
+
+```bash
+node --test tests/script-creation-prototype.test.cjs
+```
+
+Result: `96 / 96` tests passed.
+
+Additional checks:
+
+- embedded controller extraction plus `vm.Script` syntax validation: passed;
+- fake-DOM executable interaction smoke: covered by the three focused tests;
+- local HTTP smoke at `http://127.0.0.1:62110/eight-stage-workbench.html`: `GET 200`, `HEAD 200`, and the served page contained the scene update/refresh controls;
+- `git diff --check`: passed.

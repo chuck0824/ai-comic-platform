@@ -612,6 +612,11 @@ function loadPrototypeDom() {
       const target = new FakeElement('', { action, ...dataset });
       for (const listener of documentListeners.get('click') || []) listener({ target });
     },
+    change(id, value) {
+      const target = fakeDocument.getElementById(id);
+      target.value = value;
+      for (const listener of documentListeners.get('change') || []) listener({ target });
+    },
     runAllTimers() {
       while (timers.length) {
         timers.sort((a,b) => a.delay - b.delay);
@@ -1412,4 +1417,97 @@ test('scene asset Obsidian export contains a stable index master variants and pi
   assert.match(files['04-场景资产/SCENE-ASSET-001-林野出租屋.md'], /SCRIPT-SCENE-001/);
   assert.match(files['04-场景资产/SCENE-ASSET-001-林野出租屋.md'], /SNAPSHOT-001/);
   assert.match(html, /静态演示仅在当前页面内模拟保存，不会写入外部后端/);
+});
+
+test('DOM semantic scene asset update versions the master and exposes only valid stale resolutions', () => {
+  const dom = loadPrototypeDom();
+  const state = dom.app.state;
+  const asset = state.sceneAssets.masters[0];
+  const instance = state.sceneAssets.scriptInstances[0];
+  const lockedSnapshot = JSON.parse(JSON.stringify(state.sceneAssets.storyboardSnapshots[0]));
+
+  dom.click('open-scene-asset-detail', { sceneAssetId:asset.id });
+  dom.click('update-scene-asset');
+  assert.equal(dom.app.getOverlayState().type, 'scene-asset-update-editor');
+  dom.element('scene-asset-update-description').value = '暴雨浸入窗缝，北墙电路每三秒闪烁一次。';
+  dom.click('confirm-update-scene-asset');
+
+  assert.equal(asset.version, 2);
+  assert.equal(asset.description, '暴雨浸入窗缝，北墙电路每三秒闪烁一次。');
+  assert.equal(instance.sceneAssetVersion, 1);
+  assert.equal(instance.status, 'STALE');
+  assert.deepEqual(JSON.parse(JSON.stringify(state.sceneAssets.storyboardSnapshots[0])), lockedSnapshot);
+  assert.equal(dom.app.getOverlayState().type, 'scene-asset-impact');
+  assert.match(dom.element('overlay-content').innerHTML, /data-action="refresh-scene-binding"/);
+
+  dom.click('refresh-scene-binding');
+  assert.equal(instance.status, 'CURRENT');
+  assert.equal(instance.sceneAssetVersion, 2);
+  assert.doesNotMatch(dom.element('overlay-content').innerHTML, /data-action="refresh-scene-binding"/);
+  dom.click('refresh-scene-binding');
+  assert.equal(dom.app.getOverlayState().type, 'action-guidance');
+  assert.equal(dom.app.getOverlayState().payload.code, 'SCENE_BINDING_CURRENT');
+});
+
+test('DOM keep-old resolution pins a stale script binding without changing the locked snapshot', () => {
+  const dom = loadPrototypeDom();
+  const state = dom.app.state;
+  const asset = state.sceneAssets.masters[0];
+  const instance = state.sceneAssets.scriptInstances[0];
+  const lockedSnapshot = JSON.parse(JSON.stringify(state.sceneAssets.storyboardSnapshots[0]));
+
+  dom.click('open-scene-asset-detail', { sceneAssetId:asset.id });
+  dom.click('update-scene-asset');
+  dom.element('scene-asset-update-description').value = '母资产 V2 的语义更新。';
+  dom.click('confirm-update-scene-asset');
+  dom.click('keep-pinned-scene');
+
+  assert.equal(instance.status, 'PINNED');
+  assert.equal(instance.sceneAssetVersion, 1);
+  assert.equal(dom.app.getOverlayState().type, 'scene-pinned-result');
+  assert.match(dom.element('overlay-content').innerHTML, /SCRIPT-SCENE-001/);
+  assert.match(dom.element('overlay-content').innerHTML, /PINNED/);
+  assert.deepEqual(JSON.parse(JSON.stringify(state.sceneAssets.storyboardSnapshots[0])), lockedSnapshot);
+});
+
+test('DOM secondary scene asset actions create convert and bind against a changed master picker', () => {
+  const dom = loadPrototypeDom();
+  const state = dom.app.state;
+
+  dom.click('create-scene-asset');
+  dom.element('scene-asset-name').value = '管理局审讯室';
+  dom.element('scene-asset-type').value = 'INTERIOR';
+  dom.element('scene-asset-description').value = '北墙单向玻璃，固定冷白台灯。';
+  dom.click('confirm-create-scene-asset');
+  const second = state.sceneAssets.masters.find(item => item.name === '管理局审讯室');
+  assert.ok(second);
+  assert.equal(dom.app.getOverlayState().type, 'scene-asset-detail');
+
+  dom.click('create-scene-variant');
+  dom.element('scene-variant-name').value = '红色警报';
+  dom.element('scene-variant-time').value = '夜';
+  dom.element('scene-variant-weather').value = '封闭室内';
+  dom.element('scene-variant-lighting').value = '红色应急灯';
+  dom.click('confirm-create-scene-variant');
+  assert.equal(second.variants[0].name, '红色警报');
+  assert.equal(second.version, 1, 'management-only variant creation must not version the master');
+
+  dom.click('convert-location-to-scene-asset');
+  dom.element('scene-location-picker').value = 'LOCATION-002';
+  dom.click('confirm-convert-location');
+  assert.ok(state.sceneAssets.locations.find(item => item.id === 'LOCATION-002').sceneAssetId);
+
+  dom.click('bind-scene-asset');
+  dom.change('scene-master-picker', second.id);
+  assert.equal(state.sceneAssets.selectedAssetId, second.id);
+  assert.match(dom.element('overlay-content').innerHTML, /SCENE-VARIANT-003/);
+  dom.element('script-scene-picker').value = 'SCRIPT-SCENE-001';
+  dom.element('scene-master-picker').value = second.id;
+  dom.element('scene-variant-picker').value = second.variants[0].id;
+  dom.click('confirm-bind-scene-asset');
+
+  assert.equal(dom.app.getOverlayState().type, 'scene-asset-impact');
+  assert.equal(state.sceneAssets.scriptInstances[0].sceneAssetId, second.id);
+  assert.equal(state.sceneAssets.scriptInstances[0].variantId, second.variants[0].id);
+  assert.equal(state.sceneAssets.scriptInstances[0].status, 'CURRENT');
 });

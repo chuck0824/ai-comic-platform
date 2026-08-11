@@ -920,7 +920,7 @@
         'ai-continue','ai-conflict','ai-condense-dialogue','ai-rewrite-tone','ai-character-check','accept-generation-result','discard-generation-result','run-script-check','export-script','confirm-script-export',
         'save-review-edit','resolve-review-issue','approve-episode','add-shot','save-shot','split-shot','merge-shot','undo-storyboard','run-continuity-check','lock-storyboard',
         'open-regenerate','confirm-regenerate','apply-stale-impact','archive-project','archive-project-complete','confirm-archive','confirm-project-export','handoff-canvas','retry-task',
-        'create-scene-asset','confirm-create-scene-asset','create-scene-variant','confirm-create-scene-variant','convert-location-to-scene-asset','confirm-convert-location','bind-scene-asset','confirm-bind-scene-asset','refresh-scene-binding'
+        'create-scene-asset','confirm-create-scene-asset','update-scene-asset','confirm-update-scene-asset','create-scene-variant','confirm-create-scene-variant','convert-location-to-scene-asset','confirm-convert-location','bind-scene-asset','confirm-bind-scene-asset','refresh-scene-binding','keep-pinned-scene'
       ]);
 
       function isWriteAction(action = '') {
@@ -1071,7 +1071,6 @@
         const sequence = state.sceneAssets.masters.flatMap(item => item.variants).length + 1;
         const variant = { id:spec.id || `SCENE-VARIANT-${String(sequence).padStart(3,'0')}`, name, version:1, status:'ACTIVE', lighting:spec.lighting || '待补充', weather:spec.weather || '室内', time:spec.time || '日' };
         asset.variants.push(variant);
-        asset.version += 1;
         state.sceneAssets.selectedVariantId = variant.id;
         return { allowed:true, code:'ALLOW', asset, variant };
       }
@@ -1104,8 +1103,33 @@
         const asset = state.sceneAssets.masters.find(item => item.id === assetId);
         if (!asset) return null;
         Object.assign(asset, cloneValue(patch), { id:asset.id, stableId:asset.stableId, version:asset.version + 1 });
-        for (const instance of state.sceneAssets.scriptInstances.filter(item => item.sceneAssetId === assetId)) instance.status = 'STALE';
+        for (const instance of state.sceneAssets.scriptInstances.filter(item => item.sceneAssetId === assetId && item.status === 'CURRENT')) instance.status = 'STALE';
         return asset;
+      }
+
+      function refreshSceneBindings(state, assetId) {
+        const asset = state.sceneAssets.masters.find(item => item.id === assetId);
+        if (!asset) return { allowed:false, code:'SCENE_ASSET_REQUIRED', title:'缺少场景母资产', message:'请返回项目场景资产库选择场景母资产。', targetAction:'open-scene-assets' };
+        const stale = state.sceneAssets.scriptInstances.filter(item => item.sceneAssetId === assetId && item.status === 'STALE');
+        if (!stale.length) return { allowed:false, code:'SCENE_BINDING_CURRENT', title:'无需刷新场景引用', message:'当前没有 STALE 的剧本场景实例；CURRENT 或 PINNED 引用不会被重复改写。', targetAction:'view-scene-asset-impact' };
+        for (const instance of stale) {
+          const variant = asset.variants.find(item => item.id === instance.variantId) || asset.variants[0];
+          instance.sceneAssetVersion = asset.version;
+          instance.variantId = variant?.id || null;
+          instance.variantVersion = variant?.version || null;
+          instance.status = 'CURRENT';
+        }
+        return { allowed:true, code:'ALLOW', asset, instances:stale };
+      }
+
+      function keepSceneBindingsPinned(state, assetId) {
+        const stale = state.sceneAssets.scriptInstances.filter(item => item.sceneAssetId === assetId && item.status === 'STALE');
+        if (!stale.length) return { allowed:false, code:'SCENE_BINDING_NOT_STALE', title:'没有待保留的旧引用', message:'仅 STALE 的剧本场景实例可以明确保留旧版本。', targetAction:'view-scene-asset-impact' };
+        for (const instance of stale) {
+          instance.status = 'PINNED';
+          instance.keepDecision = 'KEEP_OLD_VERSION';
+        }
+        return { allowed:true, code:'ALLOW', instances:stale };
       }
 
       function getSceneAssetImpact(state, assetId) {
@@ -1299,7 +1323,7 @@
         return { ...precondition, transition:stage < state.stages.length - 1 ? startStageTransition(state, stage) : null };
       }
 
-      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, listArtifactVersions, compareArtifactVersions, renderSourcePreview, recordPoints, createActionResult, startGeneration, setGenerationStatus, settleGeneration, acceptGenerationResult, discardGenerationResult, completeManualAction, completeExportAction, completeProjectExportAction, restoreArchivedProject, saveAdaptationRule, restoreArtifactVersion, retryTask, simulateFileSelection, ensureStageArtifactForGeneration, saveStageDraft, applyReviewRevision, canApproveReview, isWriteAction, evaluateActionPrecondition, evaluateStageConfirmation, beginStageConfirmation, estimatePoints, generationPricing, createPricingSnapshot, buildVaultFiles, createSceneAsset, createSceneVariant, convertLocationToSceneAsset, bindSceneAsset, updateSceneAsset, getSceneAssetImpact, normalizePricingPayload, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
+      return { STAGE_STATUS, TASK_STATUS, createInitialState, countHan, limitHanText, createArtifact, updateArtifact, markArtifactImpacts, renderMarkdown, listArtifactVersions, compareArtifactVersions, renderSourcePreview, recordPoints, createActionResult, startGeneration, setGenerationStatus, settleGeneration, acceptGenerationResult, discardGenerationResult, completeManualAction, completeExportAction, completeProjectExportAction, restoreArchivedProject, saveAdaptationRule, restoreArtifactVersion, retryTask, simulateFileSelection, ensureStageArtifactForGeneration, saveStageDraft, applyReviewRevision, canApproveReview, isWriteAction, evaluateActionPrecondition, evaluateStageConfirmation, beginStageConfirmation, estimatePoints, generationPricing, createPricingSnapshot, buildVaultFiles, createSceneAsset, createSceneVariant, convertLocationToSceneAsset, bindSceneAsset, updateSceneAsset, refreshSceneBindings, keepSceneBindingsPinned, getSceneAssetImpact, normalizePricingPayload, normalizePricingModels, resolveModels, canEnterStage, computeProgress, markDownstreamStale, createTask, completeTask, advanceTransitionProgress, startStageTransition, completeStageTransition };
     })();
     /* WORKFLOW_MODEL_END */
     const appState = WorkflowModel.createInitialState();
@@ -2033,13 +2057,14 @@
         'shot-editor': () => { const shot = storyboardState.shots.find(item => item.id === storyboardState.selectedShotId); return overlayFrame('shot-editor',shot ? `编辑镜头 · ${shot.id}` : '新增镜头','保存到 08-文字分镜/EP-001-文字分镜.md',`<div class="field-grid"><div class="field"><label>景别</label><select id="shot-size"><option ${shot?.size === '近景' ? 'selected' : ''}>近景</option><option ${shot?.size === '大全景' ? 'selected' : ''}>大全景</option><option ${shot?.size === '主观镜头' ? 'selected' : ''}>主观镜头</option></select></div><div class="field"><label>运镜</label><input id="shot-movement" value="${escapeHtml(shot?.movement || '缓慢推进')}"></div><div class="field"><label>时长（秒）</label><input id="shot-duration" type="number" min="1" value="${shot?.duration || 4}"></div><div class="field"><label>声音</label><input id="shot-audio" value="${escapeHtml(shot?.audio || '环境音')}"></div></div><div class="field" style="margin-top:12px"><label>画面内容</label><textarea id="shot-visual" style="min-height:110px">${escapeHtml(shot?.visual || '林野走进昏暗的出租屋，门后影子一闪而过。')}</textarea></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="save-shot">保存镜头</button>`); },
         'continuity-check': () => overlayFrame('continuity-check','连续性检查','角色、场景、道具与镜头轴线',`<div class="surface-list">${storyboardState.continuity.map(item => `<div class="surface-row"><div><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div><span class="tag">通过</span></div>`).join('')}</div>`,`<button class="btn primary" data-action="close-overlay">完成</button>`),
         'scene-asset-library': () => overlayFrame('scene-asset-library','项目场景资产库','场景资产是项目级共享基础设施，不是第九阶段',`<div class="notice"><strong>四层关联模型</strong>：场景母资产 → 场景变体 → 剧本场景实例 → 分镜锁定快照。<br>静态演示仅在当前页面内模拟保存，不会写入外部后端。</div><div class="mini-card" style="margin-top:12px"><h3>完整演示链路</h3><p>小说地点 LOCATION-001 · 林野出租屋 → 场景母资产 SCENE-ASSET-001 → 场景变体 SCENE-VARIANT-001 · 暴雨夜 → 剧本场景实例 SCRIPT-SCENE-001 → 分镜锁定快照 SNAPSHOT-001 · PINNED</p></div><div class="surface-list" style="margin-top:12px">${appState.sceneAssets.masters.map(asset => `<div class="surface-row"><div><strong>${escapeHtml(asset.id)} · ${escapeHtml(asset.name)}</strong><p>${escapeHtml(asset.obsidianPath)} · V${asset.version} · ${asset.variants.length} 个变体</p></div><div><button class="btn secondary" data-action="open-scene-asset-detail" data-scene-asset-id="${asset.id}">查看详情</button> <button class="btn secondary" data-action="view-scene-asset-impact" data-scene-asset-id="${asset.id}">影响</button></div></div>`).join('')}</div>`,`<button class="btn secondary" data-action="convert-location-to-scene-asset">从小说地点转换</button><button class="btn secondary" data-action="bind-scene-asset">绑定剧本场景</button><button class="btn secondary" data-action="create-scene-variant">新增场景变体</button><button class="btn primary" data-action="create-scene-asset">新建场景母资产</button>`),
-        'scene-asset-detail': () => { const asset = appState.sceneAssets.masters.find(item => item.id === (overlayState.payload.sceneAssetId || appState.sceneAssets.selectedAssetId)); const impact = WorkflowModel.getSceneAssetImpact(appState, asset?.id); return overlayFrame('scene-asset-detail',`${escapeHtml(asset?.id || '')} · ${escapeHtml(asset?.name || '场景资产详情')}`,'稳定 ID 不随名称和版本变化；引用按版本显式追踪',`<div class="grid-2"><div class="mini-card"><h3>场景母资产</h3><p>${escapeHtml(asset?.description || '')}<br>${escapeHtml(asset?.obsidianPath || '')} · V${asset?.version || '-'}</p></div><div class="mini-card"><h3>影响概览</h3><p>${impact.variants.length} 个场景变体 · ${impact.scriptInstances.length} 个剧本场景实例 · ${impact.storyboardSnapshots.length} 个分镜锁定快照</p></div></div><div class="surface-list" style="margin-top:12px">${(asset?.variants || []).map(variant => `<div class="surface-row"><div><strong>${escapeHtml(variant.id)} · ${escapeHtml(variant.name)}</strong><p>${escapeHtml(variant.time)} · ${escapeHtml(variant.weather)} · ${escapeHtml(variant.lighting)}</p></div><span class="tag">V${variant.version}</span></div>`).join('')}</div>`,`<button class="btn secondary" data-action="open-scene-assets">返回资产库</button><button class="btn secondary" data-action="view-scene-asset-impact" data-scene-asset-id="${asset?.id || ''}">查看依赖影响</button><button class="btn primary" data-action="create-scene-variant">新增变体</button>`); },
+        'scene-asset-detail': () => { const asset = appState.sceneAssets.masters.find(item => item.id === (overlayState.payload.sceneAssetId || appState.sceneAssets.selectedAssetId)); const impact = WorkflowModel.getSceneAssetImpact(appState, asset?.id); return overlayFrame('scene-asset-detail',`${escapeHtml(asset?.id || '')} · ${escapeHtml(asset?.name || '场景资产详情')}`,'稳定 ID 不随名称和版本变化；引用按版本显式追踪',`<div class="grid-2"><div class="mini-card"><h3>场景母资产</h3><p>${escapeHtml(asset?.description || '')}<br>${escapeHtml(asset?.obsidianPath || '')} · V${asset?.version || '-'}</p></div><div class="mini-card"><h3>影响概览</h3><p>${impact.variants.length} 个场景变体 · ${impact.scriptInstances.length} 个剧本场景实例 · ${impact.storyboardSnapshots.length} 个分镜锁定快照</p></div></div><div class="surface-list" style="margin-top:12px">${(asset?.variants || []).map(variant => `<div class="surface-row"><div><strong>${escapeHtml(variant.id)} · ${escapeHtml(variant.name)}</strong><p>${escapeHtml(variant.time)} · ${escapeHtml(variant.weather)} · ${escapeHtml(variant.lighting)}</p></div><span class="tag">V${variant.version}</span></div>`).join('')}</div>`,`<button class="btn secondary" data-action="open-scene-assets">返回资产库</button><button class="btn secondary" data-action="view-scene-asset-impact" data-scene-asset-id="${asset?.id || ''}">查看依赖影响</button><button class="btn secondary" data-action="update-scene-asset">编辑母资产语义</button><button class="btn primary" data-action="create-scene-variant">新增变体</button>`); },
         'scene-asset-editor': () => overlayFrame('scene-asset-editor','新建场景母资产','创建项目级稳定 ID，并生成 Obsidian 场景资产 Markdown',`<div class="field-grid"><div class="field"><label>资产名称</label><input id="scene-asset-name" value="管理局审讯室"></div><div class="field"><label>空间类型</label><select id="scene-asset-type"><option>INTERIOR</option><option>EXTERIOR</option><option>HYBRID</option></select></div></div><div class="field" style="margin-top:12px"><label>空间结构与连续性锚点</label><textarea id="scene-asset-description" style="min-height:100px">无窗审讯室，单向玻璃位于北墙，桌面固定一盏冷白台灯。</textarea></div><div class="notice">保存只更新当前静态演示状态；不会声称已写入后端。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-create-scene-asset">保存演示资产</button>`),
+        'scene-asset-update-editor': () => { const asset = appState.sceneAssets.masters.find(item => item.id === appState.sceneAssets.selectedAssetId); return overlayFrame('scene-asset-update-editor','编辑场景母资产语义',`${asset?.id || ''} · 当前 V${asset?.version || '-'}`,`<div class="field"><label>空间结构、材质、光线与连续性锚点</label><textarea id="scene-asset-update-description" style="min-height:120px">${escapeHtml(asset?.description || '')}</textarea></div><div class="notice">确认后母资产创建新版本；仍引用旧版本的剧本场景实例标记为 STALE，分镜锁定快照保持 PINNED。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-update-scene-asset">保存语义新版本</button>`); },
         'scene-variant-editor': () => { const asset = appState.sceneAssets.masters.find(item => item.id === appState.sceneAssets.selectedAssetId); return overlayFrame('scene-variant-editor','新增场景变体',`归属场景母资产：${asset?.id || '未选择'}`,`<div class="field-grid"><div class="field"><label>变体名称</label><input id="scene-variant-name" value="断电警报"></div><div class="field"><label>时间</label><select id="scene-variant-time"><option>夜</option><option>日</option><option>清晨</option></select></div><div class="field"><label>天气 / 环境</label><input id="scene-variant-weather" value="暴雨"></div><div class="field"><label>光线</label><input id="scene-variant-lighting" value="红色应急灯"></div></div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-create-scene-variant">保存演示变体</button>`); },
         'location-to-scene-asset': () => { const locations = appState.sceneAssets.locations.filter(item => !item.sceneAssetId); return overlayFrame('location-to-scene-asset','小说地点转换为场景资产','保留地点事实源，并创建可制作的场景母资产',locations.length ? `<div class="field"><label>待转换地点</label><select id="scene-location-picker">${locations.map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('')}</select></div><div class="notice">来源：03-小说分析/世界观/主要地点.md</div>` : '<div class="empty">全部小说地点均已关联场景资产；可返回资产库新建母资产。</div>',locations.length ? `<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-convert-location">确认转换</button>` : `<button class="btn primary" data-action="open-scene-assets">返回资产库</button>`); },
         'scene-asset-picker': () => { const asset = appState.sceneAssets.masters.find(item => item.id === appState.sceneAssets.selectedAssetId) || appState.sceneAssets.masters[0]; return overlayFrame('scene-asset-picker','绑定剧本场景资产','把当前剧本场景实例绑定到指定母资产与变体',`<div class="field-grid"><div class="field"><label>剧本场景实例</label><select id="script-scene-picker">${appState.sceneAssets.scriptInstances.map(item => `<option value="${item.id}">${item.id} · ${escapeHtml(item.title)}</option>`).join('')}</select></div><div class="field"><label>场景母资产</label><select id="scene-master-picker">${appState.sceneAssets.masters.map(item => `<option value="${item.id}" ${item.id === asset?.id ? 'selected' : ''}>${item.id} · ${escapeHtml(item.name)}</option>`).join('')}</select></div><div class="field"><label>场景变体</label><select id="scene-variant-picker">${(asset?.variants || []).map(item => `<option value="${item.id}">${item.id} · ${escapeHtml(item.name)}</option>`).join('')}</select></div></div><div class="notice">绑定后剧本场景实例记录 asset / variant 版本；分镜快照仍保持不可变。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="confirm-bind-scene-asset">确认绑定</button>`); },
-        'scene-asset-impact': () => { const assetId = overlayState.payload.sceneAssetId || appState.sceneAssets.selectedAssetId; const impact = WorkflowModel.getSceneAssetImpact(appState, assetId); return overlayFrame('scene-asset-impact','场景资产影响范围','母资产更新只标记引用，绝不改写已锁定快照',`<div class="surface-list"><div class="surface-row"><div><strong>场景变体</strong><p>${impact.variants.map(item => `${item.id} · V${item.version}`).join('；') || '暂无'}</p></div><span class="tag">CURRENT</span></div>${impact.scriptInstances.map(item => `<div class="surface-row"><div><strong>剧本场景实例 · ${item.id}</strong><p>绑定 asset V${item.sceneAssetVersion} / variant V${item.variantVersion}</p></div><span class="tag">${item.status}</span></div>`).join('')}${impact.storyboardSnapshots.map(item => `<div class="surface-row"><div><strong>分镜锁定快照 · ${item.id}</strong><p>${item.shotId} · immutable=true · asset V${item.sceneAssetVersion}</p></div><span class="tag">PINNED</span></div>`).join('')}</div><div class="notice">STALE：可刷新到当前资产版本；PINNED：继续使用已锁定版本，保证已确认分镜可复现。</div>`,`<button class="btn secondary" data-action="keep-pinned-scene">保留锁定版本</button><button class="btn primary" data-action="refresh-scene-binding">刷新剧本场景引用</button>`); },
-        'scene-pinned-result': () => overlayFrame('scene-pinned-result','已保留锁定版本','这是当前页面内的演示决策，不会写入外部后端。',`<div class="mini-card"><h3>分镜锁定快照 · SNAPSHOT-001</h3><p>状态：PINNED · 已确认镜头继续引用 asset V1 / variant V1；母资产当前版本不被回写。</p></div>`,`<button class="btn primary" data-action="view-scene-asset-impact">返回影响范围</button>`),
+        'scene-asset-impact': () => { const assetId = overlayState.payload.sceneAssetId || appState.sceneAssets.selectedAssetId; const impact = WorkflowModel.getSceneAssetImpact(appState, assetId); const hasStale = impact.scriptInstances.some(item => item.status === 'STALE'); const foot = hasStale ? `<button class="btn secondary" data-action="keep-pinned-scene">保留旧引用并 PINNED</button><button class="btn primary" data-action="refresh-scene-binding">刷新剧本场景引用</button>` : `<button class="btn secondary" data-action="open-scene-asset-detail" data-scene-asset-id="${assetId}">返回资产详情</button><button class="btn primary" data-action="close-overlay">完成</button>`; return overlayFrame('scene-asset-impact','场景资产影响范围','母资产更新只标记引用，绝不改写已锁定快照',`<div class="surface-list"><div class="surface-row"><div><strong>场景变体</strong><p>${impact.variants.map(item => `${item.id} · V${item.version}`).join('；') || '暂无'}</p></div><span class="tag">CURRENT</span></div>${impact.scriptInstances.map(item => `<div class="surface-row"><div><strong>剧本场景实例 · ${item.id}</strong><p>绑定 asset V${item.sceneAssetVersion} / variant V${item.variantVersion}</p></div><span class="tag">${item.status}</span></div>`).join('')}${impact.storyboardSnapshots.map(item => `<div class="surface-row"><div><strong>分镜锁定快照 · ${item.id}</strong><p>${item.shotId} · immutable=true · asset V${item.sceneAssetVersion}</p></div><span class="tag">PINNED</span></div>`).join('')}</div><div class="notice">STALE：可刷新到当前资产版本，或明确保留旧引用；PINNED：保持已锁定版本，保证已确认分镜可复现。</div>`,foot); },
+        'scene-pinned-result': () => { const instances = overlayState.payload.instances || []; return overlayFrame('scene-pinned-result','已保留旧场景引用','这是当前页面内的演示决策，不会写入外部后端。',`<div class="surface-list">${instances.map(instance => `<div class="surface-row"><div><strong>剧本场景实例 · ${instance.id}</strong><p>继续引用 asset V${instance.sceneAssetVersion} / variant V${instance.variantVersion}</p></div><span class="tag">PINNED</span></div>`).join('')}</div><div class="notice">已确认分镜快照继续独立保持 PINNED，母资产当前版本不会回写任何锁定内容。</div>`,`<button class="btn primary" data-action="view-scene-asset-impact">返回影响范围</button>`); },
         'canvas-handoff': () => overlayFrame('canvas-handoff','创建画布项目','将锁定文字分镜与关联资产交给视频生产工作台',`<div class="mini-card"><h3>交接内容</h3><p>${storyboardState.shots.length} 个镜头 · 人物资产 · 世界观 · 场景连续性锚点</p></div><div class="notice">静态演示不会真实创建外部项目；产品实现时调用画布项目创建接口。</div>`,`<button class="btn secondary" data-action="close-overlay">取消</button><button class="btn primary" data-action="handoff-canvas">确认创建</button>`),
         'archive-result': () => { const result = overlayState.payload.result || {}; return overlayFrame('archive-result','项目已归档','静态演示已将本项目切换为只读状态；不会修改外部后端。',`<div class="mini-card"><h3>${escapeHtml(config.projectName)}</h3><p>状态：ARCHIVED（只读） · 任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p><p>全部产物、版本、任务与导出记录均已保留。</p></div>`,`<button class="btn secondary" data-action="view-archive-result" data-result-id="${escapeHtml(result.id || '')}">查看项目详情</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
         'export-result': () => { const result = overlayState.payload.result || {}; const fileCount = Object.keys(WorkflowModel.buildVaultFiles(appState)).length; return overlayFrame('export-result','创作包导出已完成','静态演示已保存导出记录，不会创建外部文件。',`<div class="mini-card"><h3>${escapeHtml(result.packagePath || result.path || '创作包')}</h3><p>格式：${escapeHtml(result.exportFormat || '-')} · 范围：${escapeHtml(result.exportRange || '-')}</p><p>Vault 文件：${fileCount} 个 · 任务 ${escapeHtml(result.taskId || '-')} · 积分 0</p></div>`,`<button class="btn secondary" data-action="view-export-result" data-result-id="${escapeHtml(result.id || '')}">查看导出结果</button><button class="btn primary" data-action="open-task-center">在任务中心查看</button>`); },
@@ -2248,6 +2273,15 @@
           openOverlay('scene-asset-detail', { sceneAssetId:outcome.asset.id });
           notify(`${outcome.asset.id} 已保存到当前页面演示状态。`);
         },
+        'update-scene-asset': () => openOverlay('scene-asset-update-editor'),
+        'confirm-update-scene-asset': () => {
+          const description = document.getElementById('scene-asset-update-description').value.trim();
+          if (!description) return openOverlay('action-guidance', { code:'SCENE_ASSET_DESCRIPTION_REQUIRED', title:'场景语义不能为空', message:'请补充空间结构、材质、光线或连续性锚点后再保存。', targetAction:'update-scene-asset' });
+          const asset = WorkflowModel.updateSceneAsset(appState, appState.sceneAssets.selectedAssetId, { description });
+          if (!asset) return openOverlay('action-guidance', { code:'SCENE_ASSET_REQUIRED', title:'缺少场景母资产', message:'请返回资产库选择要编辑的场景母资产。', targetAction:'open-scene-assets' });
+          openOverlay('scene-asset-impact', { sceneAssetId:asset.id });
+          notify(`${asset.id} 已在当前页面演示中更新为 V${asset.version}，旧引用已进入影响检查。`);
+        },
         'create-scene-variant': () => openOverlay('scene-variant-editor'),
         'confirm-create-scene-variant': () => {
           const outcome = WorkflowModel.createSceneVariant(appState, appState.sceneAssets.selectedAssetId, {
@@ -2283,18 +2317,16 @@
           appState.sceneAssets.selectedAssetId = sceneAssetId;
           openOverlay('scene-asset-impact', { sceneAssetId });
         },
-        'keep-pinned-scene': () => openOverlay('scene-pinned-result'),
+        'keep-pinned-scene': () => {
+          const outcome = WorkflowModel.keepSceneBindingsPinned(appState, appState.sceneAssets.selectedAssetId);
+          if (!outcome.allowed) return openOverlay('action-guidance', outcome);
+          openOverlay('scene-pinned-result', { instances:outcome.instances });
+        },
         'refresh-scene-binding': () => {
-          const asset = appState.sceneAssets.masters.find(item => item.id === appState.sceneAssets.selectedAssetId);
-          for (const instance of appState.sceneAssets.scriptInstances.filter(item => item.sceneAssetId === asset?.id)) {
-            const variant = asset.variants.find(item => item.id === instance.variantId) || asset.variants[0];
-            instance.sceneAssetVersion = asset.version;
-            instance.variantId = variant?.id || null;
-            instance.variantVersion = variant?.version || null;
-            instance.status = 'CURRENT';
-          }
-          openOverlay('scene-asset-impact', { sceneAssetId:asset?.id });
-          notify('剧本场景实例已刷新到当前演示版本；PINNED 分镜快照保持不变。');
+          const outcome = WorkflowModel.refreshSceneBindings(appState, appState.sceneAssets.selectedAssetId);
+          if (!outcome.allowed) return openOverlay('action-guidance', outcome);
+          openOverlay('scene-asset-impact', { sceneAssetId:outcome.asset.id });
+          notify('STALE 剧本场景实例已刷新到当前演示版本；PINNED 分镜快照保持不变。');
         },
         'open-project-detail': () => openOverlay('project-detail'),
         'open-task-center': () => openOverlay('task-center'),
@@ -2706,6 +2738,14 @@
       if (!event.target.closest('.workspace-more-wrap') && document.getElementById('workspace-more-menu').classList.contains('open')) closeWorkspaceMoreMenu();
     });
     document.addEventListener('change', event => {
+      if (event.target.id === 'scene-master-picker') {
+        if (!guardAction('bind-scene-asset', event.target)) return;
+        const asset = appState.sceneAssets.masters.find(item => item.id === event.target.value);
+        appState.sceneAssets.selectedAssetId = asset?.id || null;
+        appState.sceneAssets.selectedVariantId = asset?.variants[0]?.id || null;
+        renderOverlay();
+        return;
+      }
       const select = event.target.closest('[data-model-scope]');
       if (!select) return;
       if (!guardAction('change-model', select)) return;
