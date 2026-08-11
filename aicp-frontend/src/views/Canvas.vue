@@ -20,238 +20,189 @@
         <span v-if="canvas.localMode.value" class="badge badge-warning">本地可操作模式</span>
         <span class="text-sm text-muted">自动保存于 {{ state.lastSaved.value }}</span>
       </div>
-      <div class="flex gap-sm">
-        <span class="zoom-label">缩放: {{ state.zoomLevel.value }}%</span>
-        <el-button size="small" circle @click="state.zoomIn()">+</el-button>
-        <el-button size="small" circle @click="state.zoomOut()">−</el-button>
-        <el-button size="small" @click="state.resetZoom()">1:1</el-button>
-        <el-button size="small" @click="showAssetPicker = true">
-          <el-icon><FolderOpened /></el-icon> Workspace资产
-        </el-button>
+      <div class="toolbar-actions">
+        <span class="zoom-label" title="当前缩放">{{ state.zoomLevel.value }}%</span>
+        <button type="button" class="toolbar-action-btn" @click="showAssetPicker = true">
+          <el-icon :size="14"><FolderOpened /></el-icon>
+          Workspace 资产
+        </button>
       </div>
     </div>
 
     <div class="canvas-body">
       <!-- LEFT Panel -->
       <div v-show="!leftPanelCollapsed" class="canvas-left-panel">
-        <div class="canvas-tabs">
-          <div v-for="tab in leftTabs" :key="tab.key"
-               :class="['canvas-tab', { active: state.activeLeftTab.value === tab.key }]"
-               @click="state.activeLeftTab.value = tab.key"><el-icon :size="14"><component :is="tab.icon" /></el-icon> {{ tab.label }}</div>
-        </div>
+        <nav class="canvas-tabs" aria-label="画布侧栏">
+          <button
+            v-for="tab in leftTabs"
+            :key="tab.key"
+            type="button"
+            :class="['canvas-tab', { active: state.activeLeftTab.value === tab.key }]"
+            @click="state.activeLeftTab.value = tab.key"
+          >
+            <el-icon :size="16"><component :is="tab.icon" /></el-icon>
+            <span>{{ tab.label }}</span>
+          </button>
+        </nav>
 
         <!-- Add Node -->
         <div v-if="state.activeLeftTab.value === 'add'" class="tab-content">
-          <div class="text-xs font-bold mb-sm text-muted">生产节点（双击画布或点击）</div>
-          <div v-for="group in nodeTypeGroups" :key="group.name" class="node-group">
-            <div class="node-group-title">{{ group.name }}</div>
-            <div v-for="nt in group.items" :key="nt.type"
-                 class="card card-hover node-add-card"
-                 @click="handleAddNode(nt.type)">
-              <span class="node-icon"><el-icon><component :is="nt.icon" /></el-icon></span>
-              <div><strong>{{ nt.label }}</strong><div class="text-xs text-muted">{{ nt.desc }}</div></div>
+          <section class="panel-section">
+            <header class="panel-section-head">
+              <h3>生产节点</h3>
+              <p>双击画布空白处，或点击下方卡片添加</p>
+            </header>
+            <div v-for="group in nodeTypeGroups" :key="group.name" class="node-group">
+              <div class="node-group-title">{{ group.name }}</div>
+              <button
+                v-for="nt in group.items"
+                :key="nt.type"
+                type="button"
+                class="node-add-card"
+                @click="handleAddNode(nt.type)"
+              >
+                <span class="node-icon"><el-icon :size="18"><component :is="nt.icon" /></el-icon></span>
+                <span class="node-add-copy">
+                  <strong>{{ nt.label }}</strong>
+                  <small>{{ nt.desc }}</small>
+                </span>
+              </button>
             </div>
-          </div>
-          <div class="text-xs font-bold mb-sm mt-lg text-muted">添加资源</div>
-          <div class="upload-drop" @click="ElMessage.info('可将图片/视频/音频直接拖入画布，或接入上传组件')">
-            拖入图片 / 视频 / 音频，或点击上传
-          </div>
-          <div class="text-xs font-bold mb-sm mt-lg text-muted">Slash 快捷命令</div>
-          <el-button v-for="cmd in canvas.SLASH_COMMANDS" :key="cmd" size="small"
-                     class="slash-btn" @click="handleSlash(cmd)">{{ cmd }}</el-button>
+          </section>
+
+          <section class="panel-section">
+            <header class="panel-section-head">
+              <h3>添加资源</h3>
+            </header>
+            <button type="button" class="upload-drop" @click="ElMessage.info('可将图片/视频/音频直接拖入画布，或接入上传组件')">
+              <span class="upload-drop-title">拖入媒体文件</span>
+              <span class="upload-drop-hint">图片 / 视频 / 音频，或点击上传</span>
+            </button>
+          </section>
+
+          <section class="panel-section">
+            <header class="panel-section-head">
+              <h3>Slash 快捷命令</h3>
+            </header>
+            <div class="slash-grid">
+              <button
+                v-for="cmd in canvas.SLASH_COMMANDS"
+                :key="cmd"
+                type="button"
+                class="slash-chip"
+                @click="handleSlash(cmd)"
+              >{{ cmd }}</button>
+            </div>
+          </section>
         </div>
 
         <!-- Workflows -->
         <div v-if="state.activeLeftTab.value === 'workflow'" class="tab-content">
-          <div class="text-xs font-bold mb-sm text-muted">已保存工作流</div>
-          <div v-for="wf in canvas.workflows.value" :key="wf.id || wf.uuid"
-               class="card card-hover" style="padding:10px;margin-bottom:8px"
-               @click="handleApplyWorkflow(wf)">
-            <strong style="font-size:12px">{{ wf.name }}</strong>
-            <div class="text-xs text-muted">{{ wf.description }}</div>
-          </div>
+          <section class="panel-section">
+            <header class="panel-section-head">
+              <h3>已保存工作流</h3>
+            </header>
+            <button
+              v-for="wf in canvas.workflows.value"
+              :key="wf.id || wf.uuid"
+              type="button"
+              class="node-add-card"
+              @click="handleApplyWorkflow(wf)"
+            >
+              <span class="node-add-copy">
+                <strong>{{ wf.name }}</strong>
+                <small>{{ wf.description }}</small>
+              </span>
+            </button>
+            <div v-if="!canvas.workflows.value.length" class="panel-empty">暂无工作流</div>
+          </section>
         </div>
 
         <!-- Assets -->
         <div v-if="state.activeLeftTab.value === 'assets'" class="tab-content">
-          <div class="text-xs font-bold mb-sm text-muted">资产库</div>
-          <div class="reference-actions">
-            <el-button size="small" type="primary" @click="quickCreateProductionChain">创建脚本生产链</el-button>
-            <el-button size="small" @click="ElMessage.info('将选中节点保存为资产，待接入资产接口')">保存为资产</el-button>
-            <el-button size="small" @click="ElMessage.info('批量使用资产到当前画布')">批量使用</el-button>
-          </div>
-          <div v-for="asset in projectAssets" :key="asset.asset_id"
-               class="card card-hover" style="padding:8px;margin-bottom:4px;display:flex;align-items:center">
-            <span>{{ assetIcon(asset.asset_type) }}</span> {{ asset.name }}
-            <span :class="['badge', maturityBadge(asset.maturity_level)]" style="margin-left:auto">
-              {{ asset.maturity_level || 'L0' }}
-            </span>
-          </div>
+          <section class="panel-section">
+            <header class="panel-section-head">
+              <h3>资产库</h3>
+            </header>
+            <div class="reference-actions">
+              <el-button size="small" type="primary" @click="quickCreateProductionChain">创建脚本生产链</el-button>
+              <el-button size="small" @click="ElMessage.info('将选中节点保存为资产，待接入资产接口')">保存为资产</el-button>
+              <el-button size="small" @click="ElMessage.info('批量使用资产到当前画布')">批量使用</el-button>
+            </div>
+            <div v-for="asset in projectAssets" :key="asset.asset_id" class="asset-row">
+              <span class="asset-row-name">{{ asset.name }}</span>
+              <span :class="['badge', maturityBadge(asset.maturity_level)]">{{ asset.maturity_level || 'L0' }}</span>
+            </div>
+            <div v-if="!projectAssets.length" class="panel-empty">画布中尚无资产节点</div>
+          </section>
         </div>
 
         <!-- History -->
         <div v-if="state.activeLeftTab.value === 'history'" class="tab-content">
-          <div class="text-xs font-bold mb-sm text-muted">生成历史</div>
-          <div class="reference-actions">
-            <el-button size="small" type="primary" @click="$router.push('/asset-history')">打开历史记录</el-button>
-            <el-button size="small" @click="ElMessage.info('批量下载生成历史，待接入后端')">批量下载</el-button>
-            <el-button size="small" @click="ElMessage.info('批量删除生成历史，待接入后端')">批量删除</el-button>
-            <el-button size="small" @click="ElMessage.info('批量使用历史资源到当前画布')">批量使用</el-button>
-          </div>
+          <section class="panel-section">
+            <header class="panel-section-head">
+              <h3>生成历史</h3>
+            </header>
+            <div class="reference-actions">
+              <el-button size="small" type="primary" @click="$router.push('/asset-history')">打开历史记录</el-button>
+              <el-button size="small" @click="ElMessage.info('批量下载生成历史，待接入后端')">批量下载</el-button>
+              <el-button size="small" @click="ElMessage.info('批量删除生成历史，待接入后端')">批量删除</el-button>
+              <el-button size="small" @click="ElMessage.info('批量使用历史资源到当前画布')">批量使用</el-button>
+            </div>
+          </section>
         </div>
 
         <div v-if="state.activeLeftTab.value === 'tutorial'" class="tab-content">
-          <div class="text-xs font-bold mb-sm text-muted">教程</div>
-          <div class="tutorial-list">
-            <button @click="ElMessage.info('教程：双击空白画布新建节点')">新建节点</button>
-            <button @click="ElMessage.info('教程：从节点右侧端口拖线到输入点建立连接')">节点连线</button>
-            <button @click="ElMessage.info('教程：脚本节点按确认镜头、整理资产、合成提示词、批量生成执行')">脚本节点</button>
-          </div>
+          <section class="panel-section">
+            <header class="panel-section-head">
+              <h3>教程</h3>
+            </header>
+            <div class="tutorial-list">
+              <button type="button" @click="ElMessage.info('教程：双击空白画布新建节点')">新建节点</button>
+              <button type="button" @click="ElMessage.info('教程：从节点右侧端口拖线到输入点建立连接')">节点连线</button>
+              <button type="button" @click="ElMessage.info('教程：脚本节点按确认镜头、整理资产、合成提示词、批量生成执行')">脚本节点</button>
+            </div>
+          </section>
         </div>
       </div>
 
       <!-- CANVAS AREA -->
       <div class="canvas-area"
            ref="canvasAreaRef"
-           @dblclick="onCanvasDoubleClick"
            @drop="onCanvasDrop"
-           @dragover.prevent
-           @mousedown="onCanvasMouseDown"
-           @mousemove="onCanvasMouseMove"
-           @mouseup="onCanvasMouseUp"
-           @mouseleave="onCanvasMouseLeave"
-           @click.self="deselectCanvas()">
+           @dragover.prevent>
         <button
           class="left-panel-toggle"
           :title="leftPanelCollapsed ? '展开节点工具栏' : '收起节点工具栏'"
           @mousedown.stop
           @click.stop="leftPanelCollapsed = !leftPanelCollapsed"
         >{{ leftPanelCollapsed ? '›' : '‹' }}</button>
-        <!-- Minimap -->
-        <div class="minimap">
-          <strong>{{ canvas.nodes.value.length }}</strong>
-          <span>节点</span>
-          <small>{{ state.zoomLevel.value }}%</small>
-        </div>
 
-        <div class="canvas-stage" :style="stageStyle" @click.self="deselectCanvas()">
-          <!-- SVG Connections -->
-          <svg class="connection-layer" :width="state.canvasSize.value.width" :height="state.canvasSize.value.height">
-            <g v-for="conn in connectionPaths" :key="conn.id">
-              <path :d="conn.path"
-                    class="connection-hit"
-                    @click.stop="selectConnection(conn.id)" />
-              <path :d="conn.path"
-                    :class="['connection-path', { selected: selectedConnectionId === conn.id }]" />
-            </g>
-            <path v-if="tempConnectionLine" :d="tempConnectionLine" class="connection-path temp-connection" />
-          </svg>
+        <VueFlowCanvasStage
+          ref="flowStageRef"
+          :domain-nodes="canvas.nodes.value"
+          :domain-connections="canvas.connections.value"
+          :selected-node-id="state.selectedNodeId.value"
+          :selected-edge-id="selectedConnectionId"
+          @select-node="selectNode"
+          @deselect="deselectCanvas"
+          @connect="onFlowConnect"
+          @select-edge="onFlowSelectEdge"
+          @nodes-moved="onFlowNodesMoved"
+          @viewport="onFlowViewport"
+          @pane-dblclick="onCanvasDoubleClick"
+          @drop="onCanvasDrop"
+          @open-shot="openShotEditor"
+          @open-director="openDirectorDesk"
+          @node-context="onFlowNodeContext"
+        />
 
-          <button v-if="selectedConnectionForPanel"
-                  class="connection-delete"
-                  :style="{ left: selectedConnectionForPanel.midX + 'px', top: selectedConnectionForPanel.midY + 'px' }"
-                  @mousedown.stop
-                  @click.stop="deleteSelectedConnection">
-            删除连线
-          </button>
-
-          <!-- Nodes -->
-          <div v-for="group in presetGroupFrames" :key="group.id"
-               :class="['preset-group-frame', { dragging: groupDrag.active && groupDrag.groupId === group.id }]"
-               :style="{ left: group.x + 'px', top: group.y + 'px', width: group.width + 'px', height: group.height + 'px' }"
-               @mousedown.stop="(e) => onPresetGroupMouseDown(e, group)">
-            <div class="preset-group-title">{{ group.title }}</div>
-          </div>
-
-          <div v-for="node in canvas.nodes.value" :key="nodeKey(node)"
-               :class="['canvas-node', 'node-' + node.type, { selected: state.selectedNodeId.value === nodeKey(node), 'node-dragging': nodeDrag.active && nodeDrag.nodeId === nodeKey(node) }]"
-               :style="{ left: (node.x || 0) + 'px', top: (node.y || 0) + 'px', width: nodeW(node) + 'px' }"
-               @mousedown="(e) => onNodeMouseDown(e, node)"
-               @click.stop="selectNode(node)"
-               @contextmenu.prevent="state.openContextMenu($event, nodeKey(node))">
-            <div class="node-header">
-              <span><el-icon :size="14"><component :is="nodeIcon(node.type)" /></el-icon> {{ node.name || node.label || '节点' }}</span>
-              <div v-if="node.type !== 'text'" class="flex gap-sm">
-                <span :class="['node-status', nodeStatusClass(node.status)]">{{ nodeStatusText(node.status) }}</span>
-                <span class="node-cost">预计 {{ estimatedCostForNode(node.type) }} 积分</span>
-                <el-button link size="small" v-if="node.type === 'script'" @click="openShotEditor(node)"></el-button>
-              </div>
-            </div>
-            <div class="node-body">
-              <div v-if="node.type === 'script'" class="node-script-table">
-                <div class="script-progress">
-                  <span>确认镜头信息</span>
-                  <span>整理资产</span>
-                  <span>合成提示词</span>
-                  <span>批量生成</span>
-                </div>
-                <table><thead><tr><th>镜号</th><th>景别</th><th>画面</th><th>对白</th></tr></thead>
-                  <tbody><tr v-for="s in getNodeShots(node).slice(0,4)" :key="s.id || s.uuid || s.shot_no">
-                    <td><code>{{ s.shot_no || s.id }}</code></td><td>{{ s.shot_size || s.shotType }}</td>
-                    <td>{{ s.visual_description || s.content }}</td><td>{{ getDialogueText(s) }}</td>
-                  </tr></tbody></table>
-                <div v-if="!getNodeShots(node).length" class="empty-node-tip">未导入分镜，点击“分镜表”维护镜头字段</div>
-              </div>
-              <div v-else-if="node.type === 'image'" class="canvas-mock" style="min-height:100px">
-                <img v-if="getNodePreviewUrl(node)" :src="getNodePreviewUrl(node)" class="node-preview-image" alt="图片预览" />
-                <div v-else class="media-placeholder image-placeholder"><el-icon><Picture /></el-icon> {{ getNodePrompt(node) || '图片预览' }}</div>
-              </div>
-              <div v-else-if="node.type === 'video'" class="canvas-mock" style="min-height:100px">
-                <div class="media-placeholder video-placeholder"><span>▶</span></div>
-              </div>
-              <div v-else-if="node.type === 'director'" class="director-node-preview">
-                <div class="director-mini-stage">
-                  <span class="director-mini-person"></span>
-                  <span class="director-mini-box"></span>
-                  <span class="director-mini-camera"></span>
-                </div>
-                <div class="director-node-meta">
-                  <span>元素 {{ getDirectorData(node).elements.length }}</span>
-                  <span>截图 {{ getDirectorData(node).shots.length }}</span>
-                  <span>{{ getDirectorData(node).aspect }}</span>
-                </div>
-              </div>
-              <div v-else-if="node.type === 'text'" class="text-node-body">
-                <div v-if="getTextNodeMode(node) === 'manual'" class="text-content-preview">
-                  {{ getNodePrompt(node) || '点击节点，在浮动编辑器中输入内容…' }}
-                </div>
-                <div v-else-if="getTextNodeMode(node) === 'prompt'" class="text-prompt-card">
-                  {{ getNodePrompt(node) || '输入文本提示词...' }}
-                </div>
-                <div v-else class="text-choice-panel">
-                  <div class="text-choice-empty">
-                    <span></span><span></span><span></span><small></small>
-                  </div>
-                  <div class="text-choice-label">尝试:</div>
-                  <button @click.stop="handleTextPreset(node, 'manual')"><span>▤</span>自己编写内容</button>
-                  <button @click.stop="handleTextPreset(node, 'text_to_video')"><span>▶</span>文生视频</button>
-                  <button @click.stop="handleTextPreset(node, 'image_to_prompt')"><span>▧</span>图片反推提示词</button>
-                  <button @click.stop="handleTextPreset(node, 'text_to_music')"><span>♩</span>文字生音乐</button>
-                </div>
-              </div>
-              <div v-else-if="node.type === 'audio'" style="padding:8px">
-                <div class="audio-placeholder">
-                  <span></span><span></span><span></span><span></span><span></span>
-                </div>
-              </div>
-              <div v-else style="padding:8px;font-size:11px;color:#888">
-                {{ getNodePrompt(node) || node.type + ' 节点' }}
-              </div>
-            </div>
-            <!-- Complex workspaces keep one clear entry; ordinary node actions live in the floating editor. -->
-            <div v-if="node.type === 'script'" class="node-actions">
-              <el-button type="primary" size="small" @click.stop="openShotEditor(node)">打开专业编辑器 ↗</el-button>
-            </div>
-            <div v-if="node.type === 'director'" class="node-actions">
-              <el-button type="primary" size="small" @click.stop="openDirectorDesk(node)">打开专业编辑器 ↗</el-button>
-            </div>
-            <div class="node-out-port" title="拖出连线" @mousedown.stop="startConnectionDrag(node)"></div>
-            <div :class="['node-in-port', { connectable: isConnectableTarget(node) }]"
-                 title="输入连接"
-                 @mouseup.stop="completeConnectionDrag(node)"></div>
-          </div>
-
-        </div>
+        <button
+          v-if="selectedConnectionId"
+          class="connection-delete-btn"
+          @mousedown.stop
+          @click.stop="deleteSelectedConnection"
+        >删除连线</button>
 
         <NodeFloatingEditor
           v-if="selectedNodeForPanel"
@@ -608,6 +559,7 @@ import NodeCreateMenu from './canvas/components/NodeCreateMenu.vue'
 import NodeFloatingEditor from './canvas/components/NodeFloatingEditor.vue'
 import ShotTableEditor from './canvas/components/ShotTableEditor.vue'
 import WorkspaceAssetPicker from './canvas/components/WorkspaceAssetPicker.vue'
+import VueFlowCanvasStage from './canvas/flow/VueFlowCanvasStage.vue'
 import { computeFloatingEditorPosition } from './canvas/utils/floatingEditorPosition'
 import { shouldSelectNode } from './canvas/utils/nodeEditorData'
 
@@ -618,6 +570,7 @@ const showAssetPicker = ref(false)
 const canvas = useCanvasNodes(state.projectId)
 
 const canvasAreaRef = ref(null)
+const flowStageRef = ref(null)
 const directorStageRef = ref(null)
 const selectedNodeForPanel = ref(null)
 const leftPanelCollapsed = ref(false)
@@ -914,6 +867,9 @@ const tempConnectionLine = computed(() => {
 
 // ===== Lifecycle =====
 onMounted(async () => {
+  // 路由切换后可能残留上一页 teleported 的 Element Plus 遮罩，叠在侧栏上
+  document.querySelectorAll('body > .el-overlay').forEach((el) => el.remove())
+
   window.addEventListener('keydown', onCanvasKeydown)
   if (canvasAreaRef.value) {
     const updateViewport = () => {
@@ -1974,10 +1930,6 @@ function getDialogueText(shot) {
 
 // ===== Canvas Interactions =====
 function onCanvasDoubleClick(e) {
-  // Don't open create menu if we're finishing a drag
-  if (nodeDrag.value.active || connectionDrag.value.active) return
-  const rect = canvasAreaRef.value?.getBoundingClientRect()
-  if (!rect) return
   createMenuPos.value = { x: e.clientX, y: e.clientY }
   createMenuVisible.value = true
 }
@@ -2754,6 +2706,12 @@ function findNodeByRef(ref) {
 }
 
 function screenToCanvas(clientX, clientY) {
+  if (flowStageRef.value?.screenToCanvas) {
+    try {
+      const point = flowStageRef.value.screenToCanvas(clientX, clientY)
+      if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) return point
+    } catch { /* fall through */ }
+  }
   const rect = canvasAreaRef.value?.getBoundingClientRect()
   const scale = state.zoomLevel.value / 100
   if (!rect || !scale) return { x: 0, y: 0 }
@@ -2761,6 +2719,55 @@ function screenToCanvas(clientX, clientY) {
     x: (clientX - rect.left - state.panOffset.value.x) / scale,
     y: (clientY - rect.top - state.panOffset.value.y) / scale
   }
+}
+
+async function onFlowConnect({ source, target, sourcePort = 'out', targetPort = 'in' }) {
+  if (!source || !target || source === target) return
+  const alreadyConnected = canvas.connections.value.some(c => {
+    const sId = c.source_node_id || c.sourceNodeId || c.source
+    const tId = c.target_node_id || c.targetNodeId || c.target
+    const sNode = findNodeByRef(sId)
+    const tNode = findNodeByRef(tId)
+    if (!sNode || !tNode) return false
+    return nodeKey(sNode) === source && nodeKey(tNode) === target
+  })
+  if (alreadyConnected) {
+    ElMessage.warning('这两个节点已经连接')
+    return
+  }
+  try {
+    await canvas.connectNodes(source, target, sourcePort, targetPort)
+    ElMessage.success('节点已连接')
+    state.markSaved()
+  } catch (e) {
+    ElMessage.error('连线失败: ' + (e?.message || e || '未知错误'))
+  }
+}
+
+function onFlowSelectEdge(edgeId) {
+  selectConnection(edgeId)
+}
+
+async function onFlowNodesMoved(positions = []) {
+  if (!positions.length) return
+  positions.forEach((p) => {
+    const node = findNodeByRef(p.node_id)
+    if (!node) return
+    node.x = p.x
+    node.y = p.y
+  })
+  await canvas.updateNodePositions(positions).catch(() => {})
+  state.markSaved()
+}
+
+function onFlowViewport(vp) {
+  if (!vp) return
+  state.zoomLevel.value = vp.zoom || 100
+  state.panOffset.value = { x: vp.x || 0, y: vp.y || 0 }
+}
+
+function onFlowNodeContext(e, raw) {
+  state.openContextMenu(e, nodeKey(raw))
 }
 
 function nodeLabel(type) {
@@ -2898,33 +2905,256 @@ function estimatedCostForNode(type) {
 .canvas-back-btn { color:#94a3b8 !important; margin-right:4px; }
 .canvas-back-btn:hover { color:#e2e8f0 !important; }
 .canvas-toolbar { display:flex; align-items:center; justify-content:space-between; padding:8px 16px;
-  background:#1a1a2e; border-bottom:1px solid #2a2a3e; flex-shrink:0; color:#e0e0e0; }
+  background:#1a1a2e; border-bottom:1px solid #2a2a3e; flex-shrink:0; color:#e0e0e0; position:relative; z-index:40; }
+.toolbar-actions { display:flex; align-items:center; gap:10px; }
+.zoom-label {
+  min-width: 46px;
+  text-align: center;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: #c7d2fe;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid #2a3348;
+  background: #121826;
+}
+.toolbar-action-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #2a3348;
+  background: #121826;
+  color: #dbe4f5;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.toolbar-action-btn:hover {
+  border-color: rgba(129,140,248,.5);
+  background: rgba(129,140,248,.12);
+  color: #eef2ff;
+}
 .project-menu-btn { border:1px solid #2a2a3e; background:#111827; color:#e0e7ff; border-radius:6px; padding:5px 9px; font-size:13px; font-weight:800; cursor:pointer; }
 .project-menu-btn:hover { border-color:#818cf8; }
-.zoom-label { font-size:12px; color:#a1a1aa; padding:4px 8px; background:#0f172a; border-radius:4px; }
 .canvas-body { display:flex; flex:1; min-height:0; overflow:hidden; }
-.canvas-left-panel { width:248px; background:#1a1a2e; border-right:1px solid #2a2a3e;
-  display:flex; flex-direction:column; flex-shrink:0; overflow-y:auto; padding:12px; color:#e0e0e0; --text-secondary:#a1a1aa; }
-.canvas-tabs { display:flex; gap:4px; margin-bottom:12px; }
-.canvas-tab { font-size:11px; padding:6px 8px; cursor:pointer; font-weight:600; color:#a1a1aa;
-  border-bottom:2px solid transparent; transition:all .15s; min-height:32px; display:flex; align-items:center; gap:4px; }
-.canvas-tab:hover { color:#e0e0e0; }
-.canvas-tab.active { color:#818cf8; border-bottom-color:#818cf8; }
-.tab-content { font-size:12px; }
-.node-add-card { padding:10px 12px; margin-bottom:6px; display:flex; gap:10px; align-items:center;
-  background:#1e293b; border:1px solid #2a2a3e; border-radius:8px; cursor:pointer; transition:all .15s; color:#e0e0e0; }
-.node-add-card:hover { border-color:#818cf8; background:rgba(99,102,241,0.1); color:#fff; }
-.node-add-card .node-icon { font-size:18px; }
-.node-group { margin-bottom:12px; }
-.node-group-title { color:#94a3b8; font-size:10px; font-weight:800; margin:10px 0 6px; letter-spacing:.06em; }
-.reference-actions { display:grid; gap:6px; margin-bottom:12px; }
-.reference-actions .el-button { margin-left:0; width:100%; }
-.upload-drop { border:1px dashed #475569; color:#94a3b8; border-radius:8px; padding:12px; font-size:12px; text-align:center; cursor:pointer; background:#0f172a; }
-.upload-drop:hover { border-color:#818cf8; color:#e0e7ff; }
-.tutorial-list { display:grid; gap:8px; }
-.tutorial-list button { text-align:left; border:1px solid #2a2a3e; background:#1e293b; color:#cbd5e1; border-radius:8px; padding:9px; cursor:pointer; }
-.tutorial-list button:hover { border-color:#818cf8; }
-.slash-btn { font-size:10px; padding:3px 8px; margin:0 4px 4px 0; }
+.canvas-left-panel {
+  --panel-bg: #121826;
+  --panel-surface: #1a2234;
+  --panel-surface-hover: #222c42;
+  --panel-border: #2a3348;
+  --panel-text: #e8edf7;
+  --panel-muted: #8b95a8;
+  --panel-accent: #818cf8;
+  --panel-accent-soft: rgba(129, 140, 248, .14);
+  width: 268px;
+  background: var(--panel-bg);
+  border-right: 1px solid var(--panel-border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--panel-text);
+  position: relative;
+  z-index: 30;
+}
+.canvas-tabs {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 2px;
+  padding: 10px 8px 8px;
+  border-bottom: 1px solid var(--panel-border);
+  background: rgba(0, 0, 0, .18);
+  flex-shrink: 0;
+}
+.canvas-tab {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--panel-muted);
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 52px;
+  padding: 6px 2px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+  transition: background .15s, color .15s;
+}
+.canvas-tab:hover { color: var(--panel-text); background: rgba(255,255,255,.04); }
+.canvas-tab.active {
+  color: #c7d2fe;
+  background: var(--panel-accent-soft);
+  box-shadow: inset 0 0 0 1px rgba(129, 140, 248, .28);
+}
+.tab-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 12px 20px;
+  font-size: 12px;
+  scrollbar-width: thin;
+  scrollbar-color: #334155 transparent;
+}
+.panel-section + .panel-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid rgba(42, 51, 72, .9); }
+.panel-section-head { margin-bottom: 10px; }
+.panel-section-head h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  color: #dbe4f5;
+}
+.panel-section-head p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--panel-muted);
+}
+.node-group { margin-bottom: 12px; }
+.node-group-title {
+  color: #6f7b91;
+  font-size: 10px;
+  font-weight: 700;
+  margin: 0 0 8px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.node-add-card {
+  width: 100%;
+  appearance: none;
+  text-align: left;
+  padding: 10px 11px;
+  margin-bottom: 8px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: var(--panel-surface);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, transform .12s;
+  color: var(--panel-text);
+}
+.node-add-card:hover {
+  border-color: rgba(129, 140, 248, .55);
+  background: var(--panel-surface-hover);
+}
+.node-add-card:active { transform: translateY(1px); }
+.node-add-card .node-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: rgba(129, 140, 248, .12);
+  color: #a5b4fc;
+}
+.node-add-copy { display: grid; gap: 3px; min-width: 0; }
+.node-add-copy strong {
+  font-size: 13px;
+  font-weight: 650;
+  color: #f1f5f9;
+  line-height: 1.25;
+}
+.node-add-copy small {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--panel-muted);
+}
+.upload-drop {
+  width: 100%;
+  appearance: none;
+  border: 1px dashed #3d4a63;
+  color: var(--panel-muted);
+  border-radius: 12px;
+  padding: 16px 12px;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+  background: rgba(15, 23, 42, .55);
+  display: grid;
+  gap: 4px;
+  transition: border-color .15s, color .15s, background .15s;
+}
+.upload-drop:hover {
+  border-color: rgba(129, 140, 248, .65);
+  background: var(--panel-accent-soft);
+  color: #e0e7ff;
+}
+.upload-drop-title { font-size: 12px; font-weight: 650; color: #cbd5e1; }
+.upload-drop-hint { font-size: 11px; color: inherit; }
+.slash-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.slash-chip {
+  appearance: none;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-surface);
+  color: #c6d0e3;
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 550;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color .15s, background .15s, color .15s;
+}
+.slash-chip:hover {
+  border-color: rgba(129, 140, 248, .5);
+  background: var(--panel-accent-soft);
+  color: #e0e7ff;
+}
+.reference-actions { display: grid; gap: 6px; margin-bottom: 12px; }
+.reference-actions .el-button { margin-left: 0; width: 100%; }
+.asset-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 10px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-surface);
+}
+.asset-row-name { flex: 1; min-width: 0; font-size: 12px; color: #e2e8f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-empty {
+  padding: 18px 10px;
+  text-align: center;
+  color: var(--panel-muted);
+  font-size: 12px;
+  border: 1px dashed var(--panel-border);
+  border-radius: 12px;
+}
+.tutorial-list { display: grid; gap: 8px; }
+.tutorial-list button {
+  text-align: left;
+  border: 1px solid var(--panel-border);
+  background: var(--panel-surface);
+  color: #cbd5e1;
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.tutorial-list button:hover {
+  border-color: rgba(129, 140, 248, .5);
+  background: var(--panel-surface-hover);
+}
 .canvas-area { flex:1; min-width:0; min-height:0; background:#0f172a;
   background-image:radial-gradient(#1e293b 1px, transparent 1px); background-size:24px 24px;
   position:relative; overflow:hidden; cursor:grab; color:#e0e0e0; }
@@ -3032,7 +3262,13 @@ function estimatedCostForNode(type) {
 .node-out-port { right:-6px; background:#6366f1; box-shadow:0 0 0 2px rgba(99,102,241,0.5); }
 .node-in-port { left:-6px; background:#10b981; box-shadow:0 0 0 2px rgba(16,185,129,0.5); }
 .node-in-port.connectable { transform:scale(1.25); box-shadow:0 0 0 4px rgba(16,185,129,0.28), 0 0 16px rgba(16,185,129,.75); }
-.floating-add { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:10; }
+.floating-add { position:absolute; bottom:16px; left:50%; transform:translateX(-50%); z-index:80; }
+.connection-delete-btn {
+  position:absolute; top:16px; right:16px; z-index:80;
+  border:1px solid #f59e0b; background:#1f1606; color:#fbbf24;
+  border-radius:6px; padding:6px 10px; font-size:12px; font-weight:700; cursor:pointer;
+}
+.connection-delete-btn:hover { background:#2a1d08; }
 .node-context-menu { position:fixed; z-index:1000; display:grid; min-width:160px; background:#111827; border:1px solid #374151; border-radius:8px; overflow:hidden; box-shadow:0 16px 40px rgba(0,0,0,.45); }
 .node-context-menu button { border:0; background:transparent; color:#e5e7eb; text-align:left; padding:9px 12px; cursor:pointer; font-size:12px; }
 .node-context-menu button:hover { background:#1f2937; }
