@@ -562,7 +562,7 @@ function transitionGuard() {
   if (stage === 'script_body') {
     const scenes = (stageData.scriptBody.episodes || []).flatMap(episode => episode.scenes || [])
     if (!scenes.length) return { code: 'SCRIPT_SCENE_REQUIRED', title: '请先新增剧本场景', message: '剧本正文至少需要一个场景。', targetAction: 'focus_script_scenes' }
-    if (scenes.some(scene => !scene.assetBinding && scene.bindingState !== 'DEFERRED')) return { code: 'SCENE_ASSET_BINDING_REQUIRED', title: '请处理场景资产绑定', message: '绑定场景资产，或明确选择稍后绑定后再进入审阅。', targetAction: 'focus_scene_asset_binding' }
+    if (scenes.some(scene => !scene.assetBinding && scene.bindingState !== 'DEFERRED')) return { code: 'SCENE_ASSET_BINDING_REQUIRED', title: '请处理场景资产绑定', message: '绑定场景资产，或明确选择稍后绑定后再进入审核修订。', targetAction: 'focus_scene_asset_binding' }
   }
   if (stage === 'review_revision' && !stageData.reviewRevision.approvedEpisodeIds?.length) return { code: 'REVIEW_APPROVAL_REQUIRED', title: '请先审核通过本集', message: '解决 HIGH/BLOCKER 问题并完成审核通过后才能进入文字分镜。', targetAction: 'approve_review_episode' }
   if (stage === 'text_storyboard' && !stageData.textStoryboard.archived) return { code: 'STORYBOARD_ARCHIVE_REQUIRED', title: '请先完成并归档', message: '通过连续性检查并锁定所有场景快照后，再完成八阶段流程。', targetAction: 'complete_storyboard_archive' }

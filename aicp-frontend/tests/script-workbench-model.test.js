@@ -38,7 +38,9 @@ test('user-visible workflow copy never falls back to legacy stage aliases', () =
 
   assert.match(sources, /结构化文字剧本/)
   assert.match(sources, /审核修订/)
+  assert.match(sources, /绑定场景资产，或明确选择稍后绑定后再进入审核修订。/)
   assert.doesNotMatch(sources, /结构化剧本|审阅与修订/)
+  assert.doesNotMatch(sources, /进入审阅/)
 })
 
 test('all actions stay clickable and explain unmet conditions', () => {
