@@ -394,10 +394,12 @@ POST /api/v1/content-projects/{id}/duplicate
 
 场景母资产生命周期 `ACTIVE` / `DISABLED` / `ARCHIVED` 与项目生命周期相互独立。新绑定只允许 ACTIVE；语义版本变化后剧本消费者可为 `CURRENT`、`STALE` 或 `PINNED`；已锁或 superseded 分镜快照始终 PINNED。资产归档前必须先读取权威消费者并处理替换，不能仅根据前端计数放行。
 
-### 16.3 版本、候选和积分投影
+### 16.3 版本、候选和积分投影：当前实现与目标合同
 
-生成任务使用 `queued` / `running` / `completed` / `failed` / `cancelled`。completed 产生隔离 candidate 而不是自动切换当前版本；服务端采纳后才成为 accepted，放弃成为 discarded。仓库项目卡片和详情只投影当前公开版本，不把 candidate/discarded 当作当前内容。
+**当前实现**：生成任务 API 使用 `pending` / `processing` / `completed` / `failed` / `cancelled`；UI 可将前两者显示为 `queued` / `running`。completed 产生隔离 candidate 而不是自动切换当前版本；服务端采纳后才成为 accepted，放弃成为 discarded。仓库项目卡片和详情只投影当前公开版本，不把 candidate/discarded 当作当前内容。
 
-模型优先读取 3001 真实可用模型，只有无可用模型或接口不可达时展示内置演示模型；仅显式演示模型为 0 积分。真实任务沿用 3001 现有积分规则：预估 → 预冻结/预消费 → 实际结算 → 退回差额；仓库审计显示 task、`result_version_id`、`actual_credits`，幂等重试不重复扣费。
+当前 `/api/v1/ai/models` 与本地 registry 提供模型/演示兜底，`/api/v1/credits/estimate`、`actual_credits` 是兼容估算，不是 3001 账务证据。**目标合同（P0 延期）**才是 3001 权威模型目录及预冻结/预消费 → 实际结算 → 失败/取消退款或退回差额；仓库最终应投影 task、`result_version_id`、3001 结算值与流水，幂等重试不重复扣费。
 
 Obsidian 项目库增加 `04-场景资产/00-场景资产索引.md`，用稳定 asset/version/variant/consumer 链接连接剧本与分镜。生产数据库迁移事实到 V17；静态演示中的归档、导出和交接结果不得投影为仓库真实状态。详细合同见 [`../../剧本创作模块_场景资产与八阶段融合说明.md`](../../剧本创作模块_场景资产与八阶段融合说明.md)。
+
+当前文字分镜“完成并归档”只锁定 storyboard version 并记录本地八阶段完成，不会把仓库项目置为 `ARCHIVED`；项目归档仍须走仓库独立状态动作。

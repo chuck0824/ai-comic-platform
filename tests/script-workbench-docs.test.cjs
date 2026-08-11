@@ -60,7 +60,7 @@ test('billing documentation states real-model point parity and explicit demo fal
 
 test('generation candidate lifecycle is server-first and auditable', () => {
   const text = read('docs/剧本创作模块_场景资产与八阶段融合说明.md')
-  for (const status of ['queued', 'running', 'failed', 'cancelled', 'completed']) {
+  for (const status of ['pending', 'processing', 'failed', 'cancelled', 'completed']) {
     assert.match(text, new RegExp(`\\b${status}\\b`))
   }
   for (const term of ['candidate', 'accepted', 'discarded', 'result_version_id', 'actual_credits']) {
@@ -68,6 +68,51 @@ test('generation candidate lifecycle is server-first and auditable', () => {
   }
   assert.match(text, /服务端优先[\s\S]*采纳[\s\S]*放弃/)
   assert.match(text, /候选隔离/)
+  assert.match(text, /API[^\n]*pending[^\n]*processing[^\n]*completed[^\n]*failed[^\n]*cancelled/)
+  assert.match(text, /UI[^\n]*pending[^\n]*queued[^\n]*processing[^\n]*running/)
+})
+
+test('documents separate implemented compatibility behavior from deferred 3001 accounting', () => {
+  for (const relativePath of requiredDocs) {
+    const text = read(relativePath)
+    assert.match(text, /当前实现[\s\S]{0,800}目标合同|目标合同[\s\S]{0,800}当前实现/,
+      `${relativePath} must separate implemented behavior from target contracts`)
+  }
+  const billing = read('docs/superpowers/specs/2026-08-06-script-workbench-obsidian-model-billing-design.md')
+  assert.match(billing, /\/api\/v1\/ai\/models/)
+  assert.match(billing, /\/api\/v1\/credits\/estimate/)
+  assert.match(billing, /本地[^\n]*(?:registry|模型注册表)/)
+  assert.match(billing, /(?:预计|估算)[^\n]*不可[^\n]*账务证据|不可[^\n]*账务证据[^\n]*(?:预计|估算)/)
+  assert.match(billing, /P0[^\n]*(?:延期|未落地)[^\n]*(?:3001|预冻结|结算)/)
+  assert.match(billing, /3001[^\n]*(?:权威模型目录|权威目录)/)
+  assert.match(billing, /预冻结[^\n]*结算[^\n]*退(?:款|回)/)
+})
+
+test('scene variant, snapshot and completion contracts match production DTOs', () => {
+  const text = read('docs/剧本创作模块_场景资产与八阶段融合说明.md')
+  assert.match(text, /新增[^\n]*场景变体[^\n]*(?:append|追加)[^\n]*资产版本/)
+  assert.match(text, /语义等价[^\n]*(?:CURRENT|不[^\n]*STALE)/)
+  assert.match(text, /scene_variant_version/)
+  assert.doesNotMatch(text, /scene_variant_version_id/)
+  for (const key of ['master', 'variant', 'sceneOverride', 'continuityRules', 'finalPromptFragment', 'fingerprint']) {
+    assert.match(text, new RegExp(`"${key}"`), `snapshot example must include ${key}`)
+  }
+  assert.match(text, /完成并归档[^\n]*(?:锁定分镜|storyboard lock)[^\n]*本地八阶段完成/)
+  assert.match(text, /不[^\n]*归档项目|不会[^\n]*项目[^\n]*ARCHIVED/)
+})
+
+test('implementation references use exact component, migration and sourced error facts', () => {
+  const text = read('docs/剧本创作模块_场景资产与八阶段融合说明.md')
+  assert.match(text, /SceneAssetDetailDrawer\.vue/)
+  assert.doesNotMatch(text, /`SceneAssetDrawer\.vue`/)
+  for (const column of ['scene_asset_id', 'scene_asset_version_id', 'scene_variant_id', 'scene_variant_version', 'scene_asset_snapshot']) {
+    assert.match(text, new RegExp(column))
+  }
+  assert.match(text, /V16[^\n]*(?:两个索引|2 个索引)/)
+  assert.match(text, /错误码[^\n]*来源|来源[^\n]*错误码/)
+  for (const source of ['ErrorCode.java', 'scriptWorkbenchModel.js', 'downstreamStageModel.js', 'generationResultPersistence.js']) {
+    assert.match(text, new RegExp(source.replace('.', '\\.')))
+  }
 })
 
 test('fusion guide covers V17, APIs, Obsidian graph, stale policy and rollback', () => {

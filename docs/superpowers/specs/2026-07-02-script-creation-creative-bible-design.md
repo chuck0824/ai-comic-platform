@@ -963,6 +963,12 @@ GET  /api/v1/content-projects/{projectId}/canvas-import-snapshots/{snapshotId}/d
 
 ## 28. 八阶段与场景资产兼容合同（2026-08-11）
 
+### 28.1 当前实现与目标合同
+
+**当前实现**具备创作圣经、场景转换/版本和候选隔离；生成 API 状态为 `pending → processing → completed | failed | cancelled`，UI 可映射为 `queued/running`。模型通过 `/api/v1/ai/models` 与本地 registry 演示兜底展示，`/api/v1/credits/estimate` 及任务积分是本地估算，不是 3001 账务证据。
+
+**目标合同（P0 延期）**是 3001 权威模型目录和预冻结/实际结算/失败取消退款闭环，以及 Obsidian 文件真实落盘；不得用本地估算或静态演示判定上述能力已交付。“完成并归档”当前只锁定分镜并完成本地八阶段，不归档 content project。
+
 本设计中的创作圣经继续作为跨阶段事实与生成上下文，不改变主流程。`/script-gen` 是四入口启动台与最近项目列表；`/script-gen/:projectId/workspace` 是生产原生项目工作台。静态验收演示只保存当前页状态，非生产后端或 Obsidian 持久化证据。
 
 八阶段权威顺序为：创作设置 → 小说上传 → 小说分析 → 改编方案 → 结构化文字剧本 → 剧本正文 → 审核修订 → 文字分镜。与创作圣经中的地点、生态规则和连续性事实关联的场景数据固定分为：场景母资产、场景变体、剧本场景实例、分镜场景快照。
@@ -970,8 +976,8 @@ GET  /api/v1/content-projects/{projectId}/canvas-import-snapshots/{snapshotId}/d
 - 创作圣经“地点”是语义事实；从已保存地点转换后才形成可复用场景母资产，二者通过稳定 location reference 关联，不合并为同一实体。
 - 场景母资产/场景变体使用 immutable 版本；剧本场景实例固定引用具体版本；分镜场景快照锁定后由 fingerprint 证明不可变。
 - 母资产语义更新只把未锁旧版消费者标为 `STALE`；当前消费者为 `CURRENT`；锁定或 superseded 分镜保持 `PINNED`。
-- 创作圣经候选与正文生成候选都遵守候选隔离，但属于不同业务表。正文生成按 `queued` / `running` / `completed` / `failed` / `cancelled` 流转，completed candidate 只有服务端采纳后成为 accepted；discarded 不进入下游上下文。
+- 创作圣经候选与正文生成候选都遵守候选隔离，但属于不同业务表。正文生成 API 按 `pending` / `processing` / `completed` / `failed` / `cancelled` 流转，completed candidate 只有服务端采纳后成为 accepted；discarded 不进入下游上下文。
 - Obsidian 增加 `04-场景资产/00-场景资产索引.md`，稳定 asset/version/variant/consumer 链接进入上下文快照；场景语义变化同时追加影响记录，不能静默重写圣经或锁定分镜。
-- 3001 真实模型优先且沿用现有积分规则；只有显式内置演示模型允许 0 积分。预估、预冻结/预消费、实际结算、退回差额与版本、任务、审计同源。
+- 3001 权威模型和现有积分规则（预估、预冻结/预消费、实际结算、退款/退回差额）属于 P0 目标合同；当前本地 registry/估算不可作为账务证据。
 
 生产数据迁移当前到 V17：V16 保存分镜场景快照，V17 为资产应用补充稳定 `target_key`。完整接口、错误码、部署回滚与操作追溯见 [`../../剧本创作模块_场景资产与八阶段融合说明.md`](../../剧本创作模块_场景资产与八阶段融合说明.md)。

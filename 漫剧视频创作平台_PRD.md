@@ -174,18 +174,18 @@ flowchart LR
 
 ```mermaid
 stateDiagram-v2
-    [*] --> queued: 创建任务
-    queued --> running: 调度成功
-    queued --> cancelled: 用户取消
-    running --> completed: 候选版本落库
-    running --> failed: 模型/解析/服务异常
-    running --> cancelled: 取消生效
-    failed --> queued: 重试并创建新任务
+    [*] --> pending: 创建任务
+    pending --> processing: 执行器领取
+    pending --> cancelled: 用户取消
+    processing --> completed: 候选版本落库
+    processing --> failed: 模型/解析/服务异常
+    processing --> cancelled: 取消生效
+    failed --> pending: 重试并创建新任务
     completed --> accepted: 服务端采纳
     completed --> discarded: 服务端放弃
 ```
 
-生产生成任务状态枚举：`queued`、`running`、`completed`、`failed`、`cancelled`。`completed` 只表示隔离的 candidate 已落库；`accepted`、`discarded` 是结果决定。阶段流转任务在页面层可继续使用 `QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED`、`CANCELED` 映射表示进度与持久化完成，但不得与生成候选状态混为一谈。
+生产生成任务 API 状态枚举：`pending`、`processing`、`completed`、`failed`、`cancelled`。`completed` 只表示隔离的 candidate 已落库；`accepted`、`discarded` 是结果决定。页面层可把 `pending` 显示为 `queued`、`processing` 显示为 `running`，阶段流转也可使用 `QUEUED`、`RUNNING`、`SUCCEEDED`、`FAILED`、`CANCELED` 表示进度，但不得把 UI 映射回写为生成 API 枚举。
 
 规则：
 
@@ -1128,7 +1128,7 @@ V1 默认展示前 6 个主要人物，完整人物列表可通过“查看全�
 
 ### 17.2 生成与结果状态
 
-1. 通过守卫后，AI 动作创建具有稳定 `taskId` 的任务，并进入 `queued → running → completed | failed | cancelled`。进度只能在 `completed` 时达到 100%，失败保留原产物并允许重试。
+1. 通过守卫后，AI 动作创建具有稳定 `taskId` 的任务，并按 API `pending → processing → completed | failed | cancelled` 流转；UI 可映射为 `queued → running`。进度只能在 `completed` 时达到 100%，失败保留原产物并允许重试。
 2. `generation-progress` 展示范围、模型、预计积分和进度；`generation-result` 展示生成前后差异、任务状态、结算状态、结果决策、估算来源、版本、Markdown 路径和积分。
 3. 生成 completed 后结算并保存隔离 `candidate`。用户采纳时先由服务端把候选置为 `accepted` 并切换当前版本，再刷新页面和标记下游 `STALE`；放弃把候选置为 `discarded` 且不覆盖当前产物。成功任务、完整计价快照和积分流水仍可回访，同一 `taskId` 重复决定必须幂等。
 4. 人工保存、检查、审核、导出、归档和交接也必须生成可回访的成功结果记录；静态演示中的人工任务记录 0 积分，但不得声称已写入生产后端。
@@ -1167,7 +1167,7 @@ V1 默认展示前 6 个主要人物，完整人物列表可通过“查看全�
 | 文字分镜 | 切换卡片/表格 | 无业务前置，归档后仍可用 | 当前视图与可选镜头立即更新 | 仅当前页本地视图状态，不创建任务 |
 | 文字分镜 | 连续性检查 | 已有分镜 | 角色、场景、道具和轴线检查弹层 | 检查结果与当前分镜版本关联 |
 | 文字分镜 | 空历史撤销 | 需存在分镜历史；否则 `STORYBOARD_HISTORY_REQUIRED` | 引导选择镜头并完成一次编辑 | 条件不足时零写入；允许时恢复为新版本 |
-| 文字分镜 | 完成并归档 | 项目未归档 | 归档确认与 `archive-result` | 项目切换 `ARCHIVED`，产物/版本/任务/导出记录全部保留 |
+| 文字分镜 | 完成并归档 | 连续性通过且镜头快照完整 | 分镜锁定结果与本地八阶段完成 | 当前不切换项目 `ARCHIVED`；项目归档走仓库独立动作 |
 | 文字分镜 | 配置导图（现有界面对应“导出创作包/配置导出”） | 项目未归档 | 范围、版本、格式配置及 `export-result` | 独立导出任务、文件包路径、Vault 文件数和积分记录 |
 | 文字分镜 | 创建画布项目 | 项目未归档且已有分镜 | 交接确认及 `canvas-result` | 静态演示交接任务、画布项目 ID、镜头/资产数与积分记录 |
 | 文字分镜 | 重新生成当前产物 | 需已保存分镜产物；否则引导保存 | 共享生成流 | 采纳后分镜新版本及任务记录 |
@@ -1328,13 +1328,13 @@ V1 默认展示前 6 个主要人物，完整人物列表可通过“查看全�
 
 归档场景前先读取权威影响；存在活动消费者时阻断并引导替换。恢复历史版本生成新版本而不覆盖历史。`DISABLED`/`ARCHIVED` 资产不得创建新绑定；缓存降级列表只读。数据库迁移事实到 `V17__asset_application_target_key.sql`，以稳定 `target_key` 定位剧本场景实例；分镜快照字段来自 V16。
 
-### 23.3 生成候选与积分
+### 23.3 生成候选与积分：当前实现与目标合同
 
-原生工作台优先读取 3001 真实可用模型；只有无可用模型或接口不可达时才展示内置演示模型，且只有用户显式选择演示模型允许 0 积分。真实模型没有有限且大于零的积分预估时不创建任务。
+**当前实现**：原生工作台调用 `/api/v1/ai/models`，不可用时由本地模型注册表提供内置演示模型；`/api/v1/credits/estimate`、`estimated_credits` 和 `actual_credits` 是 UI/执行器兼容估算，不是 3001 模型目录、余额或账务证据。
 
-生成任务后端状态使用 `queued`、`running`、`completed`、`failed`、`cancelled`。`completed` 只产生隔离的 `candidate` 版本；采纳/放弃必须服务端优先，采纳后成为 `accepted` 并按生成基线切换当前版本，放弃后成为 `discarded` 且当前内容不变。candidate/discarded 不得进入公开版本、恢复或下游生成上下文。
+当前生成任务 API 状态为 `pending` → `processing` → `completed | failed | cancelled`；UI 可将 `pending` 映射为 `queued`、`processing` 映射为 `running`。`completed` 只产生隔离的 `candidate` 版本；采纳/放弃必须服务端优先，采纳后成为 `accepted` 并按生成基线切换当前版本，放弃后成为 `discarded` 且当前内容不变。candidate/discarded 不得进入公开版本、恢复或下游生成上下文。
 
-真实模型完整沿用 3001 现有积分规则：预估 → 预冻结/预消费 → 实际结算 → 退回差额或按规则补差。任务、`result_version_id`、`actual_credits`、积分流水和审计通过同一 task ID 追溯，幂等重试不得重复扣费。
+**目标合同（P0 延期）**：接入 3001 权威模型目录、价格与余额，执行预冻结/预消费、实际结算、失败/取消退款或退回差额。`result_version_id` 与 `actual_credits` 当前可追踪候选和本地估算，但在接入 3001 结算单前不得作为账务证据。
 
 ### 23.4 Obsidian 与影响
 

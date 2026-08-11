@@ -151,7 +151,7 @@ stale: false
 - 新增、拆分、合并镜头直接修改镜头结构，并支持撤销当前操作。
 - 卡片/表格切换保留选择与滚动位置。
 - 连续性检查形成角色、地点、服装、道具和轴线问题列表。
-- 完成并归档写入项目主页状态；配置导出打开格式配置；创建画布项目生成交接摘要。
+- 完成并归档当前锁定 storyboard version 并标记本地八阶段完成，不写项目归档状态；配置导出打开格式配置；创建画布项目生成交接摘要。
 - 重新生成仅作用于当前集、场景或镜头范围，保留旧版本并记录积分消耗。
 
 ## 5. 变更影响与同步修改
@@ -252,14 +252,18 @@ stale: false
 
 场景母资产采用 `ACTIVE` / `DISABLED` / `ARCHIVED` 生命周期与 immutable 语义版本；消费者采用 `CURRENT` / `STALE` / `PINNED`。未锁消费者随语义版本过期，锁定或 superseded 分镜快照保持 `PINNED`。
 
-### 11.2 模型、积分和候选
+### 11.2 模型、积分和候选：当前实现与目标合同
 
-3001 真实可用模型优先。只有无可用模型或接口不可达时才显示内置演示模型；仅用户明确选择的演示模型固定为 `0 积分`。真实模型缺少正数预估时不创建任务。
+**当前实现**：工作台读取 `/api/v1/ai/models`，不可用时使用前端本地模型注册表（local registry）的内置演示模型；`/api/v1/credits/estimate`、任务 `estimated_credits` / `actual_credits` 当前是本地兼容估算。估算只能用于 UI 守卫与提示，不可作为 3001 账务证据，也不能证明已冻结、已结算或已退款。
 
-真实请求沿用 3001 现有积分规则：预估 → 预冻结/预消费 → 实际结算 → 退回差额或按规则补差；task、结果版本、实际积分和流水同源，幂等请求不重复扣费。
+**目标合同（P0 延期，未落地）**：3001 提供权威模型目录、价格快照和余额；真实请求按现有积分规则执行预估 → 预冻结/预消费 → 实际结算 → 失败/取消退款或退回差额。task、结果版本、实际积分和 3001 流水同源，幂等请求不重复扣费。
 
-任务按 `queued` / `running` / `completed` / `failed` / `cancelled` 流转。completed 只创建隔离 candidate；采纳/放弃服务端优先，分别形成 accepted/discarded。candidate/discarded 不进入公开版本、恢复或下游生成上下文，结果需返回 `result_version_id`、`actual_credits` 与稳定错误码。
+仅用户明确选择的演示模型允许显示 0 积分；真实模型不得借演示兜底绕过目标计费合同。
+
+任务 API 按 `pending` → `processing` → `completed | failed | cancelled` 流转；UI 可将 `pending` 显示为 `queued`、`processing` 显示为 `running`。completed 只创建隔离 candidate；采纳/放弃服务端优先，分别形成 accepted/discarded。candidate/discarded 不进入公开版本、恢复或下游生成上下文，结果返回 `result_version_id`、`actual_credits` 与稳定错误码；当前 `actual_credits` 仍是本地估算而非 3001 结算值。
 
 ### 11.3 实施事实
 
 场景/分镜数据库迁移链当前到 V17；V16 建立分镜快照字段，V17 为资产应用增加稳定 `target_key`。详细 API、部署回滚和逐操作追溯以 [`../../剧本创作模块_场景资产与八阶段融合说明.md`](../../剧本创作模块_场景资产与八阶段融合说明.md) 为准。
+
+“完成并归档”当前实现为锁定 storyboard version + 本地八阶段完成，不会调用项目归档 API 或把 content project 置为 `ARCHIVED`。Obsidian 真实文件落盘、3001 权威模型/结算和项目归档自动化均不得由静态演示或本地估算推断为已交付。
