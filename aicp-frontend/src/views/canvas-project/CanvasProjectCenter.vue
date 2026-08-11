@@ -80,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { canvasApi } from '@/api/canvas.js'
@@ -190,9 +190,12 @@ async function onCanvasCommand({ action, canvas }) {
   }
 }
 
-function onCreated(canvas) {
+async function onCreated(canvas) {
   showCreateDialog.value = false
   ElMessage.success('画布创建成功')
+  await nextTick()
+  // 清掉可能残留的 teleported overlay，避免叠在全屏画布上
+  document.querySelectorAll('body > .el-overlay').forEach((el) => el.remove())
   const id = canvas?.uuid || canvas?.id
   if (id) {
     router.push({ name: 'Canvas', params: { projectId: String(id) } })

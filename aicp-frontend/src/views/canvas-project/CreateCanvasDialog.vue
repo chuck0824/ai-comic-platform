@@ -1,5 +1,13 @@
 <template>
-  <el-dialog :model-value="visible" title="新建画布" width="560px" @update:model-value="$emit('update:visible', $event)" @open="resetForm">
+  <el-dialog
+    :model-value="visible"
+    title="新建画布"
+    width="560px"
+    destroy-on-close
+    append-to-body
+    @update:model-value="$emit('update:visible', $event)"
+    @open="resetForm"
+  >
     <el-form :model="form" label-width="120px" :rules="rules" ref="formRef">
       <el-form-item label="画布名称" prop="name">
         <el-input v-model="form.name" maxlength="200" placeholder="输入画布名称" />

@@ -5,6 +5,7 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
@@ -19,15 +20,27 @@ import java.util.concurrent.TimeUnit;
  * 简易内存速率限制过滤器。
  * 生产环境建议替换为 Redis 方案（如 bucket4j-redis）以支持分布式部署。
  *
- * 限制规则：
- * - 登录/注册: 5次/分钟/IP
- * - AI生成端点: 30次/分钟/用户
- * - 通用API: 120次/分钟/用户
+ * 限制规则（可通过 aicp.rate-limit.* 配置；dev 默认关闭）：
+ * - 登录/注册: authMaxPerMinute 次/分钟/IP
+ * - AI生成端点: generationMaxPerMinute 次/分钟
+ * - 通用API: generalMaxPerMinute 次/分钟
  */
 @Slf4j
 @Component
 @Order(Ordered.HIGHEST_PRECEDENCE + 10)
 public class RateLimitFilter extends OncePerRequestFilter {
+
+    @Value("${aicp.rate-limit.enabled:true}")
+    private boolean enabled;
+
+    @Value("${aicp.rate-limit.auth-max-per-minute:5}")
+    private int authMaxPerMinute;
+
+    @Value("${aicp.rate-limit.generation-max-per-minute:30}")
+    private int generationMaxPerMinute;
+
+    @Value("${aicp.rate-limit.general-max-per-minute:120}")
+    private int generalMaxPerMinute;
 
     /** IP → (窗口起始毫秒, 计数) */
     private final ConcurrentHashMap<String, RateWindow> ipCounters = new ConcurrentHashMap<>();
@@ -37,6 +50,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
     /** 清理过期窗口的间隔 */
     private static final long CLEANUP_INTERVAL_MS = TimeUnit.MINUTES.toMillis(5);
     private volatile long lastCleanup = System.currentTimeMillis();
+
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) {
+        return !enabled;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
@@ -99,13 +117,13 @@ public class RateLimitFilter extends OncePerRequestFilter {
     private RateLimit getLimitForPath(String path) {
         if (path.contains("/auth/login") || path.contains("/auth/register")
                 || path.contains("/auth/sms")) {
-            return new RateLimit(5, TimeUnit.MINUTES.toMillis(1));
+            return new RateLimit(authMaxPerMinute, TimeUnit.MINUTES.toMillis(1));
         }
         if (path.contains("/generation") || path.contains("/generate")
                 || path.contains("/shots/") && (path.contains("image") || path.contains("video"))) {
-            return new RateLimit(30, TimeUnit.MINUTES.toMillis(1));
+            return new RateLimit(generationMaxPerMinute, TimeUnit.MINUTES.toMillis(1));
         }
-        return new RateLimit(120, TimeUnit.MINUTES.toMillis(1));
+        return new RateLimit(generalMaxPerMinute, TimeUnit.MINUTES.toMillis(1));
     }
 
     private boolean isRateLimited(String key, RateLimit limit, String path) {

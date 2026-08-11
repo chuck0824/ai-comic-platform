@@ -39,10 +39,15 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
         redisUtil.set(key, code, 5, TimeUnit.MINUTES);
 
         String retryKey = "code:retry:" + target;
+        // 开发环境缩短验证码重发冷却，避免联调时频繁触发
+        long retrySeconds = isDevProfile() ? 5L : 60L;
         if (redisUtil.hasKey(retryKey)) {
-            throw new BizException(ErrorCode.RATE_LIMIT, "验证码发送过于频繁，请60秒后重试");
+            throw new BizException(ErrorCode.RATE_LIMIT,
+                    isDevProfile()
+                            ? "验证码发送过于频繁，请稍后再试"
+                            : "验证码发送过于频繁，请60秒后重试");
         }
-        redisUtil.set(retryKey, "1", 60, TimeUnit.SECONDS);
+        redisUtil.set(retryKey, "1", retrySeconds, TimeUnit.SECONDS);
         // 不记录验证码明文，防止日志泄漏导致账户接管
         log.info("验证码发送: target={}, type={}, scene={}", target, type, scene);
     }
