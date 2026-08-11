@@ -115,6 +115,43 @@ test('implementation references use exact component, migration and sourced error
   }
 })
 
+test('generation response and decision errors are cross-checked against production source', () => {
+  const text = read('docs/剧本创作模块_场景资产与八阶段融合说明.md')
+  const views = read('aicp-backend/src/main/java/com/aicp/module/contentproject/dto/ContentProjectViews.java')
+  const decisions = read('aicp-frontend/src/views/content-project/workbench/generationResultPersistence.js')
+  const service = read('aicp-backend/src/main/java/com/aicp/module/contentproject/service/ContentGenerationJobService.java')
+
+  const view = views.match(/record GenerationJobView\(([\s\S]*?)\) \{\}/)?.[1] || ''
+  for (const field of ['resultVersionId', 'artifactRef', 'resultDisposition', 'actualCredits', 'errorCode', 'errorMessage']) {
+    assert.match(view, new RegExp(`\\b${field}\\b`), `GenerationJobView must expose ${field}`)
+  }
+  assert.doesNotMatch(view, /\bdiff\b/i)
+  assert.match(text, /GenerationJobView[^\n]*不包含 `?diff/i)
+  assert.doesNotMatch(text, /GenerationJobView[^\n]*(?:包含|返回)[^\n]*差异|返回结果[^\n]*(?:diff|差异)/i)
+
+  assert.match(decisions, /code:\s*'IN_FLIGHT_CONFLICT'/)
+  const decisionService = service.match(/public GenerationJobView acceptJob\([\s\S]*?private ContentGenerationJob requireCompleted/)?.[0] || ''
+  assert.match(decisionService, /ErrorCode\.PARAM_INVALID/)
+  assert.match(decisionService, /ErrorCode\.EDIT_CONFLICT/)
+  assert.match(text, /IN_FLIGHT_CONFLICT[^\n]*前端[^\n]*(?:guard|守卫)/i)
+  assert.match(text, /后端[^\n]*(?:PARAM_INVALID|EDIT_CONFLICT)[^\n]*(?:PARAM_INVALID|EDIT_CONFLICT)/)
+})
+
+test('migration wording is cross-checked against V16 and V17 SQL syntax', () => {
+  const text = read('docs/剧本创作模块_场景资产与八阶段融合说明.md')
+  const v16 = read('aicp-backend/src/main/resources/db/migration/V16__scene_asset_storyboard_snapshots.sql')
+  const v17 = read('aicp-backend/src/main/resources/db/migration/V17__asset_application_target_key.sql')
+
+  assert.match(v16, /ADD COLUMN IF NOT EXISTS/)
+  assert.match(v16, /CREATE INDEX IF NOT EXISTS/)
+  assert.doesNotMatch(v17, /IF NOT EXISTS/)
+  assert.match(v17, /ADD COLUMN target_key/)
+  assert.match(v17, /CREATE INDEX idx_aa_target_key/)
+  assert.match(text, /V16[^\n]*IF NOT EXISTS/)
+  assert.match(text, /V17[^\n]*(?:普通 DDL|普通DDL)[^\n]*不含 `?IF NOT EXISTS`?/)
+  assert.match(text, /V16[^\n]*(?:MySQL 8|兼容|风险)/)
+})
+
 test('fusion guide covers V17, APIs, Obsidian graph, stale policy and rollback', () => {
   const text = read('docs/剧本创作模块_场景资产与八阶段融合说明.md')
   for (const term of [
