@@ -70,7 +70,7 @@
             :creation-settings="stageData.creationSettings"
             :persist-hook="persistAdaptationHook"
             :persist-plan="persistAdaptationPlan"
-            :regenerate-artifact="() => submitStageGeneration('adaptation')"
+            :regenerate-artifact="task => submitStageGeneration('adaptation', {}, task)"
             :workbench="workbench"
             @guidance="showGuidance"
             @regenerated="handleGenerationResult"
@@ -81,7 +81,7 @@
             :open-episode-adapter="persistStructuredAction"
             :add-beat-adapter="persistStructuredAction"
             :regenerate-beat-adapter="persistStructuredAction"
-            :regenerate-artifact-adapter="() => submitStageGeneration('structured_script')"
+            :regenerate-artifact-adapter="task => submitStageGeneration('structured_script', {}, task)"
             :workbench="workbench"
             :generation-input="generationInput"
             @guidance="showGuidance"
@@ -98,7 +98,7 @@
             :space-change-adapter="persistScriptBodyAction"
             :script-check-adapter="runScriptBodyCheck"
             :export-adapter="exportScriptBody"
-            :regenerate-artifact-adapter="() => submitStageGeneration('script_body')"
+            :regenerate-artifact-adapter="task => submitStageGeneration('script_body', {}, task)"
             :workbench="workbench"
             :generation-input="generationInput"
             @guidance="showGuidance"
@@ -112,7 +112,7 @@
             episode-id="EP-001"
             :save-revision-adapter="persistReviewAction"
             :approve-adapter="approveReviewEpisode"
-            :regenerate-artifact-adapter="() => submitStageGeneration('review_revision')"
+            :regenerate-artifact-adapter="task => submitStageGeneration('review_revision', {}, task)"
             :workbench="workbench"
             :generation-input="generationInput"
             @guidance="showGuidance"
@@ -130,7 +130,7 @@
             :archive-adapter="archiveStoryboard"
             :mindmap-adapter="persistMindmap"
             :canvas-adapter="createCanvasProject"
-            :regenerate-artifact-adapter="() => submitStageGeneration('text_storyboard')"
+            :regenerate-artifact-adapter="task => submitStageGeneration('text_storyboard', {}, task)"
             :workbench="workbench"
             :generation-input="generationInput"
             @guidance="showGuidance"
@@ -193,6 +193,7 @@ import { createWorkspaceAdapters, normalizeBatchGeneration } from './workbench/w
 import { nextStageKey, resolveWorkspaceStage, restoreWorkbenchStage } from './workbench/workspaceRouting.js'
 import { validateAnalysisSection, validateCreationSettings } from './workbench/upstreamStageModel.js'
 import { createProjectLoadGuard, resetProjectWorkspaceData } from './workbench/workspaceLoadState.js'
+import { trackGenerationJob } from './workbench/generationJobTracker.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -212,6 +213,7 @@ const storyboardScenes = ref([])
 const storyboardShotIds = new Map()
 let autosaveTimer = null
 const projectLoadGuard = createProjectLoadGuard()
+const activeGenerationJobs = new Map()
 
 const defaultEpisode = () => ({ id: 'EP-001', title: '第 1 集', beats: [], scenes: [] })
 const stageData = reactive({
@@ -248,7 +250,11 @@ const generationInput = computed(() => ({ model: stageData.creationSettings.mode
 const transitionVisible = computed(() => workbench.state.transition?.status === 'persisting')
 
 onMounted(loadProject)
-onBeforeUnmount(() => { if (autosaveTimer) clearTimeout(autosaveTimer) })
+onBeforeUnmount(() => {
+  if (autosaveTimer) clearTimeout(autosaveTimer)
+  activeGenerationJobs.forEach(record => record.controller.abort())
+  activeGenerationJobs.clear()
+})
 watch(() => route.params.projectId, (next, previous) => { if (next !== previous) loadProject() })
 watch(() => route.query.stage, stage => {
   if (!project.value || Number(project.value.id) !== projectId.value) return
@@ -318,6 +324,8 @@ async function loadProject() {
 function resetWorkspaceForProject() {
   if (autosaveTimer) clearTimeout(autosaveTimer)
   autosaveTimer = null
+  activeGenerationJobs.forEach(record => record.controller.abort())
+  activeGenerationJobs.clear()
   project.value = null
   units.value = []
   error.value = ''
@@ -616,16 +624,33 @@ async function approveReviewEpisode(payload) {
   return { persisted: true, version: version.id, approval: payload }
 }
 
-async function submitStageGeneration(stage, payload = {}) {
+async function submitStageGeneration(stage, payload = {}, localTask = null) {
   const unit = await ensureUnit(stage)
   const batch = normalizeBatchGeneration(await contentProjectApi.batchGenerate(projectId.value, [unit.id], `${stage}_generate`))
   if (!batch.ok) throw Object.assign(new Error(batch.message), { code: batch.code })
-  const job = batch.job
+  const controller = new AbortController()
+  if (localTask?.id) activeGenerationJobs.set(localTask.id, { serverJobId: batch.job.id, controller })
+  let job
+  try {
+    job = await trackGenerationJob({
+      job: batch.job,
+      getJob: contentProjectApi.getGenerationJob,
+      signal: controller.signal,
+      onProgress: update => {
+        if (localTask?.id) workbench.updateGenerationProgress(localTask.id, update)
+      }
+    })
+  } finally {
+    if (localTask?.id) activeGenerationJobs.delete(localTask.id)
+  }
+  const artifactPath = job.result_path ?? job.resultPath ?? job.artifact_path ?? job.artifactPath ?? job.output_path ?? job.outputPath ?? null
   return {
     artifact: {
-      path: `/content-projects/${projectId.value}/generation-jobs/${job.id}`,
+      path: artifactPath,
       jobId: job.id,
-      status: job.status || 'queued',
+      status: 'completed',
+      availability: artifactPath ? 'ready' : 'pending_reference',
+      message: artifactPath ? null : '任务已完成，但服务端尚未返回产物地址。',
       version: job.resultVersionId ?? job.result_version_id ?? null
     },
     actualPoints: job.actualPoints ?? job.actual_points ?? stageData.creationSettings.estimatedPoints,
@@ -726,7 +751,16 @@ function openResultEntry() {
   if (!selectedResult.value) return showGuidance({ code: 'NO_RESULTS', title: '暂无生成结果', message: '完成一次生成任务后可在此对比与采用。' })
   resultVisible.value = true
 }
-function cancelGenerationTask(taskId) { workbench.finishGeneration(taskId, { status: 'cancelled' }); openResultEntry() }
+async function cancelGenerationTask(taskId) {
+  const record = activeGenerationJobs.get(taskId)
+  if (!record) return showGuidance({ code: 'GENERATION_JOB_NOT_ACTIVE', title: '任务无法取消', message: '未找到正在跟踪的生成任务。', targetAction: 'refresh_generation_status' })
+  try {
+    await contentProjectApi.cancelGenerationJob(record.serverJobId)
+  } catch (caught) {
+    return showGuidance({ code: 'GENERATION_CANCEL_FAILED', title: '取消请求失败', message: caught?.response?.data?.message || caught?.message || '请稍后重试。', targetAction: 'retry_generation_cancel' })
+  }
+  record.controller.abort()
+}
 function acceptGenerationResult(taskId) { const result = workbench.acceptGeneration(taskId); if (result?.allowed === false) showGuidance(result); else resultVisible.value = false }
 function discardGenerationResult(taskId) { const result = workbench.discardGeneration(taskId); if (result?.allowed === false) showGuidance(result); else resultVisible.value = false }
 function noop() {}

@@ -266,6 +266,83 @@ test('scene asset load ignores a stale response after project switch', async () 
   assert.deepEqual(sceneAssets.assets.value.map(asset => asset.id), [10])
 })
 
+test('scene asset detail load cannot select an asset after project switch', async () => {
+  let resolveDetail
+  const projectId = ref(9)
+  const sceneAssets = useSceneAssets(projectId, {
+    api: { get: () => new Promise(resolve => { resolveDetail = resolve }) }, resultStorage: memoryStorage()
+  })
+  const oldLoad = sceneAssets.loadAsset(3)
+  projectId.value = 10
+  sceneAssets.reset()
+  resolveDetail({ id: 3, name: '旧项目场景', current_version_id: 8 })
+
+  const result = await oldLoad
+
+  assert.equal(result.code, 'STALE_PROJECT_RESPONSE')
+  assert.equal(sceneAssets.selectedAsset.value, null)
+  assert.deepEqual(sceneAssets.assets.value, [])
+})
+
+test('project operation token invalidates an old response even after switching back to the same project id', async () => {
+  let resolveDetail
+  const projectId = ref(9)
+  const sceneAssets = useSceneAssets(projectId, {
+    api: { get: () => new Promise(resolve => { resolveDetail = resolve }) }, resultStorage: memoryStorage()
+  })
+  const oldLoad = sceneAssets.loadAsset(3)
+  projectId.value = 10
+  projectId.value = 9
+  resolveDetail({ id: 3, name: '过期场景', current_version_id: 8 })
+
+  const result = await oldLoad
+
+  assert.equal(result.code, 'STALE_PROJECT_RESPONSE')
+  assert.equal(sceneAssets.selectedAsset.value, null)
+})
+
+test('successful stale mutation cannot write assets selection results or cache into the new project', async () => {
+  let resolveCreate
+  const projectId = ref(9)
+  const storage = memoryStorage()
+  const sceneAssets = useSceneAssets(projectId, {
+    api: { create: () => new Promise(resolve => { resolveCreate = resolve }) }, resultStorage: storage
+  })
+  sceneAssets.state.value = 'ready'
+  const oldCreate = sceneAssets.create({ name: '旧场景', spaceType: 'INTERIOR', reusability: 'PRIMARY', realityType: 'REALISTIC' })
+  projectId.value = 10
+  sceneAssets.reset()
+  resolveCreate({ id: 3, name: '旧场景', current_version_id: 8 })
+
+  const result = await oldCreate
+
+  assert.equal(result.code, 'STALE_PROJECT_RESPONSE')
+  assert.deepEqual(sceneAssets.assets.value, [])
+  assert.equal(sceneAssets.selectedAsset.value, null)
+  assert.equal(sceneAssets.actionResult.value, null)
+  assert.equal(storage.length, 0)
+})
+
+test('stale mutation rejection cannot publish the old project error into new state', async () => {
+  let rejectUpdate
+  const projectId = ref(9)
+  const sceneAssets = useSceneAssets(projectId, {
+    api: { update: () => new Promise((_resolve, reject) => { rejectUpdate = reject }) }, resultStorage: memoryStorage()
+  })
+  sceneAssets.state.value = 'ready'
+  sceneAssets.assets.value = [{ id: 3, name: '旧场景', currentVersionId: 8 }]
+  const oldUpdate = sceneAssets.update(3, { name: '旧项目修改' })
+  projectId.value = 10
+  sceneAssets.reset()
+  rejectUpdate(Object.assign(new Error('旧项目网络错误'), { code: 'OLD_PROJECT_ERROR' }))
+
+  const result = await oldUpdate
+
+  assert.equal(result.code, 'STALE_PROJECT_RESPONSE')
+  assert.equal(sceneAssets.actionResult.value, null)
+  assert.equal(sceneAssets.state.value, 'loading')
+})
+
 function memoryStorage() {
   const values = new Map()
   return {

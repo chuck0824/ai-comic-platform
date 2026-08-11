@@ -1,4 +1,4 @@
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { classifySceneAssetChange, normalizeSceneAsset, validateSceneAssetDraft } from './sceneAssetModel.js'
 import { normalizeSceneAssetMarkdown } from './sceneAssetMarkdown.js'
 import {
@@ -51,7 +51,15 @@ export function useSceneAssets(projectId, {
   const actionResult = ref(null)
   const actionResults = ref(readSceneAssetActionResults(resolveSceneAssetProjectId(projectId), resultStorage))
   const projectArchived = ref(false)
+  let operationGeneration = 0
   const activeProjectId = () => resolveSceneAssetProjectId(projectId)
+  watch(activeProjectId, () => { operationGeneration += 1 }, { flush: 'sync' })
+  const captureOperation = () => ({ projectId: activeProjectId(), generation: operationGeneration })
+  const operationIsCurrent = context => context.generation === operationGeneration && context.projectId === activeProjectId()
+  const staleResponse = () => failure('STALE_PROJECT_RESPONSE', '已忽略上一项目的场景资产响应')
+  const requireCurrent = context => {
+    if (!operationIsCurrent(context)) throw Object.assign(new Error(staleResponse().message), { code: 'STALE_PROJECT_RESPONSE' })
+  }
   const isArchived = () => projectArchived.value || Boolean(typeof isProjectArchived === 'function'
     ? isProjectArchived()
     : isProjectArchived?.value ?? isProjectArchived)
@@ -72,25 +80,21 @@ export function useSceneAssets(projectId, {
   }
 
   async function load() {
+    const context = captureOperation()
     state.value = 'loading'
-    const resolvedProjectId = activeProjectId()
     const filterSnapshot = { ...filters }
     try {
-      const response = await client.list(resolvedProjectId, filterSnapshot)
-      if (resolvedProjectId !== activeProjectId()) {
-        return failure('STALE_PROJECT_RESPONSE', '已忽略上一项目的场景资产响应')
-      }
+      const response = await client.list(context.projectId, filterSnapshot)
+      if (!operationIsCurrent(context)) return staleResponse()
       const list = Array.isArray(response) ? response : response.items ?? []
       assets.value = list.map(normalizeSceneAsset)
-      writeSuccessfulSceneAssetListCache(resolvedProjectId, filterSnapshot, assets.value)
+      writeSuccessfulSceneAssetListCache(context.projectId, filterSnapshot, assets.value)
       state.value = isArchived() ? 'readonly' : (assets.value.length ? 'ready' : 'empty')
-      actionResults.value = readSceneAssetActionResults(resolvedProjectId, resultStorage)
+      actionResults.value = readSceneAssetActionResults(context.projectId, resultStorage)
       return { ok: true, items: assets.value }
     } catch (error) {
-      if (resolvedProjectId !== activeProjectId()) {
-        return failure('STALE_PROJECT_RESPONSE', '已忽略上一项目的场景资产响应')
-      }
-      const cached = readSceneAssetListCache(resolvedProjectId, filterSnapshot)
+      if (!operationIsCurrent(context)) return staleResponse()
+      const cached = readSceneAssetListCache(context.projectId, filterSnapshot)
       if (cached.found) {
         assets.value = cached.items.map(normalizeSceneAsset)
         state.value = 'readonly'
@@ -102,6 +106,7 @@ export function useSceneAssets(projectId, {
   }
 
   function reset() {
+    operationGeneration += 1
     state.value = 'loading'
     assets.value = []
     selectedAsset.value = null
@@ -113,45 +118,51 @@ export function useSceneAssets(projectId, {
     projectArchived.value = false
   }
 
-  async function loadAsset(assetId) {
+  async function loadAsset(assetId, context = captureOperation()) {
     try {
-      const asset = normalizeSceneAsset(await client.get(activeProjectId(), assetId))
+      const asset = normalizeSceneAsset(await client.get(context.projectId, assetId))
+      if (!operationIsCurrent(context)) return staleResponse()
       selectAsset(asset)
       return { ok: true, asset }
     } catch (error) {
+      if (!operationIsCurrent(context)) return staleResponse()
       return failure(error?.code || 'SCENE_ASSET_LOAD_FAILED', error?.message || '场景资产加载失败')
     }
   }
 
-  async function mutate(operation) {
+  async function mutate(context, operation) {
     const guarded = sceneAssetMutationGuard({ projectArchived: isArchived(), state: state.value })
     if (guarded) return guarded
     try {
-      const result = await operation()
+      const result = await operation(context)
+      if (!operationIsCurrent(context)) return staleResponse()
       actionResult.value = { ok: true, data: result?.result || result }
       return actionResult.value
     } catch (error) {
+      if (!operationIsCurrent(context)) return staleResponse()
       actionResult.value = failure(error?.code || 'SCENE_ASSET_ACTION_FAILED', error?.message || '场景资产操作失败')
       return actionResult.value
     }
   }
 
-  function recordResult(result) {
-    const resolvedProjectId = activeProjectId()
+  function recordResult(result, context = captureOperation()) {
+    requireCurrent(context)
     const normalized = {
       id: result.id || `SCENE-RESULT-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       createdAt: result.createdAt || new Date().toISOString(),
       ...result
     }
-    persistSceneAssetActionResult(resolvedProjectId, normalized, resultStorage)
-    actionResults.value = readSceneAssetActionResults(resolvedProjectId, resultStorage)
+    persistSceneAssetActionResult(context.projectId, normalized, resultStorage)
+    actionResults.value = readSceneAssetActionResults(context.projectId, resultStorage)
     if (!actionResults.value.some(item => item.id === normalized.id)) actionResults.value = [normalized, ...actionResults.value]
     actionResult.value = { ok: true, data: normalized }
     return normalized
   }
 
-  async function impactAfterPersist(assetId) {
-    const loaded = await loadImpact(assetId)
+  async function impactAfterPersist(assetId, context) {
+    const loaded = await loadImpact(assetId, context)
+    requireCurrent(context)
+    if (loaded.code === 'STALE_PROJECT_RESPONSE') requireCurrent(context)
     if (loaded.ok) return { impact: loaded.impact, impactRefresh: { ok: true } }
     return {
       impact: { assetId, references: [], staleReferences: 0, lockedReferences: 0, status: 'UNAVAILABLE' },
@@ -169,11 +180,12 @@ export function useSceneAssets(projectId, {
       projectArchived: isArchived(), state: state.value, draft, validate: validateSceneAssetDraft
     })
     if (prepared) return prepared
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
-      const asset = normalizeSceneAsset(await client.create(resolvedProjectId, draft))
+    const context = captureOperation()
+    return mutate(context, async () => {
+      const asset = normalizeSceneAsset(await client.create(context.projectId, draft))
+      requireCurrent(context)
       assets.value = [asset, ...assets.value]
-      invalidateSceneAssetListCache(resolvedProjectId)
+      invalidateSceneAssetListCache(context.projectId)
       selectAsset(asset)
       state.value = 'ready'
       return asset
@@ -181,129 +193,149 @@ export function useSceneAssets(projectId, {
   }
 
   async function update(assetId, draft) {
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
+    const context = captureOperation()
+    return mutate(context, async () => {
       const before = assets.value.find(item => item.id === assetId) || selectedAsset.value || {}
-      const asset = normalizeSceneAsset(await client.update(resolvedProjectId, assetId, draft))
+      const asset = normalizeSceneAsset(await client.update(context.projectId, assetId, draft))
+      requireCurrent(context)
       replaceAsset(asset)
-      invalidateSceneAssetListCache(resolvedProjectId)
+      invalidateSceneAssetListCache(context.projectId)
       const change = classifySceneAssetChange(before, asset)
-      const { impact: refreshedImpact, impactRefresh } = await impactAfterPersist(assetId)
+      const { impact: refreshedImpact, impactRefresh } = await impactAfterPersist(assetId, context)
+      requireCurrent(context)
       const result = recordResult({
         action: 'update-scene-asset', assetId, versionId: asset.currentVersionId,
         change, impact: refreshedImpact, impactRefresh, affectedConsumers: impactConsumers(change, refreshedImpact)
-      })
+      }, context)
       return { asset, result }
     })
   }
 
   async function createFromLocation(draft) {
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
-      const asset = normalizeSceneAsset(await client.createFromLocation(resolvedProjectId, draft))
+    const context = captureOperation()
+    return mutate(context, async () => {
+      const asset = normalizeSceneAsset(await client.createFromLocation(context.projectId, draft))
+      requireCurrent(context)
       replaceAsset(asset, true)
-      invalidateSceneAssetListCache(resolvedProjectId)
+      invalidateSceneAssetListCache(context.projectId)
       return asset
     })
   }
 
   async function createVariant(assetId, draft) {
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
+    const context = captureOperation()
+    return mutate(context, async () => {
       const before = assets.value.find(item => item.id === assetId) || selectedAsset.value || {}
-      const asset = normalizeSceneAsset(await client.createVariant(resolvedProjectId, assetId, draft))
+      const asset = normalizeSceneAsset(await client.createVariant(context.projectId, assetId, draft))
+      requireCurrent(context)
       replaceAsset(asset)
-      invalidateSceneAssetListCache(resolvedProjectId)
+      invalidateSceneAssetListCache(context.projectId)
       const change = classifySceneAssetChange(before, asset)
-      const { impact: refreshedImpact, impactRefresh } = await impactAfterPersist(assetId)
-      return { asset, result: recordResult({ action: 'create-variant', assetId, change, impact: refreshedImpact, impactRefresh, affectedConsumers: impactConsumers(change, refreshedImpact) }) }
+      const { impact: refreshedImpact, impactRefresh } = await impactAfterPersist(assetId, context)
+      requireCurrent(context)
+      return { asset, result: recordResult({ action: 'create-variant', assetId, change, impact: refreshedImpact, impactRefresh, affectedConsumers: impactConsumers(change, refreshedImpact) }, context) }
     })
   }
 
   async function updateVariant(assetId, variantId, draft) {
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
+    const context = captureOperation()
+    return mutate(context, async () => {
       const before = assets.value.find(item => item.id === assetId) || selectedAsset.value || {}
-      const asset = normalizeSceneAsset(await client.updateVariant(resolvedProjectId, assetId, variantId, draft))
+      const asset = normalizeSceneAsset(await client.updateVariant(context.projectId, assetId, variantId, draft))
+      requireCurrent(context)
       replaceAsset(asset)
-      invalidateSceneAssetListCache(resolvedProjectId)
+      invalidateSceneAssetListCache(context.projectId)
       const change = classifySceneAssetChange(before, asset)
-      const { impact: refreshedImpact, impactRefresh } = await impactAfterPersist(assetId)
-      return { asset, result: recordResult({ action: 'update-variant', assetId, variantId, change, impact: refreshedImpact, impactRefresh, affectedConsumers: impactConsumers(change, refreshedImpact) }) }
+      const { impact: refreshedImpact, impactRefresh } = await impactAfterPersist(assetId, context)
+      requireCurrent(context)
+      return { asset, result: recordResult({ action: 'update-variant', assetId, variantId, change, impact: refreshedImpact, impactRefresh, affectedConsumers: impactConsumers(change, refreshedImpact) }, context) }
     })
   }
 
   async function restore(assetId, versionId, draft = {}) {
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
+    const context = captureOperation()
+    return mutate(context, async () => {
       const before = assets.value.find(item => item.id === assetId) || selectedAsset.value || {}
-      const version = await client.restore(resolvedProjectId, assetId, versionId, draft)
-      invalidateSceneAssetListCache(resolvedProjectId)
-      const reloaded = await loadAsset(assetId)
+      const version = await client.restore(context.projectId, assetId, versionId, draft)
+      requireCurrent(context)
+      invalidateSceneAssetListCache(context.projectId)
+      const reloaded = await loadAsset(assetId, context)
+      requireCurrent(context)
       const change = reloaded.ok
         ? classifySceneAssetChange(before, selectedAsset.value || {})
         : { visualChange: true, downstreamStatus: 'STALE', affectedScopes: ['visual', 'continuity'] }
-      const { impact: refreshedImpact, impactRefresh } = await impactAfterPersist(assetId)
+      const { impact: refreshedImpact, impactRefresh } = await impactAfterPersist(assetId, context)
+      requireCurrent(context)
       const result = recordResult({
         action: 'restore-version', assetId, restoredVersionId: versionId,
         version, change, assetRefresh: reloaded.ok ? { ok: true } : reloaded,
         impact: refreshedImpact, impactRefresh, affectedConsumers: impactConsumers(change, refreshedImpact)
-      })
+      }, context)
       return { version, asset: selectedAsset.value, result }
     })
   }
 
   async function archive(assetId) {
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
-      await client.archive(resolvedProjectId, assetId)
+    const context = captureOperation()
+    return mutate(context, async () => {
+      await client.archive(context.projectId, assetId)
+      requireCurrent(context)
       const archived = assets.value.find(asset => asset.id === assetId)
       assets.value = assets.value.map(asset => asset.id === assetId ? { ...asset, status: 'ARCHIVED' } : asset)
       if (selectedAsset.value?.id === assetId && archived) selectAsset({ ...archived, status: 'ARCHIVED' })
-      invalidateSceneAssetListCache(resolvedProjectId)
-      return recordResult({ action: 'archive-scene-asset', assetId, affectedConsumers: [] })
+      invalidateSceneAssetListCache(context.projectId)
+      return recordResult({ action: 'archive-scene-asset', assetId, affectedConsumers: [] }, context)
     })
   }
 
   async function disable(assetId) {
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
-      const loadedImpact = await loadImpact(assetId)
+    const context = captureOperation()
+    return mutate(context, async () => {
+      const loadedImpact = await loadImpact(assetId, context)
+      requireCurrent(context)
       if (!loadedImpact.ok) throw Object.assign(new Error(loadedImpact.message), { code: loadedImpact.code })
       const affectedConsumers = preservedImpactConsumers(loadedImpact.impact)
-      const asset = normalizeSceneAsset(await client.disable(resolvedProjectId, assetId))
+      const asset = normalizeSceneAsset(await client.disable(context.projectId, assetId))
+      requireCurrent(context)
       replaceAsset(asset)
-      invalidateSceneAssetListCache(resolvedProjectId)
-      return { asset, result: recordResult({ action: 'disable-scene-asset', assetId, affectedConsumers }) }
+      invalidateSceneAssetListCache(context.projectId)
+      return { asset, result: recordResult({ action: 'disable-scene-asset', assetId, affectedConsumers }, context) }
     })
   }
 
   async function activate(assetId) {
-    return mutate(async () => {
-      const resolvedProjectId = activeProjectId()
-      const asset = normalizeSceneAsset(await client.activate(resolvedProjectId, assetId))
+    const context = captureOperation()
+    return mutate(context, async () => {
+      const asset = normalizeSceneAsset(await client.activate(context.projectId, assetId))
+      requireCurrent(context)
       replaceAsset(asset)
-      invalidateSceneAssetListCache(resolvedProjectId)
-      return { asset, result: recordResult({ action: 'activate-scene-asset', assetId, affectedConsumers: [] }) }
+      invalidateSceneAssetListCache(context.projectId)
+      return { asset, result: recordResult({ action: 'activate-scene-asset', assetId, affectedConsumers: [] }, context) }
     })
   }
 
-  async function loadImpact(assetId = selectedAsset.value?.id) {
+  async function loadImpact(assetId = selectedAsset.value?.id, context = captureOperation()) {
     try {
       if (assetId == null) return failure('SCENE_ASSET_REQUIRED', '请先选择场景资产')
-      impact.value = await client.impact(activeProjectId(), assetId)
+      const response = await client.impact(context.projectId, assetId)
+      if (!operationIsCurrent(context)) return staleResponse()
+      impact.value = response
       return { ok: true, impact: impact.value }
     } catch (error) {
+      if (!operationIsCurrent(context)) return staleResponse()
       return failure(error?.code || 'SCENE_ASSET_IMPACT_FAILED', error?.message || '影响范围加载失败')
     }
   }
 
-  async function loadMarkdown(assetId = selectedAsset.value?.id) {
+  async function loadMarkdown(assetId = selectedAsset.value?.id, context = captureOperation()) {
     try {
       if (assetId == null) return failure('SCENE_ASSET_REQUIRED', '请先选择场景资产')
-      markdown.value = normalizeSceneAssetMarkdown(await client.markdown(activeProjectId(), assetId))
+      const response = await client.markdown(context.projectId, assetId)
+      if (!operationIsCurrent(context)) return staleResponse()
+      markdown.value = normalizeSceneAssetMarkdown(response)
       return { ok: true, markdown: markdown.value }
     } catch (error) {
+      if (!operationIsCurrent(context)) return staleResponse()
       return failure(error?.code || 'SCENE_ASSET_MARKDOWN_FAILED', error?.message || 'Markdown 预览加载失败')
     }
   }
@@ -327,18 +359,22 @@ export function useSceneAssets(projectId, {
     if (typeof adapter !== 'function') return failure('REFERENCE_REPLACEMENT_UNAVAILABLE', '请先连接剧本/分镜引用迁移服务')
     const guarded = sceneAssetMutationGuard({ projectArchived: isArchived(), state: state.value })
     if (guarded) return guarded
-    const refreshedImpact = await loadImpact(assetId)
+    const context = captureOperation()
+    const refreshedImpact = await loadImpact(assetId, context)
+    if (!operationIsCurrent(context)) return staleResponse()
     if (!refreshedImpact.ok) return refreshedImpact
     const affectedConsumers = preservedImpactConsumers(refreshedImpact.impact)
     try {
       const response = await adapter({ assetId, replacement, impact: refreshedImpact.impact })
+      if (!operationIsCurrent(context)) return staleResponse()
       if (!response?.persisted) return failure(response?.code || 'REFERENCE_REPLACEMENT_FAILED', response?.message || '引用迁移未持久化，请重试')
       const result = recordResult({
         action: 'replace-reference', assetId, replacement,
         affectedConsumers: response.affectedConsumers?.length ? response.affectedConsumers : affectedConsumers, response
-      })
+      }, context)
       return { ok: true, data: result }
     } catch (error) {
+      if (!operationIsCurrent(context)) return staleResponse()
       return failure(error?.code || 'REFERENCE_REPLACEMENT_FAILED', error?.message || '引用迁移失败')
     }
   }
@@ -346,15 +382,25 @@ export function useSceneAssets(projectId, {
   async function resolveConsumer(reference, decision, adapter = consumerAdapter?.resolveConsumer) {
     const allowed = ['view-diff', 'keep-old', 'upgrade-new']
     if (!allowed.includes(decision)) return failure('CONSUMER_DECISION_INVALID', '请选择查看差异、保留旧版或升级新版')
+    const context = captureOperation()
     if (decision === 'view-diff' && typeof consumerAdapter?.viewDiff === 'function') {
-      return { ok: true, data: await consumerAdapter.viewDiff(reference) }
+      try {
+        const response = await consumerAdapter.viewDiff(reference)
+        if (!operationIsCurrent(context)) return staleResponse()
+        return { ok: true, data: response }
+      } catch (error) {
+        if (!operationIsCurrent(context)) return staleResponse()
+        return failure(error?.code || 'CONSUMER_DIFF_FAILED', error?.message || '查看差异失败')
+      }
     }
     if (typeof adapter !== 'function') return failure('CONSUMER_RESOLUTION_UNAVAILABLE', '请先连接剧本/分镜版本处理服务')
     try {
       const response = await adapter({ reference, decision })
+      if (!operationIsCurrent(context)) return staleResponse()
       if (!response?.persisted) return failure(response?.code || 'CONSUMER_RESOLUTION_FAILED', response?.message || '处理结果未持久化')
-      return { ok: true, data: recordResult({ action: decision, reference, response, affectedConsumers: [reference] }) }
+      return { ok: true, data: recordResult({ action: decision, reference, response, affectedConsumers: [reference] }, context) }
     } catch (error) {
+      if (!operationIsCurrent(context)) return staleResponse()
       return failure(error?.code || 'CONSUMER_RESOLUTION_FAILED', error?.message || '下游版本处理失败')
     }
   }

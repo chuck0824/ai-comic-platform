@@ -3,6 +3,7 @@ import { STAGES } from './scriptWorkbenchModel.js'
 const STAGE_KEYS = STAGES.map(stage => stage.key)
 const LEGACY_STAGE_MAP = Object.freeze({
   story_seed: 'creation_settings',
+  import_review: 'novel_upload',
   characters: 'novel_analysis',
   synopsis: 'novel_analysis',
   outline: 'structured_script',
@@ -17,7 +18,7 @@ export function normalizePersistedStage(stage) {
 }
 
 export function workspaceTarget({ id, entryMode = 'quick', stage } = {}) {
-  const validStage = STAGE_KEYS.includes(stage) ? stage : STAGE_KEYS[0]
+  const validStage = normalizePersistedStage(stage) ?? STAGE_KEYS[0]
   const query = new URLSearchParams({ stage: validStage })
   if (entryMode === 'upload') query.set('next', 'novel_upload')
   if (entryMode === 'tvc') query.set('variant', 'tvc')
@@ -29,6 +30,8 @@ export function resolveWorkspaceStage({ persistedStage, queryStage } = {}) {
   const persistedIndex = STAGE_KEYS.indexOf(normalizedPersisted)
   const safePersistedIndex = persistedIndex >= 0 ? persistedIndex : 0
   const queryIndex = STAGE_KEYS.indexOf(queryStage)
+  const persistedWasLegacy = Boolean(normalizedPersisted && !STAGE_KEYS.includes(persistedStage))
+  if (persistedWasLegacy && queryStage === STAGE_KEYS[0]) return normalizedPersisted
   if (queryIndex >= 0 && queryIndex <= safePersistedIndex) return STAGE_KEYS[queryIndex]
   return STAGE_KEYS[safePersistedIndex]
 }

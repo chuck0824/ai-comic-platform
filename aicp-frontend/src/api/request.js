@@ -67,7 +67,7 @@ request.interceptors.request.use(
         console.warn('[request] JWT 解码失败，无法推导 workspace ID:', e)
       }
     }
-    if (workspaceId) {
+    if (workspaceId && !config.headers['X-Workspace-Id']) {
       config.headers['X-Workspace-Id'] = workspaceId
     }
     return config

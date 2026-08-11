@@ -59,6 +59,8 @@ export const contentProjectApi = {
   // M2: Batch, Hooks, Continuity
   batchGenerate: (projectId, unitIds, jobType = 'content_generate') =>
     request.post(`/content-projects/${projectId}/batch-generate`, { unit_ids: unitIds, job_type: jobType }),
+  getGenerationJob: (jobId) => request.get(`/generation-jobs/${jobId}`),
+  cancelGenerationJob: (jobId) => request.post(`/generation-jobs/${jobId}/cancel`),
   generateHooks: (projectId) => request.post(`/content-projects/${projectId}/generate-hooks`),
   hookSummary: (projectId) => request.get(`/content-projects/${projectId}/hook-summary`),
   getUnitHooks: (projectId, unitId) => request.get(`/content-projects/${projectId}/units/${unitId}/hooks`),

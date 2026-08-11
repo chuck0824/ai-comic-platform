@@ -330,6 +330,11 @@ export async function runArtifactRegeneration({ workbench, input, execute }) {
     workbench.updateGenerationProgress(task.id, { percentage: 90, subtask: '正在生成差异与影响范围' })
     return workbench.finishGeneration(task.id, { status: 'completed', ...outcome })
   } catch (error) {
-    return workbench.finishGeneration(task.id, { status: 'failed', error: error?.message || '生成失败' })
+    return workbench.finishGeneration(task.id, {
+      status: error?.status === 'cancelled' ? 'cancelled' : 'failed',
+      error: error?.message || '生成失败',
+      errorCode: error?.code,
+      targetAction: error?.targetAction
+    })
   }
 }

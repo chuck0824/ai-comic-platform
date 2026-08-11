@@ -4,9 +4,10 @@
       <el-descriptions-item label="任务 ID">{{ result?.taskId || '—' }}</el-descriptions-item>
       <el-descriptions-item label="状态">{{ result?.status || '—' }}</el-descriptions-item>
       <el-descriptions-item label="影响">{{ result?.impact || '无' }}</el-descriptions-item>
-      <el-descriptions-item label="产物路径">{{ result?.artifact?.path || '尚未采用' }}</el-descriptions-item>
+      <el-descriptions-item label="产物路径">{{ result?.artifact?.path || '尚未返回' }}</el-descriptions-item>
       <el-descriptions-item label="版本">{{ result?.artifact?.version ?? '—' }}</el-descriptions-item>
     </el-descriptions>
+    <el-alert v-if="result?.artifact?.message" class="result-error" type="warning" :title="result.artifact.message" :closable="false" show-icon />
     <section v-if="diffView.visible" class="result-diff">
       <h3>修订对比</h3>
       <p v-if="diffView.summary" class="diff-summary">{{ diffView.summary }}</p>

@@ -12,6 +12,9 @@ test('creation entries resolve to the native project workbench', async () => {
   assert.equal(workspaceTarget({ id: 22, entryMode: 'professional' }), '/script-gen/22/workspace?stage=creation_settings')
   assert.equal(workspaceTarget({ id: 23, entryMode: 'upload' }), '/script-gen/23/workspace?stage=creation_settings&next=novel_upload')
   assert.equal(workspaceTarget({ id: 24, entryMode: 'tvc' }), '/script-gen/24/workspace?stage=creation_settings&variant=tvc')
+  assert.equal(workspaceTarget({ id: 25, stage: 'content' }), '/script-gen/25/workspace?stage=script_body')
+  assert.equal(workspaceTarget({ id: 26, stage: 'review' }), '/script-gen/26/workspace?stage=review_revision')
+  assert.equal(workspaceTarget({ id: 27, stage: 'import_review' }), '/script-gen/27/workspace?stage=novel_upload')
 })
 
 test('persisted and query stages are validated without allowing skips', async () => {
@@ -21,13 +24,16 @@ test('persisted and query stages are validated without allowing skips', async ()
   assert.equal(resolveWorkspaceStage({ persistedStage: 'script_body', queryStage: 'text_storyboard' }), 'script_body')
   assert.equal(resolveWorkspaceStage({ persistedStage: 'legacy_destination', queryStage: 'hacked' }), 'creation_settings')
   const legacy = {
-    story_seed: 'creation_settings', characters: 'novel_analysis', synopsis: 'novel_analysis',
+    story_seed: 'creation_settings', import_review: 'novel_upload', characters: 'novel_analysis', synopsis: 'novel_analysis',
     outline: 'structured_script', content: 'script_body', review: 'review_revision',
     destination: 'text_storyboard', storyboard: 'text_storyboard'
   }
   for (const [persistedStage, expected] of Object.entries(legacy)) {
     assert.equal(resolveWorkspaceStage({ persistedStage }), expected)
   }
+  assert.equal(resolveWorkspaceStage({ persistedStage: 'content', queryStage: 'creation_settings' }), 'script_body')
+  assert.equal(resolveWorkspaceStage({ persistedStage: 'review', queryStage: 'creation_settings' }), 'review_revision')
+  assert.equal(resolveWorkspaceStage({ persistedStage: 'import_review', queryStage: 'creation_settings' }), 'novel_upload')
 })
 
 test('batch generation response chooses the first real job and preserves failure detail', async () => {
@@ -97,6 +103,9 @@ test('workspace mounts the authoritative shell and removes legacy stage conditio
   assert.match(source, /loadUnitDrafts/)
   assert.match(source, /getDraft/)
   assert.match(source, /submitStageGeneration/)
+  assert.match(source, /trackGenerationJob/)
+  assert.match(source, /getGenerationJob/)
+  assert.match(source, /cancelGenerationJob/)
   assert.match(source, /GenerationProgressDialog/)
   assert.match(source, /ActionResultDrawer/)
   assert.match(source, /ActionGuidanceDialog/)

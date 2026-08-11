@@ -57,3 +57,19 @@ GREEN:
 - Production frontend build passed after transforming 1,998 modules to `/tmp/aicp-task9-fix1-dist`.
 - Full frontend suite: 204 passed, 1 failed. The only failure remains the pre-existing `agent-config-state.test.js` identity mismatch documented above; no Task 9 file participates in that assertion.
 - `git diff --check` passed.
+
+## Fix Round 2 — Reviewer Findings
+
+- Generation actions now keep polling the authoritative server job through `pending`/`processing` to a terminal state. The workbench publishes completed artifacts only after the server reports `completed`, preserves terminal failure/cancellation codes, supports local abort and timeout guidance, and sends cancellation to the real `/generation-jobs/{id}/cancel` endpoint before aborting local tracking.
+- Script-scene asset application requests now send the explicit content-project workspace header `X-Workspace-Id: project_<id>`. The global Axios interceptor preserves this explicit header instead of overwriting it with the user's default workspace.
+- Launchpad resume targets normalize legacy `content`, `review`, and `import_review` values before URL serialization. A default `creation_settings` query no longer overwrites a later legal persisted legacy resume stage.
+- Every public asynchronous scene-asset operation captures a project ID plus operation generation before awaiting. List/detail/lifecycle/variant/conversion/impact/Markdown/reference-replacement/consumer-resolution responses and failures refuse all state, cache, selection, or action-result writes after a project switch or reset.
+
+### Fix Round 2 Verification
+
+- Task 4–9 focused frontend regression: 109/109 passed, including deferred generation job states, project-workspace request headers, legacy resume precedence, stale successful/rejected scene-asset responses, and a 9→10→9 project switch-back token case.
+- Full frontend suite: 213 passed, 1 failed. The only failure remains the acknowledged pre-existing `agent-config-state.test.js` identity mismatch (`null` expected versus an empty identity object); no Task 9 file participates in that assertion.
+- All modified JavaScript files passed `node --check`. `ContentProjectWorkspace.vue`, `ActionResultDrawer.vue`, and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`.
+- Vite production build passed after transforming 2,000 modules to `/tmp/aicp-task9-fix2-dist`.
+- Backend regression passed: `ProjectSceneAssetLifecycleE2ETest` 17/17 and `AssetApplicationServiceTest` 5/5.
+- `git diff --check` passed.

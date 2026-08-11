@@ -1,0 +1,39 @@
+function snakeKey(key) { return key.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`) }
+function camelKey(key) { return key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()) }
+function mapKeys(value, keyMapper) {
+  if (Array.isArray(value)) return value.map(item => mapKeys(item, keyMapper))
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [keyMapper(key), mapKeys(item, keyMapper)]))
+}
+
+export const toSceneAssetPayload = value => mapKeys(value ?? {}, snakeKey)
+export const fromSceneAssetResponse = value => mapKeys(value?.data ?? value ?? {}, camelKey)
+export const projectWorkspaceConfig = projectId => ({ headers: { 'X-Workspace-Id': `project_${projectId}` } })
+
+const base = projectId => `/content-projects/${projectId}/scene-assets`
+
+export function createSceneAssetApi(client) {
+  const mapped = async call => fromSceneAssetResponse(await call())
+  return {
+    list: (projectId, filters = {}) => mapped(() => client.get(base(projectId), { params: toSceneAssetPayload(filters) })),
+    create: (projectId, draft) => mapped(() => client.post(base(projectId), toSceneAssetPayload(draft))),
+    get: (projectId, assetId) => mapped(() => client.get(`${base(projectId)}/${assetId}`)),
+    update: (projectId, assetId, draft) => mapped(() => client.patch(`${base(projectId)}/${assetId}`, toSceneAssetPayload(draft))),
+    createFromLocation: (projectId, draft) => mapped(() => client.post(`${base(projectId)}/from-location`, toSceneAssetPayload(draft))),
+    createVariant: (projectId, assetId, draft) => mapped(() => client.post(`${base(projectId)}/${assetId}/variants`, toSceneAssetPayload(draft))),
+    updateVariant: (projectId, assetId, variantId, draft) => mapped(() => client.patch(`${base(projectId)}/${assetId}/variants/${variantId}`, toSceneAssetPayload(draft))),
+    restore: (projectId, assetId, versionId, draft = {}) => mapped(() => client.post(`${base(projectId)}/${assetId}/versions/${versionId}/restore`, toSceneAssetPayload(draft))),
+    disable: (projectId, assetId) => mapped(() => client.post(`${base(projectId)}/${assetId}/disable`)),
+    activate: (projectId, assetId) => mapped(() => client.post(`${base(projectId)}/${assetId}/activate`)),
+    archive: (projectId, assetId) => mapped(() => client.post(`${base(projectId)}/${assetId}/archive`)),
+    impact: (projectId, assetId) => mapped(() => client.get(`${base(projectId)}/${assetId}/impact`)),
+    markdown: (projectId, assetId) => mapped(() => client.get(`${base(projectId)}/${assetId}/markdown`)),
+    apply: (projectId, assetId, target) => mapped(() => client.post(`/asset/library/${assetId}/applications`, toSceneAssetPayload({
+      projectId,
+      targetType: target.targetType,
+      targetId: target.targetId ?? null,
+      targetKey: target.targetKey ?? null,
+      idempotencyKey: target.idempotencyKey
+    }), projectWorkspaceConfig(projectId)))
+  }
+}
