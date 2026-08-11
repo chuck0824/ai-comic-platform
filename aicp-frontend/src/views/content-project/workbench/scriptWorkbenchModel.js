@@ -3,9 +3,9 @@ export const STAGES = [
   { key: 'novel_upload', label: '小说上传' },
   { key: 'novel_analysis', label: '小说分析' },
   { key: 'adaptation', label: '改编方案' },
-  { key: 'structured_script', label: '结构化剧本' },
+  { key: 'structured_script', label: '结构化文字剧本' },
   { key: 'script_body', label: '剧本正文' },
-  { key: 'review_revision', label: '审阅与修订' },
+  { key: 'review_revision', label: '审核修订' },
   { key: 'text_storyboard', label: '文字分镜' }
 ]
 

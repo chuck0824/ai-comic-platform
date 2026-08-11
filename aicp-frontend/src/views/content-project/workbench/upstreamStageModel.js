@@ -32,43 +32,68 @@ function text(value) {
   return String(value ?? '').trim()
 }
 
-function unwrapModels(response) {
+function unwrapCatalog(response) {
   const payload = response?.data?.data ?? response?.data ?? response ?? {}
-  return Array.isArray(payload) ? payload : (payload.models ?? payload.items ?? [])
+  if (Array.isArray(payload)) return { models: payload, catalogProvenance: null, billingProvenance: null }
+  return {
+    models: payload.models ?? payload.items ?? [],
+    catalogProvenance: text(payload.catalog_provenance ?? payload.catalogProvenance ?? payload.provenance).toLowerCase() || null,
+    billingProvenance: text(payload.billing_provenance ?? payload.billingProvenance).toLowerCase() || null
+  }
 }
 
-function normalizeRemoteModel(model) {
+const REMOTE_3001_PROVENANCE = new Set(['3001', 'remote_3001', '3001_remote'])
+const REMOTE_3001_BILLING = new Set(['3001', '3001_credits', 'remote_3001'])
+
+function isExplicit3001Catalog(catalog) {
+  return REMOTE_3001_PROVENANCE.has(catalog.catalogProvenance)
+}
+
+function normalizeCatalogModel(model, mode, catalog) {
   const id = model.id ?? model.modelId ?? model.model_id
   const name = model.name ?? model.modelName ?? model.model_name ?? id
   const status = String(model.status ?? 'available').toLowerCase()
   if (!id || !['available', 'active', 'enabled', 'ready'].includes(status)) return null
   const estimated = Number(model.estimatedPoints ?? model.estimated_points ?? model.estimatedCredits ?? model.estimated_credits)
+  const remote = mode === 'remote'
+  const authoritative3001Billing = remote && REMOTE_3001_BILLING.has(catalog.billingProvenance)
   return {
     id,
     name,
     status: 'available',
-    source: model.source ?? model.provider ?? '3001',
-    sourceBadge: model.sourceBadge ?? model.source_badge ?? '3001 平台',
-    pointRule: model.pointRule ?? model.point_rule ?? model.creditRule ?? model.credit_rule ?? '按 3001 平台实际用量结算',
+    source: remote ? catalog.catalogProvenance : (catalog.catalogProvenance ?? 'local_registry'),
+    sourceBadge: remote ? '3001 平台' : '本地模型目录',
+    pointRule: authoritative3001Billing
+      ? (model.pointRule ?? model.point_rule ?? model.creditRule ?? model.credit_rule ?? '按 3001 平台实际用量结算')
+      : '本地积分预估，仅供参考，非 3001 账务结算',
     estimatedPoints: Number.isFinite(estimated) && estimated > 0 ? estimated : null,
     demo: false
   }
 }
 
-/** Loads the 3001-compatible model catalog. Demos are returned only as a visible fallback. */
+export function creationCatalogPresentation(mode) {
+  if (mode === 'remote') return { label: '3001 模型已连接', type: 'success' }
+  if (mode === 'local') return { label: '本地模型目录', type: 'info' }
+  if (mode === 'loading') return { label: '正在加载模型', type: 'info' }
+  return { label: '内置演示模式', type: 'warning' }
+}
+
+/** Only an explicit backend provenance can promote a catalog to remote 3001 mode. */
 export async function loadCreationModels(fetchModels) {
   try {
     if (typeof fetchModels !== 'function') throw new Error('模型服务未配置')
-    const models = unwrapModels(await fetchModels()).map(normalizeRemoteModel).filter(Boolean)
-    if (models.length) return { mode: 'remote', models, guidance: null }
+    const catalog = unwrapCatalog(await fetchModels())
+    const mode = isExplicit3001Catalog(catalog) ? 'remote' : 'local'
+    const models = catalog.models.map(model => normalizeCatalogModel(model, mode, catalog)).filter(Boolean)
+    if (models.length) return { mode, models, guidance: null }
     return {
       mode: 'demo', models: BUILT_IN_DEMO_MODELS.map(clone),
-      guidance: rejected('MODEL_CATALOG_EMPTY', '暂无可用平台模型', '3001 暂无可用模型，已切换到内置演示模型。', 'refresh_model_catalog')
+      guidance: rejected('MODEL_CATALOG_EMPTY', '暂无可用模型', '模型目录中暂无可用模型，已切换到内置演示模型。', 'refresh_model_catalog')
     }
   } catch (error) {
     return {
       mode: 'demo', models: BUILT_IN_DEMO_MODELS.map(clone),
-      guidance: rejected('MODEL_CATALOG_UNREACHABLE', '模型服务不可用', `无法连接 3001 模型服务，已切换到内置演示模型。${error?.message ? `（${error.message}）` : ''}`, 'refresh_model_catalog')
+      guidance: rejected('MODEL_CATALOG_UNREACHABLE', '模型目录不可用', `无法加载模型目录，已切换到内置演示模型。${error?.message ? `（${error.message}）` : ''}`, 'refresh_model_catalog')
     }
   }
 }

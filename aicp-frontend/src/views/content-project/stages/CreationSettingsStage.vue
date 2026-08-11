@@ -2,7 +2,7 @@
   <section class="stage-panel">
     <header class="stage-heading">
       <div><p class="eyebrow">STEP 1</p><h2>创作设置</h2><p>先确定创作边界、产物规格和积分规则。</p></div>
-      <el-tag :type="modelMode === 'remote' ? 'success' : 'warning'">{{ modelMode === 'remote' ? '3001 模型已连接' : '演示模式' }}</el-tag>
+      <el-tag :type="catalogPresentation.type">{{ catalogPresentation.label }}</el-tag>
     </header>
 
     <el-form label-position="top" class="settings-grid">
@@ -42,11 +42,11 @@
       <div class="model-title"><strong>创作模型</strong><el-button text @click="refreshModels">刷新模型</el-button></div>
       <el-select v-model="selectedModelId" placeholder="选择模型" :loading="modelLoading" @change="selectModel">
         <el-option v-for="model in models" :key="model.id" :label="model.name" :value="model.id">
-          <span>{{ model.name }}</span><el-tag class="source-badge" size="small" :type="model.demo ? 'warning' : 'success'">{{ model.sourceBadge }}</el-tag>
+          <span>{{ model.name }}</span><el-tag class="source-badge" size="small" :type="model.demo ? 'warning' : (modelMode === 'local' ? 'info' : 'success')">{{ model.sourceBadge }}</el-tag>
         </el-option>
       </el-select>
       <div v-if="draft.model" class="model-meta">
-        <el-tag :type="draft.model.demo ? 'warning' : 'success'">{{ draft.model.sourceBadge }}</el-tag>
+        <el-tag :type="draft.model.demo ? 'warning' : (modelMode === 'local' ? 'info' : 'success')">{{ draft.model.sourceBadge }}</el-tag>
         <span>{{ draft.model.pointRule }}</span>
         <strong>{{ draft.model.demo ? '0 积分' : (draft.estimatedPoints ? `预估 ${draft.estimatedPoints} 积分` : '待获取积分预估') }}</strong>
       </div>
@@ -58,10 +58,10 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { canvasAgentApi } from '@/api/canvas'
 import { generationApi } from '@/api/generation'
-import { buildCreditEstimateRequest, loadCreationModels, validateCreationSettings } from '../workbench/upstreamStageModel.js'
+import { buildCreditEstimateRequest, creationCatalogPresentation, loadCreationModels, validateCreationSettings } from '../workbench/upstreamStageModel.js'
 
 const props = defineProps({
   modelValue: { type: Object, default: () => ({}) },
@@ -77,6 +77,7 @@ const tones = ['高燃', '紧张', '治愈', '轻喜', '暗黑', '浪漫', '写�
 const models = ref([])
 const selectedModelId = ref(draft.model?.id ?? '')
 const modelMode = ref('loading')
+const catalogPresentation = computed(() => creationCatalogPresentation(modelMode.value))
 const modelLoading = ref(false)
 const localGuidance = ref(null)
 

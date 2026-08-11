@@ -23,6 +23,10 @@ test('workbench uses the approved eight-stage creative order', () => {
     'creation_settings', 'novel_upload', 'novel_analysis', 'adaptation',
     'structured_script', 'script_body', 'review_revision', 'text_storyboard'
   ])
+  assert.deepEqual(STAGES.map(stage => stage.label), [
+    '创作设置', '小说上传', '小说分析', '改编方案',
+    '结构化文字剧本', '剧本正文', '审核修订', '文字分镜'
+  ])
 })
 
 test('all actions stay clickable and explain unmet conditions', () => {

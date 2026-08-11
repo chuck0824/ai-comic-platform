@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import {
   addAdaptationRule,
   buildCreditEstimateRequest,
+  creationCatalogPresentation,
   confirmAdaptationPlan,
   convertLocationToSceneAsset,
   countChineseCharacters,
@@ -54,14 +55,14 @@ test('pasted novel enforces the 2000 Chinese-character product rule', () => {
 
 test('creation settings use real usable models and only fall back to explicit free demos', async () => {
   const real = await loadCreationModels(async () => ({
-    data: { models: [
-      { model_id: 'qwen-plus', model_name: 'Qwen Plus', status: 'available', source: '3001', point_rule: '按实际 Token 结算', estimated_points: 8 },
+    data: { catalog_provenance: 'remote_3001', billing_provenance: '3001_credits', models: [
+      { model_id: 'qwen-plus', model_name: 'Qwen Plus', status: 'available', provider: 'qwen', point_rule: '按实际 Token 结算', estimated_points: 8 },
       { model_id: 'offline', model_name: 'Offline', status: 'unavailable' }
     ] }
   }))
   assert.deepEqual(real, {
     mode: 'remote',
-    models: [{ id: 'qwen-plus', name: 'Qwen Plus', status: 'available', source: '3001', sourceBadge: '3001 平台', pointRule: '按实际 Token 结算', estimatedPoints: 8, demo: false }],
+    models: [{ id: 'qwen-plus', name: 'Qwen Plus', status: 'available', source: 'remote_3001', sourceBadge: '3001 平台', pointRule: '按实际 Token 结算', estimatedPoints: 8, demo: false }],
     guidance: null
   })
 
@@ -77,6 +78,37 @@ test('creation settings use real usable models and only fall back to explicit fr
   })
   assert.equal(invalidRealSettings.allowed, false)
   assert.equal(invalidRealSettings.code, 'POINT_ESTIMATE_REQUIRED')
+})
+
+test('local or unspecified model catalogs never claim a 3001 connection or accounting settlement', async () => {
+  for (const response of [
+    { data: { catalog_provenance: 'local_registry', billing_provenance: 'local_estimate', models: [
+      { model_id: 'deepseek-v3', model_name: 'DeepSeek V3', provider: 'deepseek', status: 'available' }
+    ] } },
+    { data: { models: [
+      { model_id: 'deepseek-v3', model_name: 'DeepSeek V3', provider: 'deepseek', status: 'available' }
+    ] } }
+  ]) {
+    const catalog = await loadCreationModels(async () => response)
+    assert.equal(catalog.mode, 'local')
+    assert.equal(catalog.models[0].sourceBadge, '本地模型目录')
+    assert.match(catalog.models[0].pointRule, /非 3001 账务结算/)
+    assert.doesNotMatch(catalog.models[0].pointRule, /按 3001 实际用量结算/)
+  }
+
+  assert.deepEqual(creationCatalogPresentation('local'), {
+    label: '本地模型目录',
+    type: 'info'
+  })
+
+  const remoteCatalogWithLocalEstimate = await loadCreationModels(async () => ({ data: {
+    catalog_provenance: 'remote_3001',
+    billing_provenance: 'local_estimate',
+    models: [{ model_id: 'qwen-plus', status: 'available' }]
+  } }))
+  assert.equal(remoteCatalogWithLocalEstimate.mode, 'remote')
+  assert.equal(remoteCatalogWithLocalEstimate.models[0].sourceBadge, '3001 平台')
+  assert.match(remoteCatalogWithLocalEstimate.models[0].pointRule, /非 3001 账务结算/)
 })
 
 test('credit estimate request matches the backend generation contract', () => {
