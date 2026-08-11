@@ -46,6 +46,7 @@ public class ContentGenerationExecutor {
             return;
         }
 
+        ContentVersion candidate = null;
         try {
             if (!"pending".equals(job.getStatus())) return;
             int started = jobMapper.update(null, new UpdateWrapper<ContentGenerationJob>()
@@ -99,9 +100,12 @@ public class ContentGenerationExecutor {
 
             if (isCancelled(jobId)) return;
             // Save as a content version if target_id is specified
-            ContentVersion candidate = null;
             if (job.getTargetId() != null && job.getTargetType() != null) {
                 candidate = saveGeneratedContent(job, parsedResult != null ? toJson(parsedResult) : generatedText);
+            }
+            if (isCancelled(jobId)) {
+                deleteCandidate(candidate);
+                return;
             }
 
             int completed = jobMapper.update(null, new UpdateWrapper<ContentGenerationJob>()
@@ -111,7 +115,7 @@ public class ContentGenerationExecutor {
                     .set("actual_credits", estimateTokens(generatedText))
                     .set("finished_at", LocalDateTime.now()));
             if (completed == 0) {
-                if (candidate != null && candidate.getId() != null) versionMapper.deleteById(candidate.getId());
+                deleteCandidate(candidate);
                 return;
             }
             job.setStatus("completed");
@@ -120,7 +124,18 @@ public class ContentGenerationExecutor {
             log.info("Generation job {} completed: {} chars", jobId, generatedText.length());
         } catch (Exception e) {
             log.error("Generation job {} failed", jobId, e);
+            deleteCandidate(candidate);
             markFailedIfProcessing(jobId, "AI_ERROR");
+        }
+    }
+
+    private void deleteCandidate(ContentVersion candidate) {
+        if (candidate == null || candidate.getId() == null) return;
+        try {
+            versionMapper.deleteById(candidate.getId());
+        } catch (Exception cleanupError) {
+            // Candidate/discarded versions are excluded from every public version path even if physical cleanup fails.
+            log.warn("Failed to clean candidate version {}", candidate.getId(), cleanupError);
         }
     }
 
@@ -209,7 +224,8 @@ public class ContentGenerationExecutor {
 
         // Extract content unit context
         for (Map.Entry<String, Object> entry : snapshot.entrySet()) {
-            if ("parameter".equals(entry.getKey()) || "strategy".equals(entry.getKey())) continue;
+            if ("parameter".equals(entry.getKey()) || "strategy".equals(entry.getKey())
+                    || entry.getKey().startsWith("_")) continue;
             sb.append("\n--- ").append(entry.getKey()).append(" ---\n");
             if (entry.getValue() instanceof Map<?, ?> m) {
                 Object content = m.get("content");

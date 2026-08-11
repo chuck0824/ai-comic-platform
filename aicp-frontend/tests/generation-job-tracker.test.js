@@ -1,7 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { trackGenerationJob } from '../src/views/content-project/workbench/generationJobTracker.js'
-import { loadAcceptedGeneration, persistGenerationDecision } from '../src/views/content-project/workbench/generationResultPersistence.js'
+import {
+  createGenerationDecisionGuard,
+  loadAcceptedGeneration,
+  loadUnitWorkspaceContent,
+  persistGenerationDecision
+} from '../src/views/content-project/workbench/generationResultPersistence.js'
 
 test('tracks queued through running to completed and preserves the real artifact response', async () => {
   const responses = [
@@ -107,4 +112,41 @@ test('accepted result refreshes from the unit current version instead of the man
 
   assert.equal(loaded.unit.current_version_id, 176)
   assert.deepEqual(loaded.content, { scenes: ['新候选'] })
+})
+
+test('workspace reload prefers the authoritative current named version and only falls back without one', async () => {
+  let draftCalls = 0
+  const current = await loadUnitWorkspaceContent({
+    unit: { id: 17, current_version_id: 176 },
+    listVersions: async () => [{ id: 176, status: 'accepted', content_json: '{"scenes":["已采用"]}' }],
+    getDraft: async () => { draftCalls += 1; return { content_json: '{"scenes":["旧草稿"]}' } }
+  })
+  const fallback = await loadUnitWorkspaceContent({
+    unit: { id: 18, current_version_id: null },
+    listVersions: async () => { throw new Error('should not list') },
+    getDraft: async () => { draftCalls += 1; return { revision: 3, content_json: '{"scenes":["手工草稿"]}' } }
+  })
+  assert.deepEqual(current.content, { scenes: ['已采用'] })
+  assert.deepEqual(fallback.content, { scenes: ['手工草稿'] })
+  assert.equal(draftCalls, 1)
+})
+
+test('decision guard deduplicates double clicks and same disposition is locally idempotent', async () => {
+  const guard = createGenerationDecisionGuard()
+  let remoteCalls = 0
+  let release
+  const remote = new Promise(resolve => { release = resolve })
+  const first = guard.run('task-80', 'accept', async () => { remoteCalls += 1; await remote; return { ok: true } })
+  const second = guard.run('task-80', 'accept', async () => { remoteCalls += 1; return { ok: false } })
+  release()
+  assert.strictEqual(first, second)
+  assert.equal((await second).ok, true)
+  assert.equal(remoteCalls, 1)
+
+  const idempotent = await persistGenerationDecision({
+    decision: 'accept', serverJobId: 80, localTaskId: 'task-80',
+    api: { acceptGenerationJob: async () => ({ data: { data: { result_disposition: 'accepted' } } }) },
+    workbench: { acceptGeneration: () => ({ allowed: false, code: 'GENERATION_ALREADY_RECORDED' }) }
+  })
+  assert.equal(idempotent.ok, true)
 })

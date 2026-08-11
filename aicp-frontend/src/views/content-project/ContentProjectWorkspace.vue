@@ -194,7 +194,7 @@ import { nextStageKey, resolveWorkspaceStage, restoreWorkbenchStage, shouldAdvan
 import { validateAnalysisSection, validateCreationSettings } from './workbench/upstreamStageModel.js'
 import { createProjectLoadGuard, resetProjectWorkspaceData } from './workbench/workspaceLoadState.js'
 import { trackGenerationJob } from './workbench/generationJobTracker.js'
-import { loadAcceptedGeneration, persistGenerationDecision } from './workbench/generationResultPersistence.js'
+import { createGenerationDecisionGuard, loadAcceptedGeneration, loadUnitWorkspaceContent, persistGenerationDecision } from './workbench/generationResultPersistence.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -214,6 +214,7 @@ const storyboardScenes = ref([])
 const storyboardShotIds = new Map()
 let autosaveTimer = null
 const projectLoadGuard = createProjectLoadGuard()
+const decisionGuard = createGenerationDecisionGuard()
 const activeGenerationJobs = new Map()
 
 const defaultEpisode = () => ({ id: 'EP-001', title: '第 1 集', beats: [], scenes: [] })
@@ -351,11 +352,14 @@ async function loadUnitDrafts(loadToken, requestedProjectId) {
     const key = stageDataKey(unit.unit_type)
     if (!key || unit.unit_type === 'novel_upload') return
     try {
-      const draft = responseData(await contentProjectApi.getDraft(unit.id))
+      const loaded = await loadUnitWorkspaceContent({
+        unit,
+        listVersions: async unitId => responseData(await contentProjectApi.listVersions(unitId)) || [],
+        getDraft: async unitId => responseData(await contentProjectApi.getDraft(unitId))
+      })
       if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
-      const parsed = JSON.parse(draft.content_json || '{}')
-      Object.assign(stageData[key], parsed)
-      unit.revision = draft.revision ?? unit.revision
+      Object.assign(stageData[key], loaded.content)
+      if (loaded.draft) unit.revision = loaded.draft.revision ?? unit.revision
     } catch { /* a content unit may not have a draft yet */ }
   }))
 }
@@ -776,19 +780,21 @@ async function refreshAcceptedGeneration(response) {
   Object.assign(stageData[key], loaded.content)
 }
 async function decideGenerationResult(taskId, decision) {
-  const result = workbench.state.results.find(item => item.taskId === taskId)
-  const persisted = await persistGenerationDecision({
-    decision,
-    serverJobId: result?.artifact?.jobId,
-    localTaskId: taskId,
-    api: contentProjectApi,
-    workbench,
-    refresh: refreshAcceptedGeneration
+  return decisionGuard.run(taskId, decision, async () => {
+    const result = workbench.state.results.find(item => item.taskId === taskId)
+    const persisted = await persistGenerationDecision({
+      decision,
+      serverJobId: result?.artifact?.jobId,
+      localTaskId: taskId,
+      api: contentProjectApi,
+      workbench,
+      refresh: refreshAcceptedGeneration
+    })
+    if (!persisted.ok) return showGuidance({ ...persisted, title: decision === 'accept' ? '采用失败' : '丢弃失败', targetAction: `retry_generation_${decision}` })
+    resultVisible.value = false
+    if (persisted.refreshFailure) showGuidance({ ...persisted.refreshFailure, title: '候选版本已采用，但页面刷新失败', targetAction: 'refresh_project_units' })
+    return persisted
   })
-  if (!persisted.ok) return showGuidance({ ...persisted, title: decision === 'accept' ? '采用失败' : '丢弃失败', targetAction: `retry_generation_${decision}` })
-  resultVisible.value = false
-  if (persisted.refreshFailure) showGuidance({ ...persisted.refreshFailure, title: '候选版本已采用，但页面刷新失败', targetAction: 'refresh_project_units' })
-  return persisted
 }
 function acceptGenerationResult(taskId) { return decideGenerationResult(taskId, 'accept') }
 function discardGenerationResult(taskId) { return decideGenerationResult(taskId, 'discard') }

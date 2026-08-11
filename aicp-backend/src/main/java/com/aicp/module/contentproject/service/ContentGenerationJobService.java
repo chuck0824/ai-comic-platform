@@ -4,6 +4,7 @@ import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
 import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
+import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
 import com.aicp.module.contentproject.entity.ContentGenerationJob;
 import com.aicp.module.contentproject.entity.ContentUnit;
 import com.aicp.module.contentproject.entity.ContentVersion;
@@ -15,13 +16,19 @@ import com.aicp.module.contentproject.mapper.GenerationContextSnapshotMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -36,6 +43,7 @@ public class ContentGenerationJobService {
     private final ObjectMapper objectMapper;
     private final ContentVersionMapper versionMapper;
     private final ContentUnitMapper unitMapper;
+    private final ProjectAccessService projectAccessService;
 
     @Transactional
     public GenerationJobView createJob(Long userId, Long projectId, GenerationJobRequest request,
@@ -54,6 +62,7 @@ public class ContentGenerationJobService {
 
         // assemble context snapshot
         ContextSnapshot snapshot = contextAssembler.assemble(projectId, request);
+        JobSnapshot jobSnapshot = snapshotForJob(projectId, request, snapshot);
 
         ContentGenerationJob job = new ContentGenerationJob();
         job.setUuid(UUID.randomUUID().toString());
@@ -62,8 +71,8 @@ public class ContentGenerationJobService {
         job.setTargetType(request.targetType());
         job.setTargetId(request.targetId());
         job.setStatus("pending");
-        job.setInputSnapshotJson(snapshot.payload());
-        job.setInputSnapshotHash(snapshot.contentHash());
+        job.setInputSnapshotJson(jobSnapshot.payload());
+        job.setInputSnapshotHash(jobSnapshot.contentHash());
         job.setSchemaVersion(request.schemaVersion() != null ? request.schemaVersion() : "v1");
         job.setEstimatedCredits(0);
         job.setActualCredits(0);
@@ -85,8 +94,8 @@ public class ContentGenerationJobService {
             persisted.setUnitGuideId(snapshot.unitGuideId());
             persisted.setSelectedVersionsJson(objectMapper.writeValueAsString(snapshot.selectedVersions()));
             persisted.setResolvedGuideJson(snapshot.resolvedGuideJson());
-            persisted.setPayloadJson(snapshot.payload());
-            persisted.setPayloadHash(snapshot.contentHash());
+            persisted.setPayloadJson(jobSnapshot.payload());
+            persisted.setPayloadHash(jobSnapshot.contentHash());
             contextSnapshotMapper.insert(persisted);
         } catch (JsonProcessingException e) {
             throw new BizException(ErrorCode.INTERNAL_ERROR, "生成上下文快照保存失败");
@@ -98,20 +107,14 @@ public class ContentGenerationJobService {
         return toView(job);
     }
 
-    public GenerationJobView getJob(Long jobId) {
-        ContentGenerationJob job = jobMapper.selectById(jobId);
-        if (job == null) {
-            throw new BizException(ErrorCode.NOT_FOUND);
-        }
+    public GenerationJobView getJob(Long userId, Long jobId) {
+        ContentGenerationJob job = requireAuthorizedJob(userId, jobId, Action.VIEW);
         return toView(job);
     }
 
     @Transactional
-    public void cancelJob(Long jobId) {
-        ContentGenerationJob job = jobMapper.selectById(jobId);
-        if (job == null) {
-            throw new BizException(ErrorCode.NOT_FOUND);
-        }
+    public void cancelJob(Long userId, Long jobId) {
+        ContentGenerationJob job = requireAuthorizedJob(userId, jobId, Action.EDIT_CONTENT);
         if ("cancelled".equals(job.getStatus())) {
             return;
         }
@@ -129,11 +132,11 @@ public class ContentGenerationJobService {
     }
 
     @Transactional
-    public GenerationJobView acceptJob(Long jobId) {
-        ContentGenerationJob job = requireCompleted(jobId);
+    public GenerationJobView acceptJob(Long userId, Long jobId) {
+        ContentGenerationJob job = requireCompleted(userId, jobId, Action.EDIT_CONTENT);
         ContentVersion candidate = requireResultVersion(jobId);
-        ContentUnit unit = unitMapper.selectById(candidate.getContentUnitId());
-        if (unit == null || !job.getProjectId().equals(unit.getProjectId())) {
+        ContentUnit unit = requireTargetUnit(job);
+        if (!candidate.getContentUnitId().equals(unit.getId())) {
             throw new BizException(ErrorCode.NOT_FOUND, "生成结果对应的内容单元不存在");
         }
         if ("discarded".equals(candidate.getStatus())) {
@@ -148,6 +151,18 @@ public class ContentGenerationJobService {
         if (!"candidate".equals(candidate.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "生成结果不是可采用的候选版本");
         }
+        TargetBaseline baseline = targetBaseline(job, unit);
+        int revision = baseline.revision();
+        UpdateWrapper<ContentUnit> unitClaim = new UpdateWrapper<ContentUnit>()
+                .eq("id", unit.getId())
+                .eq("revision", revision)
+                .set("current_version_id", candidate.getId())
+                .set("revision", revision + 1);
+        if (baseline.currentVersionId() == null) unitClaim.isNull("current_version_id");
+        else unitClaim.eq("current_version_id", baseline.currentVersionId());
+        if (unitMapper.update(null, unitClaim) == 0) {
+            throw new BizException(ErrorCode.EDIT_CONFLICT, "当前内容版本已变更，请刷新后重新选择候选结果");
+        }
         int claimed = versionMapper.update(null, new UpdateWrapper<ContentVersion>()
                 .eq("id", candidate.getId())
                 .eq("status", "candidate")
@@ -161,17 +176,19 @@ public class ContentGenerationJobService {
         }
         candidate.setStatus("accepted");
         unit.setCurrentVersionId(candidate.getId());
-        unit.setRevision((unit.getRevision() == null ? 0 : unit.getRevision()) + 1);
-        unitMapper.updateById(unit);
+        unit.setRevision(revision + 1);
         return toView(job);
     }
 
     @Transactional
-    public GenerationJobView discardJob(Long jobId) {
-        ContentGenerationJob job = requireCompleted(jobId);
+    public GenerationJobView discardJob(Long userId, Long jobId) {
+        ContentGenerationJob job = requireCompleted(userId, jobId, Action.EDIT_CONTENT);
         ContentVersion candidate = requireResultVersion(jobId);
         if ("discarded".equals(candidate.getStatus())) return toView(job);
-        ContentUnit unit = unitMapper.selectById(candidate.getContentUnitId());
+        ContentUnit unit = requireTargetUnit(job);
+        if (!candidate.getContentUnitId().equals(unit.getId())) {
+            throw new BizException(ErrorCode.NOT_FOUND, "生成结果对应的内容单元不存在");
+        }
         if ("accepted".equals(candidate.getStatus()) || (unit != null && candidate.getId().equals(unit.getCurrentVersionId()))) {
             throw new BizException(ErrorCode.PARAM_INVALID, "已采用的生成结果不能丢弃");
         }
@@ -191,13 +208,31 @@ public class ContentGenerationJobService {
         return toView(job);
     }
 
-    private ContentGenerationJob requireCompleted(Long jobId) {
-        ContentGenerationJob job = jobMapper.selectById(jobId);
-        if (job == null) throw new BizException(ErrorCode.NOT_FOUND);
+    private ContentGenerationJob requireCompleted(Long userId, Long jobId, Action action) {
+        ContentGenerationJob job = requireAuthorizedJob(userId, jobId, action);
         if (!"completed".equals(job.getStatus())) {
             throw new BizException(ErrorCode.PARAM_INVALID, "只能处理已完成的生成结果");
         }
         return job;
+    }
+
+    private ContentGenerationJob requireAuthorizedJob(Long userId, Long jobId, Action action) {
+        ContentGenerationJob job = jobMapper.selectById(jobId);
+        if (job == null) throw new BizException(ErrorCode.NOT_FOUND);
+        projectAccessService.require(job.getProjectId(), userId, action);
+        requireTargetUnit(job);
+        return job;
+    }
+
+    private ContentUnit requireTargetUnit(ContentGenerationJob job) {
+        if (!"content_unit".equals(job.getTargetType()) || job.getTargetId() == null) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "生成任务目标不是内容单元");
+        }
+        ContentUnit unit = unitMapper.selectById(job.getTargetId());
+        if (unit == null || !job.getProjectId().equals(unit.getProjectId())) {
+            throw new BizException(ErrorCode.NOT_FOUND, "生成任务目标与项目不匹配");
+        }
+        return unit;
     }
 
     private ContentVersion requireResultVersion(Long jobId) {
@@ -212,6 +247,61 @@ public class ContentGenerationJobService {
                 .last("limit 1"));
     }
 
+    private JobSnapshot snapshotForJob(Long projectId, GenerationJobRequest request, ContextSnapshot snapshot) {
+        if (!"content_unit".equals(request.targetType()) || request.targetId() == null) {
+            return new JobSnapshot(snapshot.payload(), snapshot.contentHash());
+        }
+        ContentUnit unit = unitMapper.selectById(request.targetId());
+        if (unit == null || !projectId.equals(unit.getProjectId())) {
+            throw new BizException(ErrorCode.NOT_FOUND, "生成任务目标与项目不匹配");
+        }
+        try {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> payload = objectMapper.readValue(snapshot.payload(), LinkedHashMap.class);
+            Map<String, Object> target = new LinkedHashMap<>();
+            target.put("unit_id", unit.getId());
+            target.put("revision", unit.getRevision() == null ? 0 : unit.getRevision());
+            target.put("current_version_id", unit.getCurrentVersionId());
+            payload.put("_generation_target", target);
+            String json = objectMapper.writeValueAsString(payload);
+            return new JobSnapshot(json, sha256(json));
+        } catch (JsonProcessingException e) {
+            throw new BizException(ErrorCode.INTERNAL_ERROR, "生成目标快照保存失败");
+        }
+    }
+
+    private TargetBaseline targetBaseline(ContentGenerationJob job, ContentUnit fallback) {
+        try {
+            JsonNode target = objectMapper.readTree(job.getInputSnapshotJson()).path("_generation_target");
+            if (!target.isMissingNode() && target.path("unit_id").asLong() == fallback.getId()) {
+                JsonNode current = target.get("current_version_id");
+                return new TargetBaseline(
+                        target.path("revision").asInt(0),
+                        current == null || current.isNull() ? null : current.asLong());
+            }
+        } catch (Exception e) {
+            log.warn("Generation job {} has no readable target baseline; using legacy acceptance semantics", job.getId());
+        }
+        return new TargetBaseline(
+                fallback.getRevision() == null ? 0 : fallback.getRevision(),
+                fallback.getCurrentVersionId());
+    }
+
+    private String sha256(String input) {
+        try {
+            byte[] digest = MessageDigest.getInstance("SHA-256")
+                    .digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder(digest.length * 2);
+            for (byte b : digest) hex.append(String.format("%02x", b));
+            return hex.toString();
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("SHA-256 not available", e);
+        }
+    }
+
+    private record JobSnapshot(String payload, String contentHash) {}
+    private record TargetBaseline(int revision, Long currentVersionId) {}
+
     private String errorMessage(String code) {
         if (code == null) return null;
         return switch (code) {
@@ -222,7 +312,7 @@ public class ContentGenerationJobService {
     }
 
     private GenerationJobView toView(ContentGenerationJob job) {
-        ContentVersion result = findResultVersion(job.getId());
+        ContentVersion result = "completed".equals(job.getStatus()) ? findResultVersion(job.getId()) : null;
         Long resultVersionId = result != null ? result.getId() : null;
         String artifactRef = result != null
                 ? "/content-units/" + result.getContentUnitId() + "/versions/" + result.getId()

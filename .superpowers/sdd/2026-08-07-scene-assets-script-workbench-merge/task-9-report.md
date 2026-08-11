@@ -93,3 +93,22 @@ GREEN:
 - Modified JavaScript passed `node --check`; `ContentProjectWorkspace.vue`, `ActionResultDrawer.vue`, and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`.
 - Vite production build passed after transforming 2,001 modules to `/tmp/aicp-task9-fix3-dist`.
 - `git diff --check` passed.
+
+## Fix Round 4 — Candidate Security, Concurrency, and Reload Isolation
+
+- Generation-job read, cancel, accept, and discard now derive the authenticated user in the controller and enforce project `VIEW` or `EDIT_CONTENT` access in the service. Every operation also verifies that the job target is a content unit belonging to the same project; the endpoint E2E runs the real Spring Security filter chain and covers missing authentication and cross-user denial.
+- Job creation captures the target unit ID, revision, and current-version pointer inside the durable generation snapshot and recomputes the snapshot hash. Accept uses that generation-time baseline for an atomic unit CAS before claiming the candidate in the same transaction. Two candidates generated from one baseline can no longer sequentially replace one another: the winner becomes current/accepted while the loser remains candidate with a `409` edit conflict. Legacy jobs without target-baseline metadata keep backward-compatible acceptance semantics.
+- Stale manual autosaves now claim the unit revision atomically and never write the current-version pointer. Candidate/discarded versions are excluded from public version lists and rejected by restore. Failed and cancelled jobs do not expose candidate IDs or artifact references.
+- Executor cancellation/failure races physically remove an inserted candidate before returning or marking failure; a failed completion CAS also removes the candidate. Internal target-baseline metadata is excluded from the model prompt.
+- Workspace reload resolves `unit.current_version_id` from accepted named versions before considering the independent manual draft, so an adopted result remains authoritative after leaving and reopening the project.
+- Accept/discard UI actions now have a per-result in-flight guard. Double clicks share one in-flight promise, and an authoritative server response with the already-requested disposition is treated as idempotent success even when local audit state is already terminal.
+
+### Fix Round 4 TDD and Verification
+
+- RED explicitly reproduced the sequential same-baseline candidate overwrite (`200` on the second accept); GREEN returns `409` and preserves the losing candidate. Additional RED covered missing security user propagation, public candidate visibility/restore, stale autosave mutation, current-version reload precedence, and duplicate UI decisions.
+- Backend generation/content/security service regression: 33/33 passed across `ContentGenerationJobLifecycleServiceTest`, `ContentUnitCandidateIsolationServiceTest`, `ContentProjectM1IntegrationTest`, `ContentProjectM2ScaleTest`, `ContentProjectServiceTest`, and `ContentProjectEnumsTest`. The lifecycle suite includes post-insert failure cleanup and cancellation/completion races.
+- Real-filter generation decision E2E: 4/4 passed, covering authentication/authorization, truthful failed-job exposure, pending/processing cancellation, accept/discard idempotency, same-baseline candidate conflict, and candidate/discarded list/restore isolation.
+- Frontend Task 4–9 focused regression: 116/116 passed. Full frontend suite: 220 passed, 1 failed; the only failure remains the acknowledged pre-existing `agent-config-state.test.js` identity mismatch (`null` expected versus an empty identity object), outside Task 9 files.
+- `ContentProjectWorkspace.vue`, `ActionResultDrawer.vue`, and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`; modified JavaScript passed `node --check`.
+- Vite production build passed after transforming 2,001 modules to `/tmp/aicp-task9-fix4-dist`.
+- `git diff --check` passed.

@@ -22,6 +22,34 @@ export async function loadAcceptedGeneration({ response, listUnits, listVersions
   return { units, unit, version, content: JSON.parse(version.content_json ?? version.contentJson ?? '{}') }
 }
 
+/** Restores the accepted/current named version; manual draft is only a no-current fallback. */
+export async function loadUnitWorkspaceContent({ unit, listVersions, getDraft }) {
+  const currentVersionId = unit?.current_version_id ?? unit?.currentVersionId
+  if (currentVersionId != null) {
+    const versions = await listVersions(unit.id)
+    const version = versions.find(item => Number(item.id) === Number(currentVersionId))
+    if (!version) throw new Error('当前内容版本不可用')
+    return { source: 'current_version', version, content: JSON.parse(version.content_json ?? version.contentJson ?? '{}') }
+  }
+  const draft = await getDraft(unit.id)
+  return { source: 'manual_draft', draft, content: JSON.parse(draft.content_json ?? draft.contentJson ?? '{}') }
+}
+
+/** Coalesces every in-flight decision for the same generated result. */
+export function createGenerationDecisionGuard() {
+  const pending = new Map()
+  return {
+    run(taskId, decision, execute) {
+      const key = String(taskId)
+      if (pending.has(key)) return pending.get(key)
+      const promise = Promise.resolve().then(() => execute(decision)).finally(() => pending.delete(key))
+      pending.set(key, promise)
+      return promise
+    },
+    isPending(taskId) { return pending.has(String(taskId)) }
+  }
+}
+
 /** Persists the candidate decision before mutating the local workbench audit state. */
 export async function persistGenerationDecision({ decision, serverJobId, localTaskId, api, workbench, refresh }) {
   const accepted = decision === 'accept'
@@ -33,12 +61,14 @@ export async function persistGenerationDecision({ decision, serverJobId, localTa
   try {
     const response = body(await remote(serverJobId))
     const localResult = local(localTaskId)
-    if (localResult?.allowed === false) return localResult
+    const disposition = response.result_disposition ?? response.resultDisposition
+    const expectedDisposition = accepted ? 'accepted' : 'discarded'
+    if (localResult?.allowed === false && disposition !== expectedDisposition) return localResult
     let refreshFailure = null
     if (accepted && typeof refresh === 'function') {
       try { await refresh(response) } catch (error) { refreshFailure = failure(error, 'GENERATION_ACCEPT_REFRESH_FAILED') }
     }
-    return { ok: true, response, localResult, refreshFailure }
+    return { ok: true, response, localResult, refreshFailure, idempotent: localResult?.allowed === false }
   } catch (error) {
     return failure(error, accepted ? 'GENERATION_ACCEPT_FAILED' : 'GENERATION_DISCARD_FAILED')
   }
