@@ -73,3 +73,23 @@ GREEN:
 - Vite production build passed after transforming 2,000 modules to `/tmp/aicp-task9-fix2-dist`.
 - Backend regression passed: `ProjectSceneAssetLifecycleE2ETest` 17/17 and `AssetApplicationServiceTest` 5/5.
 - `git diff --check` passed.
+
+## Fix Round 3 — Generation Candidate Lifecycle
+
+- Generation completion now persists an auditable `candidate` `ContentVersion` without changing the content unit's current-version pointer. Completed jobs expose the authoritative `result_version_id`, canonical artifact reference, candidate disposition, actual credits, and actionable error code/message.
+- Added idempotent server-side accept/discard decisions. Accept atomically claims the candidate and switches the target unit's `current_version_id`; discard marks the candidate discarded and leaves the current version untouched. An accepted result cannot later be discarded, and a discarded result cannot later be accepted.
+- The result drawer now persists accept/discard on the server before mutating local audit state. Accept refreshes the unit list and resolves stage content from the authoritative current named version (not the independent manual draft); discard keeps the visible current content unchanged. Server failures leave the local result available for retry.
+- Paid tasks no longer substitute estimated points when the backend omits actual consumption. Terminal job errors preserve backend codes and messages through polling and workbench task/result state.
+- Cancellation now supports both `pending` and `processing` jobs. Executor transitions are conditional and re-check cancellation before and after the model call and before persistence; a cancellation that wins after candidate insertion prevents completion and removes the uncommitted candidate.
+- Resume-pointer persistence now normalizes legacy `content`, `review`, and `import_review` keys before comparing stage order, so revisiting an earlier stage cannot regress the authoritative resume position.
+
+### Fix Round 3 TDD and Verification
+
+- RED covered missing accept/discard APIs and lifecycle fields, automatic current-version switching, processing cancellation, estimated-credit fallback, missing legacy persistence comparison, missing server-first result persistence, and accepted-content refresh incorrectly reading the manual draft. Each focused failure was observed before its implementation.
+- Focused frontend Task 4–9 regression: 114/114 passed, including server-first accept/discard fixtures, authoritative accepted-version refresh, actual-credit/error propagation, legacy resume persistence, generation polling, and scene-asset race isolation.
+- Backend generation and content-unit regression passed: `ContentGenerationJobLifecycleServiceTest` 5/5, `GenerationJobDecisionE2ETest` 2/2, `ContentProjectM1IntegrationTest` 5/5, and `ContentProjectM2ScaleTest` 6/6. The new tests cover candidate creation without pointer mutation, accept/discard plus idempotency, truthful job views, and processing cancellation without a generated artifact.
+- Backend scene-asset compatibility remained green: `ProjectSceneAssetLifecycleE2ETest` 17/17 and `AssetApplicationServiceTest` 5/5. Spring E2E classes were verified in isolated Maven invocations because the repository's fixed-name H2 test database is retained across dirtied contexts and otherwise re-runs the default-user seed.
+- Full frontend suite: 218 passed, 1 failed. The sole failure remains the acknowledged pre-existing `agent-config-state.test.js` identity mismatch (`null` expected versus an empty identity object); no Task 9 file participates in that assertion.
+- Modified JavaScript passed `node --check`; `ContentProjectWorkspace.vue`, `ActionResultDrawer.vue`, and all eight stage SFCs passed Vue parse, `compileScript`, and `compileTemplate`.
+- Vite production build passed after transforming 2,001 modules to `/tmp/aicp-task9-fix3-dist`.
+- `git diff --check` passed.

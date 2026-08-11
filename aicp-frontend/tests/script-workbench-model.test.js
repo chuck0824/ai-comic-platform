@@ -210,6 +210,17 @@ test('generation lifecycle is idempotent and prevents terminal-state rewrites or
   assert.equal(state.pointsRecords.length, 1)
 })
 
+test('paid generation never substitutes an estimate when actual credits are absent', () => {
+  const state = createWorkbenchState()
+  beginGeneration(state, { id: 'actual-required', model: { id: 'qwen-plus' }, estimatedPoints: 12 })
+  finishGeneration(state, 'actual-required', {
+    status: 'completed', artifact: { path: '/content-units/17/versions/176', version: 176 }
+  })
+  assert.equal(state.tasks[0].actualPoints, null)
+  const accepted = acceptGeneration(state, 'actual-required')
+  assert.equal(accepted.actualPoints, null)
+})
+
 test('overall progress counts completed stages and reaches 100 only after final completion', () => {
   const state = createWorkbenchState()
   assert.equal(typeof workbenchModel.getOverallProgress, 'function')

@@ -255,7 +255,10 @@ export function finishGeneration(state, taskId, outcome = {}) {
   task.status = status
   task.cancelable = false
   task.progress = status === 'completed' ? 100 : task.progress
-  task.actualPoints = state.demoTaskIds.includes(taskId) ? 0 : (outcome.actualPoints ?? task.estimatedPoints)
+  const actualPoints = Number(outcome.actualPoints)
+  task.actualPoints = state.demoTaskIds.includes(taskId)
+    ? 0
+    : (outcome.actualPoints != null && Number.isFinite(actualPoints) && actualPoints >= 0 ? actualPoints : null)
   task.error = outcome.error ?? null
   const existing = findResult(state, taskId)
   const item = {

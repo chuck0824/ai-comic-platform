@@ -7,6 +7,7 @@ import com.aicp.module.contentproject.entity.ContentVersion;
 import com.aicp.module.contentproject.mapper.ContentGenerationJobMapper;
 import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.aicp.module.contentproject.mapper.ContentVersionMapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -46,8 +47,14 @@ public class ContentGenerationExecutor {
         }
 
         try {
+            if (!"pending".equals(job.getStatus())) return;
+            int started = jobMapper.update(null, new UpdateWrapper<ContentGenerationJob>()
+                    .eq("id", jobId)
+                    .eq("status", "pending")
+                    .set("status", "processing"));
+            if (started == 0) return;
             job.setStatus("processing");
-            jobMapper.updateById(job);
+            if (isCancelled(jobId)) return;
 
             // Parse input snapshot to extract system prompt and user prompt
             String snapshotJson = job.getInputSnapshotJson();
@@ -73,6 +80,7 @@ public class ContentGenerationExecutor {
             // Call AI
             log.info("Executing generation job {}: type={}, model={}", jobId, job.getJobType(), aiParams.get("model"));
             Map<String, Object> aiResult = aiRouter.chatCompletion(aiParams);
+            if (isCancelled(jobId)) return;
             String generatedText = extractContent(aiResult);
 
             // Parse structured output if the job expects JSON
@@ -84,39 +92,56 @@ public class ContentGenerationExecutor {
                     parsedResult = schemaValidation.validate(job.getJobType(), parsedResult);
                 } catch (SchemaValidationService.SchemaValidationException e) {
                     log.error("Schema validation failed for job {}: {}", jobId, e.getMessage());
-                    job.setStatus("failed");
-                    job.setErrorCode("SCHEMA_VALIDATION_FAILED");
-                    job.setFinishedAt(LocalDateTime.now());
-                    jobMapper.updateById(job);
+                    markFailedIfProcessing(jobId, "SCHEMA_VALIDATION_FAILED");
                     return;
                 }
             }
 
+            if (isCancelled(jobId)) return;
             // Save as a content version if target_id is specified
+            ContentVersion candidate = null;
             if (job.getTargetId() != null && job.getTargetType() != null) {
-                saveGeneratedContent(job, parsedResult != null ? toJson(parsedResult) : generatedText);
+                candidate = saveGeneratedContent(job, parsedResult != null ? toJson(parsedResult) : generatedText);
             }
 
-            // Update job
+            int completed = jobMapper.update(null, new UpdateWrapper<ContentGenerationJob>()
+                    .eq("id", jobId)
+                    .eq("status", "processing")
+                    .set("status", "completed")
+                    .set("actual_credits", estimateTokens(generatedText))
+                    .set("finished_at", LocalDateTime.now()));
+            if (completed == 0) {
+                if (candidate != null && candidate.getId() != null) versionMapper.deleteById(candidate.getId());
+                return;
+            }
             job.setStatus("completed");
             job.setActualCredits(estimateTokens(generatedText));
-            job.setFinishedAt(LocalDateTime.now());
-            jobMapper.updateById(job);
 
             log.info("Generation job {} completed: {} chars", jobId, generatedText.length());
         } catch (Exception e) {
             log.error("Generation job {} failed", jobId, e);
-            job.setStatus("failed");
-            job.setErrorCode("AI_ERROR");
-            job.setFinishedAt(LocalDateTime.now());
-            jobMapper.updateById(job);
+            markFailedIfProcessing(jobId, "AI_ERROR");
         }
     }
 
-    private void saveGeneratedContent(ContentGenerationJob job, String contentJson) {
+    private boolean isCancelled(Long jobId) {
+        ContentGenerationJob current = jobMapper.selectById(jobId);
+        return current == null || "cancelled".equals(current.getStatus());
+    }
+
+    private void markFailedIfProcessing(Long jobId, String errorCode) {
+        jobMapper.update(null, new UpdateWrapper<ContentGenerationJob>()
+                .eq("id", jobId)
+                .eq("status", "processing")
+                .set("status", "failed")
+                .set("error_code", errorCode)
+                .set("finished_at", LocalDateTime.now()));
+    }
+
+    private ContentVersion saveGeneratedContent(ContentGenerationJob job, String contentJson) {
         // Create a named version for the target content unit
         ContentUnit unit = unitMapper.selectById(job.getTargetId());
-        if (unit == null) return;
+        if (unit == null) return null;
 
         // Get next version_no
         List<ContentVersion> existing = versionMapper.selectList(
@@ -133,7 +158,7 @@ public class ContentGenerationExecutor {
         cv.setProjectId(job.getProjectId());
         cv.setContentUnitId(job.getTargetId());
         cv.setVersionNo(nextVersion);
-        cv.setStatus("draft");
+        cv.setStatus("candidate");
         cv.setContentJson(contentJson);
         cv.setPlainText(extractPlainText(contentJson));
         cv.setSource("ai_generated");
@@ -141,10 +166,7 @@ public class ContentGenerationExecutor {
         cv.setContentHash(hash);
         cv.setCreatedBy(job.getCreatedBy());
         versionMapper.insert(cv);
-
-        // Update unit's current version
-        unit.setCurrentVersionId(cv.getId());
-        unitMapper.updateById(unit);
+        return cv;
     }
 
     // ===== Prompt Builders =====

@@ -40,4 +40,14 @@ public class ContentGenerationJobController {
         jobService.cancelJob(id);
         return ApiResponse.success();
     }
+
+    @PostMapping("/{id}/accept")
+    public ApiResponse<GenerationJobView> accept(@PathVariable Long id) {
+        return ApiResponse.success(jobService.acceptJob(id));
+    }
+
+    @PostMapping("/{id}/discard")
+    public ApiResponse<GenerationJobView> discard(@PathVariable Long id) {
+        return ApiResponse.success(jobService.discardJob(id));
+    }
 }

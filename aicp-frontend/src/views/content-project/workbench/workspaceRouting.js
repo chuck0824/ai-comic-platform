@@ -36,6 +36,12 @@ export function resolveWorkspaceStage({ persistedStage, queryStage } = {}) {
   return STAGE_KEYS[safePersistedIndex]
 }
 
+export function shouldAdvanceResume(persistedStage, targetStage) {
+  const persistedIndex = STAGE_KEYS.indexOf(normalizePersistedStage(persistedStage) ?? STAGE_KEYS[0])
+  const targetIndex = STAGE_KEYS.indexOf(normalizePersistedStage(targetStage) ?? '')
+  return targetIndex > persistedIndex
+}
+
 export function restoreWorkbenchStage(state, activeStage, persistedStage = activeStage) {
   const index = STAGE_KEYS.indexOf(activeStage)
   const safeIndex = index >= 0 ? index : 0

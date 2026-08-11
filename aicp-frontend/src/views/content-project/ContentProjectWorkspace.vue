@@ -190,10 +190,11 @@ import { STAGES, createWorkbenchState } from './workbench/scriptWorkbenchModel.j
 import { useScriptWorkbench } from './workbench/useScriptWorkbench.js'
 import { useSceneAssets } from './workbench/useSceneAssets.js'
 import { createWorkspaceAdapters, normalizeBatchGeneration } from './workbench/workspaceAdapters.js'
-import { nextStageKey, resolveWorkspaceStage, restoreWorkbenchStage } from './workbench/workspaceRouting.js'
+import { nextStageKey, resolveWorkspaceStage, restoreWorkbenchStage, shouldAdvanceResume } from './workbench/workspaceRouting.js'
 import { validateAnalysisSection, validateCreationSettings } from './workbench/upstreamStageModel.js'
 import { createProjectLoadGuard, resetProjectWorkspaceData } from './workbench/workspaceLoadState.js'
 import { trackGenerationJob } from './workbench/generationJobTracker.js'
+import { loadAcceptedGeneration, persistGenerationDecision } from './workbench/generationResultPersistence.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -491,9 +492,7 @@ async function persistStage(targetStage) {
     ? await persistSettings(stageData.creationSettings)
     : await persistUnit(current, currentStagePayload())
   if (!saved.persisted) return saved
-  const persistedIndex = STAGES.findIndex(stage => stage.key === project.value.last_stage_key)
-  const targetIndex = STAGES.findIndex(stage => stage.key === targetStage)
-  if (targetIndex > persistedIndex) await adapters.persistStage(targetStage)
+  if (shouldAdvanceResume(project.value.last_stage_key, targetStage)) await adapters.persistStage(targetStage)
   return { persisted: true, message: '阶段产物与恢复位置已保存' }
 }
 
@@ -643,17 +642,18 @@ async function submitStageGeneration(stage, payload = {}, localTask = null) {
   } finally {
     if (localTask?.id) activeGenerationJobs.delete(localTask.id)
   }
-  const artifactPath = job.result_path ?? job.resultPath ?? job.artifact_path ?? job.artifactPath ?? job.output_path ?? job.outputPath ?? null
+  const artifactPath = job.artifact_ref ?? job.artifactRef ?? null
+  const resultVersionId = job.result_version_id ?? job.resultVersionId ?? null
   return {
     artifact: {
       path: artifactPath,
       jobId: job.id,
       status: 'completed',
-      availability: artifactPath ? 'ready' : 'pending_reference',
-      message: artifactPath ? null : '任务已完成，但服务端尚未返回产物地址。',
-      version: job.resultVersionId ?? job.result_version_id ?? null
+      availability: artifactPath && resultVersionId ? 'candidate' : 'pending_reference',
+      message: artifactPath && resultVersionId ? '候选版本已生成，采用后才会切换当前内容。' : '任务已完成，但服务端尚未返回候选版本。',
+      version: resultVersionId
     },
-    actualPoints: job.actualPoints ?? job.actual_points ?? stageData.creationSettings.estimatedPoints,
+    actualPoints: job.actualCredits ?? job.actual_credits ?? null,
     impact: job.impact || '当前阶段与关联下游产物',
     batch: { total: batch.total, jobIds: batch.jobs.map(item => item.id) },
     request: payload
@@ -761,8 +761,37 @@ async function cancelGenerationTask(taskId) {
   }
   record.controller.abort()
 }
-function acceptGenerationResult(taskId) { const result = workbench.acceptGeneration(taskId); if (result?.allowed === false) showGuidance(result); else resultVisible.value = false }
-function discardGenerationResult(taskId) { const result = workbench.discardGeneration(taskId); if (result?.allowed === false) showGuidance(result); else resultVisible.value = false }
+async function refreshAcceptedGeneration(response) {
+  const loaded = await loadAcceptedGeneration({
+    response,
+    listUnits: async () => {
+      const refreshed = responseData(await contentProjectApi.listUnits(projectId.value))
+      return refreshed?.items || refreshed || []
+    },
+    listVersions: async unitId => responseData(await contentProjectApi.listVersions(unitId)) || []
+  })
+  units.value = loaded.units
+  const key = stageDataKey(loaded.unit?.unit_type)
+  if (!key || key === 'novelUpload') return
+  Object.assign(stageData[key], loaded.content)
+}
+async function decideGenerationResult(taskId, decision) {
+  const result = workbench.state.results.find(item => item.taskId === taskId)
+  const persisted = await persistGenerationDecision({
+    decision,
+    serverJobId: result?.artifact?.jobId,
+    localTaskId: taskId,
+    api: contentProjectApi,
+    workbench,
+    refresh: refreshAcceptedGeneration
+  })
+  if (!persisted.ok) return showGuidance({ ...persisted, title: decision === 'accept' ? '采用失败' : '丢弃失败', targetAction: `retry_generation_${decision}` })
+  resultVisible.value = false
+  if (persisted.refreshFailure) showGuidance({ ...persisted.refreshFailure, title: '候选版本已采用，但页面刷新失败', targetAction: 'refresh_project_units' })
+  return persisted
+}
+function acceptGenerationResult(taskId) { return decideGenerationResult(taskId, 'accept') }
+function discardGenerationResult(taskId) { return decideGenerationResult(taskId, 'discard') }
 function noop() {}
 function modeLabel(mode) { return ({ short_drama: '短剧', long_form: '长篇', tvc: 'TVC' })[mode] || mode || '未知' }
 function statusLabel(status) { return ({ draft: '草稿', reviewing: '审核中', approved: '已通过', needs_revision: '需修订', locked: '已锁定', archived: '已归档' })[status] || status || '草稿' }

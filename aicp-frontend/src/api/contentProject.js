@@ -61,6 +61,8 @@ export const contentProjectApi = {
     request.post(`/content-projects/${projectId}/batch-generate`, { unit_ids: unitIds, job_type: jobType }),
   getGenerationJob: (jobId) => request.get(`/generation-jobs/${jobId}`),
   cancelGenerationJob: (jobId) => request.post(`/generation-jobs/${jobId}/cancel`),
+  acceptGenerationJob: (jobId) => request.post(`/generation-jobs/${jobId}/accept`),
+  discardGenerationJob: (jobId) => request.post(`/generation-jobs/${jobId}/discard`),
   generateHooks: (projectId) => request.post(`/content-projects/${projectId}/generate-hooks`),
   hookSummary: (projectId) => request.get(`/content-projects/${projectId}/hook-summary`),
   getUnitHooks: (projectId, unitId) => request.get(`/content-projects/${projectId}/units/${unitId}/hooks`),

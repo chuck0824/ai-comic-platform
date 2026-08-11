@@ -18,7 +18,7 @@ test('creation entries resolve to the native project workbench', async () => {
 })
 
 test('persisted and query stages are validated without allowing skips', async () => {
-  const { resolveWorkspaceStage } = await import('../src/views/content-project/workbench/workspaceRouting.js')
+  const { resolveWorkspaceStage, shouldAdvanceResume } = await import('../src/views/content-project/workbench/workspaceRouting.js')
   assert.equal(resolveWorkspaceStage({ persistedStage: 'script_body' }), 'script_body')
   assert.equal(resolveWorkspaceStage({ persistedStage: 'script_body', queryStage: 'novel_analysis' }), 'novel_analysis')
   assert.equal(resolveWorkspaceStage({ persistedStage: 'script_body', queryStage: 'text_storyboard' }), 'script_body')
@@ -34,6 +34,10 @@ test('persisted and query stages are validated without allowing skips', async ()
   assert.equal(resolveWorkspaceStage({ persistedStage: 'content', queryStage: 'creation_settings' }), 'script_body')
   assert.equal(resolveWorkspaceStage({ persistedStage: 'review', queryStage: 'creation_settings' }), 'review_revision')
   assert.equal(resolveWorkspaceStage({ persistedStage: 'import_review', queryStage: 'creation_settings' }), 'novel_upload')
+  assert.equal(shouldAdvanceResume('content', 'novel_analysis'), false)
+  assert.equal(shouldAdvanceResume('content', 'review_revision'), true)
+  assert.equal(shouldAdvanceResume('review', 'script_body'), false)
+  assert.equal(shouldAdvanceResume('import_review', 'novel_analysis'), true)
 })
 
 test('batch generation response chooses the first real job and preserves failure detail', async () => {
@@ -89,6 +93,7 @@ test('workspace adapters persist stages and preserve stable script scene identit
 
 test('workspace mounts the authoritative shell and removes legacy stage conditionals', () => {
   const source = read('../src/views/content-project/ContentProjectWorkspace.vue')
+  const apiSource = read('../src/api/contentProject.js')
   assert.doesNotMatch(source, /currentStageInfo\.key === 'story_seed'/)
   assert.doesNotMatch(source, /currentStageInfo\.key === 'destination'/)
   assert.match(source, /SceneAssetLibrary/)
@@ -106,6 +111,10 @@ test('workspace mounts the authoritative shell and removes legacy stage conditio
   assert.match(source, /trackGenerationJob/)
   assert.match(source, /getGenerationJob/)
   assert.match(source, /cancelGenerationJob/)
+  assert.match(source, /persistGenerationDecision/)
+  assert.match(apiSource, /acceptGenerationJob/)
+  assert.match(apiSource, /discardGenerationJob/)
+  assert.match(source, /shouldAdvanceResume/)
   assert.match(source, /GenerationProgressDialog/)
   assert.match(source, /ActionResultDrawer/)
   assert.match(source, /ActionGuidanceDialog/)
