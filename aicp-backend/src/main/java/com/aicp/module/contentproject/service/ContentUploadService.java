@@ -3,6 +3,8 @@ package com.aicp.module.contentproject.service;
 import com.aicp.common.ai.AiRouter;
 import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
+import com.aicp.common.storage.StorageRefCodec;
+import com.aicp.common.storage.StorageUploadService;
 import com.aicp.module.contentproject.entity.ContentUnit;
 import com.aicp.module.contentproject.entity.ContentVersion;
 import com.aicp.module.contentproject.entity.UploadFile;
@@ -31,6 +33,7 @@ public class ContentUploadService {
     private final ContentVersionMapper versionMapper;
     private final AiRouter aiRouter;
     private final ObjectMapper objectMapper;
+    private final StorageUploadService storageUploadService;
 
     private static final long MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
     private static final Set<String> ALLOWED_TYPES = Set.of(
@@ -53,6 +56,17 @@ public class ContentUploadService {
         uf.setFileType(contentType.contains("officedocument") ? "docx" : "txt");
         uf.setFileSize(file.getSize());
         uf.setParseStatus("pending");
+
+        try {
+            var uploaded = storageUploadService.upload(file, "content-projects/" + userId + "/uploads");
+            uf.setStorageUri(StorageRefCodec.encode(uploaded.ref()));
+            uf.setStorageProvider(uploaded.ref().provider().code());
+            uf.setStorageBucket(uploaded.ref().bucket());
+            uf.setStorageKey(uploaded.ref().key());
+        } catch (Exception e) {
+            log.warn("Failed to persist original upload to object storage: {}", e.getMessage());
+        }
+
         uploadMapper.insert(uf);
 
         // Async parsing

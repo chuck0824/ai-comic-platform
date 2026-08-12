@@ -1,16 +1,16 @@
 package com.aicp.module.generation.service;
 
 import com.aicp.common.ai.AiRouter;
-import com.aicp.module.generation.entity.GenerationTask;
-import com.aicp.module.generation.entity.PlatformAsset;
-import com.aicp.module.generation.mapper.GenerationTaskMapper;
-import com.aicp.module.generation.mapper.PlatformAssetMapper;
 import com.aicp.module.canvas.entity.CanvasNode;
 import com.aicp.module.canvas.entity.CanvasProject;
 import com.aicp.module.canvas.entity.StoryboardShot;
 import com.aicp.module.canvas.mapper.CanvasNodeMapper;
 import com.aicp.module.canvas.mapper.CanvasProjectMapper;
 import com.aicp.module.canvas.mapper.StoryboardShotMapper;
+import com.aicp.module.generation.entity.GenerationTask;
+import com.aicp.module.generation.entity.PlatformAsset;
+import com.aicp.module.generation.mapper.GenerationTaskMapper;
+import com.aicp.module.generation.mapper.PlatformAssetMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +35,7 @@ public class GenerationExecutor {
     private final CanvasProjectMapper projectMapper;
     private final StoryboardShotMapper shotMapper;
     private final PlatformAssetMapper platformAssetMapper;
+    private final GenerationSettlementService settlementService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     @Async("genTaskExecutor")
@@ -45,22 +46,15 @@ public class GenerationExecutor {
             task.setStatus("running");
             taskMapper.updateById(task);
 
-            // 调用 AI Router
             aiRouter.executeTask(task.getId());
 
-            // 重新加载，获取AI Router写入的结果
             GenerationTask updated = taskMapper.selectById(task.getId());
             if (updated == null || !"succeeded".equals(updated.getStatus())) {
                 throw new RuntimeException(updated != null ? updated.getErrorMessage() : "任务执行失败");
             }
 
-            // 回写节点状态
             writebackNode(updated);
-
-            // 回写分镜状态
             writebackShot(updated);
-
-            // 资产入库
             registerAssets(updated);
 
             log.info("生成任务完成: type={}, uuid={}", task.getType(), task.getUuid());
@@ -84,6 +78,20 @@ public class GenerationExecutor {
             output.put("status", task.getStatus());
             output.put("output_assets", task.getOutputAssets());
             try {
+                @SuppressWarnings("unchecked")
+                Map<String, Object> parsed = objectMapper.readValue(
+                        task.getOutputAssets() == null ? "{}" : task.getOutputAssets(), Map.class);
+                if (parsed.get("url") != null) {
+                    output.put("preview_url", parsed.get("url"));
+                }
+                if (parsed.get("preview_url") != null) {
+                    output.put("preview_url", parsed.get("preview_url"));
+                }
+                if (parsed.get("storage_provider") != null) {
+                    output.put("storage_provider", parsed.get("storage_provider"));
+                    output.put("storage_bucket", parsed.get("storage_bucket"));
+                    output.put("storage_key", parsed.get("storage_key"));
+                }
                 node.setOutputData(objectMapper.writeValueAsString(output));
                 node.setStatus("completed");
                 nodeMapper.updateById(node);
@@ -108,6 +116,13 @@ public class GenerationExecutor {
 
     private void registerAssets(GenerationTask task) {
         try {
+            GenerationSettlementService.SettlementInput input = buildSettlementInput(task);
+            if (input != null) {
+                ensureWorkspaceFields(task);
+                settlementService.settle(task, input);
+                return;
+            }
+
             PlatformAsset asset = new PlatformAsset();
             asset.setUuid("asset_" + UUID.randomUUID().toString().replace("-", "").substring(0, 8));
             asset.setProjectId(task.getProjectId());
@@ -117,16 +132,61 @@ public class GenerationExecutor {
             asset.setName("生成结果 - " + task.getType());
             asset.setPrompt(task.getParameters());
             asset.setModelId(task.getModelId());
-            // 异步上下文：通过 projectId 反查项目所有者
-            Long ownerId = resolveOwnerId(task.getProjectId());
-            asset.setOwnerUserId(ownerId);
+            asset.setOwnerUserId(resolveOwnerId(task.getProjectId()));
             platformAssetMapper.insert(asset);
         } catch (Exception e) {
-            log.warn("资产入库失败: taskId={}", task.getId());
+            log.warn("资产入库失败: taskId={}, err={}", task.getId(), e.getMessage());
         }
     }
 
-    /** 异步上下文中无法使用 SecurityContext，通过项目反查所有者 */
+    private void ensureWorkspaceFields(GenerationTask task) {
+        if (task.getCreatedBy() == null || task.getCreatedBy() == 0L) {
+            task.setCreatedBy(resolveOwnerId(task.getProjectId()));
+        }
+        if (task.getWorkspaceId() == null || task.getWorkspaceId().isBlank()) {
+            task.setWorkspaceId("personal_" + task.getCreatedBy());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private GenerationSettlementService.SettlementInput buildSettlementInput(GenerationTask task) {
+        try {
+            String json = task.getOutputAssets();
+            if (json == null || json.isBlank()) return null;
+            Map<String, Object> output = objectMapper.readValue(json, Map.class);
+            String storageKey = asString(output.get("storage_key"));
+            String provider = asString(output.get("storage_provider"));
+            String bucket = asString(output.get("storage_bucket"));
+            if (storageKey == null || provider == null || bucket == null) {
+                return null;
+            }
+            Long fileSize = output.get("size") instanceof Number n ? n.longValue()
+                    : output.get("file_size") instanceof Number n2 ? n2.longValue() : null;
+            return new GenerationSettlementService.SettlementInput(
+                    provider,
+                    bucket,
+                    storageKey,
+                    asString(output.get("content_type")) != null
+                            ? asString(output.get("content_type"))
+                            : asString(output.get("mime_type")),
+                    fileSize,
+                    null,
+                    null,
+                    null,
+                    asString(output.get("preview_url")) != null
+                            ? asString(output.get("preview_url"))
+                            : asString(output.get("url")),
+                    asString(output.get("checksum")));
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private static String asString(Object value) {
+        if (value instanceof String s && !s.isBlank()) return s;
+        return null;
+    }
+
     private Long resolveOwnerId(Long projectId) {
         if (projectId == null) return 1L;
         try {

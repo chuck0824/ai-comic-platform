@@ -49,7 +49,14 @@ export const canvasApi = {
   createDirectorDesk: (id, data) => request.post(`/canvas/projects/${id}/director-desk`, data),
   getDirectorDesk: (id, deskId) => request.get(`/canvas/projects/${id}/director-desk/${deskId}`),
   updateDirectorDesk: (id, deskId, data) => request.put(`/canvas/projects/${id}/director-desk/${deskId}`, data),
-  uploadDirectorModel: (id, deskId, data) => request.post(`/canvas/projects/${id}/director-desk/${deskId}/assets/model`, data),
+  uploadDirectorModel: (id, deskId, file, name) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (name) form.append('name', name)
+    return request.post(`/canvas/projects/${id}/director-desk/${deskId}/assets/model`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
   captureDirectorDesk: (id, deskId, data = {}) => request.post(`/canvas/projects/${id}/director-desk/${deskId}/capture`, data),
   sendDirectorScreenshotToCanvas: (id, deskId, screenshotId, data = {}) =>
     request.post(`/canvas/projects/${id}/director-desk/${deskId}/screenshots/${screenshotId}/send-to-canvas`, data),
@@ -60,7 +67,31 @@ export const canvasApi = {
 
   // === V1.5 新增 ===
   updateNodePositions: (id, data) => request.patch(`/canvas/projects/${id}/nodes/positions`, data),
-  dropMaterial: (id, data) => request.post(`/canvas/projects/${id}/assets/drop`, data),
+  dropMaterial: (id, dataOrFile, meta = {}) => {
+    if (dataOrFile instanceof File || dataOrFile instanceof Blob) {
+      const form = new FormData()
+      form.append('file', dataOrFile)
+      if (meta.asset_type) form.append('asset_type', meta.asset_type)
+      if (meta.name) form.append('name', meta.name)
+      if (meta.x != null) form.append('x', meta.x)
+      if (meta.y != null) form.append('y', meta.y)
+      return request.post(`/canvas/projects/${id}/assets/drop`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+    }
+    return request.post(`/canvas/projects/${id}/assets/drop`, dataOrFile)
+  },
+  uploadStorageFile: (file, options = {}) => {
+    const form = new FormData()
+    form.append('file', file)
+    if (options.name) form.append('name', options.name)
+    if (options.media_type) form.append('media_type', options.media_type)
+    if (options.prefix) form.append('prefix', options.prefix)
+    if (options.register_asset != null) form.append('register_asset', String(options.register_asset))
+    return request.post('/storage/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+  },
   createGroup: (id, data) => request.post(`/canvas/projects/${id}/groups`, data),
 
   // ===== R1: Canvas 生产内核 =====
