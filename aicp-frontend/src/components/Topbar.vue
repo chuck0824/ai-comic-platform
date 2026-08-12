@@ -41,6 +41,7 @@
           <el-dropdown-menu>
             <el-dropdown-item @click="$router.push('/profile')">个人中心</el-dropdown-item>
             <el-dropdown-item @click="$router.push('/warehouse')">我的仓库</el-dropdown-item>
+            <el-dropdown-item @click="openModelConsole">模型控制台</el-dropdown-item>
             <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -54,6 +55,7 @@ import { computed, ref } from 'vue'
 import { ArrowDown, Bell, Menu, OfficeBuilding } from '@element-plus/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { openNewApiWithSso } from '@/lib/sso'
 
 defineProps({ title: { type: String, default: '工作台' } })
 defineEmits(['toggleSidebar'])
@@ -93,6 +95,10 @@ async function handleWorkspaceSwitch(id) {
 
 function handleLogout() {
   auth.logout()
+}
+
+function openModelConsole() {
+  openNewApiWithSso('/dashboard')
 }
 </script>
 

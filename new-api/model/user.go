@@ -340,9 +340,13 @@ func GetOrCreateShadowUser(aicpUserId int64, userUUID string, claims map[string]
 	}
 
 	// 4. Create the shadow user (password is random — login happens via AICP JWT)
+	displayName := username
+	if nickname, ok := claims["nickname"].(string); ok && strings.TrimSpace(nickname) != "" {
+		displayName = strings.TrimSpace(nickname)
+	}
 	cleanUser := User{
 		Username:    username,
-		DisplayName: username,
+		DisplayName: displayName,
 		Password:    common.GetRandomString(16),
 		Role:        common.RoleCommonUser,
 		Status:      common.UserStatusEnabled,

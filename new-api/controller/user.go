@@ -93,6 +93,8 @@ func Login(c *gin.Context) {
 // loginMethodFromContext 根据请求路径推导登录方式，用于登录审计日志。
 func loginMethodFromContext(c *gin.Context) string {
 	switch c.FullPath() {
+	case "/api/user/login/aicp-sso":
+		return "aicp_sso"
 	case "/api/user/login":
 		return "password"
 	case "/api/user/login/2fa":

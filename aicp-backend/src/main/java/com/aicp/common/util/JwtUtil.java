@@ -31,12 +31,34 @@ public class JwtUtil {
         Date now = new Date();
         return Jwts.builder()
                 .subject(uuid)
-                .claim("uid", userId)
+                // uid 用字符串，避免 JS / Go 对 >2^53 雪花 ID 的 JSON number 精度丢失
+                .claim("uid", String.valueOf(userId))
+                .claim("uuid", uuid)
                 .claim("type", accountType)
                 .claim("role", role != null ? role : "free_user")
                 .claim("permissions", permissions != null ? permissions : List.of())
                 .issuedAt(now)
                 .expiration(new Date(now.getTime() + accessTokenExpire * 1000))
+                .signWith(secretKey)
+                .compact();
+    }
+
+    /**
+     * Short-lived one-shot SSO ticket for bridging 8080 ↔ 3001 browser sessions.
+     * Validated by the peer with the same {@code JWT_SECRET}/{@code AICP_JWT_SECRET}.
+     */
+    public String generateSsoTicket(Long userId, String uuid, String nickname) {
+        Date now = new Date();
+        String jti = UUID.randomUUID().toString().replace("-", "");
+        return Jwts.builder()
+                .id(jti)
+                .subject(uuid)
+                .claim("uid", String.valueOf(userId))
+                .claim("uuid", uuid)
+                .claim("nickname", nickname != null ? nickname : "")
+                .claim("purpose", "sso")
+                .issuedAt(now)
+                .expiration(new Date(now.getTime() + 60_000))
                 .signWith(secretKey)
                 .compact();
     }
@@ -79,7 +101,21 @@ public class JwtUtil {
 
     public Long getUserId(String token) {
         Claims claims = parseToken(token);
-        return claims.get("uid", Long.class);
+        return readUidClaim(claims.get("uid"));
+    }
+
+    /** Accept string or numeric uid claims (new tokens use string). */
+    static Long readUidClaim(Object uid) {
+        if (uid == null) {
+            return null;
+        }
+        if (uid instanceof Number number) {
+            return number.longValue();
+        }
+        if (uid instanceof String text && !text.isBlank()) {
+            return Long.parseLong(text.trim());
+        }
+        throw new IllegalArgumentException("unsupported uid claim type: " + uid.getClass().getName());
     }
 
     public String getUserUuid(String token) {

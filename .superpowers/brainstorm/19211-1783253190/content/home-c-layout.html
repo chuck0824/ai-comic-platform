@@ -1,0 +1,67 @@
+<h2>方案 C：首页信息架构与模块顺序</h2>
+<p class="subtitle">目标：10 秒内讲清平台是什么、3001 与 8080 的关系，以及用户下一步去哪里。</p>
+
+<div class="mockup">
+  <div class="mockup-header">3001 公开门户首页｜桌面结构草图</div>
+  <div class="mockup-body">
+    <div class="mock-nav">AI 漫剧平台　产品能力　模型服务　解决方案　企业服务　文档　　　　　　登录　进入创作工作台</div>
+
+    <div style="padding:30px 24px;text-align:center;background:linear-gradient(135deg,#f5f7ff,#f7fbff)">
+      <div class="label">01 首屏定位</div>
+      <h2 style="margin:8px 0">AI 模型服务 × 漫剧工业化创作平台</h2>
+      <p>统一接入主流模型，贯通剧本、分镜、画布生产、资产生成、质检与企业协作</p>
+      <button class="mock-button">进入 8080 创作工作台</button>
+      <button class="mock-button" style="margin-left:8px">查看模型服务</button>
+      <p><small>模型数量 · 服务可用性 · 累计生成任务（仅展示真实可取数据）</small></p>
+    </div>
+
+    <div style="padding:20px 24px">
+      <div class="label">02 双产品入口</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div class="placeholder" style="min-height:90px"><strong>模型服务中心（3001）</strong><br><small>模型广场 · API 接入 · 令牌与额度 · 计费 · 运行状态</small></div>
+        <div class="placeholder" style="min-height:90px"><strong>创作生产工作台（8080）</strong><br><small>剧本创作 · 画布漫剧 · 资产生成 · Agent · 企业协作</small></div>
+      </div>
+    </div>
+
+    <div style="padding:20px 24px;background:#fafafa">
+      <div class="label">03 核心生产链（首页主体）</div>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+        <div class="placeholder">1 剧本创作<br><small>短剧 · 长篇 · TVC</small></div>
+        <div class="placeholder">2 分镜与画布<br><small>导演台 · 节点生产</small></div>
+        <div class="placeholder">3 资产与生成<br><small>角色 · 场景 · 视频</small></div>
+        <div class="placeholder">4 质检与交付<br><small>SOP · 审核 · 导出</small></div>
+      </div>
+    </div>
+
+    <div style="padding:20px 24px">
+      <div class="label">04 模型能力底座</div>
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px">
+        <div class="placeholder">文本模型</div><div class="placeholder">图像模型</div><div class="placeholder">视频模型</div><div class="placeholder">路由与重试</div><div class="placeholder">成本与监控</div>
+      </div>
+    </div>
+
+    <div style="padding:20px 24px;background:#fafafa">
+      <div class="label">05 企业级管理</div>
+      <p><strong>组织与成员　统一审批　预算与用量　权限隔离　审计追溯</strong></p>
+      <p><small>把 8080 的项目治理与 3001 的模型额度、计费、用量统一讲成企业闭环。</small></p>
+    </div>
+
+    <div style="padding:20px 24px">
+      <div class="label">06 智能与生态补充</div>
+      <p>Agent 配置与会话 · 工业化生产 SOP · 剧本交易市场 · AI 资产市场</p>
+    </div>
+
+    <div style="padding:24px;text-align:center;background:#111827;color:#fff">
+      <div class="label">07 最终转化</div>
+      <h3>选择你的入口</h3>
+      <button class="mock-button">开始创作</button>
+      <button class="mock-button" style="margin-left:8px">接入模型 API</button>
+      <p><small>文档 · 服务状态 · 隐私与协议 · 联系方式</small></p>
+    </div>
+  </div>
+</div>
+
+<div class="pros-cons">
+  <div class="pros"><h4>本结构解决的问题</h4><ul><li>不再是通用 New API 模板</li><li>3001/8080 分工清楚</li><li>生产闭环完整，不只讲“生成”</li><li>兼顾创作者、开发者和企业客户</li></ul></div>
+  <div class="cons"><h4>控制原则</h4><ul><li>首屏不堆所有功能</li><li>不展示虚假模型数或任务数</li><li>交易市场放下半页</li><li>公开页不暴露内部运维数据</li></ul></div>
+</div>

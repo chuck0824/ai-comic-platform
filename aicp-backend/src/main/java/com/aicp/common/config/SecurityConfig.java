@@ -48,7 +48,7 @@ public class SecurityConfig {
     private final Environment environment;
 
     /** 生产环境 CORS 允许的前端域名（可通过环境变量覆盖） */
-    @Value("${app.cors.allowed-origins:http://localhost:8080,http://localhost:5173}")
+    @Value("${app.cors.allowed-origins:http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3001,http://127.0.0.1:3001}")
     private String allowedOrigins;
 
     @Bean
@@ -165,6 +165,8 @@ public class SecurityConfig {
                                          HttpServletResponse response,
                                          FilterChain filterChain)
                 throws ServletException, IOException {
+            String path = request.getRequestURI();
+            boolean publicAuth = path.startsWith("/api/v1/auth/");
             String token = extractToken(request);
 
             // 无 token：放行，由 Spring Security 按 URL 规则处理（公开端点允许，受保护端点拒绝）
@@ -174,14 +176,25 @@ public class SecurityConfig {
             }
 
             try {
-                // token 在黑名单中（已登出）：返回 401，提示重新登录
+                // token 在黑名单中（已登出）
                 if (redisUtil.isTokenBlacklisted(token)) {
+                    if (publicAuth) {
+                        // 登录/注册等公开接口：忽略失效 token，允许重新登录
+                        SecurityContextHolder.clearContext();
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
                     sendUnauthorizedResponse(response, "Token已失效，请重新登录");
                     return;
                 }
 
-                // token 无效或已过期：返回 401，前端自动跳转登录页
+                // token 无效或已过期
                 if (!jwtUtil.validateToken(token)) {
+                    if (publicAuth) {
+                        SecurityContextHolder.clearContext();
+                        filterChain.doFilter(request, response);
+                        return;
+                    }
                     sendUnauthorizedResponse(response, "登录已过期，请重新登录");
                     return;
                 }
@@ -213,6 +226,10 @@ public class SecurityConfig {
             } catch (Exception e) {
                 log.debug("JWT认证失败: {}", e.getMessage());
                 SecurityContextHolder.clearContext();
+                if (publicAuth) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
                 sendUnauthorizedResponse(response, "认证失败，请重新登录");
                 return;
             }

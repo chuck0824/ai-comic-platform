@@ -117,8 +117,12 @@ function debounce(key, fn, delay = 300) {
 }
 
 const nodeIcon = computed(() => {
-  const icons = { script:'Document', image:'Picture', video:'VideoCamera', audio:'Headset', text:'EditPen',
-    character:'User', scene:'PictureFilled', prompt:'ChatLineRound', reference:'Camera', workflow:'SetUp', storyboard:'Film' }
+  const icons = {
+    script: 'Film', image: 'Picture', video: 'VideoCamera', audio: 'Headset', text: 'EditPen',
+    character: 'User', scene: 'PictureFilled', prompt: 'ChatLineRound',
+    model: 'Cpu', output: 'Download', reference: 'Camera', workflow: 'SetUp', storyboard: 'Film',
+    director: 'VideoCameraFilled'
+  }
   return icons[props.node?.type] || 'Box'
 })
 const nodeLabel = computed(() => props.node?.name || props.node?.type || '节点')

@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { canvasApi } from '@/api/canvas'
+import { NODE_TYPES, getNodeMeta, getNodeSize } from '../nodeRegistry'
 
 /**
  * 画布节点 CRUD 操作
@@ -13,15 +14,6 @@ export function useCanvasNodes(projectId) {
   const timeline = ref(null)
   const loading = ref(false)
   const localMode = ref(false)
-
-  const NODE_TYPES = [
-    { type: 'text', icon: 'Document', label: '文本', desc: '手动输入或大语言模型生成', group: '基础节点' },
-    { type: 'image', icon: 'Picture', label: '图片', desc: '上传图片或图像模型生成', group: '基础节点' },
-    { type: 'video', icon: 'VideoCamera', label: '视频', desc: '上传视频或视频模型生成', group: '基础节点' },
-    { type: 'audio', icon: 'Headset', label: '音频', desc: '上传音频、音乐、音效或TTS', group: '基础节点' },
-    { type: 'script', icon: 'Film', label: '脚本 new', desc: '剧本拆解、资产管理、批量生图/视频', group: '基础节点' },
-    { type: 'director', icon: 'VideoCameraFilled', label: '导演台', desc: '轻量3D构图、机位截图、发送到画布', group: '画布工具' }
-  ]
 
   const SLASH_COMMANDS = [
     '图像编辑', '多图参考融合', '全景模式', '智能打光',
@@ -171,8 +163,13 @@ export function useCanvasNodes(projectId) {
       workflows.value = []
       return
     }
-    const res = await canvasApi.getWorkflows(projectId.value)
-    workflows.value = res.data || []
+    try {
+      const res = await canvasApi.getWorkflows(projectId.value)
+      workflows.value = res.data || []
+    } catch (e) {
+      console.error('加载工作流失败', e)
+      workflows.value = []
+    }
   }
 
   async function createWorkflow(name, description, nodeIds) {
@@ -302,14 +299,16 @@ export function useCanvasNodes(projectId) {
   }
 
   function addLocalNode(type, x, y, data = {}, layout = {}) {
+    const size = getNodeSize(type)
+    const meta = getNodeMeta(type)
     const node = {
       uuid: `local_node_${Date.now()}_${Math.random().toString(16).slice(2, 8)}`,
       type,
-      name: NODE_TYPES.find(n => n.type === type)?.label || '节点',
+      name: meta.label || '节点',
       x,
       y,
-      width: layout.width || (type === 'script' ? 340 : type === 'director' ? 280 : type === 'text' ? 560 : ['image', 'video', 'audio'].includes(type) ? 520 : 200),
-      height: layout.height || (type === 'script' ? 280 : type === 'director' ? 220 : type === 'text' ? 520 : ['image', 'video'].includes(type) ? 360 : type === 'audio' ? 300 : 180),
+      width: layout.width || size.width,
+      height: layout.height || size.height,
       input_data: JSON.stringify(data),
       status: 'ready'
     }

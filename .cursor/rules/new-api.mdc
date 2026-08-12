@@ -1,0 +1,15 @@
+---
+description: new-api Go 网关与 React 控制台约定
+globs: new-api/**/*
+alwaysApply: false
+---
+
+# new-api
+
+- 后端：Go + Gin + GORM；分层 `router → controller → service → model`。细则见 `new-api/AGENTS.md`。
+- 前端 default：Bun + React 19 + Rsbuild；规范见 `new-api/web/default/AGENTS.md`（i18n、`t()`、英文源串作 key 等）。
+- 本地：`go run .` 需 `web/default/dist` 与 `web/classic/dist` 占位（`dev-up.sh` 会创建）；前端 dev 在 3001，代理到 API `VITE_REACT_APP_SERVER_URL`（常为 `http://localhost:3000`）。
+- 启动必需环境变量：`AICP_SERVICE_SECRET`；SSO/JWT 桥：`AICP_JWT_SECRET`。可选 `SQLITE_PATH`、`REDIS_CONN_STRING`、`SESSION_SECRET`。
+- AICP 桥：`middleware/aicp_jwt.go`（注入 `New-Api-User`）、`controller/aicp_sso.go`（`/api/user/login/aicp-sso`、`/api/user/sso/aicp-ticket`）、影子用户 `GetOrCreateShadowUser`。
+- 营销入口 URL：`web/default/src/lib/product-urls.ts`、`aicp-sso.ts`；首页/漫剧文案走 `home.*` / `comic.*` i18n。
+- `go:embed` 依赖 dist；改前端后若要单进程嵌入构建，先 `bun run build`，日常开发用 3001 dev server 即可。

@@ -39,10 +39,15 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
         redisUtil.set(key, code, 5, TimeUnit.MINUTES);
 
         String retryKey = "code:retry:" + target;
+        // 开发环境缩短验证码重发冷却，避免联调时频繁触发
+        long retrySeconds = isDevProfile() ? 5L : 60L;
         if (redisUtil.hasKey(retryKey)) {
-            throw new BizException(ErrorCode.RATE_LIMIT, "验证码发送过于频繁，请60秒后重试");
+            throw new BizException(ErrorCode.RATE_LIMIT,
+                    isDevProfile()
+                            ? "验证码发送过于频繁，请稍后再试"
+                            : "验证码发送过于频繁，请60秒后重试");
         }
-        redisUtil.set(retryKey, "1", 60, TimeUnit.SECONDS);
+        redisUtil.set(retryKey, "1", retrySeconds, TimeUnit.SECONDS);
         // 不记录验证码明文，防止日志泄漏导致账户接管
         log.info("验证码发送: target={}, type={}, scene={}", target, type, scene);
     }
@@ -135,7 +140,13 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
     public Map<String, Object> loginBySms(String phone, String verifyCode) {
         String codeKey = "code:login:" + phone;
         String savedCode = redisUtil.get(codeKey, String.class);
-        if (savedCode == null || !savedCode.equals(verifyCode)) {
+        boolean codeOk = savedCode != null && savedCode.equals(verifyCode);
+        // 本地/联调：允许固定验证码 123456，避免「点了登录却像没反应」
+        if (!codeOk && isDevProfile() && "123456".equals(verifyCode)) {
+            codeOk = true;
+            log.info("dev 环境接受固定短信验证码登录: phone={}", phone);
+        }
+        if (!codeOk) {
             throw new BizException(ErrorCode.VERIFY_CODE_ERROR);
         }
         redisUtil.delete(codeKey);
@@ -148,7 +159,7 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
             user = new User();
             user.setUuid("usr_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12));
             user.setPhone(phone);
-            user.setNickname("用户" + phone.substring(phone.length() - 4));
+            user.setNickname("用户" + phone.substring(Math.max(0, phone.length() - 4)));
             user.setAccountType("personal");
             user.setMemberLevel("free");
             user.setStatus("active");
@@ -164,6 +175,10 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
         userMapper.updateById(user);
 
         return buildLoginResult(user);
+    }
+
+    private boolean isDevProfile() {
+        return Arrays.asList(environment.getActiveProfiles()).contains("dev");
     }
 
     // ===== 微信登录 =====
@@ -192,6 +207,82 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
         userMapper.updateById(user);
 
         return buildLoginResult(user);
+    }
+
+    /**
+     * Issue a short-lived SSO ticket for the currently authenticated user.
+     * Used by the 8080 SPA to open the 3001 console without a second login.
+     */
+    public Map<String, Object> createSsoTicket(String accessToken) {
+        User user = requireActiveUserFromAccessToken(accessToken);
+        String ticket = jwtUtil.generateSsoTicket(user.getId(), user.getUuid(), user.getNickname());
+        return Map.of(
+                "ticket", ticket,
+                "expires_in", 60
+        );
+    }
+
+    /**
+     * Consume an SSO ticket (from 3001 reverse bridge or peer) and issue 8080 tokens.
+     */
+    public Map<String, Object> loginBySso(String ticket) {
+        if (ticket == null || ticket.isBlank()) {
+            throw new BizException(ErrorCode.TOKEN_INVALID);
+        }
+        try {
+            var claims = jwtUtil.parseToken(ticket);
+            if (!"sso".equals(claims.get("purpose", String.class))) {
+                throw new BizException(ErrorCode.TOKEN_INVALID);
+            }
+            String jti = claims.getId();
+            if (jti == null || jti.isBlank()) {
+                throw new BizException(ErrorCode.TOKEN_INVALID);
+            }
+            Long userId = claims.get("uid", Long.class);
+            if (userId == null) {
+                throw new BizException(ErrorCode.TOKEN_INVALID);
+            }
+            User user = userMapper.selectById(userId);
+            if (user == null || "disabled".equals(user.getStatus())) {
+                throw new BizException(ErrorCode.ACCOUNT_DISABLED);
+            }
+
+            String usedKey = "sso:jti:" + jti;
+            if (redisUtil.hasKey(usedKey)) {
+                throw new BizException(ErrorCode.TOKEN_INVALID, "SSO票据已使用或已失效");
+            }
+            redisUtil.set(usedKey, "1", 2, TimeUnit.MINUTES);
+
+            user.setLastLoginAt(LocalDateTime.now());
+            userMapper.updateById(user);
+            return buildLoginResult(user);
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.TOKEN_INVALID);
+        }
+    }
+
+    private User requireActiveUserFromAccessToken(String accessToken) {
+        if (accessToken == null || accessToken.isBlank()) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
+        String token = accessToken.startsWith("Bearer ") ? accessToken.substring(7) : accessToken;
+        try {
+            if (redisUtil.isTokenBlacklisted(token)) {
+                throw new BizException(ErrorCode.UNAUTHORIZED);
+            }
+            Long userId = jwtUtil.getUserId(token);
+            User user = userMapper.selectById(userId);
+            if (user == null || "disabled".equals(user.getStatus())) {
+                throw new BizException(ErrorCode.ACCOUNT_DISABLED);
+            }
+            return user;
+        } catch (BizException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BizException(ErrorCode.UNAUTHORIZED);
+        }
     }
 
     // ===== 刷新Token =====

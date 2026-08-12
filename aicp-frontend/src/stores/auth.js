@@ -1,24 +1,8 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
+import { extractJwtUid } from '@/lib/jwt'
 import router from '@/router'
-
-/** Decode the payload of a JWT without verification. */
-function decodeJwtPayload(token) {
-  try {
-    const base64Url = token.split('.')[1]
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
-    const json = decodeURIComponent(
-      atob(base64)
-        .split('')
-        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
-        .join('')
-    )
-    return JSON.parse(json)
-  } catch {
-    return null
-  }
-}
 
 function clearWorkspace() {
   localStorage.removeItem('active_workspace_id')
@@ -34,13 +18,9 @@ export const useAuthStore = defineStore('auth', () => {
   const userDisplayName = computed(() => user.value?.nickname || '用户')
   const memberLevel = computed(() => user.value?.member_level || 'free')
 
-  /** Extract user ID from JWT payload for workspace fallback. */
+  /** Extract user ID from JWT payload for workspace fallback (string-safe). */
   function getUserId() {
-    const payload = decodeJwtPayload(token.value)
-    if (payload) {
-      return payload.uid ?? payload.userId ?? payload.user_id ?? payload.sub
-    }
-    return null
+    return extractJwtUid(token.value)
   }
 
   async function login(credentials) {
@@ -108,6 +88,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     token, refreshToken, user, isLoggedIn, userDisplayName, memberLevel,
-    login, loginBySms, register, logout, clearAuth, getUserId, initWorkspaceAfterLogin
+    login, loginBySms, register, logout, clearAuth, getUserId, initWorkspaceAfterLogin,
+    setAuthData
   }
 })

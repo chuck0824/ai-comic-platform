@@ -1,0 +1,33 @@
+<h2>一模块一屏 · 滚动交互模型</h2>
+<p class="subtitle">三种方案都保持五个模块独立成屏，区别在于滚动控制权、叙事感和使用成本。点击选择。</p>
+
+<div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+  <div class="card" data-choice="soft-snap" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0c1119;padding:16px;min-height:390px;color:white;overflow:hidden">
+      <div style="height:24px;border:1px solid #334052;border-radius:7px;padding:6px 9px;font:8px Arial;color:#aab4c4">统一导航 · 滚动后胶囊收缩</div>
+      <div style="position:relative;height:320px;margin-top:9px;border:1px solid #2c3748;border-radius:9px;overflow:hidden;background:#101722">
+        <div style="height:100%;padding:25px;display:grid;grid-template-columns:.8fr 1.2fr;gap:15px;align-items:center;background:radial-gradient(circle at 100% 30%,#213b5944,transparent 38%)"><div><small style="color:#60a5fa">03 / CANVAS</small><b style="display:block;font:700 20px Arial;margin:9px 0">画布生产</b><p style="font:9px/1.7 Arial;color:#94a1b4">进入屏幕时文案和界面自然显现，滚动接近边界后轻柔吸附。</p><span style="font:8px Arial;border:1px solid #3d485a;padding:5px 7px;border-radius:999px">节点画布</span></div><div style="height:150px;border:1px solid #354156;border-radius:8px;background:linear-gradient(#1d2938 1px,transparent 1px),linear-gradient(90deg,#1d2938 1px,transparent 1px),#0b121b;background-size:20px 20px"></div></div>
+        <div style="position:absolute;right:8px;top:50%;transform:translateY(-50%);display:grid;gap:5px"><i style="width:4px;height:4px;border-radius:50%;background:#4b5563"></i><i style="width:4px;height:16px;border-radius:4px;background:#60a5fa"></i><i style="width:4px;height:4px;border-radius:50%;background:#4b5563"></i><i style="width:4px;height:4px;border-radius:50%;background:#4b5563"></i><i style="width:4px;height:4px;border-radius:50%;background:#4b5563"></i></div>
+      </div>
+    </div>
+    <div class="card-body"><h3>A · 柔性吸附（推荐）</h3><p>正常滚动，接近章节边界时自动对齐。用户仍有控制权；桌面有“一屏一章”感，移动端可自然降级。</p></div>
+  </div>
+
+  <div class="card" data-choice="hard-snap" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0c1119;padding:16px;min-height:390px;color:white;overflow:hidden">
+      <div style="height:24px;border:1px solid #334052;border-radius:7px;padding:6px 9px;font:8px Arial;color:#aab4c4">统一导航 · 单次滚轮切换整屏</div>
+      <div style="height:320px;margin-top:9px;display:grid;grid-template-rows:1fr 18px;gap:6px"><div style="border:1px solid #50344f;border-radius:9px;background:radial-gradient(circle at 0 30%,#4b243f55,transparent 40%),#14131c;padding:25px;display:grid;grid-template-columns:1.2fr .8fr;gap:15px;align-items:center"><div style="height:150px;border-radius:8px;background:linear-gradient(145deg,#26394b,#6f4656,#1c313e)"></div><div><small style="color:#fb7185">04 / DIRECT</small><b style="display:block;font:700 20px Arial;margin:9px 0">导演质检</b><p style="font:9px/1.7 Arial;color:#a69ca8">每次滚轮、触控板手势或键盘操作只切换到下一屏。</p></div></div><div style="text-align:center;font:8px Arial;color:#8e99aa">SCROLL TO NEXT ↓</div></div>
+    </div>
+    <div class="card-body"><h3>B · 强制整屏翻页</h3><p>展示感最强，但会拦截滚轮并造成触控板误翻页；小屏、放大字体和键盘阅读体验较差。</p></div>
+  </div>
+
+  <div class="card" data-choice="sticky-story" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0c1119;padding:16px;min-height:390px;color:white;overflow:hidden">
+      <div style="height:24px;border:1px solid #334052;border-radius:7px;padding:6px 9px;font:8px Arial;color:#aab4c4">统一导航 · 内容滚动，界面保持</div>
+      <div style="height:320px;margin-top:9px;border:1px solid #304238;border-radius:9px;background:#101917;padding:20px;display:grid;grid-template-columns:.72fr 1.28fr;gap:14px"><div style="display:grid;align-content:center;gap:8px"><div style="padding:8px;border-left:2px solid #34d399;background:#14231f;font:8px Arial">01 统一归档</div><div style="padding:8px;border-left:2px solid #344054;font:8px Arial;color:#738075">02 版本追踪</div><div style="padding:8px;border-left:2px solid #344054;font:8px Arial;color:#738075">03 质量报告</div><div style="padding:8px;border-left:2px solid #344054;font:8px Arial;color:#738075">04 交付清单</div></div><div style="position:sticky;height:210px;top:0;border:1px solid #31453f;border-radius:8px;background:#0b1312;display:grid;grid-template-columns:1fr 65px;gap:6px;padding:8px"><div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px"><i style="background:#27403a"></i><i style="background:#493441"></i><i style="background:#294053"></i><i style="background:#3e352b"></i></div><i style="background:#14231f"></i></div></div>
+    </div>
+    <div class="card-body"><h3>C · Sticky 叙事滚动</h3><p>右侧产品界面固定，左侧能力逐项切换。信息表达最深，但每个模块实际需要 1.5–2 屏滚动距离。</p></div>
+  </div>
+</div>
+
+<div class="pros-cons" style="margin-top:20px"><div class="pros"><h4>推荐的 A 方案</h4><ul><li>桌面：每章 min-height: 100svh，scroll-snap-type: y proximity</li><li>模块进入 35% 视口后触发一次显现动效</li><li>右侧章节进度点可点击跳转</li><li>支持滚轮、触控板、键盘和浏览器查找</li></ul></div><div class="cons"><h4>明确不做</h4><ul><li>不劫持滚轮事件</li><li>不让动画阻塞继续滚动</li><li>不在移动端强制 100vh</li><li>开启“减少动态效果”时关闭位移与吸附</li></ul></div></div>

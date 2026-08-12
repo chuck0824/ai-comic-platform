@@ -1,0 +1,15 @@
+---
+description: AICP Vue 工作台（aicp-frontend）约定
+globs: aicp-frontend/**/*
+alwaysApply: false
+---
+
+# aicp-frontend
+
+- 栈：Vue 3 + Vite + Pinia + Vue Router + Element Plus；包管理用 npm（有 `package-lock.json`）。
+- API 基址 `/api/v1`，由 Vite 代理到 `http://localhost:8080`。
+- 鉴权：`access_token` / `refresh_token` / `user` 存 localStorage；请求头 `Authorization: Bearer` + `X-Workspace-Id`。
+- 跨端进模型控制台：用 `@/lib/sso.js` 的 `openNewApiWithSso`，不要裸链 `localhost:3001`。
+- SSO 回调页：`/sso`（`views/Sso.vue`），消费 3001 签发的 ticket。
+- 画布 Feature Flag：`src/config/canvasFeatures.js`（`VITE_*`）。
+- 改动保持与现有 Composition API / Pinia 风格一致；少引入新状态库。

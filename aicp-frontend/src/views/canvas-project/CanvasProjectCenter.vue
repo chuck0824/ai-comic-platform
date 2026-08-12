@@ -80,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { canvasApi } from '@/api/canvas.js'
@@ -139,15 +139,20 @@ async function search() {
     total.value = data?.pagination?.total || 0
     cacheRecentProjects(items.value)
   } catch (e) {
-    errorCode.value = e?.response?.status || 500
-    errorMessage.value = e?.response?.data?.message || '加载画布列表失败'
+    errorCode.value = e?.code || e?.response?.data?.code || e?.response?.status || 500
+    errorMessage.value = e?.response?.data?.message || e?.message || '加载画布列表失败'
   } finally {
     loading.value = false
   }
 }
 
 function goToEditor(canvas) {
-  router.push(`/canvas/${canvas.uuid}`)
+  const id = canvas?.uuid || canvas?.id
+  if (!id) {
+    ElMessage.error('画布标识缺失，无法打开编辑器')
+    return
+  }
+  router.push({ name: 'Canvas', params: { projectId: String(id) } })
 }
 
 async function onCanvasCommand({ action, canvas }) {
@@ -185,10 +190,18 @@ async function onCanvasCommand({ action, canvas }) {
   }
 }
 
-function onCreated(canvas) {
+async function onCreated(canvas) {
   showCreateDialog.value = false
   ElMessage.success('画布创建成功')
-  router.push(`/canvas/${canvas.uuid}`)
+  await nextTick()
+  // 清掉可能残留的 teleported overlay，避免叠在全屏画布上
+  document.querySelectorAll('body > .el-overlay').forEach((el) => el.remove())
+  const id = canvas?.uuid || canvas?.id
+  if (id) {
+    router.push({ name: 'Canvas', params: { projectId: String(id) } })
+  } else {
+    search()
+  }
 }
 
 onMounted(search)

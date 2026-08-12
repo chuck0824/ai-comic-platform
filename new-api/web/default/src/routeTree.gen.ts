@@ -17,7 +17,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as SetupIndexRouteImport } from './routes/setup/index'
 import { Route as RankingsIndexRouteImport } from './routes/rankings/index'
 import { Route as PricingIndexRouteImport } from './routes/pricing/index'
+import { Route as ComicIndexRouteImport } from './routes/comic/index'
 import { Route as AboutIndexRouteImport } from './routes/about/index'
+import { Route as SsoAicpRouteImport } from './routes/sso/aicp'
 import { Route as OauthProviderRouteImport } from './routes/oauth/$provider'
 import { Route as ConsoleTopupRouteImport } from './routes/console/topup'
 import { Route as ConsoleLogRouteImport } from './routes/console/log'
@@ -108,9 +110,19 @@ const PricingIndexRoute = PricingIndexRouteImport.update({
   path: '/pricing/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ComicIndexRoute = ComicIndexRouteImport.update({
+  id: '/comic/',
+  path: '/comic/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AboutIndexRoute = AboutIndexRouteImport.update({
   id: '/about/',
   path: '/about/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SsoAicpRoute = SsoAicpRouteImport.update({
+  id: '/sso/aicp',
+  path: '/sso/aicp',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OauthProviderRoute = OauthProviderRouteImport.update({
@@ -420,7 +432,9 @@ export interface FileRoutesByFullPath {
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
+  '/sso/aicp': typeof SsoAicpRoute
   '/about/': typeof AboutIndexRoute
+  '/comic/': typeof ComicIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -479,7 +493,9 @@ export interface FileRoutesByTo {
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
+  '/sso/aicp': typeof SsoAicpRoute
   '/about': typeof AboutIndexRoute
+  '/comic': typeof ComicIndexRoute
   '/pricing': typeof PricingIndexRoute
   '/rankings': typeof RankingsIndexRoute
   '/setup': typeof SetupIndexRoute
@@ -542,7 +558,9 @@ export interface FileRoutesById {
   '/console/log': typeof ConsoleLogRoute
   '/console/topup': typeof ConsoleTopupRoute
   '/oauth/$provider': typeof OauthProviderRoute
+  '/sso/aicp': typeof SsoAicpRoute
   '/about/': typeof AboutIndexRoute
+  '/comic/': typeof ComicIndexRoute
   '/pricing/': typeof PricingIndexRoute
   '/rankings/': typeof RankingsIndexRoute
   '/setup/': typeof SetupIndexRoute
@@ -604,7 +622,9 @@ export interface FileRouteTypes {
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
+    | '/sso/aicp'
     | '/about/'
+    | '/comic/'
     | '/pricing/'
     | '/rankings/'
     | '/setup/'
@@ -663,7 +683,9 @@ export interface FileRouteTypes {
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
+    | '/sso/aicp'
     | '/about'
+    | '/comic'
     | '/pricing'
     | '/rankings'
     | '/setup'
@@ -725,7 +747,9 @@ export interface FileRouteTypes {
     | '/console/log'
     | '/console/topup'
     | '/oauth/$provider'
+    | '/sso/aicp'
     | '/about/'
+    | '/comic/'
     | '/pricing/'
     | '/rankings/'
     | '/setup/'
@@ -779,7 +803,9 @@ export interface RootRouteChildren {
   ConsoleLogRoute: typeof ConsoleLogRoute
   ConsoleTopupRoute: typeof ConsoleTopupRoute
   OauthProviderRoute: typeof OauthProviderRoute
+  SsoAicpRoute: typeof SsoAicpRoute
   AboutIndexRoute: typeof AboutIndexRoute
+  ComicIndexRoute: typeof ComicIndexRoute
   PricingIndexRoute: typeof PricingIndexRoute
   RankingsIndexRoute: typeof RankingsIndexRoute
   SetupIndexRoute: typeof SetupIndexRoute
@@ -844,11 +870,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PricingIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/comic/': {
+      id: '/comic/'
+      path: '/comic'
+      fullPath: '/comic/'
+      preLoaderRoute: typeof ComicIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/about/': {
       id: '/about/'
       path: '/about'
       fullPath: '/about/'
       preLoaderRoute: typeof AboutIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sso/aicp': {
+      id: '/sso/aicp'
+      path: '/sso/aicp'
+      fullPath: '/sso/aicp'
+      preLoaderRoute: typeof SsoAicpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/oauth/$provider': {
@@ -1357,7 +1397,9 @@ const rootRouteChildren: RootRouteChildren = {
   ConsoleLogRoute: ConsoleLogRoute,
   ConsoleTopupRoute: ConsoleTopupRoute,
   OauthProviderRoute: OauthProviderRoute,
+  SsoAicpRoute: SsoAicpRoute,
   AboutIndexRoute: AboutIndexRoute,
+  ComicIndexRoute: ComicIndexRoute,
   PricingIndexRoute: PricingIndexRoute,
   RankingsIndexRoute: RankingsIndexRoute,
   SetupIndexRoute: SetupIndexRoute,

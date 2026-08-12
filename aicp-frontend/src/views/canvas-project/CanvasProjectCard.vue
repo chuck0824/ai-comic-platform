@@ -44,14 +44,15 @@ const emit = defineEmits(['edit', 'command'])
 const statusLabel = computed(() => STATUS_LABELS[props.canvas.status] || props.canvas.status)
 const purposeLabel = computed(() => PURPOSE_LABELS[props.canvas.purpose])
 const statusType = computed(() => {
-  const map = { editing: '', generating: 'warning', composing: 'warning', completed: 'success', archived: 'info' }
+  const map = { draft: 'info', editing: '', generating: 'warning', composing: 'warning', completed: 'success', archived: 'info' }
   return map[props.canvas.status] || ''
 })
 const actions = computed(() => canvasActions(props.canvas))
 const hasMenuActions = computed(() => actions.value.canCopy || actions.value.canMove || actions.value.canArchive || actions.value.canRestore || actions.value.canDelete)
 const timeText = computed(() => {
-  if (!props.canvas.updatedAt) return ''
-  return new Date(props.canvas.updatedAt).toLocaleDateString('zh-CN')
+  const raw = props.canvas.updatedAt || props.canvas.updated_at
+  if (!raw) return ''
+  return new Date(raw).toLocaleDateString('zh-CN')
 })
 
 function handleCommand(cmd) {

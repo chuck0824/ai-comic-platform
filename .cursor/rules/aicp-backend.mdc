@@ -1,0 +1,15 @@
+---
+description: AICP Spring Boot 后端（aicp-backend）约定
+globs: aicp-backend/**/*
+alwaysApply: false
+---
+
+# aicp-backend
+
+- 栈：Java 17+ / Spring Boot 3；构建 Maven。默认 `spring.profiles.active=dev`（H2 + Redis:6379）。
+- 包结构按模块：`com.aicp.module.*`、`com.aicp.common.*`。鉴权在 `AuthController` / `AuthService` / `JwtUtil`。
+- SSO：`POST /api/v1/auth/sso/ticket`（已登录签发）、`POST /api/v1/auth/login/sso`（消费票据）。JWT access token 须含 `uid` 与 `uuid` claim。
+- 调 3001：`new-api.base-url`；钱包服务密钥与 `AICP_SERVICE_SECRET` 对齐。账户中心 BFF 转发 Bearer，依赖 3001 `AicpJwtAuth`。
+- Redis 用于验证码、refresh token、SSO jti 一次性；dev 无 Redis 会起不来。
+- 测试：`src/test/java`；CI 常见 `JWT_SECRET` 环境变量。勿把真实密钥写进仓库。
+- 对象存储等能力若在其他分支，合并前先核对当前分支是否已接线。

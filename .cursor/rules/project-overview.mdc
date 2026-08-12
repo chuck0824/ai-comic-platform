@@ -1,0 +1,16 @@
+---
+description: AICP 单体仓库总览与全局约束（始终生效）
+alwaysApply: true
+---
+
+# AICP 全局规则
+
+- 仓库含三块主代码：`aicp-frontend`（Vue）、`aicp-backend`（Spring Boot）、`new-api`（Go + React）。先确认改动落在哪一侧。
+- 权威需求/API：`docs/01-core/`。派生文档与 archive 冲突时以 core 为准。
+- 本地一键：`./scripts/dev-up.sh`。端口约定：5173 工作台前端、8080 AICP API、3001 营销/控制台、3000 new-api API。
+- 入口 URL 禁止写死 `localhost`：用 `VITE_AICP_WORKBENCH_URL`、`VITE_NEW_API_PUBLIC_URL`、`product-urls` / `aicp-sso` 助手。
+- 8080↔3001 登录靠短时 SSO + 影子用户；共享密钥 `AICP_JWT_SECRET`≡`JWT_SECRET`，服务鉴权需 `AICP_SERVICE_SECRET`。
+- 面向用户文案必须 i18n；不要夸大「账号已完全统一」。
+- 不主动提交密钥、DB、venv、生成日志；用户要求才 commit/push。
+- **提交规范**：说明用**简体中文**；**按功能拆分**多次提交（一次一个 feat/fix/docs/chore）；标题 `类型: 中文简述`，正文写动机。
+- 产品不做视频剪辑器能力。

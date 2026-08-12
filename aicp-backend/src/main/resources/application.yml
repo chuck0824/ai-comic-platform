@@ -82,7 +82,8 @@ mybatis-plus:
 jwt:
   secret: aicp-jwt-secret-key-2026-very-long-secret-key-for-hs256
 new-api:
-  base-url: http://localhost:3001
+  # 8080 → Go API（3000），勿指向营销前端 3001
+  base-url: ${NEW_API_URL:http://localhost:3000}
   api-key: dev-mock-key
   timeout: 120000
 
@@ -91,6 +92,12 @@ aicp:
     base-url: ${AICP_WALLET_BASE_URL:http://localhost:3001}
     service-name: ${AICP_WALLET_SERVICE_NAME:aicp-8080}
     service-secret: ${AICP_WALLET_SERVICE_SECRET:dev-wallet-secret}
+  # 本地开发关闭全局限流，避免登录/联调频繁触发 429
+  rate-limit:
+    enabled: false
+    auth-max-per-minute: 300
+    generation-max-per-minute: 300
+    general-max-per-minute: 2000
 
 minio:
   endpoint: http://localhost:9000
@@ -101,6 +108,10 @@ minio:
 logging:
   level:
     com.aicp: DEBUG
+
+app:
+  cors:
+    allowed-origins: http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://127.0.0.1:5173,http://localhost:3001,http://127.0.0.1:3001
 
 ---
 # ================================================================
@@ -143,9 +154,13 @@ mybatis-plus:
     log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
 
 new-api:
-  base-url: ${NEW_API_URL:http://localhost:3001}
+  base-url: ${NEW_API_URL:http://localhost:3000}
   api-key: ${NEW_API_KEY:}
   timeout: 120000
+
+aicp:
+  rate-limit:
+    enabled: false
 
 minio:
   endpoint: ${MINIO_ENDPOINT:http://localhost:9010}

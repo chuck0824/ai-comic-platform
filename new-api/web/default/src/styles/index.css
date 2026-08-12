@@ -605,3 +605,19 @@ For commercial licensing, please contact support@quantumnous.com
     animation: none !important;
   }
 }
+
+/* -- Aurora drift animation (home page hero / CTA) -- */
+@keyframes aurora-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(1.5%, -0.8%) scale(1.02); }
+  50% { transform: translate(-0.8%, 0.8%) scale(1.015); }
+  75% { transform: translate(0.8%, -0.4%) scale(1.025); }
+}
+.aurora-animate {
+  animation: aurora-drift 18s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora-animate {
+    animation: none !important;
+  }
+}

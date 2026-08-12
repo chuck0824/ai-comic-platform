@@ -21,8 +21,8 @@ import { useAuthStore } from '@/stores/auth-store'
 import { Markdown } from '@/components/ui/markdown'
 import { PublicLayout } from '@/components/layout'
 import { Footer } from '@/components/layout/components/footer'
-import { CTA, Features, Hero, HowItWorks, Stats } from './components'
 import { useHomePageContent } from './hooks'
+import { BentoSection, CreationWorkflow, CTA, EnterpriseSection, Features, Hero, HowItWorks, PlatformBridge, Stats } from './components'
 
 export function Home() {
   const { t } = useTranslation()
@@ -45,11 +45,7 @@ export function Home() {
       <PublicLayout showMainContainer={false}>
         <main className='overflow-x-hidden'>
           {isUrl ? (
-            <iframe
-              src={content}
-              className='h-screen w-full border-none'
-              title={t('Custom Home Page')}
-            />
+            <iframe src={content} className='h-screen w-full border-none' title={t('Custom Home Page')} />
           ) : (
             <div className='container mx-auto py-8'>
               <Markdown className='custom-home-content'>{content}</Markdown>
@@ -64,8 +60,12 @@ export function Home() {
     <PublicLayout showMainContainer={false}>
       <Hero isAuthenticated={isAuthenticated} />
       <Stats />
+      <PlatformBridge />
       <Features />
       <HowItWorks />
+      <CreationWorkflow />
+      <BentoSection />
+      <EnterpriseSection />
       <CTA isAuthenticated={isAuthenticated} />
       <Footer />
     </PublicLayout>

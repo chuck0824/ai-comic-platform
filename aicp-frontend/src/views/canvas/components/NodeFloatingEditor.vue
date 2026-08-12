@@ -2,7 +2,7 @@
   <section
     v-if="node"
     :class="['node-floating-editor', `placement-${placement}`, { collapsed }]"
-    :style="style"
+    :style="{ ...style, '--node-accent': accent }"
     @mousedown.stop
   >
     <header class="floating-head">
@@ -10,7 +10,7 @@
         <span class="node-type-icon">{{ typeIcon }}</span>
         <div>
           <strong>{{ draft.name || typeLabel }}</strong>
-          <small :class="saveStateClass">{{ saveStateText }}</small>
+          <small :class="saveStateClass">{{ saveStateText }} · {{ typeLabel }}</small>
         </div>
       </div>
       <div class="head-actions">
@@ -149,6 +149,116 @@
           </div>
         </div>
 
+        <div v-else-if="isMetaNode && activeTab === 'content'" class="form-stack">
+          <label v-if="node.type === 'prompt'" class="field-label">
+            <span>Prompt</span>
+            <textarea
+              v-model="draft.prompt"
+              rows="8"
+              placeholder="输入可复用的提示词，连接下游图片/视频/音频节点"
+              @input="errors.prompt = ''"
+              @change="saveDataField('prompt')"
+            />
+            <em v-if="errors.prompt" class="field-error">{{ errors.prompt }}</em>
+          </label>
+          <label v-if="node.type === 'prompt'" class="field-label">
+            <span>标签</span>
+            <input v-model="draft.tags" placeholder="如：角色一致性, 夜景" @change="saveDataField('tags')" />
+          </label>
+
+          <template v-if="node.type === 'character'">
+            <label class="field-label">
+              <span>角色名</span>
+              <input v-model="draft.name" placeholder="角色显示名" @change="saveNameAndField('name')" />
+            </label>
+            <label class="field-label">
+              <span>外观描述</span>
+              <textarea v-model="draft.appearance" rows="3" placeholder="年龄、服饰、发型、标志性特征" @change="saveDataField('appearance')" />
+            </label>
+            <label class="field-label">
+              <span>性格 / 语气</span>
+              <textarea v-model="draft.personality" rows="2" placeholder="性格、说话方式" @change="saveDataField('personality')" />
+            </label>
+            <label class="field-label">
+              <span>生成参考 Prompt</span>
+              <textarea v-model="draft.prompt" rows="4" placeholder="注入下游生成的角色一致性描述" @change="saveDataField('prompt')" />
+            </label>
+            <label class="field-label">
+              <span>参考图 URL</span>
+              <input v-model="draft.reference_url" placeholder="可选：角色参考图" @change="saveDataField('reference_url')" />
+            </label>
+          </template>
+
+          <template v-if="node.type === 'scene'">
+            <label class="field-label">
+              <span>场景名</span>
+              <input v-model="draft.name" placeholder="场景显示名" @change="saveNameAndField('name')" />
+            </label>
+            <label class="field-label">
+              <span>环境</span>
+              <textarea v-model="draft.environment" rows="3" placeholder="地点、建筑、道具布局" @change="saveDataField('environment')" />
+            </label>
+            <label class="field-label">
+              <span>氛围 / 光线</span>
+              <textarea v-model="draft.atmosphere" rows="2" placeholder="天气、时段、色调" @change="saveDataField('atmosphere')" />
+            </label>
+            <label class="field-label">
+              <span>场景 Prompt</span>
+              <textarea v-model="draft.prompt" rows="4" placeholder="注入下游生成的场景描述" @change="saveDataField('prompt')" />
+            </label>
+            <label class="field-label">
+              <span>参考图 URL</span>
+              <input v-model="draft.reference_url" placeholder="可选：场景参考图" @change="saveDataField('reference_url')" />
+            </label>
+          </template>
+
+          <template v-if="node.type === 'model'">
+            <label class="field-label">
+              <span>能力类型</span>
+              <select v-model="draft.capability" @change="onModelCapabilityChange">
+                <option value="image">图像</option>
+                <option value="video">视频</option>
+                <option value="audio">音频</option>
+                <option value="llm">文本 / LLM</option>
+              </select>
+            </label>
+            <label class="field-label">
+              <span>模型</span>
+              <select v-model="draft.model_id" @change="saveDataField('model_id')">
+                <option v-for="model in modelNodeOptions" :key="model.value" :value="model.value">
+                  {{ model.label }}
+                </option>
+              </select>
+              <em v-if="errors.model_id" class="field-error">{{ errors.model_id }}</em>
+            </label>
+            <label class="field-label">
+              <span>备注</span>
+              <textarea v-model="draft.notes" rows="3" placeholder="调用约束、成本偏好等" @change="saveDataField('notes')" />
+            </label>
+          </template>
+
+          <template v-if="node.type === 'output'">
+            <label class="field-label">
+              <span>交付标题</span>
+              <input v-model="draft.title" placeholder="本出口交付物名称" @change="saveDataField('title')" />
+            </label>
+            <label class="field-label">
+              <span>输出格式</span>
+              <select v-model="draft.format" @change="saveDataField('format')">
+                <option value="package">素材包</option>
+                <option value="image">图片</option>
+                <option value="video">视频</option>
+                <option value="audio">音频</option>
+                <option value="manifest">清单</option>
+              </select>
+            </label>
+            <label class="field-label">
+              <span>说明</span>
+              <textarea v-model="draft.notes" rows="4" placeholder="交付备注、验收标准" @change="saveDataField('notes')" />
+            </label>
+          </template>
+        </div>
+
         <div v-else-if="node.type === 'script'" class="special-summary">
           <div class="summary-icon">▦</div>
           <strong>{{ shots.length }} 个镜头</strong>
@@ -183,6 +293,7 @@ import {
   readNodeData,
   validateNodeDraft,
 } from '../utils/nodeEditorData'
+import { getNodeMeta } from '../nodeRegistry'
 
 const props = defineProps({
   node: { type: Object, required: true },
@@ -207,14 +318,19 @@ const submitting = ref(false)
 const saveState = ref('saved')
 
 const nodeId = computed(() => props.node?.uuid || String(props.node?.id || ''))
+const nodeMeta = computed(() => getNodeMeta(props.node?.type))
+const accent = computed(() => nodeMeta.value.accent)
 const isMediaNode = computed(() => ['image', 'video', 'audio'].includes(props.node.type))
-const typeLabel = computed(() => ({
-  text: '文本节点', image: '图片节点', video: '视频节点', audio: '音频节点',
-  script: '脚本节点', director: '导演台节点',
-}[props.node.type] || '节点'))
-const typeIcon = computed(() => ({ text: '▤', image: '▧', video: '▶', audio: '♫', script: '▦', director: '◫' }[props.node.type] || '◇'))
+const isMetaNode = computed(() => ['prompt', 'character', 'scene', 'model', 'output'].includes(props.node.type))
+const typeLabel = computed(() => nodeMeta.value.label + '节点')
+const typeIcon = computed(() => ({
+  text: '▤', prompt: '✎', character: '☺', scene: '⌂',
+  image: '▧', video: '▶', audio: '♫',
+  model: '⚙', output: '⇩', script: '▦', director: '◫',
+}[props.node.type] || '◇'))
 const tabs = computed(() => {
   if (props.node.type === 'text') return [{ key: 'content', label: '内容' }, { key: 'agent', label: 'AI 助手' }]
+  if (isMetaNode.value) return [{ key: 'content', label: '配置' }]
   if (isMediaNode.value) return [{ key: 'generate', label: '生成' }, { key: 'tools', label: '工具' }, { key: 'tasks', label: '任务' }]
   return []
 })
@@ -230,11 +346,14 @@ const modeOptions = computed(() => props.node.type === 'video'
       { label: '生成音乐', value: 'music' },
       { label: '生成音效', value: 'sfx' },
     ])
-const modelOptions = computed(() => ({
+const MODEL_CATALOG = {
   image: [{ label: 'Seedream 5.0', value: 'seedream-5.0' }, { label: 'Flux 1.1 Pro', value: 'flux-1.1-pro' }],
   video: [{ label: 'Seedance 2.0', value: 'seedance-2.0' }, { label: 'Kling 1.6', value: 'kling-1.6' }],
   audio: [{ label: 'Volcano TTS', value: 'volcano-tts' }],
-}[props.node.type] || []))
+  llm: [{ label: 'GPT-4o', value: 'gpt-4o' }, { label: 'DeepSeek Chat', value: 'deepseek-chat' }],
+}
+const modelOptions = computed(() => MODEL_CATALOG[props.node.type] || [])
+const modelNodeOptions = computed(() => MODEL_CATALOG[draft.capability || 'image'] || MODEL_CATALOG.image)
 const toolOptions = computed(() => ({
   image: [
     { label: '发送到视频', description: '创建下游视频节点', icon: '→', creates: 'video' },
@@ -275,7 +394,9 @@ function resetDraft() {
   Object.keys(draft).forEach(key => delete draft[key])
   Object.assign(draft, buildNodeDraft(props.node))
   Object.keys(errors).forEach(key => delete errors[key])
-  activeTab.value = props.node.type === 'text' ? 'content' : 'generate'
+  if (props.node.type === 'text' || isMetaNode.value) activeTab.value = 'content'
+  else if (isMediaNode.value) activeTab.value = 'generate'
+  else activeTab.value = 'generate'
   moreOpen.value = false
   saveState.value = 'saved'
 }
@@ -292,6 +413,25 @@ async function emitUpdate(updates) {
 
 function saveDataField(field) {
   emitUpdate({ data: { ...readNodeData(props.node), [field]: draft[field] } })
+}
+
+function saveNameAndField(field) {
+  const data = { ...readNodeData(props.node), [field]: draft[field] }
+  emitUpdate({ name: draft.name || props.node.name, data })
+}
+
+function onModelCapabilityChange() {
+  const options = MODEL_CATALOG[draft.capability] || MODEL_CATALOG.image
+  if (!options.some(item => item.value === draft.model_id)) {
+    draft.model_id = options[0]?.value || ''
+  }
+  emitUpdate({
+    data: {
+      ...readNodeData(props.node),
+      capability: draft.capability,
+      model_id: draft.model_id,
+    },
+  })
 }
 
 function saveTextContent() {
@@ -340,8 +480,19 @@ function emitAction(name) {
   background: rgba(18, 24, 38, .98);
   border: 1px solid #3b4256;
   border-radius: 16px;
-  box-shadow: 0 24px 70px rgba(0, 0, 0, .5), 0 0 0 1px rgba(129, 140, 248, .08);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .5), 0 0 0 1px color-mix(in srgb, var(--node-accent, #818cf8) 12%, transparent);
   backdrop-filter: blur(18px);
+}
+.node-floating-editor::after {
+  content: '';
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  top: 0;
+  height: 2px;
+  border-radius: 0 0 2px 2px;
+  background: linear-gradient(90deg, var(--node-accent, #818cf8), transparent);
+  pointer-events: none;
 }
 .node-floating-editor::before {
   content: '';
@@ -374,7 +525,16 @@ function emitAction(name) {
 .node-title-wrap small { display: block; margin-top: 2px; color: #34d399; font-size: 10px; }
 .node-title-wrap small.save-saving { color: #fbbf24; }
 .node-title-wrap small.save-error { color: #f87171; }
-.node-type-icon { width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 9px; color: #c7d2fe; background: #252d48; }
+.node-type-icon {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 9px;
+  color: var(--node-accent, #c7d2fe);
+  background: color-mix(in srgb, var(--node-accent, #818cf8) 16%, #252d48);
+}
 .head-actions { display: flex; align-items: center; gap: 3px; }
 .icon-button { width: 30px; height: 30px; border: 0; border-radius: 8px; color: #aeb8cb; background: transparent; cursor: pointer; }
 .icon-button:hover { color: #fff; background: #293247; }

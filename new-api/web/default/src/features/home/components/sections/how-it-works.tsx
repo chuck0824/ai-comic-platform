@@ -22,64 +22,27 @@ import { AnimateInView } from '@/components/animate-in-view'
 
 export function HowItWorks() {
   const { t } = useTranslation()
-
   const steps = [
-    {
-      num: '1',
-      title: t('Configure'),
-      desc: t(
-        'Add your API keys, set up channels and configure access permissions'
-      ),
-      icon: <Settings className='size-6' strokeWidth={1.5} />,
-    },
-    {
-      num: '2',
-      title: t('Connect'),
-      desc: t(
-        'Connect through OpenAI, Claude, Gemini, and other compatible API routes'
-      ),
-      icon: <Zap className='size-6' strokeWidth={1.5} />,
-    },
-    {
-      num: '3',
-      title: t('Monitor'),
-      desc: t('Track usage, costs and performance with real-time analytics'),
-      icon: <BarChart3 className='size-6' strokeWidth={1.5} />,
-    },
+    { num:'1', title: t('home.how.step1.title'), desc: t('home.how.step1.desc'), icon:<Settings className='size-6' strokeWidth={1.5} /> },
+    { num:'2', title: t('home.how.step2.title'), desc: t('home.how.step2.desc'), icon:<Zap className='size-6' strokeWidth={1.5} /> },
+    { num:'3', title: t('home.how.step3.title'), desc: t('home.how.step3.desc'), icon:<BarChart3 className='size-6' strokeWidth={1.5} /> },
   ]
-
   return (
     <section className='border-border/40 relative z-10 border-t px-6 py-24 md:py-32'>
       <div className='mx-auto max-w-6xl'>
         <AnimateInView className='mb-16 text-center md:mb-20'>
-          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>
-            {t('How It Works')}
-          </p>
-          <h2 className='text-2xl font-bold tracking-tight md:text-3xl'>
-            {t('Three steps to get started')}
-          </h2>
+          <p className='text-muted-foreground mb-3 text-xs font-medium tracking-widest uppercase'>{t('home.how.eyebrow')}</p>
+          <h2 className='text-2xl font-bold tracking-tight md:text-3xl' style={{ fontFamily: "'Fredoka', var(--font-sans)" }}>{t('home.how.title')}</h2>
         </AnimateInView>
-
         <div className='grid gap-8 md:grid-cols-3 md:gap-12'>
-          {steps.map((step, i) => (
-            <AnimateInView
-              key={step.num}
-              delay={i * 150}
-              animation='fade-up'
-              className='relative flex flex-col items-center text-center'
-            >
+          {steps.map((s, i) => (
+            <AnimateInView key={s.num} delay={i*150} animation='fade-up' className='relative flex flex-col items-center text-center'>
               <div className='relative mb-6'>
-                <div className='text-muted-foreground border-border/50 bg-muted/30 flex size-16 items-center justify-center rounded-2xl border transition-colors'>
-                  {step.icon}
-                </div>
-                <div className='bg-foreground text-background absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full text-xs font-bold'>
-                  {step.num}
-                </div>
+                <div className='text-muted-foreground border-border/50 bg-muted/30 hover:border-pink-500/20 hover:bg-pink-500/[0.04] flex size-16 items-center justify-center rounded-2xl border transition-all duration-300'>{s.icon}</div>
+                <div className='absolute -top-2 -right-2 flex size-6 items-center justify-center rounded-full bg-gradient-to-br from-pink-500 to-blue-600 text-white text-xs font-bold shadow-[0_0_10px_rgba(236,72,153,0.3)]'>{s.num}</div>
               </div>
-              <h3 className='mb-2 text-base font-semibold'>{step.title}</h3>
-              <p className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'>
-                {step.desc}
-              </p>
+              <h3 className='mb-2 text-base font-semibold'>{s.title}</h3>
+              <p className='text-muted-foreground max-w-[240px] text-sm leading-relaxed'>{s.desc}</p>
             </AnimateInView>
           ))}
         </div>

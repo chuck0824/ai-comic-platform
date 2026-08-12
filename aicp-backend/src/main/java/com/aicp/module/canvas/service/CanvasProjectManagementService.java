@@ -138,7 +138,8 @@ public class CanvasProjectManagementService {
         CanvasProject project = new CanvasProject();
         project.setUuid("canvas_" + UUID.randomUUID().toString().replace("-", "").substring(0, 7));
         project.setUserId(userId);
-        project.setOwnerId(request.ownerId());
+        // owner 以鉴权用户为准，避免前端大整数精度丢失 / 伪造
+        project.setOwnerId(userId);
         project.setName(request.name());
         project.setContentProjectId(request.contentProjectId());
         project.setProductionUnitType(request.productionUnitType());
@@ -150,6 +151,8 @@ public class CanvasProjectManagementService {
         project.setIdempotencyKey(request.idempotencyKey());
         project.setStatus("draft");
         project.setCanvasVersion(1);
+        project.setCanvasMode("EXPLORATION");
+        project.setSchemaVersion(1);
         project.setRevision(0);
         project.setIsDeleted(0);
 

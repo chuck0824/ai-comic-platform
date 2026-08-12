@@ -1,0 +1,40 @@
+<h2>C 风格下的三种页面结构</h2>
+<p class="subtitle">颜色与视觉语言已经锁定，这一轮只比较信息顺序与转化逻辑。点击选择。</p>
+
+<div class="cards" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:20px">
+  <div class="card" data-choice="short" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1119;padding:16px;min-height:430px;color:white">
+      <div style="height:22px;border-bottom:1px solid #2b3341;font:9px Arial;color:#9aa4b5">AICP 漫剧　　　　　　　　　产品 · 流程 · 登录</div>
+      <div style="margin-top:10px;height:120px;border-radius:8px;background:radial-gradient(circle at 85% 20%,#54274b,transparent 35%),#121925;padding:18px"><small style="color:#60d5c7">从灵感到成片，只在一个工作台</small><b style="display:block;font:700 20px/1.2 Arial;margin:8px 0">让每个好故事，<br><span style="color:#cf86e9">更快成为作品</span></b><span style="display:inline-block;background:#8b3de0;padding:6px 9px;border-radius:5px;font:8px Arial">免费开始创作</span></div>
+      <div style="margin-top:8px;height:58px;border:1px solid #30394b;border-radius:7px;padding:9px;font:9px Arial;color:#aab2c2"><b style="color:white">四阶段流程</b><br><br>剧本　→　分镜　→　生产　→　交付</div>
+      <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:7px"><div style="height:54px;background:#151c28;border-radius:7px;padding:8px;font:9px Arial">Agent 协作</div><div style="height:54px;background:#151c28;border-radius:7px;padding:8px;font:9px Arial">资产管理</div></div>
+      <div style="margin-top:8px;height:66px;border-radius:7px;background:linear-gradient(90deg,#2d1f4e,#3f2138);padding:12px;text-align:center;font:10px Arial">准备好开始第一部作品？<br><span style="display:inline-block;margin-top:8px;background:white;color:#111;padding:5px 8px;border-radius:4px">进入工作台</span></div>
+    </div>
+    <div class="card-body"><h3>方案 1 · 短转化页</h3><p>Hero → 流程 → 核心能力 → CTA。开发快、信息短，但真实产品证明不足，与当前页面差异不大。</p></div>
+  </div>
+
+  <div class="card" data-choice="proof" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1119;padding:16px;min-height:430px;color:white">
+      <div style="height:22px;border-bottom:1px solid #2b3341;font:9px Arial;color:#9aa4b5">AICP 漫剧　　　　　　　　产品 · 流程 · 能力 · 登录</div>
+      <div style="margin-top:10px;height:96px;border-radius:8px;background:radial-gradient(circle at 85% 20%,#54274b,transparent 35%),#121925;padding:15px"><small style="color:#60d5c7">从灵感到成片，只在一个工作台</small><b style="display:block;font:700 19px/1.2 Arial;margin:7px 0">让每个好故事，<span style="color:#cf86e9">更快成为作品</span></b><span style="font:8px Arial;background:#8b3de0;padding:5px 8px;border-radius:4px">免费开始创作</span> <span style="font:8px Arial;border:1px solid #475064;padding:4px 7px;border-radius:4px">查看完整流程</span></div>
+      <div style="margin-top:8px;height:90px;border:1px solid #3b4558;border-radius:7px;background:#111824;padding:8px;display:grid;grid-template-columns:42px 1fr;gap:7px"><div style="background:#090e16;border-radius:4px"></div><div style="background:linear-gradient(#222b3b 1px,transparent 1px),linear-gradient(90deg,#222b3b 1px,transparent 1px);background-size:16px 16px;position:relative"><i style="position:absolute;left:10px;top:12px;width:32px;height:18px;background:#2d295c;border:1px solid #6366f1"></i><i style="position:absolute;right:10px;bottom:12px;width:38px;height:20px;background:#4a263f;border:1px solid #ec4899"></i></div></div>
+      <div style="margin-top:8px;height:58px;border:1px solid #30394b;border-radius:7px;padding:9px;font:9px Arial"><b>你实际会怎样完成一部漫剧</b><br><br><span style="color:#aab2c2">灵感 → 剧本 → 分镜 → 生成 → 质检交付</span></div>
+      <div style="margin-top:8px;display:grid;grid-template-columns:repeat(3,1fr);gap:6px"><div style="height:46px;background:#151c28;border-radius:6px;padding:7px;font:8px Arial">个人创作者<br><span style="color:#99a3b5">快速开工</span></div><div style="height:46px;background:#151c28;border-radius:6px;padding:7px;font:8px Arial">工作室<br><span style="color:#99a3b5">批量生产</span></div><div style="height:46px;background:#151c28;border-radius:6px;padding:7px;font:8px Arial">企业团队<br><span style="color:#99a3b5">规范交付</span></div></div>
+      <div style="margin-top:8px;height:54px;border-radius:7px;background:linear-gradient(90deg,#2d1f4e,#3f2138);padding:10px;text-align:center;font:9px Arial">现在就把第一个故事变成作品　<span style="background:white;color:#111;padding:4px 7px;border-radius:4px">免费开始</span></div>
+    </div>
+    <div class="card-body"><h3>方案 2 · 产品证明漏斗（推荐）</h3><p>Hero → 工作台实景 → 完整流程 → 场景价值 → 能力 → CTA。兼顾理解、信任与转化，最符合当前目标。</p></div>
+  </div>
+
+  <div class="card" data-choice="enterprise" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0d1119;padding:16px;min-height:430px;color:white">
+      <div style="height:22px;border-bottom:1px solid #2b3341;font:9px Arial;color:#9aa4b5">AICP 漫剧　　　　　　解决方案 · 产品 · 安全 · 企业服务</div>
+      <div style="margin-top:10px;height:88px;border-radius:8px;background:radial-gradient(circle at 85% 20%,#54274b,transparent 35%),#121925;padding:14px"><small style="color:#60d5c7">AI 漫剧工业化生产平台</small><b style="display:block;font:700 18px/1.2 Arial;margin:7px 0">从创意到交付，<span style="color:#cf86e9">全链路可控</span></b><span style="font:8px Arial;background:#8b3de0;padding:5px 8px;border-radius:4px">开始试用</span> <span style="font:8px Arial;border:1px solid #475064;padding:4px 7px;border-radius:4px">预约演示</span></div>
+      <div style="margin-top:8px;height:44px;border:1px solid #30394b;border-radius:7px;padding:8px;font:8px Arial;color:#aab2c2">适用场景：工作室量产　·　MCN 内容矩阵　·　品牌项目</div>
+      <div style="margin-top:8px;height:76px;background:#151c28;border-radius:7px;padding:9px;font:9px Arial"><b>企业生产能力矩阵</b><div style="display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-top:8px"><span style="background:#20293a;padding:7px 2px;text-align:center">协作</span><span style="background:#20293a;padding:7px 2px;text-align:center">预算</span><span style="background:#20293a;padding:7px 2px;text-align:center">质检</span><span style="background:#20293a;padding:7px 2px;text-align:center">审计</span></div></div>
+      <div style="margin-top:8px;height:58px;border:1px solid #30394b;border-radius:7px;padding:9px;font:9px Arial"><b>安全、权限与可追溯交付</b><br><br><span style="color:#aab2c2">角色权限　版本记录　质量报告　交付清单</span></div>
+      <div style="margin-top:8px;display:grid;grid-template-columns:1fr 1fr;gap:7px"><div style="height:46px;background:#151c28;border-radius:6px;padding:8px;font:8px Arial">API 与模型接入</div><div style="height:46px;background:#151c28;border-radius:6px;padding:8px;font:8px Arial">企业工作台</div></div>
+      <div style="margin-top:8px;height:48px;border-radius:7px;background:linear-gradient(90deg,#2d1f4e,#3f2138);padding:10px;text-align:center;font:9px Arial">为团队搭建生产线　<span style="background:white;color:#111;padding:4px 7px;border-radius:4px">预约演示</span></div>
+    </div>
+    <div class="card-body"><h3>方案 3 · 企业解决方案深页</h3><p>强调治理、协作和交付能力，客单价叙事更强；但会削弱“免费开始创作”的主转化目标。</p></div>
+  </div>
+</div>

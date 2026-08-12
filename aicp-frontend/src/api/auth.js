@@ -14,5 +14,9 @@ export const authApi = {
   refreshToken: (token) =>
     request.post('/auth/refresh-token', { refresh_token: token }),
   logout: (refreshToken) =>
-    request.post('/auth/logout', { refresh_token: refreshToken })
+    request.post('/auth/logout', { refresh_token: refreshToken }),
+  createSsoTicket: () =>
+    request.post('/auth/sso/ticket'),
+  loginBySso: (ticket) =>
+    request.post('/auth/login/sso', { ticket })
 }

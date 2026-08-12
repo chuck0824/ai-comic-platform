@@ -73,7 +73,9 @@ async function selectUnit(unit) {
 }
 
 function goToEditor(canvas) {
-  router.push(`/canvas/${canvas.uuid}`)
+  const id = canvas?.uuid || canvas?.id
+  if (!id) return
+  router.push({ name: 'Canvas', params: { projectId: String(id) } })
 }
 
 function onCreated() {
