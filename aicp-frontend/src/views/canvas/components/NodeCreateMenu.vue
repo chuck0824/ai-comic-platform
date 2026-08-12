@@ -1,6 +1,16 @@
 <template>
-  <div v-if="visible" class="node-create-menu" :style="{ left: x + 'px', top: y + 'px' }">
-    <div class="menu-header">新建节点</div>
+  <div
+    v-if="visible"
+    ref="menuRef"
+    class="node-create-menu"
+    :style="{ left: clampedX + 'px', top: clampedY + 'px' }"
+    @mousedown.stop
+    @pointerdown.stop
+  >
+    <div class="menu-header">
+      <span>新建节点</span>
+      <button type="button" class="menu-close" title="关闭" @click="$emit('close')">×</button>
+    </div>
     <div class="menu-groups">
       <div v-for="group in groups" :key="group.name" class="menu-group">
         <div class="group-title">{{ group.name }}</div>
@@ -26,7 +36,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, watch, nextTick, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
   visible: { type: Boolean, default: false },
@@ -35,7 +45,10 @@ const props = defineProps({
   nodeTypes: { type: Array, default: () => [] }
 })
 
-defineEmits(['select'])
+const emit = defineEmits(['select', 'close'])
+
+const menuRef = ref(null)
+const menuSize = ref({ width: 320, height: 420 })
 
 const groups = computed(() => {
   const list = []
@@ -49,6 +62,59 @@ const groups = computed(() => {
     group.items.push(item)
   })
   return list
+})
+
+const clampedX = computed(() => {
+  const max = Math.max(8, window.innerWidth - menuSize.value.width - 8)
+  return Math.min(Math.max(8, props.x), max)
+})
+
+const clampedY = computed(() => {
+  const max = Math.max(8, window.innerHeight - menuSize.value.height - 8)
+  return Math.min(Math.max(8, props.y), max)
+})
+
+function measureMenu() {
+  const el = menuRef.value
+  if (!el) return
+  const rect = el.getBoundingClientRect()
+  menuSize.value = {
+    width: Math.ceil(rect.width) || 320,
+    height: Math.ceil(rect.height) || 420,
+  }
+}
+
+function onDocPointerDown(e) {
+  if (!props.visible) return
+  const el = menuRef.value
+  if (el && el.contains(e.target)) return
+  if (e.target?.closest?.('.floating-add')) return
+  emit('close')
+}
+
+function onDocKeydown(e) {
+  if (e.key === 'Escape' && props.visible) {
+    e.preventDefault()
+    emit('close')
+  }
+}
+
+watch(() => props.visible, async (visible) => {
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
+  document.removeEventListener('keydown', onDocKeydown, true)
+  if (!visible) return
+  await nextTick()
+  measureMenu()
+  // 延后绑定，避免打开菜单的同一次点击立刻关掉
+  requestAnimationFrame(() => {
+    document.addEventListener('pointerdown', onDocPointerDown, true)
+    document.addEventListener('keydown', onDocKeydown, true)
+  })
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointerDown, true)
+  document.removeEventListener('keydown', onDocKeydown, true)
 })
 </script>
 
@@ -67,12 +133,32 @@ const groups = computed(() => {
   scrollbar-width: thin;
 }
 .menu-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 12px;
   font-weight: 700;
   color: #94a3b8;
   margin-bottom: 10px;
-  padding: 0 4px;
+  padding: 0 2px 0 4px;
   letter-spacing: .04em;
+}
+.menu-close {
+  appearance: none;
+  border: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: #94a3b8;
+  background: transparent;
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.menu-close:hover {
+  color: #e2e8f0;
+  background: rgba(148, 163, 184, .12);
 }
 .menu-group + .menu-group {
   margin-top: 10px;
