@@ -1452,6 +1452,10 @@ CREATE TABLE IF NOT EXISTS content_upload_files (
     parsed_text LONGTEXT,
     parse_status VARCHAR(20) NOT NULL DEFAULT 'pending',
     error_message VARCHAR(500),
+    storage_uri VARCHAR(600),
+    storage_provider VARCHAR(20),
+    storage_bucket VARCHAR(100),
+    storage_key VARCHAR(500),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='上传文件表';

@@ -17,6 +17,10 @@ public class UploadFile {
     private String parsedText;
     private String parseStatus;
     private String errorMessage;
+    private String storageUri;
+    private String storageProvider;
+    private String storageBucket;
+    private String storageKey;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

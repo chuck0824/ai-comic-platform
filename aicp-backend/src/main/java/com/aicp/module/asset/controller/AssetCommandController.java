@@ -14,6 +14,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/assets")
 @RequiredArgsConstructor
@@ -79,11 +81,14 @@ public class AssetCommandController {
     }
 
     @GetMapping("/{assetUuid}/download-url")
-    public ApiResponse<String> downloadUrl(@PathVariable String assetUuid,
+    public ApiResponse<Map<String, Object>> downloadUrl(@PathVariable String assetUuid,
             HttpServletRequest request) {
         var ctx = requireContext(request);
-        // Deferred: signed URL generation
-        return ApiResponse.success("download-url-placeholder");
+        var signed = commandService.createDownloadUrl(ctx, assetUuid);
+        return ApiResponse.success(Map.of(
+                "url", signed.url(),
+                "expiresAt", signed.expiresAt().toString()
+        ));
     }
 
     @PostMapping("/{assetUuid}/regenerate")

@@ -1,6 +1,7 @@
 package com.aicp.common.ai;
 
 import com.aicp.common.ai.client.NewApiClient;
+import com.aicp.common.storage.GenerationOutputPersister;
 import com.aicp.module.generation.entity.GenerationTask;
 import com.aicp.module.generation.mapper.GenerationTaskMapper;
 import lombok.RequiredArgsConstructor;
@@ -22,6 +23,7 @@ public class AiRouter {
 
     private final NewApiClient newApiClient;
     private final GenerationTaskMapper taskMapper;
+    private final GenerationOutputPersister outputPersister;
 
     /**
      * 执行生成任务
@@ -38,6 +40,10 @@ public class AiRouter {
             Map<String, Object> params = parseJson(task.getParameters());
             Map<String, Object> result = routeAndExecute(task.getType(), task.getSubType(),
                     task.getModelId(), params);
+
+            if (isMediaType(task.getType())) {
+                result = outputPersister.persist(task.getType(), task.getId(), result);
+            }
 
             task.setStatus("succeeded");
             task.setProgress(100);
@@ -139,6 +145,11 @@ public class AiRouter {
             case "audio" -> "volcano-tts";
             default -> "deepseek-v3";
         };
+    }
+
+    private static boolean isMediaType(String type) {
+        return "image".equals(type) || "video".equals(type) || "audio".equals(type)
+                || "compose".equals(type) || "export".equals(type);
     }
 
     @SuppressWarnings("unchecked")
