@@ -1,5 +1,20 @@
 const TYPE_DEFAULTS = {
   text: { prompt: '', content: '' },
+  prompt: { prompt: '', tags: '' },
+  character: {
+    name: '',
+    appearance: '',
+    personality: '',
+    prompt: '',
+    reference_url: '',
+  },
+  scene: {
+    name: '',
+    environment: '',
+    atmosphere: '',
+    prompt: '',
+    reference_url: '',
+  },
   image: {
     prompt: '',
     model_id: 'seedream-5.0',
@@ -22,6 +37,16 @@ const TYPE_DEFAULTS = {
     speed: 1,
     voice: '默认音色',
     mode: 'tts',
+  },
+  model: {
+    model_id: 'seedream-5.0',
+    capability: 'image',
+    notes: '',
+  },
+  output: {
+    title: '',
+    format: 'package',
+    notes: '',
   },
   script: { prompt: '' },
   director: {},
@@ -69,6 +94,12 @@ export function buildTaskParameters(draft) {
 export function validateNodeDraft(type, draft) {
   if (['image', 'video', 'audio'].includes(type) && !String(draft.prompt || '').trim()) {
     return { prompt: type === 'audio' ? '请输入文本或提示词' : '请输入提示词' }
+  }
+  if (type === 'prompt' && !String(draft.prompt || '').trim()) {
+    return { prompt: '请输入 Prompt 内容' }
+  }
+  if (type === 'model' && !String(draft.model_id || '').trim()) {
+    return { model_id: '请选择模型' }
   }
   return {}
 }

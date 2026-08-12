@@ -54,19 +54,23 @@
             </header>
             <div v-for="group in nodeTypeGroups" :key="group.name" class="node-group">
               <div class="node-group-title">{{ group.name }}</div>
-              <button
-                v-for="nt in group.items"
-                :key="nt.type"
-                type="button"
-                class="node-add-card"
-                @click="handleAddNode(nt.type)"
-              >
-                <span class="node-icon"><el-icon :size="18"><component :is="nt.icon" /></el-icon></span>
-                <span class="node-add-copy">
-                  <strong>{{ nt.label }}</strong>
-                  <small>{{ nt.desc }}</small>
-                </span>
-              </button>
+              <div class="node-add-grid">
+                <button
+                  v-for="nt in group.items"
+                  :key="nt.type"
+                  type="button"
+                  class="node-add-card"
+                  :style="{ '--node-accent': nt.accent }"
+                  :title="nt.desc"
+                  @click="handleAddNode(nt.type)"
+                >
+                  <span class="node-icon"><el-icon :size="16"><component :is="nt.icon" /></el-icon></span>
+                  <span class="node-add-copy">
+                    <strong>{{ nt.label }}</strong>
+                    <small>{{ nt.short || nt.desc }}</small>
+                  </span>
+                </button>
+              </div>
             </div>
           </section>
 
@@ -562,6 +566,7 @@ import WorkspaceAssetPicker from './canvas/components/WorkspaceAssetPicker.vue'
 import VueFlowCanvasStage from './canvas/flow/VueFlowCanvasStage.vue'
 import { computeFloatingEditorPosition } from './canvas/utils/floatingEditorPosition'
 import { shouldSelectNode } from './canvas/utils/nodeEditorData'
+import { getNodeMeta, getNodeSize } from './canvas/nodeRegistry'
 
 const route = useRoute()
 const router = useRouter()
@@ -2835,11 +2840,34 @@ function defaultNodeData(type) {
       }
     }
   }
+  if (type === 'prompt') {
+    return { prompt: '', tags: '', source: 'canvas' }
+  }
   if (type === 'character') {
-    return { prompt: '角色名称、年龄、身份、服饰、发型、性格、三视图要求', consistency_level: 'L1' }
+    return {
+      name: '',
+      appearance: '',
+      personality: '',
+      prompt: '角色名称、年龄、身份、服饰、发型、性格、三视图要求',
+      reference_url: '',
+      consistency_level: 'L1',
+    }
   }
   if (type === 'scene') {
-    return { prompt: '场景名称、时代、空间结构、光线、色彩、镜头氛围', consistency_level: 'L1' }
+    return {
+      name: '',
+      environment: '',
+      atmosphere: '',
+      prompt: '场景名称、时代、空间结构、光线、色彩、镜头氛围',
+      reference_url: '',
+      consistency_level: 'L1',
+    }
+  }
+  if (type === 'model') {
+    return { model_id: 'seedream-5.0', capability: 'image', notes: '', source: 'canvas' }
+  }
+  if (type === 'output') {
+    return { title: '', format: 'package', notes: '', source: 'canvas' }
   }
   if (type === 'prop') {
     return { prompt: '道具名称、材质、用途、出现场景、特写要求', consistency_level: 'L1' }
@@ -2864,11 +2892,11 @@ function nodeW(nodeOrType) {
     const mode = getTextNodeMode(nodeOrType)
     return mode === 'choice' ? 560 : 520
   }
-  return { script: 340, director: 280, text: 520, video: 520, audio: 520, image: 520, compose: 230, workflow: 240, reference: 220 }[type] || 200
+  return getNodeSize(type).width
 }
 
 function nodeIcon(type) {
-  return { text:'Document', image:'Picture', video:'VideoCamera', audio:'Headset', script:'Film', director:'VideoCameraFilled' }[type] || 'Box'
+  return getNodeMeta(type).icon
 }
 
 function assetIcon(type) {
@@ -3022,7 +3050,7 @@ function estimatedCostForNode(type) {
   line-height: 1.45;
   color: var(--panel-muted);
 }
-.node-group { margin-bottom: 12px; }
+.node-group { margin-bottom: 14px; }
 .node-group-title {
   color: #6f7b91;
   font-size: 10px;
@@ -3031,48 +3059,57 @@ function estimatedCostForNode(type) {
   letter-spacing: .08em;
   text-transform: uppercase;
 }
+.node-add-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
 .node-add-card {
   width: 100%;
   appearance: none;
   text-align: left;
-  padding: 10px 11px;
-  margin-bottom: 8px;
+  padding: 9px 10px;
   display: flex;
-  gap: 10px;
+  gap: 8px;
   align-items: flex-start;
   background: var(--panel-surface);
   border: 1px solid var(--panel-border);
   border-radius: 12px;
   cursor: pointer;
-  transition: border-color .15s, background .15s, transform .12s;
+  transition: border-color .15s, background .15s, transform .12s, box-shadow .15s;
   color: var(--panel-text);
 }
 .node-add-card:hover {
-  border-color: rgba(129, 140, 248, .55);
-  background: var(--panel-surface-hover);
+  border-color: color-mix(in srgb, var(--node-accent) 55%, transparent);
+  background: color-mix(in srgb, var(--node-accent) 10%, var(--panel-surface));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--node-accent) 18%, transparent);
 }
 .node-add-card:active { transform: translateY(1px); }
 .node-add-card .node-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
   flex-shrink: 0;
-  background: rgba(129, 140, 248, .12);
-  color: #a5b4fc;
+  background: color-mix(in srgb, var(--node-accent) 16%, transparent);
+  color: var(--node-accent);
 }
-.node-add-copy { display: grid; gap: 3px; min-width: 0; }
+.node-add-copy { display: grid; gap: 2px; min-width: 0; }
 .node-add-copy strong {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 650;
   color: #f1f5f9;
   line-height: 1.25;
 }
 .node-add-copy small {
-  font-size: 11px;
-  line-height: 1.4;
+  font-size: 10px;
+  line-height: 1.35;
   color: var(--panel-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .upload-drop {
   width: 100%;

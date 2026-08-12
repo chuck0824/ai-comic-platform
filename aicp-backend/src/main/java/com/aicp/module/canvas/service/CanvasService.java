@@ -581,35 +581,50 @@ public class CanvasService {
 
     private String nodeLabel(String type) {
         return switch (type) {
-            case "image" -> "图片节点"; case "video" -> "视频节点";
-            case "audio" -> "音频节点"; case "script" -> "脚本节点";
-            case "storyboard" -> "分镜节点"; case "character" -> "角色节点";
-            case "scene" -> "场景节点"; case "prompt" -> "提示词节点";
-            case "reference" -> "参考视频节点"; case "workflow" -> "工作流模板";
+            case "image" -> "图片节点";
+            case "video" -> "视频节点";
+            case "audio" -> "音频节点";
+            case "script" -> "剧本节点";
+            case "storyboard" -> "分镜节点";
+            case "character" -> "角色节点";
+            case "scene" -> "场景节点";
+            case "prompt" -> "Prompt 节点";
+            case "model" -> "模型节点";
+            case "output" -> "输出节点";
+            case "director" -> "导演台节点";
+            case "reference" -> "参考视频节点";
+            case "workflow" -> "工作流模板";
             default -> "文本节点";
         };
     }
 
-    /** 节点默认宽度，与前端 useCanvasNodes 的 addLocalNode 保持一致 */
+    /** 节点默认宽度，与前端 nodeRegistry 保持一致 */
     private int nodeWidth(String type) {
         return switch (type) {
             case "script" -> 340;
             case "director" -> 280;
-            case "text" -> 560;
-            case "image", "video" -> 520;
+            case "text" -> 480;
+            case "prompt" -> 300;
+            case "character", "scene", "model" -> 280;
+            case "output" -> 260;
+            case "image", "video" -> 420;
             case "audio" -> 300;
-            default -> 200;
+            default -> 240;
         };
     }
 
-    /** 节点默认高度，与前端 useCanvasNodes 的 addLocalNode 保持一致 */
+    /** 节点默认高度，与前端 nodeRegistry 保持一致 */
     private int nodeHeight(String type) {
         return switch (type) {
             case "script" -> 280;
             case "director" -> 220;
-            case "text" -> 520;
-            case "image", "video" -> 360;
-            case "audio" -> 300;
+            case "text" -> 360;
+            case "prompt" -> 200;
+            case "character", "scene" -> 220;
+            case "model" -> 190;
+            case "output" -> 170;
+            case "image", "video" -> 300;
+            case "audio" -> 240;
             default -> 180;
         };
     }
