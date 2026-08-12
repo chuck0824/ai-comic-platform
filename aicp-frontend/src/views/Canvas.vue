@@ -230,7 +230,7 @@
 
         <!-- Node Create Menu (on double click) -->
         <NodeCreateMenu :visible="createMenuVisible" :x="createMenuPos.x" :y="createMenuPos.y"
-                        :node-types="canvas.NODE_TYPES" @select="onNodeTypeSelect" />
+                        :node-types="canvas.NODE_TYPES" @select="onNodeTypeSelect" @close="closeCreateMenu" />
 
         <!-- Floating Add Button -->
         <div class="floating-add">
@@ -1954,6 +1954,7 @@ function deselectCanvas() {
   selectedConnectionId.value = null
   state.deselectAll()
   state.closeContextMenu()
+  closeCreateMenu()
 }
 
 async function deleteSelectedConnection() {
@@ -1973,6 +1974,10 @@ function onCanvasKeydown(e) {
   if (['input', 'textarea', 'select'].includes(tag)) return
   // 弹窗/对话框打开时不处理画布快捷键
   if (document.querySelector('.el-overlay.is-message-box, .el-dialog:not([style*="display: none"])')) return
+  if (e.key === 'Escape' && createMenuVisible.value) {
+    closeCreateMenu()
+    return
+  }
   if (directorDeskVisible.value) {
     const key = e.key.toLowerCase()
     if (key === 'escape') {
@@ -2011,7 +2016,7 @@ function onCanvasKeydown(e) {
 }
 
 function onNodeTypeSelect(type) {
-  createMenuVisible.value = false
+  closeCreateMenu()
   const point = screenToCanvas(createMenuPos.value.x, createMenuPos.value.y)
   handleAddNode(type, point.x, point.y).then(async (node) => {
     if (node && pendingConnectionSource.value) {
@@ -2020,6 +2025,12 @@ function onNodeTypeSelect(type) {
       state.markSaved()
     }
   })
+}
+
+function closeCreateMenu() {
+  if (!createMenuVisible.value) return
+  createMenuVisible.value = false
+  pendingConnectionSource.value = null
 }
 
 function showCreateMenuAtCenter() {
@@ -2930,8 +2941,26 @@ function estimatedCostForNode(type) {
 
 <style scoped>
 .canvas-page { position:relative; display:flex; flex-direction:column; height:100vh; min-height:0; overflow:hidden; background:#0f172a; color:#e0e0e0; }
-.canvas-back-btn { color:#94a3b8 !important; margin-right:4px; }
-.canvas-back-btn:hover { color:#e2e8f0 !important; }
+.canvas-back-btn {
+  --el-button-text-color: #94a3b8;
+  --el-button-hover-text-color: #e2e8f0;
+  --el-button-hover-bg-color: rgba(148, 163, 184, .12);
+  --el-button-active-text-color: #c7d2fe;
+  --el-button-active-bg-color: rgba(129, 140, 248, .16);
+  color: #94a3b8 !important;
+  margin-right: 4px;
+}
+.canvas-back-btn:hover,
+.canvas-back-btn:focus,
+.canvas-back-btn:focus-visible {
+  color: #e2e8f0 !important;
+  background: rgba(148, 163, 184, .12) !important;
+}
+.canvas-back-btn:active,
+.canvas-back-btn.is-active {
+  color: #c7d2fe !important;
+  background: rgba(129, 140, 248, .16) !important;
+}
 .canvas-toolbar { display:flex; align-items:center; justify-content:space-between; padding:8px 16px;
   background:#1a1a2e; border-bottom:1px solid #2a2a3e; flex-shrink:0; color:#e0e0e0; position:relative; z-index:40; }
 .toolbar-actions { display:flex; align-items:center; gap:10px; }
