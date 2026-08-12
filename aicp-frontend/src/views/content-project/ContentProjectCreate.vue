@@ -31,6 +31,14 @@
       </div>
     </div>
 
+    <div v-if="entryMode === 'tvc'" class="section tvc-fields" data-entry-variant="tvc">
+      <label class="section-label">TVC 创作信息</label>
+      <el-input v-model="form.productName" placeholder="产品 / 品牌名称" maxlength="100" />
+      <el-input v-model="form.campaignObjective" type="textarea" :rows="3" placeholder="传播目标与核心卖点" maxlength="500" />
+      <el-input-number v-model="form.tvcDuration" :min="5" :max="600" />
+      <span class="field-hint">成片时长（秒）</span>
+    </div>
+
     <!-- Source Mode -->
     <div class="section">
       <label class="section-label">来源方式</label>
@@ -108,13 +116,17 @@
 
 <script setup>
 import { reactive, ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { MagicStick, UploadFilled, VideoCameraFilled, Reading, Film, Promotion } from '@element-plus/icons-vue'
 import { contentProjectApi } from '@/api/contentProject'
+import { workspaceTarget } from './workbench/workspaceRouting.js'
 
 const router = useRouter()
+const route = useRoute()
 const submitting = ref(false)
 const error = ref('')
+const supportedEntryModes = new Set(['quick', 'professional', 'upload', 'tvc'])
+const entryMode = supportedEntryModes.has(String(route.query.mode)) ? String(route.query.mode) : 'quick'
 
 const modes = [
   { key: 'short_drama', label: '短剧', icon: VideoCameraFilled, desc: '1-3分钟/集，快速产出' },
@@ -123,13 +135,16 @@ const modes = [
 ]
 
 const form = reactive({
-  creationMode: 'short_drama',
-  sourceMode: 'ai_manual',
+  creationMode: entryMode === 'tvc' ? 'tvc' : 'short_drama',
+  sourceMode: entryMode === 'upload' ? 'uploaded' : 'ai_manual',
   startContent: '',
-  contentGoal: '追更'
+  contentGoal: entryMode === 'tvc' ? '品牌传播' : '追更',
+  productName: '',
+  campaignObjective: '',
+  tvcDuration: 30
 })
 
-const canSubmit = computed(() => form.creationMode && form.sourceMode && form.contentGoal)
+const canSubmit = computed(() => form.creationMode && form.sourceMode && form.contentGoal && (entryMode !== 'tvc' || form.productName.trim()))
 
 async function handleCreate() {
   submitting.value = true
@@ -144,7 +159,22 @@ async function handleCreate() {
       tenant_type: 'personal'
     })
     const project = res.data
-    router.push(`/script-gen/${project.id}/workspace`)
+    await contentProjectApi.addParameters(project.id, {
+      revision: project.revision,
+      payload: {
+        entry_mode: entryMode,
+        creation_mode: form.creationMode,
+        source_mode: form.sourceMode,
+        content_goal: form.contentGoal,
+        start_content: form.startContent,
+        tvc: entryMode === 'tvc' ? {
+          product_name: form.productName,
+          campaign_objective: form.campaignObjective,
+          duration_seconds: form.tvcDuration
+        } : null
+      }
+    })
+    router.push(workspaceTarget({ id: project.id, entryMode }))
   } catch (e) {
     error.value = e.response?.data?.message || '创建失败，请重试'
   } finally {
@@ -305,6 +335,8 @@ async function handleCreate() {
   font-size: 13px;
   margin-top: 12px;
 }
+.tvc-fields { display: grid; gap: 12px; }
+.field-hint { color: var(--text-secondary); font-size: 12px; }
 
 /* Responsive */
 @media (max-width: 600px) {

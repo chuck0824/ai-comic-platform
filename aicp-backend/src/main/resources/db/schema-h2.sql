@@ -578,6 +578,7 @@ CREATE TABLE IF NOT EXISTS asset_applications (
     project_id BIGINT NOT NULL,
     target_type VARCHAR(20),
     target_id BIGINT,
+    target_key VARCHAR(128),
     change_summary VARCHAR(500),
     previous_state VARCHAR(4000),
     undo_token_hash VARCHAR(64),
@@ -587,6 +588,7 @@ CREATE TABLE IF NOT EXISTS asset_applications (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_application_workspace_key UNIQUE (workspace_id, idempotency_key)
 );
+CREATE INDEX IF NOT EXISTS idx_aa_target_key ON asset_applications(target_type, target_key);
 
 -- ── Asset workbench tables ──────────────────────────────────────────
 
@@ -1188,6 +1190,11 @@ CREATE TABLE IF NOT EXISTS storyboard_version_shots (
     reference_text TEXT,
     image_prompt CLOB,
     video_motion_prompt CLOB,
+    scene_asset_id BIGINT,
+    scene_asset_version_id BIGINT,
+    scene_variant_id VARCHAR(64),
+    scene_variant_version INT,
+    scene_asset_snapshot CLOB,
     director_intention TEXT,
     action_motivation TEXT,
     relationship_blocking TEXT,
@@ -1209,6 +1216,8 @@ CREATE INDEX IF NOT EXISTS idx_sb_project ON storyboards(project_id, updated_at)
 CREATE INDEX IF NOT EXISTS idx_sbv_master ON storyboard_versions(storyboard_id, tier, version_no);
 CREATE INDEX IF NOT EXISTS idx_sbscene_version ON storyboard_version_scenes(version_id, sort_order);
 CREATE INDEX IF NOT EXISTS idx_sbshot_version ON storyboard_version_shots(version_id, scene_id, sort_order);
+CREATE INDEX IF NOT EXISTS idx_sbshot_scene_asset ON storyboard_version_shots(scene_asset_id);
+CREATE INDEX IF NOT EXISTS idx_sbshot_scene_asset_version ON storyboard_version_shots(scene_asset_version_id);
 
 -- 6类专业辅助表
 

@@ -12,7 +12,8 @@ public class AssetEnums {
 
     public enum AssetSource { CREATED, MARKET_CLAIMED, PROJECT_GENERATED, IMPORTED }
 
-    public enum AssetStatus { ACTIVE, ARCHIVED }
+    /** Shared lifecycle. DISABLED preserves existing references while rejecting new bindings. */
+    public enum AssetStatus { ACTIVE, DISABLED, ARCHIVED }
 
     public enum ListingStatus { LISTED, UNLISTED, REMOVED }
 

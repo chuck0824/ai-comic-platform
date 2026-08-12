@@ -4,10 +4,17 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.nio.charset.StandardCharsets;
+import java.sql.Connection;
+import java.sql.DriverManager;
 import java.util.List;
+import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -74,5 +81,54 @@ class StoryboardSchemaTest {
             "VISUAL_DESCRIPTION", "LIGHTING_ATMOSPHERE", "CHARACTER_ACTION",
             "EMOTION_DESCRIPTION", "DIALOGUE_TEXT", "SCENE_TAGS_JSON",
             "SOUND_EFFECT", "REFERENCE_TEXT", "IMAGE_PROMPT", "VIDEO_MOTION_PROMPT");
+    }
+
+    @Test
+    @DisplayName("通用 schema 可在空库独立创建 V2 分镜链路")
+    void genericSchemaCreatesV2StoryboardChainInFreshDatabase() throws Exception {
+        String genericSchema = new ClassPathResource("db/schema.sql")
+                .getContentAsString(StandardCharsets.UTF_8);
+        int sectionStart = genericSchema.indexOf("-- V2 storyboard scene-asset snapshot binding");
+        assertThat(sectionStart).as("通用 schema 应包含 V2 storyboard baseline 区块").isGreaterThanOrEqualTo(0);
+        String storyboardSection = genericSchema.substring(sectionStart);
+        assertThat(storyboardSection).doesNotContain("ALTER TABLE storyboard_version_shots");
+
+        String url = "jdbc:h2:mem:generic_schema_" + UUID.randomUUID()
+                + ";MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1";
+        try (Connection connection = DriverManager.getConnection(url, "sa", "")) {
+            ScriptUtils.executeSqlScript(connection, new ByteArrayResource(
+                    storyboardSection.getBytes(StandardCharsets.UTF_8)));
+            for (String table : List.of("storyboards", "storyboard_versions",
+                    "storyboard_version_scenes", "storyboard_version_shots")) {
+                try (var statement = connection.prepareStatement(
+                        "select count(*) from information_schema.tables where lower(table_name) = ?")) {
+                    statement.setString(1, table);
+                    try (var result = statement.executeQuery()) {
+                        assertThat(result.next()).isTrue();
+                        assertThat(result.getInt(1)).as("通用 schema 应创建表 %s", table).isEqualTo(1);
+                    }
+                }
+            }
+            try (var statement = connection.prepareStatement(
+                    "select lower(column_name) from information_schema.columns "
+                            + "where lower(table_name) = 'storyboard_version_shots'")) {
+                try (var result = statement.executeQuery()) {
+                    var columns = new java.util.ArrayList<String>();
+                    while (result.next()) columns.add(result.getString(1));
+                    assertThat(columns).contains("scene_asset_id", "scene_asset_version_id",
+                            "scene_variant_id", "scene_variant_version", "scene_asset_snapshot");
+                }
+            }
+            try (var statement = connection.prepareStatement(
+                    "select distinct lower(index_name) from information_schema.index_columns "
+                            + "where lower(table_name) = 'storyboard_version_shots'")) {
+                try (var result = statement.executeQuery()) {
+                    var indexes = new java.util.ArrayList<String>();
+                    while (result.next()) indexes.add(result.getString(1));
+                    assertThat(indexes).contains("idx_sbshot_version", "idx_sbshot_scene_asset",
+                            "idx_sbshot_scene_asset_version");
+                }
+            }
+        }
     }
 }

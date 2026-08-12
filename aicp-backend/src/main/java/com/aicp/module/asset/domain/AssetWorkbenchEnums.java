@@ -22,8 +22,8 @@ public final class AssetWorkbenchEnums {
     /** Virtual collections shown in the project-tree sidebar. */
     public enum Collection { UNFILED, FAVORITES, PUBLISHED, TRASH }
 
-    /** Workspace-asset lifecycle status — database stores uppercase. */
-    public enum AssetStatus { ACTIVE, ARCHIVED, TRASHED }
+    /** Workspace-asset lifecycle status — DISABLED is reversible; database stores uppercase. */
+    public enum AssetStatus { ACTIVE, DISABLED, ARCHIVED, TRASHED }
 
     /** Batch operation types. */
     public enum BatchOperation { MOVE, SET_TYPE, ADD_TAGS, REMOVE_TAGS, TRASH, RESTORE }

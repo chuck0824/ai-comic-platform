@@ -29,7 +29,7 @@ public class WorkspaceAsset {
     private Long sourceNodeId;
     private Long sourceTaskId;
     private String mediaType;    // IMAGE / VIDEO / AUDIO / DATA / OTHER
-    private String status;       // ACTIVE / ARCHIVED / TRASHED
+    private String status;       // ACTIVE / DISABLED / ARCHIVED / TRASHED
     private LocalDateTime deletedAt;
     private Long deletedBy;
     private LocalDateTime purgeAt;

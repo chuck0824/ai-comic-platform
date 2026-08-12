@@ -32,12 +32,22 @@ public class ContentGenerationJobController {
 
     @GetMapping("/{id}")
     public ApiResponse<GenerationJobView> get(@PathVariable Long id) {
-        return ApiResponse.success(jobService.getJob(id));
+        return ApiResponse.success(jobService.getJob(SecurityUtil.requireCurrentUserId(), id));
     }
 
     @PostMapping("/{id}/cancel")
     public ApiResponse<Void> cancel(@PathVariable Long id) {
-        jobService.cancelJob(id);
+        jobService.cancelJob(SecurityUtil.requireCurrentUserId(), id);
         return ApiResponse.success();
+    }
+
+    @PostMapping("/{id}/accept")
+    public ApiResponse<GenerationJobView> accept(@PathVariable Long id) {
+        return ApiResponse.success(jobService.acceptJob(SecurityUtil.requireCurrentUserId(), id));
+    }
+
+    @PostMapping("/{id}/discard")
+    public ApiResponse<GenerationJobView> discard(@PathVariable Long id) {
+        return ApiResponse.success(jobService.discardJob(SecurityUtil.requireCurrentUserId(), id));
     }
 }

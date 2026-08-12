@@ -60,7 +60,7 @@ request.interceptors.request.use(
         console.warn('[request] 无法从 JWT 中提取用户ID')
       }
     }
-    if (workspaceId) {
+    if (workspaceId && !config.headers['X-Workspace-Id']) {
       config.headers['X-Workspace-Id'] = workspaceId
     }
     return config

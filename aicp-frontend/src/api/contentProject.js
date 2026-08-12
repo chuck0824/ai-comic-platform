@@ -1,4 +1,8 @@
-import request from './request'
+import request from './request.js'
+import { toContentProjectPayload } from '../views/content-project/workbench/downstreamApiPayload.js'
+
+const storyboardVersionBase = (projectId, storyboardId, versionId) =>
+  `/content-projects/${projectId}/storyboards/${storyboardId}/versions/${versionId}`
 
 export const contentProjectApi = {
   list: (params) => request.get('/content-projects', { params }),
@@ -8,6 +12,7 @@ export const contentProjectApi = {
   workflow: (id) => request.get(`/content-projects/${id}/workflow`),
   saveResume: (id, data) => request.put(`/content-projects/${id}/resume-position`, data),
   addParameters: (id, data) => request.post(`/content-projects/${id}/parameter-versions`, data),
+  listParameterVersions: (id) => request.get(`/content-projects/${id}/parameter-versions`),
   setStoryboardIntent: (id, intent, sourceVersionId) => request.put(
     `/content-projects/${id}/storyboard-intent`,
     { intent, source_version_id: sourceVersionId }
@@ -36,6 +41,16 @@ export const contentProjectApi = {
   listStoryboardScenes: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboards/${masterId}/versions/${masterId}/scenes`),
   listStoryboardShots: (projectId, masterId) => request.get(`/content-projects/${projectId}/storyboards/${masterId}/versions/${masterId}/shots`),
   lockStoryboardMaster: (projectId, masterId) => request.post(`/content-projects/${projectId}/storyboards/${masterId}/versions/${masterId}/lock`, { revision: 0 }),
+  listStoryboardVersionScenes: (projectId, storyboardId, versionId) => request.get(`${storyboardVersionBase(projectId, storyboardId, versionId)}/scenes`),
+  listStoryboardVersionShots: (projectId, storyboardId, versionId, params = {}) => request.get(`${storyboardVersionBase(projectId, storyboardId, versionId)}/shots`, { params: toContentProjectPayload(params) }),
+  createStoryboardShot: (projectId, storyboardId, versionId, data) => request.post(`${storyboardVersionBase(projectId, storyboardId, versionId)}/shots`, toContentProjectPayload(data)),
+  splitStoryboardShot: (projectId, storyboardId, versionId, shotId, data) => request.post(`${storyboardVersionBase(projectId, storyboardId, versionId)}/shots/${shotId}/split`, toContentProjectPayload(data)),
+  mergeStoryboardShots: (projectId, storyboardId, versionId, data) => request.post(`${storyboardVersionBase(projectId, storyboardId, versionId)}/shots/merge`, toContentProjectPayload(data)),
+  bindStoryboardShotSceneAsset: (projectId, storyboardId, versionId, shotId, data) => request.put(`${storyboardVersionBase(projectId, storyboardId, versionId)}/shots/${shotId}/scene-asset`, toContentProjectPayload(data)),
+  runStoryboardContinuityCheck: (projectId, storyboardId, versionId) => request.post(`${storyboardVersionBase(projectId, storyboardId, versionId)}/continuity-check`),
+  lockStoryboardVersion: (projectId, storyboardId, versionId, revision) => request.post(`${storyboardVersionBase(projectId, storyboardId, versionId)}/lock`, { revision }),
+  createStoryboardCanvasSnapshot: (projectId, storyboardId, versionId, data) => request.post(`${storyboardVersionBase(projectId, storyboardId, versionId)}/jobs/canvas-snapshot`, toContentProjectPayload(data)),
+  exportStoryboardVersion: (projectId, storyboardId, versionId, data) => request.post(`${storyboardVersionBase(projectId, storyboardId, versionId)}/jobs/export`, toContentProjectPayload(data)),
   // M1: Upload
   uploadFile: (formData) => request.post('/content-projects/upload', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   getUpload: (uploadId) => request.get(`/content-projects/upload/${uploadId}`),
@@ -45,6 +60,10 @@ export const contentProjectApi = {
   // M2: Batch, Hooks, Continuity
   batchGenerate: (projectId, unitIds, jobType = 'content_generate') =>
     request.post(`/content-projects/${projectId}/batch-generate`, { unit_ids: unitIds, job_type: jobType }),
+  getGenerationJob: (jobId) => request.get(`/generation-jobs/${jobId}`),
+  cancelGenerationJob: (jobId) => request.post(`/generation-jobs/${jobId}/cancel`),
+  acceptGenerationJob: (jobId) => request.post(`/generation-jobs/${jobId}/accept`),
+  discardGenerationJob: (jobId) => request.post(`/generation-jobs/${jobId}/discard`),
   generateHooks: (projectId) => request.post(`/content-projects/${projectId}/generate-hooks`),
   hookSummary: (projectId) => request.get(`/content-projects/${projectId}/hook-summary`),
   getUnitHooks: (projectId, unitId) => request.get(`/content-projects/${projectId}/units/${unitId}/hooks`),

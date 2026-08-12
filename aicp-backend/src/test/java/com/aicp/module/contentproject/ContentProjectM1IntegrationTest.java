@@ -106,6 +106,7 @@ class ContentProjectM1IntegrationTest {
 
         when(unitMapper.selectById(1L)).thenReturn(unit1);
         when(unitMapper.selectById(2L)).thenReturn(unit2);
+        when(unitMapper.update(isNull(), any())).thenReturn(1);
         when(versionMapper.selectOne(any())).thenReturn(null);
         doAnswer(inv -> 1).when(versionMapper).insert(any(ContentVersion.class));
 

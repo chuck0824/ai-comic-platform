@@ -17,6 +17,10 @@ public class AiModelController {
     @GetMapping("/api/v1/ai/models")
     public ApiResponse<Map<String, Object>> listModels(@RequestParam(required = false) String node_type,
                                                        @RequestParam(required = false) String agent_type) {
-        return ApiResponse.success(Map.of("models", modelRegistry.listModels(node_type, agent_type)));
+        return ApiResponse.success(Map.of(
+                "models", modelRegistry.listModels(node_type, agent_type),
+                "catalog_provenance", "local_registry",
+                "billing_provenance", "local_estimate",
+                "accounting_authoritative", false));
     }
 }

@@ -6,7 +6,6 @@ import com.aicp.module.contentproject.entity.ContentUnitHook;
 import com.aicp.module.contentproject.entity.ContentVersion;
 import com.aicp.module.contentproject.mapper.ContentUnitHookMapper;
 import com.aicp.module.contentproject.mapper.ContentUnitMapper;
-import com.aicp.module.contentproject.mapper.ContentVersionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,7 +25,7 @@ public class ContentHookService {
 
     private final ContentUnitHookMapper hookMapper;
     private final ContentUnitMapper unitMapper;
-    private final ContentVersionMapper versionMapper;
+    private final ContentVersionSelector versionSelector;
     private final AiRouter aiRouter;
     private final AiResponseParser parser;
 
@@ -59,12 +58,7 @@ public class ContentHookService {
         ContentUnit unit = unitMapper.selectById(unitId);
         if (unit == null) return null;
 
-        ContentVersion version = versionMapper.selectOne(
-                new LambdaQueryWrapper<ContentVersion>()
-                        .eq(ContentVersion::getContentUnitId, unitId)
-                        .gt(ContentVersion::getVersionNo, 0)
-                        .orderByDesc(ContentVersion::getVersionNo)
-                        .last("limit 1"));
+        ContentVersion version = versionSelector.resolvePublic(unit);
         if (version == null || version.getPlainText() == null || version.getPlainText().isBlank()) {
             return null;
         }

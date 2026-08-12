@@ -5,6 +5,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 
 import java.util.List;
+import java.util.Map;
 
 public final class StoryboardRequests {
 
@@ -85,6 +86,13 @@ public final class StoryboardRequests {
             String referenceText,
             String imagePrompt,
             String videoMotionPrompt) {}
+
+    public record BindSceneAssetRequest(
+            @NotNull Long sceneAssetId,
+            @NotNull Long sceneAssetVersionId,
+            @NotBlank String sceneVariantId,
+            @NotNull Integer sceneVariantVersion,
+            Map<String, Object> sceneOverride) {}
 
     public record ReorderScenesRequest(
             @NotNull Integer revision,

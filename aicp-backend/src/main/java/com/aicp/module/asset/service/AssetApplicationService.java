@@ -9,6 +9,10 @@ import com.aicp.module.asset.entity.*;
 import com.aicp.module.asset.mapper.*;
 import com.aicp.module.canvas.entity.CanvasProject;
 import com.aicp.module.canvas.mapper.CanvasProjectMapper;
+import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
+import com.aicp.module.contentproject.entity.ContentProject;
+import com.aicp.module.contentproject.mapper.ContentProjectMapper;
+import com.aicp.module.contentproject.service.ProjectAccessService;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +35,8 @@ public class AssetApplicationService {
     private final AssetVersionMapper versionMapper;
     private final AssetApplicationMapper applicationMapper;
     private final CanvasProjectMapper projectMapper;
+    private final ContentProjectMapper contentProjectMapper;
+    private final ProjectAccessService projectAccessService;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
@@ -54,10 +60,18 @@ public class AssetApplicationService {
                     existing.getChangeSummary() + " (已应用)");
         }
 
-        // Verify project belongs to the same workspace
-        CanvasProject project = projectMapper.selectById(req.projectId());
-        if (project == null || !ctx.workspaceId().equals(project.getWorkspaceId())) {
-            throw new BizException(ErrorCode.ASSET_NOT_FOUND.getCode(), "项目不存在");
+        boolean scriptSceneTarget = "SCRIPT_SCENE".equalsIgnoreCase(req.targetType());
+        CanvasProject project = null;
+        if (scriptSceneTarget) {
+            requireEditableContentProject(ctx, req.projectId());
+            if (!"SCENE".equals(asset.getAssetType())) {
+                throw new BizException(ErrorCode.ASSET_TYPE_UNSUPPORTED);
+            }
+        } else {
+            project = projectMapper.selectById(req.projectId());
+            if (project == null || !ctx.workspaceId().equals(project.getWorkspaceId())) {
+                throw new BizException(ErrorCode.ASSET_NOT_FOUND.getCode(), "项目不存在");
+            }
         }
 
         // Apply based on asset type
@@ -65,7 +79,10 @@ public class AssetApplicationService {
         String changeSummary;
         String assetType = asset.getAssetType();
 
-        switch (assetType) {
+        if (scriptSceneTarget) {
+            previousState = "{}";
+            changeSummary = "已将场景「" + asset.getName() + "」绑定到剧本场景「" + req.targetKey() + "」";
+        } else switch (assetType) {
             case "CHECKPOINT", "LORA", "STYLE_PACK" -> {
                 previousState = project.getStyleConfig();
                 project.setStyleConfig(mergeStyleConfig(project.getStyleConfig(), version));
@@ -89,7 +106,7 @@ public class AssetApplicationService {
             default -> throw new BizException(ErrorCode.ASSET_TYPE_UNSUPPORTED);
         }
 
-        projectMapper.updateById(project);
+        if (!scriptSceneTarget) projectMapper.updateById(project);
 
         // Generate undo token
         String undoToken = generateUndoToken();
@@ -102,6 +119,7 @@ public class AssetApplicationService {
         application.setProjectId(req.projectId());
         application.setTargetType(req.targetType());
         application.setTargetId(req.targetId());
+        application.setTargetKey(req.targetKey());
         application.setChangeSummary(changeSummary);
         application.setPreviousState(previousState);
         application.setUndoTokenHash(undoTokenHash);
@@ -137,25 +155,41 @@ public class AssetApplicationService {
         if (!sha256(req.undoToken()).equals(application.getUndoTokenHash())) {
             throw new BizException(ErrorCode.ASSET_PERMISSION_DENIED.getCode(), "撤销令牌无效");
         }
-        // Verify project row version
-        CanvasProject project = projectMapper.selectById(application.getProjectId());
-        if (project == null || !project.getCanvasVersion().equals(req.projectRowVersion())) {
-            throw new BizException(ErrorCode.ASSET_VERSION_CONFLICT.getCode(), "项目已被修改，无法撤销");
-        }
+        if ("SCRIPT_SCENE".equalsIgnoreCase(application.getTargetType())) {
+            ContentProject project = requireEditableContentProject(ctx, application.getProjectId());
+            if (!Objects.equals(project.getRevision(), req.projectRowVersion())) {
+                throw new BizException(ErrorCode.ASSET_VERSION_CONFLICT.getCode(), "项目已被修改，无法撤销");
+            }
+        } else {
+            CanvasProject project = projectMapper.selectById(application.getProjectId());
+            if (project == null || !Objects.equals(project.getCanvasVersion(), req.projectRowVersion())) {
+                throw new BizException(ErrorCode.ASSET_VERSION_CONFLICT.getCode(), "项目已被修改，无法撤销");
+            }
 
-        // Restore previous state
-        WorkspaceAsset asset = assetMapper.selectById(application.getAssetId());
-        String assetType = asset != null ? asset.getAssetType() : "STYLE_PACK";
-        switch (assetType) {
-            case "CHECKPOINT", "LORA", "STYLE_PACK" ->
-                project.setStyleConfig(application.getPreviousState());
-            default -> project.setAppliedAssetIds(application.getPreviousState());
+            WorkspaceAsset asset = assetMapper.selectById(application.getAssetId());
+            String assetType = asset != null ? asset.getAssetType() : "STYLE_PACK";
+            switch (assetType) {
+                case "CHECKPOINT", "LORA", "STYLE_PACK" ->
+                    project.setStyleConfig(application.getPreviousState());
+                default -> project.setAppliedAssetIds(application.getPreviousState());
+            }
+            projectMapper.updateById(project);
         }
-        projectMapper.updateById(project);
 
         application.setStatus("UNDONE");
         applicationMapper.updateById(application);
         log.info("Application undone: id={}, project={}", applicationId, application.getProjectId());
+    }
+
+    private ContentProject requireEditableContentProject(WorkspaceContext ctx, Long projectId) {
+        ContentProject project = contentProjectMapper.selectById(projectId);
+        String expectedWorkspaceId = "project_" + projectId;
+        if (project == null || Integer.valueOf(1).equals(project.getIsDeleted())
+                || !expectedWorkspaceId.equals(ctx.workspaceId())) {
+            throw new BizException(ErrorCode.ASSET_NOT_FOUND.getCode(), "项目不存在");
+        }
+        projectAccessService.require(projectId, ctx.userId(), Action.EDIT_CONTENT);
+        return project;
     }
 
     private String mergeStyleConfig(String currentConfig, AssetVersion version) {

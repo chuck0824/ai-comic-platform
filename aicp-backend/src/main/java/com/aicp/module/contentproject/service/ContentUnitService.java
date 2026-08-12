@@ -9,7 +9,7 @@ import com.aicp.module.contentproject.entity.ContentVersion;
 import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.aicp.module.contentproject.mapper.ContentVersionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -90,6 +90,13 @@ public class ContentUnitService {
             throw new BizException(ErrorCode.EDIT_CONFLICT);
         }
 
+        int revision = unit.getRevision() == null ? 0 : unit.getRevision();
+        int claimed = unitMapper.update(null, new UpdateWrapper<ContentUnit>()
+                .eq("id", unitId)
+                .eq("revision", revision)
+                .set("revision", revision + 1));
+        if (claimed == 0) throw new BizException(ErrorCode.EDIT_CONFLICT);
+
         String hash = sha256(request.contentJson() != null ? request.contentJson() : "");
 
         // find existing draft version
@@ -119,8 +126,7 @@ public class ContentUnitService {
         }
 
         // increment unit revision
-        unit.setRevision(unit.getRevision() + 1);
-        unitMapper.updateById(unit);
+        unit.setRevision(revision + 1);
 
         return new DraftView(draft.getId(), unitId, unit.getRevision(),
                 draft.getContentJson(), draft.getPlainText(), draft.getCreatedAt());
@@ -200,11 +206,13 @@ public class ContentUnitService {
 
     public List<ContentVersionView> listVersions(Long unitId) {
         return versionMapper.selectList(
-                        new LambdaQueryWrapper<ContentVersion>()
-                                .eq(ContentVersion::getContentUnitId, unitId)
-                                .gt(ContentVersion::getVersionNo, 0)
-                                .orderByDesc(ContentVersion::getVersionNo))
+                new LambdaQueryWrapper<ContentVersion>()
+                        .eq(ContentVersion::getContentUnitId, unitId)
+                        .gt(ContentVersion::getVersionNo, 0)
+                        .notIn(ContentVersion::getStatus, "candidate", "discarded")
+                        .orderByDesc(ContentVersion::getVersionNo))
                 .stream()
+                .filter(ContentVersionSelector::isPublic)
                 .map(v -> new ContentVersionView(v.getId(), v.getVersionNo(),
                         v.getStatus(), v.getContentJson(), v.getPlainText(),
                         v.getSource(), v.getContentHash(), v.getCreatedBy(),
@@ -224,6 +232,9 @@ public class ContentUnitService {
         ContentVersion source = versionMapper.selectById(versionId);
         if (source == null || !source.getContentUnitId().equals(unitId)) {
             throw new BizException(ErrorCode.NOT_FOUND);
+        }
+        if (!ContentVersionSelector.isPublic(source)) {
+            throw new BizException(ErrorCode.PARAM_INVALID, "未采用或已丢弃的生成版本不能恢复");
         }
 
         // create a new draft from the selected version

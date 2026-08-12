@@ -68,6 +68,7 @@ public enum ErrorCode {
     ARTIFACT_LOCKED(43005, "产物已锁定"),
     DEPENDENCY_STALE(43006, "依赖已过期"),
     IDEMPOTENCY_CONFLICT(43007, "幂等键冲突"),
+    GENERATION_BASELINE_REQUIRED(43008, "生成候选缺少可验证基线，请重新生成后再采用"),
 
     // 画布服务 46xxx
     CANVAS_NOT_FOUND(46001, "画布项目不存在"),

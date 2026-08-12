@@ -34,6 +34,9 @@ public class AssetLibraryService {
                                                          String sourceType, int page, int pageSize) {
         LambdaQueryWrapper<WorkspaceAsset> qw = new LambdaQueryWrapper<>();
         qw.eq(WorkspaceAsset::getWorkspaceId, ctx.workspaceId());
+        // Project-owned scene masters are only available through the project API,
+        // where ProjectAccessService verifies membership.
+        qw.isNull(WorkspaceAsset::getContentProjectId);
         qw.ne(WorkspaceAsset::getStatus, "ARCHIVED");
         if (assetType != null) qw.eq(WorkspaceAsset::getAssetType, assetType);
         if (sourceType != null) qw.eq(WorkspaceAsset::getSourceType, sourceType);
@@ -132,7 +135,8 @@ public class AssetLibraryService {
 
     WorkspaceAsset requireWorkspaceAsset(WorkspaceContext ctx, Long assetId) {
         WorkspaceAsset asset = assetMapper.selectById(assetId);
-        if (asset == null || !ctx.workspaceId().equals(asset.getWorkspaceId())) {
+        if (asset == null || asset.getContentProjectId() != null
+                || !ctx.workspaceId().equals(asset.getWorkspaceId())) {
             throw new BizException(ErrorCode.ASSET_NOT_FOUND);
         }
         return asset;
@@ -142,7 +146,7 @@ public class AssetLibraryService {
         return new AssetViews.AssetView(a.getId(), a.getUuid(), a.getWorkspaceId(),
                 a.getWorkspaceType(), a.getCreatorUserId(), a.getAssetType(), a.getName(),
                 a.getDescription(), parseTags(a.getTags()), a.getAccessScope(), a.getSourceType(),
-                a.getSourceListingId(), a.getCurrentVersionId(), a.getStatus(),
+                a.getSourceListingId(), a.getCurrentVersionId(), a.getContentProjectId(), a.getStatus(),
                 a.getRowVersion(), a.getCreatedAt(), a.getUpdatedAt());
     }
 

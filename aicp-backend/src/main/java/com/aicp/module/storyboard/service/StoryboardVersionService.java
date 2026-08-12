@@ -3,6 +3,7 @@ package com.aicp.module.storyboard.service;
 import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
+import com.aicp.module.contentproject.service.ProjectSceneAssetService;
 import com.aicp.module.storyboard.domain.StoryboardEnums.*;
 import com.aicp.module.storyboard.domain.StoryboardStateMachine;
 import com.aicp.module.storyboard.dto.StoryboardViews.*;
@@ -30,6 +31,7 @@ public class StoryboardVersionService {
     private final StoryboardJobMapper jobMapper;
     private final StoryboardAuditLogMapper auditLogMapper;
     private final StoryboardAccessService accessService;
+    private final ProjectSceneAssetService sceneAssetService;
 
     // ===== Version CRUD =====
 
@@ -89,6 +91,7 @@ public class StoryboardVersionService {
                                       int expectedRevision, String idempotencyKey) {
         StoryboardVersion version = accessService.requireVersion(projectId, versionId, userId, Action.PRODUCE);
         requireEditable(version, expectedRevision);
+        sceneAssetService.requireStoryboardLockSnapshots(projectId, versionId);
 
         VersionStatus fromStatus = VersionStatus.valueOf(version.getStatus().toUpperCase());
         StoryboardStateMachine.requireTransition(fromStatus, VersionStatus.LOCKED);
@@ -278,6 +281,11 @@ public class StoryboardVersionService {
             childShot.setReferenceText(ps.getReferenceText());
             childShot.setImagePrompt(ps.getImagePrompt());
             childShot.setVideoMotionPrompt(ps.getVideoMotionPrompt());
+            childShot.setSceneAssetId(ps.getSceneAssetId());
+            childShot.setSceneAssetVersionId(ps.getSceneAssetVersionId());
+            childShot.setSceneVariantId(ps.getSceneVariantId());
+            childShot.setSceneVariantVersion(ps.getSceneVariantVersion());
+            childShot.setSceneAssetSnapshot(ps.getSceneAssetSnapshot());
             childShot.setStatus(ps.getStatus());
             childShot.setSortOrder(ps.getSortOrder());
 

@@ -61,6 +61,7 @@ public class AssetViews {
             String sourceType,
             Long sourceListingId,
             Long currentVersionId,
+            Long contentProjectId,
             String status,
             Integer rowVersion,
             LocalDateTime createdAt,

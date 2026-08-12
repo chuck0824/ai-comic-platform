@@ -68,6 +68,10 @@ public class ContextAssembler {
                     throw new BizException(ErrorCode.PARAM_INVALID,
                             "内容版本 " + entry.getKey() + " 不属于当前项目");
                 }
+                if (!ContentVersionSelector.isPublic(cv)) {
+                    throw new BizException(ErrorCode.PARAM_INVALID,
+                            "内容版本 " + entry.getKey() + " 尚未采用或已丢弃，不能进入生成上下文");
+                }
                 try {
                     Map<String, Object> content = objectMapper.readValue(cv.getContentJson(),
                             new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
@@ -115,7 +119,8 @@ public class ContextAssembler {
 
             // Resolve writing guides
             Long contentUnitId = request.targetId() != null
-                    && "content_unit".equals(request.targetType()) ? request.targetId() : null;
+                    && ("content_unit".equals(request.targetType()) || "unit".equals(request.targetType()))
+                    ? request.targetId() : null;
             List<Long> charIds = extractCharacterIds(strategyMap);
             ResolvedWritingGuideView resolvedGuide = guideResolver.resolve(
                     projectId, bibleVersionId, contentUnitId, charIds);
