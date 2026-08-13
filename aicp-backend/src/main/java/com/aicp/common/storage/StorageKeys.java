@@ -8,7 +8,7 @@ public final class StorageKeys {
     private StorageKeys() {
     }
 
-    static String resolve(String requested) {
+    public static String resolve(String requested) {
         if (requested != null && !requested.isBlank()) {
             return requested.replace('\\', '/').replaceAll("^/+", "");
         }

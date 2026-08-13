@@ -25,6 +25,7 @@ public class SpaForwardController {
             "/market",
             "/asset-market",
             "/enterprise",
+            "/sop",
             "/sop/{path:[^\\.]*}",
             "/profile",
             "/agent",

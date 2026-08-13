@@ -8,17 +8,17 @@ public final class StorageExceptions {
     private StorageExceptions() {
     }
 
-    static BizException wrap(String action, Exception e) {
+    public static BizException wrap(String action, Exception e) {
         return new BizException(ErrorCode.ASSET_DOWNLOAD_SIGN_FAILED,
                 action + " failed: " + e.getMessage());
     }
 
-    static BizException missing(StorageObjectRef ref) {
+    public static BizException missing(StorageObjectRef ref) {
         return new BizException(ErrorCode.ASSET_FILE_MISSING,
                 "object not found: " + ref.provider().code() + "/" + ref.bucket() + "/" + ref.key());
     }
 
-    static BizException notConfigured(StorageProvider provider) {
+    public static BizException notConfigured(StorageProvider provider) {
         return new BizException(ErrorCode.SERVICE_UNAVAILABLE,
                 "storage provider not configured: " + provider.code());
     }
