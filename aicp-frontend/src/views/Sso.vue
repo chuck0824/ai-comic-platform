@@ -17,8 +17,26 @@ const message = ref('正在登录…')
 
 function sanitizeRedirect(raw) {
   if (!raw || typeof raw !== 'string') return '/home'
-  if (!raw.startsWith('/') || raw.startsWith('//')) return '/home'
-  return raw
+  let value = raw.trim()
+  try {
+    value = decodeURIComponent(value)
+  } catch {
+    return '/home'
+  }
+  const lower = value.toLowerCase()
+  if (
+    !value.startsWith('/') ||
+    value.startsWith('//') ||
+    value.startsWith('/\\') ||
+    lower.startsWith('/javascript:') ||
+    lower.startsWith('/data:') ||
+    lower.includes('://') ||
+    lower.includes('\\')
+  ) {
+    return '/home'
+  }
+  // 仅允许站内相对路径
+  return value
 }
 
 onMounted(async () => {
