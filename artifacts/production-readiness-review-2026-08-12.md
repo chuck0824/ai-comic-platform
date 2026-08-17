@@ -1,8 +1,9 @@
 # AICP 平台生产部署就绪度审查报告
 
-> 审查日期：2026-08-12
-> 审查范围：全模块（aicp-backend、aicp-frontend、new-api、基础设施）
-> 目标：评估是否可以部署到云服务器供外部用户使用
+> 审查日期：2026-08-12  
+> 审查范围：全模块（aicp-backend、aicp-frontend、new-api、基础设施）  
+> 目标：评估是否可以部署到云服务器供外部用户使用  
+> 答复文档：[`production-readiness-review-response-2026-08-17.md`](./production-readiness-review-response-2026-08-17.md)（严重度校准、内测/公网门禁与行动项）
 
 ---
 
