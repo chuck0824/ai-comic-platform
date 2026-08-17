@@ -28,7 +28,7 @@
               </template>
             </el-input>
           </el-form-item>
-          <p class="login-hint">开发环境可直接用验证码 <b>123456</b>（无需先获取）</p>
+          <p v-if="isDev" class="login-hint">开发环境可直接用验证码 <b>123456</b>（无需先获取）</p>
           <el-button
             type="primary"
             size="large"
@@ -50,7 +50,7 @@
           <el-form-item label="密码">
             <el-input v-model="password" type="password" placeholder="请输入密码" size="large" show-password autocomplete="current-password" />
           </el-form-item>
-          <p class="login-hint">开发账号：<b>admin</b> / <b>admin123</b></p>
+          <p v-if="isDev" class="login-hint">开发账号：<b>admin</b> / <b>admin123</b></p>
           <el-button
             type="primary"
             size="large"
@@ -111,20 +111,21 @@ import { VideoCamera } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const isDev = import.meta.env.DEV
 
 const loginType = ref('sms')
 const loading = ref(false)
 
-// 短信登录
-const phone = ref('13800000001')
-const smsCode = ref('123456')
+// 短信登录：仅开发预填，生产构建为空
+const phone = ref(isDev ? '13800000001' : '')
+const smsCode = ref(isDev ? '123456' : '')
 const countdown = ref(0)
 const activeTimers = []
 onUnmounted(() => activeTimers.forEach(clearInterval))
 
-// 密码登录（H2 种子：admin / admin123）
-const account = ref('admin')
-const password = ref('admin123')
+// 密码登录（H2 种子：admin / admin123）— 仅开发预填
+const account = ref(isDev ? 'admin' : '')
+const password = ref(isDev ? 'admin123' : '')
 
 // 注册
 const showRegister = ref(false)
@@ -132,9 +133,13 @@ const regLoading = ref(false)
 const regCountdown = ref(0)
 const registerForm = ref({ phone: '', code: '', password: '', nickname: '' })
 
+function isValidPhone(value) {
+  return /^1\d{10}$/.test(String(value || '').trim())
+}
+
 async function sendSms() {
-  if (!phone.value) {
-    ElMessage.warning('请输入手机号')
+  if (!isValidPhone(phone.value)) {
+    ElMessage.warning('请输入有效的11位手机号')
     return
   }
   countdown.value = 60
@@ -166,8 +171,12 @@ async function sendRegCode() {
 
 async function handleSmsLogin() {
   if (loading.value) return
-  if (!phone.value || !smsCode.value) {
-    ElMessage.warning('请输入手机号和验证码')
+  if (!isValidPhone(phone.value) || !smsCode.value) {
+    ElMessage.warning('请输入有效手机号和验证码')
+    return
+  }
+  if (!/^\d{4,8}$/.test(String(smsCode.value).trim())) {
+    ElMessage.warning('请输入有效验证码')
     return
   }
   loading.value = true
