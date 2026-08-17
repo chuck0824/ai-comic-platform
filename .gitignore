@@ -23,6 +23,12 @@ Thumbs.db
 .env.development
 .env.production
 
+# Local databases / secrets (never commit)
+one-api.db
+**/one-api.db
+*.db-journal
+aicp-backend/.env
+
 # Logs
 *.log
 logs/
