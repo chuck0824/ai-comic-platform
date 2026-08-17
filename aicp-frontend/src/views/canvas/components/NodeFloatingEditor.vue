@@ -74,12 +74,18 @@
             </select>
           </label>
 
+          <div v-if="compiledContext.hasUpstream" class="upstream-banner">
+            <strong>已注入上游</strong>
+            <span>{{ compiledContext.sources.join(' · ') || '连线节点' }}</span>
+            <p v-if="compiledContext.compiled_prompt">{{ compiledPreview }}</p>
+          </div>
+
           <label class="field-label">
             <span>{{ node.type === 'audio' ? '文本 / 提示词' : '提示词' }}</span>
             <textarea
               v-model="draft.prompt"
               rows="5"
-              :placeholder="promptPlaceholder"
+              :placeholder="compiledContext.hasUpstream ? '可留空，将使用上游 Prompt / 角色 / 场景' : promptPlaceholder"
               @input="errors.prompt = ''"
               @change="saveDataField('prompt')"
             />
@@ -88,7 +94,11 @@
 
           <label v-if="node.type === 'video' && draft.mode === 'image_to_video'" class="field-label">
             <span>首帧图片</span>
-            <input v-model="draft.first_frame_url" placeholder="连接图片节点或填写图片地址" @change="saveDataField('first_frame_url')" />
+            <input
+              v-model="draft.first_frame_url"
+              :placeholder="compiledContext.first_frame_url || '连接图片节点或填写图片地址'"
+              @change="saveDataField('first_frame_url')"
+            />
           </label>
 
           <div class="form-grid">
@@ -291,8 +301,10 @@ import {
   buildNodeDraft,
   buildTaskParameters,
   readNodeData,
+  slashCommandForNode,
   validateNodeDraft,
 } from '../utils/nodeEditorData'
+import { compileUpstreamContext } from '../utils/compileUpstreamContext'
 import { getNodeMeta } from '../nodeRegistry'
 
 const props = defineProps({
@@ -302,6 +314,8 @@ const props = defineProps({
   shots: { type: Array, default: () => [] },
   projectId: { type: String, required: true },
   localMode: { type: Boolean, default: false },
+  nodes: { type: Array, default: () => [] },
+  connections: { type: Array, default: () => [] },
 })
 
 const emit = defineEmits([
@@ -373,6 +387,12 @@ const toolOptions = computed(() => ({
     { label: '音频变速', description: '调整播放速度', icon: '↯', taskType: 'audio' },
   ],
 }[props.node.type] || []))
+const compiledContext = computed(() =>
+  compileUpstreamContext(props.node, props.nodes, props.connections))
+const compiledPreview = computed(() => {
+  const text = compiledContext.value.compiled_prompt || ''
+  return text.length > 180 ? `${text.slice(0, 180)}…` : text
+})
 const promptPlaceholder = computed(() => ({
   image: '描述画面主体、场景、构图、光线和风格',
   video: '描述画面动态、人物动作和运镜',
@@ -439,7 +459,9 @@ function saveTextContent() {
 }
 
 function submitGenerate() {
-  Object.assign(errors, validateNodeDraft(props.node.type, draft))
+  Object.assign(errors, validateNodeDraft(props.node.type, draft, {
+    compiledPrompt: compiledContext.value.compiled_prompt,
+  }))
   if (Object.keys(errors).some(key => errors[key])) return
   const parameters = buildTaskParameters(draft)
   submitting.value = true
@@ -448,8 +470,9 @@ function submitGenerate() {
     data: { ...readNodeData(props.node), ...parameters },
     action: {
       label: primaryLabel.value,
+      command: slashCommandForNode(props.node.type),
       taskType: props.node.type,
-      modelId: draft.model_id,
+      modelId: compiledContext.value.model_id || draft.model_id,
       parameters,
     },
   })
@@ -564,6 +587,23 @@ function emitAction(name) {
 }
 .field-label textarea { resize: vertical; min-height: 90px; line-height: 1.65; }
 .field-label textarea:focus, .field-label input:focus, .field-label select:focus { border-color: #818cf8; box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+.upstream-banner {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--node-accent, #818cf8) 28%, #33405a);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--node-accent, #818cf8) 10%, #111a2a);
+}
+.upstream-banner strong { color: #c7d2fe; font-size: 11px; }
+.upstream-banner span { color: #9ca8bd; font-size: 11px; }
+.upstream-banner p {
+  margin: 4px 0 0;
+  color: #dbe4f4;
+  font-size: 11px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
 .field-hint { margin: 0; color: #778399; font-size: 11px; line-height: 1.6; }
 .field-error { color: #fca5a5; font-style: normal; font-size: 11px; }
 .floating-footer { display: flex; justify-content: flex-end; gap: 10px; padding: 12px 16px 14px; border-top: 1px solid #2d3548; }

@@ -75,6 +75,33 @@ export function readNodeData(node) {
   }
 }
 
+export function readNodeOutput(node) {
+  if (!node) return {}
+  try {
+    const raw = node.output_data ?? node.outputData ?? {}
+    return typeof raw === 'string' ? JSON.parse(raw || '{}') : { ...raw }
+  } catch {
+    return {}
+  }
+}
+
+function pickPreviewUrl(data) {
+  if (!data || typeof data !== 'object') return ''
+  return data.preview_url || data.image_url || data.url || data.reference_url || ''
+}
+
+export function readNodePreviewUrl(node) {
+  return pickPreviewUrl(readNodeData(node)) || pickPreviewUrl(readNodeOutput(node))
+}
+
+export function slashCommandForNode(type) {
+  return {
+    image: 'generate-image',
+    video: 'generate-video',
+    audio: 'generate-audio',
+  }[type] || 'generate-text'
+}
+
 export function buildNodeDraft(node) {
   const data = readNodeData(node)
   return {
@@ -91,8 +118,10 @@ export function buildTaskParameters(draft) {
   }, {})
 }
 
-export function validateNodeDraft(type, draft) {
-  if (['image', 'video', 'audio'].includes(type) && !String(draft.prompt || '').trim()) {
+export function validateNodeDraft(type, draft, options = {}) {
+  const localPrompt = String(draft.prompt || '').trim()
+  const compiledPrompt = String(options.compiledPrompt || '').trim()
+  if (['image', 'video', 'audio'].includes(type) && !localPrompt && !compiledPrompt) {
     return { prompt: type === 'audio' ? '请输入文本或提示词' : '请输入提示词' }
   }
   if (type === 'prompt' && !String(draft.prompt || '').trim()) {
