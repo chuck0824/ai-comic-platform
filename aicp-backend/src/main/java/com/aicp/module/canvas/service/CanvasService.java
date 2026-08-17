@@ -506,10 +506,14 @@ public class CanvasService {
         if (type == null) return "text";
         // compose/export 直接透传，不做归类
         if ("compose".equals(type) || "export".equals(type)) return type;
-        if (type.contains("image") || type.contains("inpaint") || type.contains("outpaint")) return "image";
-        if (type.contains("video") || type.contains("clip") || type.contains("splice")) return "video";
-        if (type.contains("audio") || type.contains("dub") || type.contains("subtitle")) return "audio";
-        if (type.contains("workflow")) return "agent";
+        String lower = type.toLowerCase(Locale.ROOT);
+        if (lower.contains("image") || lower.contains("inpaint") || lower.contains("outpaint")
+                || type.contains("图片") || type.contains("图像") || type.contains("出图")) return "image";
+        if (lower.contains("video") || lower.contains("clip") || lower.contains("splice")
+                || type.contains("视频")) return "video";
+        if (lower.contains("audio") || lower.contains("dub") || lower.contains("subtitle")
+                || type.contains("音频") || type.contains("配音") || type.contains("语音")) return "audio";
+        if (lower.contains("workflow")) return "agent";
         return "text";
     }
 

@@ -106,9 +106,13 @@ public class AiRouter {
     private Map<String, Object> executeVideo(Map<String, Object> request, Map<String, Object> params, String subType) {
         request.put("prompt", params.getOrDefault("prompt", ""));
         request.put("duration", params.getOrDefault("duration", 5));
+        Object firstFrame = firstPresent(params, "first_frame_url", "first_frame", "keyframe_start");
+        Object lastFrame = firstPresent(params, "last_frame_url", "last_frame", "keyframe_end");
+        if (firstFrame != null) request.put("first_frame", firstFrame);
+        if (lastFrame != null) request.put("last_frame", lastFrame);
         if ("first_last_frame".equals(subType)) {
-            request.put("first_frame", params.get("keyframe_start"));
-            request.put("last_frame", params.get("keyframe_end"));
+            request.put("first_frame", params.get("keyframe_start") != null ? params.get("keyframe_start") : firstFrame);
+            request.put("last_frame", params.get("keyframe_end") != null ? params.get("keyframe_end") : lastFrame);
         }
         if ("omni_reference".equals(subType)) {
             request.put("reference_images", params.get("reference_images"));
@@ -119,8 +123,10 @@ public class AiRouter {
     }
 
     private Map<String, Object> executeAudio(Map<String, Object> request, Map<String, Object> params) {
-        request.put("input", params.getOrDefault("text", ""));
-        request.put("voice", params.getOrDefault("voice_id", "default"));
+        Object text = firstPresent(params, "text", "prompt", "input");
+        Object voice = firstPresent(params, "voice_id", "voice");
+        request.put("input", text != null ? text : "");
+        request.put("voice", voice != null ? voice : "default");
         request.put("speed", params.getOrDefault("speed", 1.0));
         return newApiClient.audioSpeech(request);
     }
@@ -150,6 +156,17 @@ public class AiRouter {
     private static boolean isMediaType(String type) {
         return "image".equals(type) || "video".equals(type) || "audio".equals(type)
                 || "compose".equals(type) || "export".equals(type);
+    }
+
+    private static Object firstPresent(Map<String, Object> params, String... keys) {
+        if (params == null || keys == null) return null;
+        for (String key : keys) {
+            Object value = params.get(key);
+            if (value == null) continue;
+            if (value instanceof String s && s.isBlank()) continue;
+            return value;
+        }
+        return null;
     }
 
     @SuppressWarnings("unchecked")

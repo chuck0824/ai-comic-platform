@@ -66,6 +66,7 @@ public class GenerationExecutor {
             task.setErrorMessage(e.getMessage());
             task.setCompletedAt(LocalDateTime.now());
             taskMapper.updateById(task);
+            writebackNodeFailure(task, e.getMessage());
         }
     }
 
@@ -78,14 +79,13 @@ public class GenerationExecutor {
             output.put("status", task.getStatus());
             output.put("output_assets", task.getOutputAssets());
             try {
-                @SuppressWarnings("unchecked")
-                Map<String, Object> parsed = objectMapper.readValue(
-                        task.getOutputAssets() == null ? "{}" : task.getOutputAssets(), Map.class);
-                if (parsed.get("url") != null) {
-                    output.put("preview_url", parsed.get("url"));
-                }
-                if (parsed.get("preview_url") != null) {
-                    output.put("preview_url", parsed.get("preview_url"));
+                Map<String, Object> parsed = parseJsonMap(task.getOutputAssets());
+                String preview = firstNonBlank(
+                        asString(parsed.get("preview_url")),
+                        asString(parsed.get("url")),
+                        asString(parsed.get("image_url")));
+                if (preview != null) {
+                    output.put("preview_url", preview);
                 }
                 if (parsed.get("storage_provider") != null) {
                     output.put("storage_provider", parsed.get("storage_provider"));
@@ -93,12 +93,57 @@ public class GenerationExecutor {
                     output.put("storage_key", parsed.get("storage_key"));
                 }
                 node.setOutputData(objectMapper.writeValueAsString(output));
+                if (preview != null) {
+                    Map<String, Object> input = parseJsonMap(node.getInputData());
+                    input.put("preview_url", preview);
+                    if ("image".equals(task.getType())) input.put("image_url", preview);
+                    if ("video".equals(task.getType()) || "audio".equals(task.getType())) {
+                        input.put("url", preview);
+                    }
+                    node.setInputData(objectMapper.writeValueAsString(input));
+                }
                 node.setStatus("completed");
                 nodeMapper.updateById(node);
             } catch (Exception e) {
                 log.warn("节点回写失败: nodeId={}", node.getId());
             }
         }
+    }
+
+    private void writebackNodeFailure(GenerationTask task, String errorMessage) {
+        if (task.getNodeId() == null) return;
+        CanvasNode node = nodeMapper.selectById(task.getNodeId());
+        if (node == null) return;
+        try {
+            Map<String, Object> output = parseJsonMap(node.getOutputData());
+            output.put("task_id", task.getUuid());
+            output.put("status", "failed");
+            output.put("error_message", errorMessage);
+            node.setOutputData(objectMapper.writeValueAsString(output));
+            node.setStatus("failed");
+            nodeMapper.updateById(node);
+        } catch (Exception e) {
+            log.warn("节点失败状态回写失败: nodeId={}", node.getId());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> parseJsonMap(String json) {
+        if (json == null || json.isBlank()) return new LinkedHashMap<>();
+        try {
+            Map<String, Object> parsed = objectMapper.readValue(json, Map.class);
+            return parsed == null ? new LinkedHashMap<>() : new LinkedHashMap<>(parsed);
+        } catch (Exception e) {
+            return new LinkedHashMap<>();
+        }
+    }
+
+    private static String firstNonBlank(String... values) {
+        if (values == null) return null;
+        for (String value : values) {
+            if (value != null && !value.isBlank()) return value;
+        }
+        return null;
     }
 
     private void writebackShot(GenerationTask task) {

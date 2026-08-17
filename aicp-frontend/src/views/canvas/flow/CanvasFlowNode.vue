@@ -39,14 +39,16 @@
           <div v-else class="ph"><el-icon><Picture /></el-icon> 图片预览</div>
         </div>
         <div v-else-if="data.nodeType === 'video'" class="preview media">
-          <div class="ph video">▶ 视频预览</div>
+          <video v-if="previewUrl" :src="previewUrl" muted playsinline preload="metadata" />
+          <div v-else class="ph video">▶ 视频预览</div>
         </div>
         <div v-else-if="data.nodeType === 'director'" class="preview director">
           <div class="mini-stage"><span /><span /><span /></div>
           <el-button type="primary" size="small" @click.stop="$emit('open-director', data.raw)">打开专业编辑器 ↗</el-button>
         </div>
         <div v-else-if="data.nodeType === 'audio'" class="preview audio">
-          <div class="bars"><i /><i /><i /><i /><i /></div>
+          <audio v-if="previewUrl" :src="previewUrl" controls preload="none" @click.stop @mousedown.stop />
+          <div v-else class="bars"><i /><i /><i /><i /><i /></div>
         </div>
         <div v-else-if="data.nodeType === 'prompt'" class="preview text">
           {{ promptText || '输入 Prompt，连到下游图片 / 视频 / 音频节点' }}
@@ -80,6 +82,7 @@ import {
   ChatLineRound, User, PictureFilled, Cpu, Download, Box
 } from '@element-plus/icons-vue'
 import { getNodeMeta } from '../nodeRegistry'
+import { readNodeData, readNodePreviewUrl } from '../utils/nodeEditorData'
 
 const props = defineProps({
   id: String,
@@ -112,7 +115,7 @@ const isMetaPreview = computed(() =>
 
 const statusText = computed(() => {
   const map = {
-    ready: '就绪', pending: '排队', running: '生成中', completed: '完成',
+    ready: '就绪', pending: '排队', running: '生成中', processing: '生成中', completed: '完成',
     failed: '失败', draft: '草稿', editing: '编辑中'
   }
   return map[props.data.status] || props.data.status || '就绪'
@@ -122,23 +125,15 @@ const statusClass = computed(() => {
   const s = props.data.status
   if (s === 'completed') return 'ok'
   if (s === 'failed') return 'err'
-  if (s === 'running' || s === 'pending') return 'run'
+  if (s === 'running' || s === 'pending' || s === 'processing') return 'run'
   return 'idle'
 })
 
 function readData(raw) {
-  if (!raw) return {}
-  if (raw.input_data && typeof raw.input_data === 'string') {
-    try { return JSON.parse(raw.input_data) } catch { /* ignore */ }
-  }
-  if (raw.data && typeof raw.data === 'object') return raw.data
-  return {}
+  return readNodeData(raw)
 }
 
-const previewUrl = computed(() => {
-  const d = readData(props.data.raw)
-  return d.preview_url || d.image_url || d.url || d.reference_url || ''
-})
+const previewUrl = computed(() => readNodePreviewUrl(props.data.raw))
 
 const promptText = computed(() => {
   const d = readData(props.data.raw)
@@ -273,11 +268,15 @@ const metaSummary = computed(() => {
   overflow: hidden;
   background: #111827;
 }
-.preview.media img {
+.preview.media img,
+.preview.media video {
   width: 100%;
   height: 140px;
   object-fit: cover;
   display: block;
+}
+.preview.audio audio {
+  width: 100%;
 }
 .ph {
   min-height: 100px;

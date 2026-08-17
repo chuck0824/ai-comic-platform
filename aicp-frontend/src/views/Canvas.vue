@@ -216,6 +216,8 @@
           :shots="getNodeShots(selectedNodeForPanel)"
           :project-id="state.projectId.value"
           :local-mode="canvas.localMode.value"
+          :nodes="canvas.nodes.value"
+          :connections="canvas.connections.value"
           @close="deselectCanvas"
           @update="handleFloatingUpdate"
           @generate="handleFloatingGenerate"
@@ -565,7 +567,9 @@ import ShotTableEditor from './canvas/components/ShotTableEditor.vue'
 import WorkspaceAssetPicker from './canvas/components/WorkspaceAssetPicker.vue'
 import VueFlowCanvasStage from './canvas/flow/VueFlowCanvasStage.vue'
 import { computeFloatingEditorPosition } from './canvas/utils/floatingEditorPosition'
-import { shouldSelectNode } from './canvas/utils/nodeEditorData'
+import { shouldSelectNode, slashCommandForNode } from './canvas/utils/nodeEditorData'
+import { compileUpstreamContext } from './canvas/utils/compileUpstreamContext'
+import { pollGenerationTask, pollTimeoutForType } from './canvas/utils/pollGenerationTask'
 import { getNodeMeta, getNodeSize } from './canvas/nodeRegistry'
 
 const route = useRoute()
@@ -1911,7 +1915,13 @@ function getTextNodeMode(node) {
 
 function getNodePreviewUrl(node) {
   const data = readNodeData(node)
-  return data.preview_url || data.image_url || data.url || ''
+  let output = {}
+  try {
+    const raw = node?.output_data ?? node?.outputData ?? {}
+    output = typeof raw === 'string' ? JSON.parse(raw || '{}') : raw
+  } catch { output = {} }
+  return data.preview_url || data.image_url || data.url
+    || output.preview_url || output.image_url || output.url || ''
 }
 
 function readNodeData(node) {
@@ -2641,13 +2651,18 @@ async function runNodeTask(node, action) {
     await captureDirectorShot(node)
     return
   }
+  const compiled = compileUpstreamContext(node, canvas.nodes.value, canvas.connections.value)
   const params = {
     ...(action.parameters || {}),
     node_id: nodeKey(node),
-    prompt: action.parameters?.prompt ?? getNodePrompt(node),
+    prompt: compiled.prompt || action.parameters?.prompt || getNodePrompt(node),
+    compiled_prompt: compiled.compiled_prompt,
     action: action.label,
-    model_id: action.modelId || action.parameters?.model_id || defaultModelForTask(taskType)
+    model_id: compiled.model_id || action.modelId || action.parameters?.model_id || defaultModelForTask(taskType)
   }
+  if (compiled.first_frame_url && !params.first_frame_url) params.first_frame_url = compiled.first_frame_url
+  if (compiled.reference_url && !params.reference_url) params.reference_url = compiled.reference_url
+  if (taskType === 'audio' && !params.text) params.text = params.prompt
   const confirmed = await confirmTaskCost(taskType, params, action.label)
   if (!confirmed) return
   if (canvas.localMode.value) {
@@ -2665,10 +2680,28 @@ async function runNodeTask(node, action) {
     return
   }
   try {
-    const command = encodeURIComponent(action.command || action.label)
+    const command = encodeURIComponent(action.command || slashCommandForNode(taskType))
     const res = await canvasApi.runSlashCommand(state.projectId.value, command, params)
     await canvas.updateNode(nodeKey(node), { status: 'processing' }).catch(() => {})
-    ElMessage.success(`${action.label}任务已创建: ${res.data?.uuid || res.data?.task_id || ''}`)
+    const taskId = res.data?.uuid || res.data?.task_id
+    ElMessage.success(`${action.label}任务已创建: ${taskId || ''}`)
+    if (!taskId) return
+    try {
+      await pollGenerationTask({
+        taskId,
+        getTask: generationApi.getTask,
+        timeoutMs: pollTimeoutForType(taskType),
+      })
+      await waitForNodeWriteback(nodeKey(node))
+      ElMessage.success(`${action.label}已完成`)
+    } catch (pollError) {
+      await canvas.loadNodes().catch(() => {})
+      const refreshed = findNodeByRef(nodeKey(node))
+      if (refreshed?.status !== 'failed') {
+        await canvas.updateNode(nodeKey(node), { status: 'failed' }).catch(() => {})
+      }
+      ElMessage.error(pollError.message || `${action.label}失败`)
+    }
   } catch (e) {
     ElMessage.error(`${action.label}任务创建失败`)
   }
@@ -2705,6 +2738,15 @@ function taskTypeForNode(type) {
   if (type === 'audio') return 'audio'
   if (type === 'director') return 'director_capture'
   return 'text'
+}
+
+async function waitForNodeWriteback(nodeId, attempts = 8) {
+  for (let i = 0; i < attempts; i++) {
+    await canvas.loadNodes()
+    const refreshed = findNodeByRef(nodeId)
+    if (refreshed && (refreshed.status === 'completed' || refreshed.status === 'failed')) return
+    await new Promise(resolve => setTimeout(resolve, 400))
+  }
 }
 
 function defaultModelForTask(type) {
