@@ -96,8 +96,9 @@ public class AuthService extends ServiceImpl<UserMapper, User> {
     }
 
     // ===== 密码登录 =====
+    /** @deprecated 请使用 {@link #login}；保留仅为兼容旧调用，避免返回 null 导致 NPE */
     public Map<String, Object> loginByPassword(String account, String accountType) {
-        return null; // placeholder for actual login
+        throw new BizException(ErrorCode.LOGIN_FAILED);
     }
 
     public Map<String, Object> login(String account, String accountType, String password) {
