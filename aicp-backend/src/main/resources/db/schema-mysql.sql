@@ -2436,3 +2436,21 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
     UNIQUE KEY uk_idem_user_key (user_id, idempotency_key),
     KEY idx_idem_expires (expires_at)
 );
+
+-- V21 R2-A stage truth vs legacy workflow diff log (record only; never overwrite)
+CREATE TABLE IF NOT EXISTS stage_truth_diff_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    trigger_source VARCHAR(32) NOT NULL,
+    legacy_current_stage VARCHAR(64) NULL,
+    truth_current_stage VARCHAR(64) NULL,
+    legacy_progress INT NULL,
+    truth_progress INT NULL,
+    legacy_snapshot_json MEDIUMTEXT NOT NULL,
+    truth_snapshot_json MEDIUMTEXT NOT NULL,
+    diff_summary_json TEXT NOT NULL,
+    fingerprint CHAR(64) NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_stdl_project_created (project_id, created_at),
+    KEY idx_stdl_project_fingerprint (project_id, fingerprint)
+);

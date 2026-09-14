@@ -3500,3 +3500,21 @@ CREATE TABLE IF NOT EXISTS idempotency_records (
     CONSTRAINT uk_idem_user_key UNIQUE (user_id, idempotency_key)
 );
 CREATE INDEX IF NOT EXISTS idx_idem_expires ON idempotency_records(expires_at);
+
+-- V21 R2-A stage truth vs legacy workflow diff log (record only; never overwrite)
+CREATE TABLE IF NOT EXISTS stage_truth_diff_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    trigger_source VARCHAR(32) NOT NULL,
+    legacy_current_stage VARCHAR(64) NULL,
+    truth_current_stage VARCHAR(64) NULL,
+    legacy_progress INT NULL,
+    truth_progress INT NULL,
+    legacy_snapshot_json CLOB NOT NULL,
+    truth_snapshot_json CLOB NOT NULL,
+    diff_summary_json CLOB NOT NULL,
+    fingerprint CHAR(64) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_stdl_project_created ON stage_truth_diff_log(project_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_stdl_project_fingerprint ON stage_truth_diff_log(project_id, fingerprint);
