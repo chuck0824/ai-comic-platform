@@ -2380,3 +2380,59 @@ VALUES
  '{"max_context_length":32000}',
  '{"default_model":"deepseek-v3","max_tokens":8192,"temperature":{"default":0.4}}',
  1, 'ACTIVE');
+
+-- ============================================================
+-- V18 R2-A Content Stage Checkpoints
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS content_stage_checkpoints (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    stage_key VARCHAR(50) NOT NULL,
+    state VARCHAR(32) NOT NULL DEFAULT 'NOT_STARTED',
+    primary_artifact_type VARCHAR(50) NULL,
+    primary_artifact_id BIGINT NULL,
+    adopted_content_version_id BIGINT NULL,
+    input_snapshot_json TEXT NULL,
+    input_snapshot_hash CHAR(64) NULL,
+    gate_result_json TEXT NULL,
+    stale_reason_json TEXT NULL,
+    revision INT NOT NULL DEFAULT 0,
+    completed_at TIMESTAMP NULL,
+    updated_by BIGINT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_csc_project_stage (project_id, stage_key),
+    KEY idx_csc_project_state (project_id, state)
+);
+
+-- V19 Storyboard handoff snapshots
+CREATE TABLE IF NOT EXISTS storyboard_handoff_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    checkpoint_id BIGINT NULL,
+    reviewed_script_body_version_id BIGINT NOT NULL,
+    continuity_check_result VARCHAR(32) NOT NULL DEFAULT 'UNKNOWN',
+    scene_count INT NOT NULL DEFAULT 0,
+    payload_json TEXT NULL,
+    content_hash CHAR(64) NULL,
+    created_by BIGINT NULL,
+    captured_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    KEY idx_shs_project (project_id),
+    KEY idx_shs_reviewed (reviewed_script_body_version_id)
+);
+
+-- V20 R2-A idempotency records
+CREATE TABLE IF NOT EXISTS idempotency_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    scope VARCHAR(64) NULL,
+    request_hash CHAR(64) NOT NULL,
+    response_payload MEDIUMTEXT NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_idem_user_key (user_id, idempotency_key),
+    KEY idx_idem_expires (expires_at)
+);

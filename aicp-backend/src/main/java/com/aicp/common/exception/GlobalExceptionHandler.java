@@ -16,11 +16,14 @@ import java.util.stream.Collectors;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BizException.class)
-    public ResponseEntity<ApiResponse<Void>> handleBizException(BizException e) {
+    public ResponseEntity<ApiResponse<Object>> handleBizException(BizException e) {
         log.warn("业务异常: code={}, message={}", e.getCode(), e.getMessage());
+        ApiResponse<Object> body = e.getDetails() != null
+                ? ApiResponse.error(e.getCode(), e.getMessage(), e.getDetails())
+                : ApiResponse.error(e.getCode(), e.getMessage());
         return ResponseEntity
                 .status(mapHttpStatus(e.getCode()))
-                .body(ApiResponse.error(e.getCode(), e.getMessage()));
+                .body(body);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
@@ -57,12 +60,13 @@ public class GlobalExceptionHandler {
         if (code >= 50000) {
             return HttpStatus.INTERNAL_SERVER_ERROR;
         }
-        // 43xxx → content project errors
+        // 43xxx → content project errors（R2-A §13）
         if (code >= 43000 && code < 44000) {
             return switch (code) {
-                case 43001 -> HttpStatus.NOT_FOUND;
-                case 43002 -> HttpStatus.FORBIDDEN;
-                default -> HttpStatus.CONFLICT; // 43003–43007 → 409
+                case 43001, 43009 -> HttpStatus.NOT_FOUND;           // PROJECT_NOT_FOUND / STAGE_NOT_FOUND
+                case 43002 -> HttpStatus.FORBIDDEN;                  // PROJECT_ACCESS_DENIED
+                case 43010, 43013 -> HttpStatus.UNPROCESSABLE_ENTITY; // STAGE_GATE_BLOCKED / ARTIFACT_NOT_PERSISTED
+                default -> HttpStatus.CONFLICT; // 43003–43008, 43011–12, 43014–18 → 409
             };
         }
         // 45xxx → storyboard professional editor errors

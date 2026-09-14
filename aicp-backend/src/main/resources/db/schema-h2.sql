@@ -3445,3 +3445,58 @@ SELECT 'bp-director-v1', 'DIRECTOR', '导演 Agent', '节奏、画面、可拍�
  '{"default_model":"deepseek-v3","max_tokens":8192,"temperature":{"default":0.4}}',
  1, 'ACTIVE'
 WHERE NOT EXISTS (SELECT 1 FROM agent_blueprints WHERE uuid = 'bp-director-v1');
+
+-- ============================================================
+-- V18 R2-A Content Stage Checkpoints
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS content_stage_checkpoints (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    stage_key VARCHAR(50) NOT NULL,
+    state VARCHAR(32) NOT NULL DEFAULT 'NOT_STARTED',
+    primary_artifact_type VARCHAR(50) NULL,
+    primary_artifact_id BIGINT NULL,
+    adopted_content_version_id BIGINT NULL,
+    input_snapshot_json CLOB NULL,
+    input_snapshot_hash CHAR(64) NULL,
+    gate_result_json CLOB NULL,
+    stale_reason_json CLOB NULL,
+    revision INT NOT NULL DEFAULT 0,
+    completed_at TIMESTAMP NULL,
+    updated_by BIGINT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_csc_project_stage UNIQUE (project_id, stage_key)
+);
+CREATE INDEX IF NOT EXISTS idx_csc_project_state ON content_stage_checkpoints(project_id, state);
+
+-- V19 Storyboard handoff snapshots
+CREATE TABLE IF NOT EXISTS storyboard_handoff_snapshots (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    project_id BIGINT NOT NULL,
+    checkpoint_id BIGINT NULL,
+    reviewed_script_body_version_id BIGINT NOT NULL,
+    continuity_check_result VARCHAR(32) NOT NULL DEFAULT 'UNKNOWN',
+    scene_count INT NOT NULL DEFAULT 0,
+    payload_json CLOB NULL,
+    content_hash CHAR(64) NULL,
+    created_by BIGINT NULL,
+    captured_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_shs_project ON storyboard_handoff_snapshots(project_id);
+
+-- V20 R2-A idempotency records
+CREATE TABLE IF NOT EXISTS idempotency_records (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    idempotency_key VARCHAR(128) NOT NULL,
+    scope VARCHAR(64) NULL,
+    request_hash CHAR(64) NOT NULL,
+    response_payload CLOB NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_idem_user_key UNIQUE (user_id, idempotency_key)
+);
+CREATE INDEX IF NOT EXISTS idx_idem_expires ON idempotency_records(expires_at);

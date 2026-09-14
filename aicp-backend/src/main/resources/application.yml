@@ -45,6 +45,9 @@ aicp:
       director-v2: true
       model-adapter-v2: true
       quality-delivery-v2: true
+  # R2-A 剧本八阶段事实链；默认关闭，灰度时开启
+  script:
+    stage-truth-enabled: ${AICP_SCRIPT_STAGE_TRUTH_ENABLED:false}
 
 ---
 # ================================================================

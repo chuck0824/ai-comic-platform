@@ -80,7 +80,7 @@ public class WorkEditorService {
         project.setContentStatus("draft");
         project.setProductionStatus("not_started");
         project.setMarketStatus("private");
-        project.setLastStageKey("story_seed");
+        project.setLastStageKey("creation_settings");
         project.setLegacyScriptId(scriptId);
         project.setRevision(0);
         project.setIsDeleted(0);

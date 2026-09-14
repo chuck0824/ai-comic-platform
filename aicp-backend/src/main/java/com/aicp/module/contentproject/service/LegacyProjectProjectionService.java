@@ -80,7 +80,7 @@ public class LegacyProjectProjectionService {
             project.setContentStatus(script.getStatus() != null ? script.getStatus() : "draft");
             project.setProductionStatus("not_started");
             project.setMarketStatus("private");
-            project.setLastStageKey("uploaded".equals(sourceMode) ? "import_review" : "story_seed");
+            project.setLastStageKey("uploaded".equals(sourceMode) ? "novel_upload" : "creation_settings");
             project.setLegacyScriptId(script.getId());
             project.setRevision(0);
             project.setIsDeleted(0);
@@ -336,7 +336,7 @@ public class LegacyProjectProjectionService {
         project.setProductionStatus("not_started");
         project.setMarketStatus("private");
         project.setLifecycleStatus("active");
-        project.setLastStageKey("uploaded".equals(sourceMode) ? "import_review" : "story_seed");
+        project.setLastStageKey("uploaded".equals(sourceMode) ? "novel_upload" : "creation_settings");
         project.setLegacyScriptId(script.getId());
         project.setRevision(0);
         project.setIsDeleted(0);

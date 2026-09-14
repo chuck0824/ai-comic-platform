@@ -28,7 +28,7 @@ class ContentUnitCandidateIsolationServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new ContentUnitService(unitMapper, versionMapper);
+        service = new ContentUnitService(unitMapper, versionMapper, mock(ContentStageOrchestrator.class));
     }
 
     @Test

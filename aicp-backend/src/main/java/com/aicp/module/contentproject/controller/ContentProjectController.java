@@ -6,13 +6,23 @@ import com.aicp.common.util.SecurityUtil;
 import com.aicp.module.canvas.dto.CanvasProjectRequests.CanvasProjectQuery;
 import com.aicp.module.canvas.dto.CanvasProjectViews.CanvasProjectSummary;
 import com.aicp.module.canvas.service.CanvasProjectManagementService;
+import com.aicp.module.contentproject.config.ScriptStageTruthProperties;
 import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
+import com.aicp.module.contentproject.dto.StageCheckpointRequests.StageForkRequest;
+import com.aicp.module.contentproject.dto.StageCheckpointRequests.StageTransitionRequest;
+import com.aicp.module.contentproject.dto.StageCheckpointRequests.StalenessResolutionRequest;
+import com.aicp.module.contentproject.dto.StageCheckpointViews.GateView;
+import com.aicp.module.contentproject.dto.StageCheckpointViews.StageProjection;
 import com.aicp.module.contentproject.service.ContentProjectService;
+import com.aicp.module.contentproject.service.ContentStageCheckpointService;
+import com.aicp.module.contentproject.service.ContentStageOrchestrator;
 import com.aicp.module.contentproject.service.ContentUnitService;
+import com.aicp.module.contentproject.service.IdempotencyService;
 import com.aicp.module.contentproject.service.LegacyProjectProjectionService;
 import com.aicp.module.contentproject.service.ProjectLifecycleService;
 import com.aicp.module.contentproject.service.ProjectWorkflowService;
+import com.aicp.module.contentproject.service.StageTruthDiffLogService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -33,6 +43,11 @@ public class ContentProjectController {
     private final ContentUnitService unitService;
     private final LegacyProjectProjectionService legacy;
     private final CanvasProjectManagementService canvasProjects;
+    private final ContentStageCheckpointService stageCheckpoints;
+    private final ContentStageOrchestrator stageOrchestrator;
+    private final IdempotencyService idempotencyService;
+    private final ScriptStageTruthProperties stageTruthProperties;
+    private final StageTruthDiffLogService stageTruthDiffLog;
 
     @PostMapping
     public ResponseEntity<ApiResponse<ProjectDetail>> create(@Valid @RequestBody CreateProjectRequest request) {
@@ -80,6 +95,10 @@ public class ContentProjectController {
         return ApiResponse.success(projects.update(SecurityUtil.requireCurrentUserId(), id, request));
     }
 
+    /**
+     * @deprecated R2-A：恢复位置请以检查点 last_stage_key / 投影为准；灰度期保留写兼容。
+     */
+    @Deprecated
     @PutMapping("/{id}/resume-position")
     public ApiResponse<ProjectDetail> saveResumePosition(@PathVariable Long id, @RequestBody ResumePositionRequest request) {
         return ApiResponse.success(projects.saveResumePosition(SecurityUtil.requireCurrentUserId(), id, request));
@@ -109,9 +128,83 @@ public class ContentProjectController {
 
     // ===== Workflow =====
 
+    /**
+     * @deprecated R2-A：开关开启后返回检查点投影；客户端应优先用 stage-checkpoints。
+     */
+    @Deprecated
     @GetMapping("/{id}/workflow")
     public ApiResponse<WorkflowView> getWorkflow(@PathVariable Long id) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        if (stageTruthProperties.isStageTruthEnabled()) {
+            WorkflowView truth = stageCheckpoints.workflowFromCheckpoints(userId, id);
+            recordStageTruthDiff(id, "workflow", truth);
+            return ApiResponse.success(truth);
+        }
         return ApiResponse.success(workflow.calculate(id));
+    }
+
+    // ===== R2-A Stage Truth =====
+
+    @GetMapping("/{id}/stage-checkpoints")
+    public ApiResponse<StageProjection> listStageCheckpoints(@PathVariable Long id) {
+        StageProjection projection = stageCheckpoints.listProjection(SecurityUtil.requireCurrentUserId(), id);
+        if (stageTruthProperties.isStageTruthEnabled()) {
+            recordStageTruthDiff(id, "stage_checkpoints", stageCheckpoints.toWorkflowView(projection));
+        }
+        return ApiResponse.success(projection);
+    }
+
+    @GetMapping("/{id}/stages/{stageKey}/gate")
+    public ApiResponse<GateView> previewStageGate(@PathVariable Long id, @PathVariable String stageKey) {
+        return ApiResponse.success(stageCheckpoints.previewGate(SecurityUtil.requireCurrentUserId(), id, stageKey));
+    }
+
+    @PostMapping("/{id}/stage-transitions")
+    public ApiResponse<StageProjection> stageTransition(
+            @PathVariable Long id,
+            @RequestBody StageTransitionRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(idempotencyService.execute(
+                userId,
+                idempotencyKey,
+                "stage-transition:" + id,
+                request,
+                StageProjection.class,
+                () -> stageOrchestrator.transition(userId, id, request)));
+    }
+
+    @PostMapping("/{id}/stages/{stageKey}/fork")
+    public ApiResponse<StageProjection> forkStage(
+            @PathVariable Long id,
+            @PathVariable String stageKey,
+            @RequestBody(required = false) StageForkRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        StageForkRequest body = request == null ? new StageForkRequest(null, null, null) : request;
+        return ApiResponse.success(idempotencyService.execute(
+                userId,
+                idempotencyKey,
+                "stage-fork:" + id + ":" + stageKey,
+                Map.of("stageKey", stageKey, "body", body),
+                StageProjection.class,
+                () -> stageOrchestrator.fork(userId, id, stageKey, body)));
+    }
+
+    @PostMapping("/{id}/stages/{stageKey}/staleness-resolution")
+    public ApiResponse<StageProjection> resolveStaleness(
+            @PathVariable Long id,
+            @PathVariable String stageKey,
+            @RequestBody StalenessResolutionRequest request,
+            @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey) {
+        Long userId = SecurityUtil.requireCurrentUserId();
+        return ApiResponse.success(idempotencyService.execute(
+                userId,
+                idempotencyKey,
+                "staleness:" + id + ":" + stageKey,
+                Map.of("stageKey", stageKey, "body", request),
+                StageProjection.class,
+                () -> stageOrchestrator.resolveStaleness(userId, id, stageKey, request)));
     }
 
     @PostMapping("/{id}/parameter-versions")
@@ -252,5 +345,15 @@ public class ContentProjectController {
     public ApiResponse<Map<String, Long>> resolveLegacy(@PathVariable Long scriptId) {
         var project = legacy.resolveOrCreate(SecurityUtil.requireCurrentUserId(), scriptId);
         return ApiResponse.success(Map.of("project_id", project.getId()));
+    }
+
+    /** 灰度观察：对比旧推断与检查点投影；失败不影响主响应。 */
+    private void recordStageTruthDiff(Long projectId, String triggerSource, WorkflowView truth) {
+        try {
+            WorkflowView legacy = workflow.calculate(projectId);
+            stageTruthDiffLog.recordIfDifferent(projectId, triggerSource, legacy, truth);
+        } catch (Exception ignored) {
+            // 差异日志不得阻断读路径
+        }
     }
 }

@@ -4,6 +4,7 @@ import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
 import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
+import com.aicp.module.contentproject.domain.ScriptStageKey;
 import com.aicp.module.contentproject.entity.ContentUnit;
 import com.aicp.module.contentproject.entity.ContentVersion;
 import com.aicp.module.contentproject.mapper.ContentUnitMapper;
@@ -18,7 +19,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -28,6 +31,7 @@ public class ContentUnitService {
 
     private final ContentUnitMapper unitMapper;
     private final ContentVersionMapper versionMapper;
+    private final ContentStageOrchestrator stageOrchestrator;
 
     // ===== Create Unit =====
 
@@ -87,7 +91,7 @@ public class ContentUnitService {
 
         // optimistic lock
         if (!request.revision().equals(unit.getRevision())) {
-            throw new BizException(ErrorCode.EDIT_CONFLICT);
+            throwEditConflict(unitId, unit, request.revision());
         }
 
         int revision = unit.getRevision() == null ? 0 : unit.getRevision();
@@ -95,7 +99,10 @@ public class ContentUnitService {
                 .eq("id", unitId)
                 .eq("revision", revision)
                 .set("revision", revision + 1));
-        if (claimed == 0) throw new BizException(ErrorCode.EDIT_CONFLICT);
+        if (claimed == 0) {
+            ContentUnit latest = unitMapper.selectById(unitId);
+            throwEditConflict(unitId, latest != null ? latest : unit, request.revision());
+        }
 
         String hash = sha256(request.contentJson() != null ? request.contentJson() : "");
 
@@ -196,6 +203,21 @@ public class ContentUnitService {
         unit.setCurrentVersionId(version.getId());
         unitMapper.updateById(unit);
 
+        if ("approved".equalsIgnoreCase(request.status()) || "locked".equalsIgnoreCase(request.status())) {
+            try {
+                if ("review_revision".equals(unit.getUnitType())) {
+                    stageOrchestrator.adoptAndOptionallyLock(
+                            userId, unit.getProjectId(), ScriptStageKey.REVIEW_REVISION, version.getId(), true);
+                } else if ("script_body".equals(unit.getUnitType())) {
+                    stageOrchestrator.adoptAndOptionallyLock(
+                            userId, unit.getProjectId(), ScriptStageKey.SCRIPT_BODY, version.getId(), false);
+                }
+            } catch (Exception e) {
+                log.warn("锁阶段检查点失败 project={} unitType={}: {}",
+                        unit.getProjectId(), unit.getUnitType(), e.getMessage());
+            }
+        }
+
         return new ContentVersionView(version.getId(), version.getVersionNo(),
                 version.getStatus(), version.getContentJson(), version.getPlainText(),
                 version.getSource(), version.getContentHash(), version.getCreatedBy(),
@@ -266,6 +288,46 @@ public class ContentUnitService {
         unitMapper.updateById(unit);
 
         return getDraft(userId, unitId);
+    }
+
+    /** R2-A §8.2：冲突对照（本地 base_revision vs 服务端当前草稿）。 */
+    public Map<String, Object> getConflictComparison(Long userId, Long unitId, Integer baseRevision) {
+        ContentUnit unit = unitMapper.selectById(unitId);
+        if (unit == null || unit.getIsDeleted() == 1) {
+            throw new BizException(ErrorCode.NOT_FOUND);
+        }
+        ContentVersion draft = findAnyDraft(unitId);
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("content_unit_id", unitId);
+        result.put("base_revision", baseRevision);
+        result.put("server_revision", unit.getRevision());
+        result.put("server_draft_id", draft == null ? null : draft.getId());
+        result.put("server_content_hash", draft == null ? null : draft.getContentHash());
+        result.put("server_content_json", draft == null ? null : draft.getContentJson());
+        result.put("server_plain_text", draft == null ? null : draft.getPlainText());
+        return result;
+    }
+
+    private void throwEditConflict(Long unitId, ContentUnit unit, Integer baseRevision) {
+        ContentVersion draft = findAnyDraft(unitId);
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("code", "EDIT_CONFLICT");
+        details.put("server_revision", unit.getRevision());
+        details.put("server_draft_id", draft == null ? null : draft.getId());
+        details.put("base_revision", baseRevision);
+        details.put("server_content_hash", draft == null ? null : draft.getContentHash());
+        details.put("comparison_url",
+                "/api/v1/content-units/" + unitId + "/conflicts?base_revision="
+                        + (baseRevision == null ? "" : baseRevision));
+        throw new BizException(ErrorCode.EDIT_CONFLICT, ErrorCode.EDIT_CONFLICT.getMessage(), details);
+    }
+
+    private ContentVersion findAnyDraft(Long unitId) {
+        return versionMapper.selectOne(
+                new LambdaQueryWrapper<ContentVersion>()
+                        .eq(ContentVersion::getContentUnitId, unitId)
+                        .eq(ContentVersion::getStatus, "draft")
+                        .last("limit 1"));
     }
 
     private String sha256(String input) {

@@ -2,6 +2,7 @@ package com.aicp.module.contentproject.service;
 
 import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
+import com.aicp.module.contentproject.config.ScriptStageTruthProperties;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.Role;
 import com.aicp.module.contentproject.dto.ContentProjectRequests.*;
 import com.aicp.module.contentproject.dto.ContentProjectViews.*;
@@ -31,6 +32,8 @@ class ContentProjectServiceTest {
     @Mock ProjectParameterVersionMapper parameterVersionMapper;
     @Mock ProjectAccessService accessService;
     @Mock OutboxService outboxService;
+    @Mock ContentStageCheckpointService stageCheckpointService;
+    @Mock ScriptStageTruthProperties stageTruthProperties;
     @Mock ObjectMapper objectMapper;
 
     @InjectMocks
@@ -62,7 +65,8 @@ class ContentProjectServiceTest {
 
         ProjectDetail result = service.create(7L, validRequest);
 
-        assertThat(result.lastStageKey()).isEqualTo("story_seed");
+        assertThat(result.lastStageKey()).isEqualTo("creation_settings");
+        verify(stageCheckpointService).ensureEight(any(ContentProject.class), eq(7L));
         verify(memberMapper).insert(argThat(m -> m.getUserId().equals(7L)
                 && m.getRole().equals(Role.OWNER.name().toLowerCase())));
         verify(outboxService).append(eq("content_project.created"), eq(1L), eq(0), any());

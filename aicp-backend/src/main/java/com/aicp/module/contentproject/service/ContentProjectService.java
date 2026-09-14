@@ -3,6 +3,7 @@ package com.aicp.module.contentproject.service;
 import com.aicp.common.exception.BizException;
 import com.aicp.common.exception.ErrorCode;
 import com.aicp.common.util.SecurityUtil;
+import com.aicp.module.contentproject.config.ScriptStageTruthProperties;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.Action;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.CreationMode;
 import com.aicp.module.contentproject.domain.ContentProjectEnums.Role;
@@ -42,6 +43,8 @@ public class ContentProjectService {
     private final ProjectParameterVersionMapper parameterVersionMapper;
     private final ProjectAccessService accessService;
     private final OutboxService outboxService;
+    private final ContentStageCheckpointService stageCheckpointService;
+    private final ScriptStageTruthProperties stageTruthProperties;
     private final ObjectMapper objectMapper;
 
     // ===== Create =====
@@ -69,7 +72,7 @@ public class ContentProjectService {
         project.setContentStatus("draft");
         project.setProductionStatus("not_started");
         project.setMarketStatus("private");
-        project.setLastStageKey("story_seed");
+        project.setLastStageKey("creation_settings");
         project.setRevision(0);
         project.setIsDeleted(0);
         projectMapper.insert(project);
@@ -79,6 +82,8 @@ public class ContentProjectService {
         owner.setUserId(userId);
         owner.setRole(Role.OWNER.name().toLowerCase());
         memberMapper.insert(owner);
+
+        stageCheckpointService.ensureEight(project, userId);
 
         Map<String, Object> initialParams = new LinkedHashMap<>();
         initialParams.put("start_content", request.startContent());
@@ -139,13 +144,34 @@ public class ContentProjectService {
         query.orderByDesc(ContentProject::getUpdatedAt);
 
         Page<ContentProject> result = projectMapper.selectPage(new Page<>(page, pageSize), query);
+        Map<Long, ContentStageCheckpointService.ListWorkflowSummary> workflowById = Map.of();
+        if (stageTruthProperties.isStageTruthEnabled()) {
+            workflowById = stageCheckpointService.summarizeForProjects(result.getRecords());
+        }
+        Map<Long, ContentStageCheckpointService.ListWorkflowSummary> summaries = workflowById;
         List<ProjectSummary> items = result.getRecords().stream()
-                .map(p -> new ProjectSummary(
-                        p.getId(), p.getUuid(), p.getName(),
-                        p.getCreationMode(), p.getSourceMode(),
-                        p.getContentStatus(), p.getProductionStatus(),
-                        p.getStoryboardIntentStatus(), p.getLastStageKey(),
-                        p.getRevision(), p.getUpdatedAt()))
+                .map(p -> {
+                    ContentStageCheckpointService.ListWorkflowSummary wf = summaries.get(p.getId());
+                    if (wf == null) {
+                        return new ProjectSummary(
+                                p.getId(), p.getUuid(), p.getName(),
+                                p.getCreationMode(), p.getSourceMode(),
+                                p.getContentStatus(), p.getProductionStatus(),
+                                p.getStoryboardIntentStatus(), p.getLastStageKey(),
+                                p.getRevision(), p.getUpdatedAt());
+                    }
+                    return new ProjectSummary(
+                            p.getId(), p.getUuid(), p.getName(),
+                            p.getCreationMode(), p.getSourceMode(),
+                            p.getContentStatus(), p.getProductionStatus(),
+                            p.getStoryboardIntentStatus(), p.getLastStageKey(),
+                            p.getRevision(), p.getUpdatedAt(),
+                            true,
+                            wf.currentStageKey(),
+                            wf.currentStageLabel(),
+                            wf.progress(),
+                            wf.stageState());
+                })
                 .toList();
 
         return new ProjectListResult(items, page, pageSize, result.getTotal());
@@ -439,8 +465,13 @@ public class ContentProjectService {
 
         int pageSize = Math.max(1, Math.min(query.pageSize(), 100));
         Page<ContentProject> result = projectMapper.selectPage(new Page<>(query.page(), pageSize), q);
+        Map<Long, ContentStageCheckpointService.ListWorkflowSummary> workflowById = Map.of();
+        if (stageTruthProperties.isStageTruthEnabled()) {
+            workflowById = stageCheckpointService.summarizeForProjects(result.getRecords());
+        }
+        Map<Long, ContentStageCheckpointService.ListWorkflowSummary> summaries = workflowById;
         List<WarehouseProjectView> items = result.getRecords().stream()
-                .map(p -> toWarehouseView(p, null))
+                .map(p -> toWarehouseView(p, null, summaries.get(p.getId())))
                 .toList();
 
         return new WarehouseProjectListResult(items, query.page(), pageSize, result.getTotal());
@@ -455,15 +486,21 @@ public class ContentProjectService {
         List<Long> projectIds = memberships.stream()
                 .map(ProjectMember::getProjectId).distinct().toList();
 
-        LambdaQueryWrapper<ContentProject> q = new LambdaQueryWrapper<>();
-        q.in(ContentProject::getId, projectIds);
-        q.eq(ContentProject::getIsDeleted, 0);
-        q.eq(ContentProject::getLifecycleStatus, "active");
-        q.orderByDesc(ContentProject::getUpdatedAt);
-        q.last("LIMIT " + Math.min(limit, 20));
+        List<ContentProject> records = projectMapper.selectList(
+                new LambdaQueryWrapper<ContentProject>()
+                        .in(ContentProject::getId, projectIds)
+                        .eq(ContentProject::getIsDeleted, 0)
+                        .eq(ContentProject::getLifecycleStatus, "active")
+                        .orderByDesc(ContentProject::getUpdatedAt)
+                        .last("limit " + Math.max(1, Math.min(limit, 50))));
 
-        return projectMapper.selectList(q).stream()
-                .map(p -> toWarehouseView(p, null))
+        Map<Long, ContentStageCheckpointService.ListWorkflowSummary> workflowById = Map.of();
+        if (stageTruthProperties.isStageTruthEnabled()) {
+            workflowById = stageCheckpointService.summarizeForProjects(records);
+        }
+        Map<Long, ContentStageCheckpointService.ListWorkflowSummary> summaries = workflowById;
+        return records.stream()
+                .map(p -> toWarehouseView(p, null, summaries.get(p.getId())))
                 .toList();
     }
 
@@ -496,27 +533,51 @@ public class ContentProjectService {
 
     public ProjectHubView hub(Long userId, Long projectId) {
         ProjectDetail detail = get(userId, projectId);
-        WarehouseProjectView summary = toWarehouseView(
-                projectMapper.selectById(projectId),
-                null  // productionGate will be wired in later
-        );
-        // versions and relationCounts are placeholders until respective services provide them
+        ContentProject project = projectMapper.selectById(projectId);
+        ContentStageCheckpointService.ListWorkflowSummary wf = null;
+        if (stageTruthProperties.isStageTruthEnabled() && project != null) {
+            wf = stageCheckpointService.summarizeForProjects(List.of(project)).get(projectId);
+        }
+        WarehouseProjectView summary = toWarehouseView(project, null, wf);
         return new ProjectHubView(detail, summary, List.of(), Map.of());
     }
 
     // ===== Warehouse Helpers =====
 
-    private WarehouseProjectView toWarehouseView(ContentProject p,
+    private WarehouseProjectView toWarehouseView(
+            ContentProject p,
             java.util.function.Function<Long, String> productionGate) {
+        return toWarehouseView(p, productionGate, null);
+    }
+
+    private WarehouseProjectView toWarehouseView(
+            ContentProject p,
+            java.util.function.Function<Long, String> productionGate,
+            ContentStageCheckpointService.ListWorkflowSummary workflow) {
         ProjectStatusProjection.StatusView sv = ProjectStatusProjection.from(p, productionGate);
+        if (workflow == null) {
+            return new WarehouseProjectView(
+                    p.getId(), p.getUuid(), p.getName(),
+                    p.getCreationMode(), p.getSourceMode(),
+                    sv.contentStatus(), sv.productionStatus(), sv.commercialStatus(),
+                    sv.lifecycleStatus(), p.getLastStageKey(),
+                    p.getAdoptedVersionId(), sv.primaryAction(), sv.blockedReason(),
+                    false,
+                    p.getRevision(), p.getUpdatedAt());
+        }
         return new WarehouseProjectView(
                 p.getId(), p.getUuid(), p.getName(),
                 p.getCreationMode(), p.getSourceMode(),
                 sv.contentStatus(), sv.productionStatus(), sv.commercialStatus(),
                 sv.lifecycleStatus(), p.getLastStageKey(),
                 p.getAdoptedVersionId(), sv.primaryAction(), sv.blockedReason(),
-                false, // migrationIssue — set by legacy service
-                p.getRevision(), p.getUpdatedAt());
+                false,
+                p.getRevision(), p.getUpdatedAt(),
+                true,
+                workflow.currentStageKey(),
+                workflow.currentStageLabel(),
+                workflow.progress(),
+                workflow.stageState());
     }
 
     public record ProjectListResult(List<ProjectSummary> items, int page, int pageSize, long total) {}

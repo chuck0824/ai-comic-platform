@@ -36,7 +36,7 @@ class ContentProjectM1IntegrationTest {
     @BeforeEach
     void setUp() throws Exception {
         workflowService = new ProjectWorkflowService(projectMapper, parameterVersionMapper, objectMapper);
-        unitService = new ContentUnitService(unitMapper, versionMapper);
+        unitService = new ContentUnitService(unitMapper, versionMapper, mock(ContentStageOrchestrator.class));
     }
 
     @Test

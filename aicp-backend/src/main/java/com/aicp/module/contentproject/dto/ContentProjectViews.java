@@ -45,7 +45,30 @@ public interface ContentProjectViews {
             String storyboardIntentStatus,
             String lastStageKey,
             Integer revision,
-            LocalDateTime updatedAt) {}
+            LocalDateTime updatedAt,
+            Boolean stageTruthEnabled,
+            String workflowCurrentStageKey,
+            String workflowCurrentStageLabel,
+            Integer workflowProgress,
+            String workflowStageState) {
+
+        public ProjectSummary(
+                Long id,
+                String uuid,
+                String name,
+                String creationMode,
+                String sourceMode,
+                String contentStatus,
+                String productionStatus,
+                String storyboardIntentStatus,
+                String lastStageKey,
+                Integer revision,
+                LocalDateTime updatedAt) {
+            this(id, uuid, name, creationMode, sourceMode, contentStatus, productionStatus,
+                    storyboardIntentStatus, lastStageKey, revision, updatedAt,
+                    null, null, null, null, null);
+        }
+    }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record MemberView(
@@ -165,7 +188,36 @@ public interface ContentProjectViews {
             String blockedReason,
             boolean migrationIssue,
             Integer revision,
-            LocalDateTime updatedAt) {}
+            LocalDateTime updatedAt,
+            Boolean stageTruthEnabled,
+            String workflowCurrentStageKey,
+            String workflowCurrentStageLabel,
+            Integer workflowProgress,
+            String workflowStageState) {
+
+        public WarehouseProjectView(
+                Long id,
+                String uuid,
+                String name,
+                String creationMode,
+                String sourceMode,
+                String contentStatus,
+                String productionStatus,
+                String commercialStatus,
+                String lifecycleStatus,
+                String lastStageKey,
+                Long adoptedVersionId,
+                String primaryAction,
+                String blockedReason,
+                boolean migrationIssue,
+                Integer revision,
+                LocalDateTime updatedAt) {
+            this(id, uuid, name, creationMode, sourceMode, contentStatus, productionStatus,
+                    commercialStatus, lifecycleStatus, lastStageKey, adoptedVersionId, primaryAction,
+                    blockedReason, migrationIssue, revision, updatedAt,
+                    null, null, null, null, null);
+        }
+    }
 
     @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy.class)
     record ProjectTodoView(

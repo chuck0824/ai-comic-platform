@@ -69,6 +69,16 @@ public enum ErrorCode {
     DEPENDENCY_STALE(43006, "依赖已过期"),
     IDEMPOTENCY_CONFLICT(43007, "幂等键冲突"),
     GENERATION_BASELINE_REQUIRED(43008, "生成候选缺少可验证基线，请重新生成后再采用"),
+    STAGE_NOT_FOUND(43009, "项目阶段不存在"),
+    STAGE_GATE_BLOCKED(43010, "门禁存在阻断项"),
+    STAGE_TRANSITION_INVALID(43011, "来源、目标或状态不允许流转"),
+    STAGE_REVISION_CONFLICT(43012, "检查点 revision 已变化"),
+    ARTIFACT_NOT_PERSISTED(43013, "阶段成果尚未可靠保存"),
+    ADOPTED_VERSION_IMMUTABLE(43014, "尝试覆盖采用或锁定版本"),
+    AI_CANDIDATE_STALE(43015, "AI 候选的基准内容已经变化"),
+    IDEMPOTENCY_PAYLOAD_CONFLICT(43016, "相同幂等键对应不同请求"),
+    STALENESS_REASON_MISMATCH(43017, "尝试清除已被其他变化叠加的过期原因"),
+    SCRIPT_STAGE_TRUTH_DISABLED(43018, "剧本阶段事实链未启用"),
 
     // 画布服务 46xxx
     CANVAS_NOT_FOUND(46001, "画布项目不存在"),

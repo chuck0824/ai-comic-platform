@@ -94,7 +94,7 @@ class ContentProjectM2ScaleTest {
     void recoveryDraftNotLost() {
         ContentUnitMapper uMapper = mock(ContentUnitMapper.class);
         ContentVersionMapper vMapper = mock(ContentVersionMapper.class);
-        ContentUnitService uService = new ContentUnitService(uMapper, vMapper);
+        ContentUnitService uService = new ContentUnitService(uMapper, vMapper, mock(ContentStageOrchestrator.class));
 
         ContentUnit unit = buildUnit(99L, 1);
         when(uMapper.selectById(99L)).thenReturn(unit);
