@@ -135,7 +135,10 @@ function openDetail(project) {
 }
 
 function continueCreation(project) {
-  router.push(workspaceTarget({ id: project.id, stage: project.last_stage_key }))
+  router.push(workspaceTarget({
+    id: project.id,
+    stage: project.workflow_current_stage_key || project.last_stage_key
+  }))
 }
 
 function modeLabel(mode) {

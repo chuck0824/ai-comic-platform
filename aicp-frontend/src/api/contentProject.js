@@ -11,6 +11,15 @@ export const contentProjectApi = {
   update: (id, data) => request.patch(`/content-projects/${id}`, data),
   workflow: (id) => request.get(`/content-projects/${id}/workflow`),
   saveResume: (id, data) => request.put(`/content-projects/${id}/resume-position`, data),
+  // R2-A stage truth
+  listStageCheckpoints: (id) => request.get(`/content-projects/${id}/stage-checkpoints`),
+  previewStageGate: (id, stageKey) => request.get(`/content-projects/${id}/stages/${stageKey}/gate`),
+  stageTransition: (id, data, headers = {}) =>
+    request.post(`/content-projects/${id}/stage-transitions`, data, { headers }),
+  forkStage: (id, stageKey, data = {}, headers = {}) =>
+    request.post(`/content-projects/${id}/stages/${stageKey}/fork`, data, { headers }),
+  resolveStaleness: (id, stageKey, data, headers = {}) =>
+    request.post(`/content-projects/${id}/stages/${stageKey}/staleness-resolution`, data, { headers }),
   addParameters: (id, data) => request.post(`/content-projects/${id}/parameter-versions`, data),
   listParameterVersions: (id) => request.get(`/content-projects/${id}/parameter-versions`),
   setStoryboardIntent: (id, intent, sourceVersionId) => request.put(
@@ -28,9 +37,14 @@ export const contentProjectApi = {
   // Content unit operations
   getDraft: (unitId) => request.get(`/content-units/${unitId}/draft`),
   saveDraft: (unitId, data) => request.put(`/content-units/${unitId}/draft`, data),
+  getConflicts: (unitId, params = {}) => request.get(`/content-units/${unitId}/conflicts`, { params }),
   listVersions: (unitId) => request.get(`/content-units/${unitId}/versions`),
   createVersion: (unitId, data) => request.post(`/content-units/${unitId}/versions`, data),
   restoreVersion: (unitId, versionId) => request.post(`/content-units/${unitId}/versions/${versionId}/restore`),
+  createLocalRewrite: (unitId, data, headers = {}) =>
+    request.post(`/content-units/${unitId}/local-rewrite`, data, { headers }),
+  adoptLocalRewrite: (unitId, data, headers = {}) =>
+    request.post(`/content-units/${unitId}/local-rewrite/adopt`, data, { headers }),
   // M1: Three-Agent Review
   reviewUnit: (unitId) => request.post(`/content-units/${unitId}/review`),
   // M1: Storyboard — now delegates to V2 professional editor APIs

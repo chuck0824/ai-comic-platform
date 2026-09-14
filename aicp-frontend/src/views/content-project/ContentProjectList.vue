@@ -38,8 +38,12 @@
         </div>
         <div class="flex items-center justify-between mt-sm">
           <div class="flex items-center gap-sm">
-            <span v-if="p.last_stage_key" class="text-sm text-muted">
-              当前阶段：{{ stageLabel(p.last_stage_key) }}
+            <span v-if="listWorkflowLabel(p)" class="text-sm text-muted">
+              当前阶段：{{ listWorkflowLabel(p) }}
+              <template v-if="listWorkflowProgress(p) != null"> · {{ listWorkflowProgress(p) }}%</template>
+            </span>
+            <span v-if="p.workflow_stage_state && p.stage_truth_enabled" class="badge" :class="stateBadgeClass(p.workflow_stage_state)">
+              {{ stateLabel(p.workflow_stage_state) }}
             </span>
             <span v-if="p.storyboard_intent_status === 'requested'" class="badge badge-accent">分镜制作中</span>
           </div>
@@ -63,7 +67,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { Plus, Loading } from '@element-plus/icons-vue'
 import { contentProjectApi } from '@/api/contentProject'
-import { stageLabel } from './utils/workflowPath'
+import { listWorkflowLabel, listWorkflowProgress } from './utils/workflowPath'
 
 const router = useRouter()
 const projects = ref([])
@@ -80,7 +84,7 @@ async function fetchProjects() {
   error.value = ''
   try {
     const res = await contentProjectApi.list({ page: 1, page_size: 20 })
-    const data = res.data
+    const data = res.data?.data || res.data
     projects.value = data.items || data.records || []
     hasMore.value = data.pagination?.has_more || false
   } catch (e) {
@@ -95,7 +99,7 @@ async function loadMore() {
   try {
     page.value++
     const res = await contentProjectApi.list({ page: page.value, page_size: 20 })
-    const data = res.data
+    const data = res.data?.data || res.data
     const items = data.items || data.records || []
     projects.value.push(...items)
     hasMore.value = data.pagination?.has_more || false
@@ -107,7 +111,10 @@ async function loadMore() {
 }
 
 function openProject(p) {
-  router.push(`/script-gen/${p.id}/workspace`)
+  const stage = p.workflow_current_stage_key || p.last_stage_key
+  router.push(stage
+    ? `/script-gen/${p.id}/workspace?stage=${encodeURIComponent(stage)}`
+    : `/script-gen/${p.id}/workspace`)
 }
 
 function formatTime(t) {
@@ -126,6 +133,29 @@ function modeLabel(m) {
 
 function statusLabel(s) {
   return { draft: '草稿', reviewing: '审核中', approved: '已通过', needs_revision: '需修改', locked: '已锁定' }[s] || s
+}
+
+function stateLabel(s) {
+  return {
+    IN_PROGRESS: '进行中',
+    COMPLETED: '已完成',
+    LOCKED: '已锁定',
+    POSSIBLY_STALE: '待确认',
+    REGEN_REQUIRED: '需重生',
+    BLOCKED: '已阻断',
+    NOT_STARTED: '未开始'
+  }[s] || s
+}
+
+function stateBadgeClass(s) {
+  return {
+    IN_PROGRESS: 'badge-primary',
+    COMPLETED: 'badge-success',
+    LOCKED: 'badge-success',
+    POSSIBLY_STALE: 'badge-warning',
+    REGEN_REQUIRED: 'badge-danger',
+    BLOCKED: 'badge-danger'
+  }[s] || 'badge-info'
 }
 
 function modeBadgeClass(m) {

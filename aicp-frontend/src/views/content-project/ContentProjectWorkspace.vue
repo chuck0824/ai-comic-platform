@@ -35,6 +35,13 @@
 
       <template v-else>
         <el-alert v-if="routeNotice" type="warning" :title="routeNotice" show-icon :closable="false" class="route-notice" />
+        <StageStalenessBanner
+          v-if="stageTruthEnabled"
+          :server-state="activeStageServerState"
+          :stale-reasons="activeStageStaleReasons"
+          :loading="stalenessLoading"
+          @resolve="handleStalenessResolve"
+        />
 
         <section v-if="sceneLibraryVisible" class="shared-panel card">
           <SceneAssetLibrary :scene-assets="sceneAssets" @guidance="showGuidance" @open-result="openSceneResult" />
@@ -93,6 +100,7 @@
             :scene-asset-state="sceneAssets"
             :scene-assets-degraded="sceneAssets.state.value === 'readonly'"
             :block-action-adapter="submitScriptBlockAction"
+            :local-rewrite-adopt-adapter="adoptScriptLocalRewrite"
             :bind-scene-asset-adapter="bindScriptSceneAsset"
             :create-scene-asset-adapter="createAndReturnSceneAsset"
             :space-change-adapter="persistScriptBodyAction"
@@ -135,7 +143,7 @@
             :generation-input="generationInput"
             @guidance="showGuidance"
             @result="handleStageResult"
-            @archived="completeFinalStage"
+            @archived="handleStoryboardArchived"
             @canvas-created="handoffCanvas"
             @open-scene-asset="sceneLibraryVisible = true"
             @open-scene-action-result="openSceneResult"
@@ -144,7 +152,7 @@
       </template>
     </main>
 
-    <ActionGuidanceDialog :visible="Boolean(guidance)" :guidance="guidance" @close="guidance = null" @target="guidance = null" />
+    <ActionGuidanceDialog :visible="Boolean(guidance)" :guidance="guidance" @close="guidance = null" @target="handleGuidanceTarget" />
     <GenerationProgressDialog
       :visible="Boolean(workbench.generationTaskRecord.value)"
       :task="workbench.generationTaskRecord.value"
@@ -162,18 +170,40 @@
       <el-progress :percentage="workbench.state.transition?.percentage || 0" />
       <p>{{ workbench.state.transition?.message || '正在保存阶段产物…' }}</p>
     </el-dialog>
+    <el-dialog
+      v-model="conflictComparisonVisible"
+      title="草稿冲突对照"
+      width="640px"
+      @close="conflictComparison = null"
+    >
+      <template v-if="conflictComparison">
+        <p class="conflict-meta">
+          本地 base={{ conflictComparison.base_revision ?? conflictComparison.baseRevision ?? '—' }}
+          · 服务端 revision={{ conflictComparison.server_revision ?? conflictComparison.serverRevision ?? '—' }}
+          · hash={{ conflictComparison.server_content_hash ?? conflictComparison.serverContentHash ?? '—' }}
+        </p>
+        <pre class="conflict-preview">{{ conflictComparison.server_plain_text || conflictComparison.serverPlainText || conflictComparison.server_content_json || conflictComparison.serverContentJson || '（远端草稿为空）' }}</pre>
+      </template>
+      <template #footer>
+        <el-button @click="conflictComparisonVisible = false">关闭</el-button>
+        <el-button type="primary" @click="loadRemoteDraftForConflict(); conflictComparisonVisible = false">
+          加载远端草稿
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { Loading } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { contentProjectApi } from '@/api/contentProject'
 import { sceneAssetApi } from '@/api/sceneAsset'
 import { storyboardV2Api } from '@/api/storyboardV2'
 import WorkflowRail from './components/WorkflowRail.vue'
+import StageStalenessBanner from './components/StageStalenessBanner.vue'
 import SceneAssetLibrary from './components/SceneAssetLibrary.vue'
 import ActionGuidanceDialog from './components/ActionGuidanceDialog.vue'
 import GenerationProgressDialog from './components/GenerationProgressDialog.vue'
@@ -191,10 +221,44 @@ import { useScriptWorkbench } from './workbench/useScriptWorkbench.js'
 import { useSceneAssets } from './workbench/useSceneAssets.js'
 import { createWorkspaceAdapters, normalizeBatchGeneration } from './workbench/workspaceAdapters.js'
 import { nextStageKey, resolveWorkspaceStage, restoreWorkbenchStage, shouldAdvanceResume } from './workbench/workspaceRouting.js'
+import {
+  applyStageTruthProjection,
+  buildStageTransitionPayload,
+  checkpointRevisionOf,
+  resolveWorkspaceStageFromTruth
+} from './workbench/stageTruthAdapter.js'
+import {
+  extractGateDetailsFromError,
+  formatGateIssues,
+  hasDurationVarianceUnconfirmed,
+  isStageGateBlockedError,
+  issueCodes,
+  normalizeGateView
+} from './workbench/stageGateHelper.js'
+import { buildForkStageRequest, shouldForkBeforeEdit } from './workbench/stageForkHelper.js'
+import { createDraftSaveQueue } from './workbench/draftSaveQueue.js'
+import {
+  conflictActionOptions,
+  extractEditConflict,
+  formatEditConflictMessage
+} from './workbench/editConflictHelper.js'
+import { scriptStageFeatures } from '@/config/scriptStageFeatures.js'
 import { validateAnalysisSection, validateCreationSettings } from './workbench/upstreamStageModel.js'
 import { createProjectLoadGuard, resetProjectWorkspaceData } from './workbench/workspaceLoadState.js'
 import { trackGenerationJob } from './workbench/generationJobTracker.js'
 import { createGenerationDecisionGuard, loadAcceptedGeneration, loadUnitWorkspaceContent, persistGenerationDecision, runGuardedGenerationDecision } from './workbench/generationResultPersistence.js'
+import {
+  applyBlockReplacement,
+  buildAdoptPatchesRequest,
+  buildLocalRewriteRequest,
+  findBlockRange,
+  flattenScriptBodyPlainText,
+  isCandidateStale,
+  normalizeLocalRewriteCandidate,
+  operationFromBlockAction,
+  selectPartialPatches,
+  sha256Hex
+} from './workbench/localRewriteHelper.js'
 
 const route = useRoute()
 const router = useRouter()
@@ -216,6 +280,12 @@ let autosaveTimer = null
 const projectLoadGuard = createProjectLoadGuard()
 const decisionGuard = createGenerationDecisionGuard()
 const activeGenerationJobs = new Map()
+const stageTruthEnabled = scriptStageFeatures().stageTruthEnabled
+const stageTruthProjection = ref(null)
+const stalenessLoading = ref(false)
+const draftSaveQueue = createDraftSaveQueue()
+const conflictComparison = ref(null)
+const conflictComparisonVisible = ref(false)
 
 const defaultEpisode = () => ({ id: 'EP-001', title: '第 1 集', beats: [], scenes: [] })
 const stageData = reactive({
@@ -243,6 +313,15 @@ const adapters = createWorkspaceAdapters({
 
 const workbench = useScriptWorkbench({ persistStage, persistFinalStage })
 const activeStageLabel = computed(() => STAGES.find(stage => stage.key === workbench.activeStage.value)?.label || workbench.activeStage.value)
+const activeStageServerState = computed(() => {
+  const stage = workbench.state.stages.find(item => item.key === workbench.activeStage.value)
+  return stage?.serverState || ''
+})
+const activeStageStaleReasons = computed(() => {
+  const key = workbench.activeStage.value
+  const row = workbench.state.stageTruth?.stagesByKey?.[key]
+  return row?.stale_reasons || row?.staleReasons || []
+})
 const modelContext = computed(() => {
   const settings = stageData.creationSettings
   if (!settings.model) return '未选择模型'
@@ -251,25 +330,52 @@ const modelContext = computed(() => {
 const generationInput = computed(() => ({ model: stageData.creationSettings.model, estimatedPoints: stageData.creationSettings.estimatedPoints }))
 const transitionVisible = computed(() => workbench.state.transition?.status === 'persisting')
 
-onMounted(loadProject)
+onMounted(() => {
+  loadProject()
+  window.addEventListener('beforeunload', onBeforeUnload)
+})
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', onBeforeUnload)
   if (autosaveTimer) clearTimeout(autosaveTimer)
   activeGenerationJobs.forEach(record => record.controller.abort())
   activeGenerationJobs.clear()
 })
+onBeforeRouteLeave((_to, _from, next) => {
+  if (!draftSaveQueue.shouldBlockLeave()) return next()
+  ElMessageBox.confirm('有未保存的修改或保存失败，确定离开吗？', '未保存修改', {
+    type: 'warning',
+    confirmButtonText: '离开',
+    cancelButtonText: '留下'
+  }).then(() => next()).catch(() => next(false))
+})
 watch(() => route.params.projectId, (next, previous) => { if (next !== previous) loadProject() })
 watch(() => route.query.stage, stage => {
   if (!project.value || Number(project.value.id) !== projectId.value) return
-  const resolved = resolveWorkspaceStage({ persistedStage: project.value.last_stage_key, queryStage: stage })
+  let resolved
+  if (stageTruthEnabled && workbench.state.stageTruth?.enabled) {
+    resolved = resolveWorkspaceStageFromTruth({
+      enteredStages: workbench.state.enteredStages,
+      lastStageKey: workbench.state.stageTruth.lastStageKey || project.value.last_stage_key,
+      queryStage: stage
+    })
+  } else {
+    resolved = resolveWorkspaceStage({ persistedStage: project.value.last_stage_key, queryStage: stage })
+  }
   if (resolved !== stage) replaceStageQuery(resolved)
   workbench.navigate(resolved)
 })
 watch(stageData, () => {
   if (loading.value) return
+  draftSaveQueue.markDirty()
   if (autosaveTimer) clearTimeout(autosaveTimer)
   autosaveTimer = setTimeout(saveCurrentDraft, 2000)
 }, { deep: true })
 
+function onBeforeUnload(event) {
+  if (!draftSaveQueue.shouldBlockLeave()) return
+  event.preventDefault()
+  event.returnValue = ''
+}
 function responseData(response) { return response?.data?.data ?? response?.data ?? response ?? {} }
 function clone(value) { return JSON.parse(JSON.stringify(value ?? {})) }
 function stageDataKey(stage) {
@@ -285,9 +391,42 @@ function showGuidance(value) {
     title: value?.title || '操作未完成',
     message: value?.message || '请根据提示补全条件后重试。',
     targetAction: value?.targetAction,
-    code: value?.code
+    code: value?.code,
+    conflict: value?.conflict,
+    items: value?.items || value?.blockers || null,
+    actions: value?.actions || null
   }
   return value
+}
+
+function handleGuidanceTarget(action) {
+  const current = guidance.value
+  const code = action || current?.targetAction
+  guidance.value = null
+  if (code === 'load_remote_draft') return loadRemoteDraftForConflict()
+  if (code === 'keep_local_retry' || code === 'retry_stage_save') return saveCurrentDraft()
+  if (code === 'open_comparison') return openConflictComparison(current?.conflict)
+}
+
+async function openConflictComparison(conflict) {
+  const stage = workbench.activeStage.value
+  const unit = units.value.find(item => item.unit_type === stage)
+  if (!unit) {
+    return showGuidance({ code: 'UNIT_REQUIRED', title: '内容单元不存在', message: '请刷新后重试。' })
+  }
+  try {
+    const data = responseData(await contentProjectApi.getConflicts(unit.id, {
+      base_revision: conflict?.base_revision ?? conflict?.baseRevision
+    }))
+    conflictComparison.value = data
+    conflictComparisonVisible.value = true
+  } catch (caught) {
+    showGuidance({
+      code: 'CONFLICT_COMPARE_FAILED',
+      title: '无法加载冲突对照',
+      message: caught?.response?.data?.message || caught?.message || '请稍后重试'
+    })
+  }
 }
 
 async function loadProject() {
@@ -309,10 +448,23 @@ async function loadProject() {
     await loadAdaptationHooks(loadToken, requestedProjectId)
     await Promise.all([loadStoryboard(loadToken, requestedProjectId), sceneAssets.load()])
     if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
+
     const requestedStage = String(route.query.stage || '')
-    const resolvedStage = resolveWorkspaceStage({ persistedStage: project.value.last_stage_key, queryStage: requestedStage })
+    let resolvedStage
+    if (stageTruthEnabled) {
+      await loadStageTruthProjection(loadToken, requestedProjectId)
+      if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
+      resolvedStage = resolveWorkspaceStageFromTruth({
+        enteredStages: workbench.state.enteredStages,
+        lastStageKey: workbench.state.stageTruth?.lastStageKey || project.value.last_stage_key,
+        queryStage: requestedStage
+      })
+      applyStageTruthProjection(workbench.state, stageTruthProjection.value, resolvedStage)
+    } else {
+      resolvedStage = resolveWorkspaceStage({ persistedStage: project.value.last_stage_key, queryStage: requestedStage })
+      restoreWorkbenchStage(workbench.state, resolvedStage, project.value.last_stage_key)
+    }
     if (requestedStage && requestedStage !== resolvedStage) routeNotice.value = '已拦截未完成阶段跳转，并恢复到最近保存位置。'
-    restoreWorkbenchStage(workbench.state, resolvedStage, project.value.last_stage_key)
     replaceStageQuery(resolvedStage)
   } catch (caught) {
     if (projectLoadGuard.accept(loadToken, requestedProjectId)) {
@@ -321,6 +473,14 @@ async function loadProject() {
   } finally {
     if (projectLoadGuard.accept(loadToken, requestedProjectId)) loading.value = false
   }
+}
+
+async function loadStageTruthProjection(loadToken, requestedProjectId) {
+  const payload = responseData(await contentProjectApi.listStageCheckpoints(requestedProjectId))
+  if (!projectLoadGuard.accept(loadToken, requestedProjectId)) return
+  stageTruthProjection.value = payload
+  // 服务端开关关闭时仍可预览投影；前端 flag 决定是否用于导航/流转
+  applyStageTruthProjection(workbench.state, payload, payload.last_stage_key || payload.lastStageKey)
 }
 
 function resetWorkspaceForProject() {
@@ -334,12 +494,14 @@ function resetWorkspaceForProject() {
   routeNotice.value = ''
   autosaveState.value = ''
   guidance.value = null
+  draftSaveQueue.markClean()
   sceneLibraryVisible.value = false
   resultVisible.value = false
   selectedResult.value = null
   Object.assign(storyboard, { id: null, versionId: null, revision: 0, locked: false })
   storyboardScenes.value = []
   storyboardShotIds.clear()
+  stageTruthProjection.value = null
   resetProjectWorkspaceData(stageData)
   stageData.structuredScript.episodes = [defaultEpisode()]
   stageData.scriptBody.episodes = [defaultEpisode()]
@@ -461,12 +623,80 @@ async function ensureUnit(stage) {
   return created
 }
 
+async function ensureForkBeforeEdit(stageKey = workbench.activeStage.value) {
+  if (!stageTruthEnabled || !workbench.state.stageTruth?.enabled) return true
+  const stage = workbench.state.stages.find(item => item.key === stageKey)
+  if (!shouldForkBeforeEdit(stage?.serverState)) return true
+  const row = workbench.state.stageTruth.stagesByKey?.[stageKey]
+  const adoptedId = row?.adopted_content_version_id ?? row?.adoptedContentVersionId
+  const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `stage-fork-${Date.now()}`
+  const projection = responseData(await contentProjectApi.forkStage(
+    projectId.value,
+    stageKey,
+    buildForkStageRequest({
+      checkpointRevision: stage?.checkpointRevision ?? 0,
+      adoptedContentVersionId: adoptedId,
+      projectRevision: workbench.state.stageTruth.projectRevision ?? project.value?.revision
+    }),
+    { 'Idempotency-Key': idempotencyKey }
+  ))
+  stageTruthProjection.value = projection
+  project.value = {
+    ...project.value,
+    last_stage_key: projection.last_stage_key || projection.lastStageKey || project.value.last_stage_key,
+    revision: projection.project_revision ?? projection.projectRevision ?? project.value.revision
+  }
+  applyStageTruthProjection(workbench.state, projection, stageKey)
+  routeNotice.value = '已为完成阶段创建新草稿，下游成果已标记为需确认。'
+  return true
+}
+
+async function handleStalenessResolve({ action, reasonFilter }) {
+  if (!stageTruthEnabled) return
+  stalenessLoading.value = true
+  try {
+    const stageKey = workbench.activeStage.value
+    const stage = workbench.state.stages.find(item => item.key === stageKey)
+    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `stale-${Date.now()}`
+    const projection = responseData(await contentProjectApi.resolveStaleness(
+      projectId.value,
+      stageKey,
+      {
+        action,
+        checkpoint_revision: stage?.checkpointRevision ?? 0,
+        reason_filter: reasonFilter,
+        note: ''
+      },
+      { 'Idempotency-Key': idempotencyKey }
+    ))
+    stageTruthProjection.value = projection
+    applyStageTruthProjection(workbench.state, projection, stageKey)
+    ElMessage.success('过期状态已处理')
+  } catch (caught) {
+    showGuidance({
+      code: 'STALENESS_RESOLVE_FAILED',
+      title: '过期处理失败',
+      message: caught?.response?.data?.message || caught?.message || '处理失败'
+    })
+  } finally {
+    stalenessLoading.value = false
+  }
+}
+
 async function persistUnit(stage, payload) {
+  if (stageTruthEnabled) await ensureForkBeforeEdit(stage)
   const unit = await ensureUnit(stage)
+  const plainText = stage === 'script_body'
+    ? flattenScriptBodyPlainText(payload).plainText
+    : JSON.stringify(payload, null, 2)
   const saved = responseData(await contentProjectApi.saveDraft(unit.id, {
     revision: unit.revision || 0,
     content_json: JSON.stringify(payload),
-    plain_text: JSON.stringify(payload, null, 2)
+    plain_text: plainText
   }))
   unit.revision = saved.revision ?? unit.revision
   return { persisted: true, version: unit.revision, unitId: unit.id, artifactPath: `content-units/${unit.id}/draft` }
@@ -479,6 +709,7 @@ async function refreshProjectRevision() {
 
 async function persistSettings(settings) {
   try {
+    if (stageTruthEnabled) await ensureForkBeforeEdit('creation_settings')
     const persisted = await adapters.persistSettings(clone(settings))
     Object.assign(stageData.creationSettings, clone(settings))
     await refreshProjectRevision()
@@ -510,19 +741,76 @@ async function persistFinalStage() {
 }
 
 async function saveCurrentDraft() {
-  if (loading.value || !project.value) return
-  autosaveState.value = '保存中…'
+  if (loading.value || !project.value) return { persisted: true }
+  draftSaveQueue.markDirty()
+  return draftSaveQueue.enqueue(async () => {
+    autosaveState.value = '保存中…'
+    try {
+      const result = workbench.activeStage.value === 'creation_settings'
+        ? await persistSettings(stageData.creationSettings)
+        : await persistUnit(workbench.activeStage.value, currentStagePayload())
+      if (!result.persisted) throw Object.assign(new Error(result.message || '草稿保存失败'), {
+        response: result.code === 'EDIT_CONFLICT'
+          ? { data: { code: 43003, data: result.conflict } }
+          : undefined,
+        conflict: result.conflict,
+        code: result.code
+      })
+      autosaveState.value = '已保存'
+      setTimeout(() => { if (autosaveState.value === '已保存') autosaveState.value = '' }, 1500)
+      return result
+    } catch (caught) {
+      autosaveState.value = '保存失败'
+      const conflict = caught?.conflict || extractEditConflict(caught)
+      if (conflict) {
+        showGuidance({
+          code: 'EDIT_CONFLICT',
+          title: '草稿冲突',
+          message: formatEditConflictMessage(conflict),
+          targetAction: 'load_remote_draft',
+          conflict,
+          actions: conflictActionOptions(conflict)
+        })
+        return { persisted: false, code: 'EDIT_CONFLICT', conflict, message: caught?.message || '编辑冲突' }
+      }
+      showGuidance({
+        code: 'STAGE_SAVE_FAILED',
+        title: '草稿保存失败',
+        message: caught?.message,
+        targetAction: 'retry_stage_save'
+      })
+      return { persisted: false, message: caught?.message || '草稿保存失败' }
+    }
+  })
+}
+
+async function loadRemoteDraftForConflict() {
+  const stage = workbench.activeStage.value
+  const unit = units.value.find(item => item.unit_type === stage)
+  if (!unit) return showGuidance({ code: 'UNIT_REQUIRED', title: '内容单元不存在', message: '请刷新后重试。' })
   try {
-    const result = workbench.activeStage.value === 'creation_settings'
-      ? await persistSettings(stageData.creationSettings)
-      : await persistUnit(workbench.activeStage.value, currentStagePayload())
-    if (!result.persisted) throw new Error(result.message)
-    autosaveState.value = '已保存'
-    setTimeout(() => { if (autosaveState.value === '已保存') autosaveState.value = '' }, 1500)
-    return result
+    const draft = responseData(await contentProjectApi.getDraft(unit.id))
+    unit.revision = draft.revision ?? unit.revision
+    if (draft.content_json || draft.contentJson) {
+      const parsed = JSON.parse(draft.content_json || draft.contentJson)
+      const keyMap = {
+        creation_settings: 'creationSettings', novel_upload: 'novelUpload', novel_analysis: 'novelAnalysis',
+        adaptation: 'adaptation', structured_script: 'structuredScript', script_body: 'scriptBody',
+        review_revision: 'reviewRevision', text_storyboard: 'textStoryboard'
+      }
+      const field = keyMap[stage]
+      if (field && parsed && typeof parsed === 'object') Object.assign(stageData[field], parsed)
+    }
+    ElMessage.success('已加载远端草稿')
+    draftSaveQueue.markClean()
+    autosaveState.value = ''
+    guidance.value = null
   } catch (caught) {
-    autosaveState.value = '保存失败'
-    return showGuidance({ code: 'STAGE_SAVE_FAILED', title: '草稿保存失败', message: caught?.message, targetAction: 'retry_stage_save' })
+    showGuidance({
+      code: 'REMOTE_DRAFT_LOAD_FAILED',
+      title: '加载远端草稿失败',
+      message: caught?.response?.data?.message || caught?.message || '请稍后重试'
+    })
   }
 }
 
@@ -530,12 +818,268 @@ async function confirmNextStage() {
   const guarded = transitionGuard()
   if (guarded) return showGuidance(guarded)
   const next = nextStageKey(workbench.activeStage.value)
+  if (stageTruthEnabled) {
+    const prepared = await prepareStageTruthTransition(workbench.activeStage.value)
+    if (!prepared.ok) {
+      if (prepared.cancelled) return
+      return showGuidance({
+        code: 'STAGE_GATE_BLOCKED',
+        title: '门禁未通过',
+        message: prepared.message || '请处理阻断项后重试。',
+        items: prepared.blockers,
+        targetAction: 'retry_stage_transition'
+      })
+    }
+    if (!next) return completeFinalStageWithTruth(prepared.acknowledgements)
+    const transition = await transitionWithStageTruth(next, prepared.acknowledgements)
+    if (transition.status === 'completed') {
+      replaceStageQuery(next)
+      if (route.query.next === next) {
+        router.replace({
+          name: 'ScriptGenWorkspace',
+          params: { projectId: projectId.value },
+          query: { stage: next, ...(route.query.variant ? { variant: route.query.variant } : {}) }
+        })
+      }
+    } else if (transition.code === 43010 || transition.code === 'STAGE_GATE_BLOCKED') {
+      showGuidance({
+        code: 'STAGE_GATE_BLOCKED',
+        title: '门禁未通过',
+        message: transition.message,
+        items: transition.blockers || transition.gate?.blockers,
+        targetAction: 'retry_stage_transition'
+      })
+    } else {
+      showGuidance({
+        code: transition.code || 'STAGE_TRANSITION_FAILED',
+        title: '无法进入下一步',
+        message: transition.message,
+        targetAction: 'retry_stage_transition'
+      })
+    }
+    return
+  }
   if (!next) return completeFinalStage()
   const transition = await workbench.transition(next)
   if (transition.status === 'completed') {
     replaceStageQuery(next)
-    if (route.query.next === next) router.replace({ name: 'ScriptGenWorkspace', params: { projectId: projectId.value }, query: { stage: next, ...(route.query.variant ? { variant: route.query.variant } : {}) } })
-  } else showGuidance({ code: 'STAGE_TRANSITION_FAILED', title: '无法进入下一步', message: transition.message, targetAction: 'retry_stage_transition' })
+    if (route.query.next === next) {
+      router.replace({
+        name: 'ScriptGenWorkspace',
+        params: { projectId: projectId.value },
+        query: { stage: next, ...(route.query.variant ? { variant: route.query.variant } : {}) }
+      })
+    }
+  } else {
+    showGuidance({
+      code: 'STAGE_TRANSITION_FAILED',
+      title: '无法进入下一步',
+      message: transition.message,
+      targetAction: 'retry_stage_transition'
+    })
+  }
+}
+
+/** 预览服务端门禁；有警告时要求用户确认，返回 warning_acknowledgements。 */
+async function prepareStageTruthTransition(sourceStage) {
+  try {
+    let gate = normalizeGateView(responseData(await contentProjectApi.previewStageGate(projectId.value, sourceStage)))
+
+    if (hasDurationVarianceUnconfirmed(gate) && sourceStage === 'structured_script') {
+      try {
+        await ElMessageBox.confirm(
+          `${formatGateIssues(gate.blockers.filter(item => item.code === 'DURATION_VARIANCE_UNCONFIRMED')) || '目标时长偏差超阈值。'}\n\n确认后将写入 durationVarianceConfirmed 并重新校验。`,
+          '确认时长偏差',
+          { type: 'warning', confirmButtonText: '确认偏差并继续', cancelButtonText: '返回修改' }
+        )
+      } catch {
+        return { ok: false, cancelled: true }
+      }
+      stageData.structuredScript.durationVarianceConfirmed = true
+      const saved = await saveCurrentDraft()
+      if (saved && saved.persisted === false) {
+        return {
+          ok: false,
+          message: saved.message || '确认时长偏差后保存失败',
+          blockers: gate.blockers
+        }
+      }
+      gate = normalizeGateView(responseData(await contentProjectApi.previewStageGate(projectId.value, sourceStage)))
+    }
+
+    if (gate.blockers.length) {
+      return {
+        ok: false,
+        message: formatGateIssues(gate.blockers) || '门禁存在阻断项',
+        blockers: gate.blockers,
+        warnings: gate.warnings,
+        gate
+      }
+    }
+
+    let acknowledgements = []
+    if (gate.warnings.length) {
+      try {
+        await ElMessageBox.confirm(
+          `进入下一阶段前请确认以下警告：\n\n${formatGateIssues(gate.warnings)}`,
+          '阶段警告确认',
+          { type: 'warning', confirmButtonText: '已确认，继续', cancelButtonText: '取消' }
+        )
+        acknowledgements = issueCodes(gate.warnings)
+      } catch {
+        return { ok: false, cancelled: true }
+      }
+    }
+    return { ok: true, acknowledgements, gate }
+  } catch (caught) {
+    return {
+      ok: false,
+      message: caught?.response?.data?.message || caught?.message || '门禁预览失败',
+      blockers: extractGateDetailsFromError(caught)?.blockers || []
+    }
+  }
+}
+
+async function transitionWithStageTruth(targetStage, warningAcknowledgements = []) {
+  const sourceStage = workbench.activeStage.value
+  workbench.state.transition = {
+    targetStage,
+    sourceStage,
+    percentage: 10,
+    status: 'persisting',
+    message: '正在校验门禁并保存阶段…'
+  }
+  try {
+    // 先落盘当前草稿，再走服务端原子流转
+    const saved = await saveCurrentDraft()
+    if (saved && saved.persisted === false) {
+      workbench.state.transition = { ...workbench.state.transition, status: 'error', message: saved.message || '草稿保存失败' }
+      return workbench.state.transition
+    }
+    workbench.state.transition.percentage = 40
+    const activeUnit = units.value.find(item => item.unit_type === sourceStage)
+    const targetRow = workbench.state.stages.find(item => item.key === targetStage)
+    const payload = buildStageTransitionPayload({
+      sourceStageKey: sourceStage,
+      targetStageKey: targetStage,
+      projectRevision: workbench.state.stageTruth?.projectRevision ?? project.value?.revision,
+      sourceCheckpointRevision: checkpointRevisionOf(workbench.state, sourceStage),
+      targetCheckpointRevision: targetRow?.checkpointRevision ?? checkpointRevisionOf(workbench.state, targetStage),
+      contentUnitId: activeUnit?.id,
+      contentUnitRevision: activeUnit?.revision,
+      warningAcknowledgements
+    })
+    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `stage-transition-${Date.now()}`
+    const projection = responseData(await contentProjectApi.stageTransition(
+      projectId.value,
+      payload,
+      { 'Idempotency-Key': idempotencyKey }
+    ))
+    stageTruthProjection.value = projection
+    project.value = {
+      ...project.value,
+      last_stage_key: projection.last_stage_key || projection.lastStageKey || targetStage,
+      revision: projection.project_revision ?? projection.projectRevision ?? project.value.revision
+    }
+    applyStageTruthProjection(workbench.state, projection, targetStage)
+    workbench.state.transition = {
+      targetStage,
+      sourceStage,
+      percentage: 100,
+      status: 'completed',
+      message: '阶段已保存'
+    }
+    return workbench.state.transition
+  } catch (caught) {
+    const message = caught?.response?.data?.message || caught?.message || '阶段流转失败'
+    const code = caught?.response?.data?.code
+    const gate = extractGateDetailsFromError(caught)
+    workbench.state.transition = {
+      targetStage,
+      sourceStage,
+      percentage: workbench.state.transition?.percentage || 0,
+      status: 'error',
+      message,
+      code,
+      blockers: gate?.blockers,
+      warnings: gate?.warnings,
+      gate
+    }
+    return workbench.state.transition
+  }
+}
+
+async function completeFinalStageWithTruth(warningAcknowledgements = []) {
+  const sourceStage = 'text_storyboard'
+  try {
+    await saveCurrentDraft()
+    const activeUnit = units.value.find(item => item.unit_type === sourceStage)
+    const payload = buildStageTransitionPayload({
+      sourceStageKey: sourceStage,
+      targetStageKey: null,
+      action: 'COMPLETE_HANDOFF',
+      projectRevision: workbench.state.stageTruth?.projectRevision ?? project.value?.revision,
+      sourceCheckpointRevision: checkpointRevisionOf(workbench.state, sourceStage),
+      contentUnitId: activeUnit?.id,
+      contentUnitRevision: activeUnit?.revision,
+      warningAcknowledgements
+    })
+    const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+      ? crypto.randomUUID()
+      : `stage-handoff-${Date.now()}`
+    const projection = responseData(await contentProjectApi.stageTransition(
+      projectId.value,
+      payload,
+      { 'Idempotency-Key': idempotencyKey }
+    ))
+    stageTruthProjection.value = projection
+    applyStageTruthProjection(workbench.state, projection, sourceStage)
+    ElMessage.success('八阶段已完成，交接快照已提交')
+  } catch (caught) {
+    if (isStageGateBlockedError(caught)) {
+      const gate = extractGateDetailsFromError(caught)
+      return showGuidance({
+        code: 'STAGE_GATE_BLOCKED',
+        title: '完成交接失败',
+        message: caught?.response?.data?.message || '门禁未通过',
+        items: gate?.blockers,
+        targetAction: 'complete_storyboard_archive'
+      })
+    }
+    showGuidance({
+      code: 'STAGE_HANDOFF_FAILED',
+      title: '完成交接失败',
+      message: caught?.response?.data?.message || caught?.message || 'COMPLETE_HANDOFF 失败'
+    })
+  }
+}
+
+async function completeFinalStage() {
+  const result = await workbench.completeFinalStageWithPersistence()
+  if (result?.allowed === false) {
+    return showGuidance(result)
+  }
+  ElMessage.success('八阶段流程已完成')
+}
+
+async function handleStoryboardArchived() {
+  if (stageTruthEnabled) {
+    const prepared = await prepareStageTruthTransition('text_storyboard')
+    if (!prepared.ok) {
+      if (prepared.cancelled) return
+      return showGuidance({
+        code: 'STAGE_GATE_BLOCKED',
+        title: '完成交接失败',
+        message: prepared.message || '门禁未通过',
+        items: prepared.blockers,
+        targetAction: 'complete_storyboard_archive'
+      })
+    }
+    return completeFinalStageWithTruth(prepared.acknowledgements)
+  }
+  return completeFinalStage()
 }
 
 function transitionGuard() {
@@ -665,9 +1209,121 @@ async function submitStageGeneration(stage, payload = {}, localTask = null) {
 }
 
 async function submitScriptBlockAction(payload) {
-  const outcome = await submitStageGeneration('script_body', payload)
-  await persistUnit('script_body', { ...clone(stageData.scriptBody), pendingGeneration: { payload, taskPath: outcome.artifact.path } })
-  return { persisted: true, result: outcome }
+  if (!stageTruthEnabled) {
+    const outcome = await submitStageGeneration('script_body', payload)
+    await persistUnit('script_body', { ...clone(stageData.scriptBody), pendingGeneration: { payload, taskPath: outcome.artifact.path } })
+    return { persisted: true, result: outcome }
+  }
+  return submitLocalRewriteBlockAction(payload)
+}
+
+async function submitLocalRewriteBlockAction(payload) {
+  const block = payload?.block
+  if (!block?.id) {
+    return { allowed: false, code: 'SCRIPT_BLOCK_REQUIRED', title: '请先选择正文块', message: '选择正文块后再执行局部改写。' }
+  }
+  if (!(String(block.text || '').trim())) {
+    return { allowed: false, code: 'SCRIPT_BLOCK_EMPTY', title: '正文块为空', message: '请先填写正文后再请求 AI 局部改写。' }
+  }
+  await persistUnit('script_body', clone(stageData.scriptBody))
+  const unit = await ensureUnit('script_body')
+  const { plainText, ranges } = flattenScriptBodyPlainText(stageData.scriptBody)
+  const range = findBlockRange(ranges, block.id)
+  if (!range || range.start >= range.end) {
+    return { allowed: false, code: 'SCRIPT_BLOCK_RANGE_MISSING', title: '无法定位选区', message: '刷新后重试局部改写。' }
+  }
+  const requestBody = await buildLocalRewriteRequest({
+    baseVersionId: unit.current_version_id || unit.currentVersionId || null,
+    contentUnitRevision: unit.revision || 0,
+    plainText,
+    startOffset: range.start,
+    endOffset: range.end,
+    operation: operationFromBlockAction(payload.action),
+    prompt: payload.action
+  })
+  const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `local-rewrite-${Date.now()}`
+  const raw = responseData(await contentProjectApi.createLocalRewrite(
+    unit.id,
+    requestBody,
+    { 'Idempotency-Key': idempotencyKey }
+  ))
+  const candidate = normalizeLocalRewriteCandidate({
+    ...raw,
+    base_content_hash: requestBody.content_hash,
+    base_revision: unit.revision || 0
+  })
+  return {
+    persisted: true,
+    localRewrite: true,
+    block: clone(block),
+    candidate,
+    result: {
+      mode: 'local_rewrite',
+      jobId: candidate.jobId,
+      candidateVersionId: candidate.candidateVersionId,
+      before: candidate.before,
+      after: candidate.after
+    }
+  }
+}
+
+async function adoptScriptLocalRewrite({ blockId, candidate, plainText, selectedPatchIndexes }) {
+  const unit = await ensureUnit('script_body')
+  const currentPlain = plainText ?? flattenScriptBodyPlainText(stageData.scriptBody).plainText
+  const currentHash = await sha256Hex(currentPlain)
+  if (isCandidateStale({
+    candidateContentHash: candidate?.baseContentHash,
+    currentPlainTextHash: currentHash,
+    candidateRevision: candidate?.baseRevision,
+    currentRevision: unit.revision
+  })) {
+    return {
+      allowed: false,
+      ok: false,
+      code: 'AI_CANDIDATE_STALE',
+      title: '候选已过期',
+      message: '正文或 revision 已变化，请重新生成局部改写后再采用。'
+    }
+  }
+
+  const allIndexes = (candidate?.patches || []).map((_, index) => index)
+  const indexes = Array.isArray(selectedPatchIndexes) && selectedPatchIndexes.length
+    ? selectedPatchIndexes
+    : allIndexes
+  const patches = selectPartialPatches(candidate?.patches || [], indexes)
+  if (!patches.length) {
+    return {
+      allowed: false,
+      ok: false,
+      code: 'LOCAL_REWRITE_PATCH_REQUIRED',
+      title: '请选择改动',
+      message: '至少选择一处 Patch 后再采用。'
+    }
+  }
+
+  const body = await buildAdoptPatchesRequest({
+    contentUnitRevision: unit.revision || 0,
+    plainText: currentPlain,
+    patches
+  })
+  const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
+    ? crypto.randomUUID()
+    : `local-rewrite-adopt-${Date.now()}`
+  const draft = responseData(await contentProjectApi.adoptLocalRewrite(
+    unit.id,
+    body,
+    { 'Idempotency-Key': idempotencyKey }
+  ))
+  unit.revision = draft.revision ?? unit.revision
+  const replacement = patches.length === (candidate?.patches || []).length
+    ? (candidate?.after ?? patches[0]?.replacement ?? '')
+    : (patches[patches.length - 1]?.replacement ?? candidate?.after ?? '')
+  const nextBody = applyBlockReplacement(stageData.scriptBody, blockId, replacement)
+  Object.assign(stageData.scriptBody, nextBody)
+  await persistUnit('script_body', clone(stageData.scriptBody))
+  return { persisted: true, adopted: true, draft, block: { id: blockId, text: replacement } }
 }
 
 async function createAndReturnSceneAsset(draft) {
@@ -737,11 +1393,6 @@ function handoffCanvas(result) {
   else showGuidance({ code: 'CANVAS_JOB_CREATED', title: '画布任务已创建', message: '快照任务已持久化，请在画布项目中查看生成结果。', targetAction: 'open_canvas_projects' })
 }
 
-async function completeFinalStage() {
-  const completed = await workbench.completeFinalStageWithPersistence()
-  if (completed?.allowed === false) return showGuidance(completed)
-  ElMessage.success('八阶段创作流程已完成')
-}
 function handleStageResult(result) { if (result?.allowed === false || result?.ok === false) showGuidance(result) }
 function handleGenerationResult(result) { selectedResult.value = result; resultVisible.value = true }
 function openSceneResult(result) { selectedResult.value = result; sceneLibraryVisible.value = true }
@@ -811,5 +1462,5 @@ function statusTagType(status) { return ({ reviewing: 'warning', approved: 'succ
 </script>
 
 <style scoped>
-.workspace{display:flex;height:calc(100vh - var(--topbar-h));min-height:680px}.workspace-main{flex:1;min-width:0;overflow:auto;padding:20px 24px;background:var(--bg-app)}.workspace-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.workspace-header h1{margin:0 0 8px;font-size:20px}.workspace-meta,.workspace-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.workspace-meta{color:var(--text-secondary);font-size:13px}.workspace-actions{justify-content:flex-end}.model-context{font-size:12px;color:var(--text-secondary);padding:6px 10px;border:1px solid var(--border);border-radius:8px}.workspace-state{display:grid;place-items:center;padding:70px;color:var(--text-secondary)}.stage-card,.shared-panel{padding:20px;margin-bottom:18px}.route-notice{margin-bottom:16px}@media(max-width:1000px){.workspace-header{flex-direction:column}.workspace-actions{justify-content:flex-start}}@media(max-width:760px){.workspace{display:block;height:auto}.workspace-main{padding:12px}.workspace-actions{align-items:stretch}.workspace-actions .el-button{margin-left:0}}
+.workspace{display:flex;height:calc(100vh - var(--topbar-h));min-height:680px}.workspace-main{flex:1;min-width:0;overflow:auto;padding:20px 24px;background:var(--bg-app)}.workspace-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.workspace-header h1{margin:0 0 8px;font-size:20px}.workspace-meta,.workspace-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.workspace-meta{color:var(--text-secondary);font-size:13px}.workspace-actions{justify-content:flex-end}.model-context{font-size:12px;color:var(--text-secondary);padding:6px 10px;border:1px solid var(--border);border-radius:8px}.workspace-state{display:grid;place-items:center;padding:70px;color:var(--text-secondary)}.stage-card,.shared-panel{padding:20px;margin-bottom:18px}.route-notice{margin-bottom:16px}.conflict-meta{margin:0 0 12px;color:var(--text-secondary);font-size:13px}.conflict-preview{margin:0;max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;padding:12px;border-radius:8px;background:var(--el-fill-color-light);font-size:13px;line-height:1.6}@media(max-width:1000px){.workspace-header{flex-direction:column}.workspace-actions{justify-content:flex-start}}@media(max-width:760px){.workspace{display:block;height:auto}.workspace-main{padding:12px}.workspace-actions{align-items:stretch}.workspace-actions .el-button{margin-left:0}}
 </style>

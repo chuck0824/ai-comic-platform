@@ -47,10 +47,32 @@ function clampPercentage(value) {
   return Math.max(0, Math.min(100, Number(value) || 0))
 }
 
+function mapServerStateToRail(serverState) {
+  switch (serverState) {
+    case 'COMPLETED': return 'completed'
+    case 'LOCKED': return 'locked'
+    case 'BLOCKED': return 'error'
+    case 'POSSIBLY_STALE': return 'possibly_stale'
+    case 'REGEN_REQUIRED': return 'regen_required'
+    case 'IN_PROGRESS': return 'in_progress'
+    default: return null
+  }
+}
+
 function refreshStageStatuses(state) {
   state.stages.forEach(stage => {
-    if (stage.key === state.activeStage) stage.status = 'current'
-    else if (state.completedStages.includes(stage.key)) stage.status = 'completed'
+    if (stage.key === state.activeStage) {
+      stage.status = 'current'
+      return
+    }
+    if (state.stageTruth?.enabled) {
+      const mapped = mapServerStateToRail(stage.serverState)
+      if (mapped) {
+        stage.status = mapped
+        return
+      }
+    }
+    if (state.completedStages.includes(stage.key)) stage.status = 'completed'
     else stage.status = 'pending'
   })
 }
@@ -127,6 +149,7 @@ export function createWorkbenchState() {
     enteredStages: [initialStage],
     completedStages: [],
     stages: STAGES.map(stage => ({ ...stage, status: stage.key === initialStage ? 'current' : 'pending' })),
+    stageTruth: null,
     transition: null,
     tasks: [],
     results: [],

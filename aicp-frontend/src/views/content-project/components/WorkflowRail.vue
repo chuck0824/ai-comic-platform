@@ -17,9 +17,13 @@
         </div>
         <span v-if="stage.status === 'current'" class="stage-current-badge">← 当前</span>
         <el-icon v-else-if="stage.status === 'completed'" class="stage-check" :size="14"><CircleCheck /></el-icon>
+        <span v-else-if="stage.status === 'locked'" class="stage-locked">已锁定</span>
+        <span v-else-if="stage.status === 'possibly_stale'" class="stage-stale">需确认</span>
+        <span v-else-if="stage.status === 'regen_required'" class="stage-regen">需要重做</span>
         <span v-else-if="stage.status === 'error'" class="stage-error">需处理</span>
+        <span v-else-if="stage.status === 'in_progress'" class="stage-progress">编辑中</span>
       </button>
-      <div v-if="i < stages.length - 1" :class="['stage-connector', { active: stage.status === 'completed' }]"></div>
+      <div v-if="i < stages.length - 1" :class="['stage-connector', { active: isConnectorActive(stage) }]"></div>
     </div>
 
     <!-- Progress -->
@@ -56,6 +60,10 @@ function stageLabel(key, fallback) {
 
 function canNavigate(stage) {
   return props.enteredStages.includes(stage.key)
+}
+
+function isConnectorActive(stage) {
+  return ['completed', 'locked', 'current'].includes(stage.status)
 }
 
 function navigate(stage) {
@@ -104,6 +112,13 @@ function navigate(stage) {
 .stage-item.stage-current {
   background: var(--accent-bg);
 }
+.stage-item.stage-possibly_stale {
+  background: rgba(217, 119, 6, 0.08);
+}
+.stage-item.stage-regen_required,
+.stage-item.stage-error {
+  background: rgba(220, 38, 38, 0.06);
+}
 .stage-indicator {
   display: flex;
   align-items: center;
@@ -130,6 +145,18 @@ function navigate(stage) {
 .stage-dot.pending {
   background: var(--border);
 }
+.stage-dot.in_progress {
+  background: var(--accent);
+}
+.stage-dot.possibly_stale {
+  background: #d97706;
+}
+.stage-dot.regen_required {
+  background: var(--danger);
+}
+.stage-dot.error {
+  background: var(--danger);
+}
 .stage-dot.skipped,
 .stage-dot.locked {
   background: var(--text-tertiary);
@@ -143,9 +170,20 @@ function navigate(stage) {
 .stage-check {
   color: var(--success);
 }
-.stage-error {
+.stage-error,
+.stage-regen {
   font-size: 11px;
   color: var(--danger);
+}
+.stage-stale {
+  font-size: 11px;
+  color: #d97706;
+  font-weight: 600;
+}
+.stage-locked,
+.stage-progress {
+  font-size: 11px;
+  color: var(--text-tertiary);
 }
 
 .stage-connector {
