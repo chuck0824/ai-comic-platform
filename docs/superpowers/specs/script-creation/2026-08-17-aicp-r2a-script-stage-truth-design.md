@@ -216,7 +216,8 @@ REGEN_REQUIRED → IN_PROGRESS
 
 | 事件名 | 触发 | 关键字段 |
 |---|---|---|
-| `StageCompleted` | 来源阶段进入 COMPLETED/LOCKED | `projectId`、`stageKey`、`adoptedVersionId`、`inputSnapshotHash` |
+| `StageCompleted` | 来源阶段进入 COMPLETED/LOCKED | `projectId`、`stageKey`、`adoptedVersionId`、`inputSnapshotHash`；`COMPLETE_HANDOFF` 时另含 `handoffSnapshotId`、`reviewedScriptBodyVersionId` |
+| `StoryboardHandoffCaptured` | 文字分镜交接快照落库 | `projectId`、`handoffSnapshotId`、`reviewedScriptBodyVersionId`、`checkpointId` |
 | `StageForked` | 已完成阶段重新编辑 | `projectId`、`stageKey`、`baseVersionId`、`newDraftId` |
 | `StageMarkedStale` | 下游被传播过期 | `projectId`、`stageKey`、`triggerStage`、`causeForkId`、`impactLevel` |
 | `StalenessResolved` | 用户处理过期 | `projectId`、`stageKey`、`action`、`operatorId` |
@@ -286,9 +287,21 @@ GET /api/v1/content-projects/{projectId}/stage-checkpoints
       "allowedActions": ["view", "fork"]
     }
   ],
-  "lastStageKey": "script_body"
+  "lastStageKey": "script_body",
+  "stageTruthEnabled": true,
+  "latestStoryboardHandoff": null
 }
 ```
+
+灰度开启后，投影可附带 `latestStoryboardHandoff`（最新交接快照摘要，尚未交接时为 `null`）。
+
+### 6.1.1 查询文字分镜交接快照（R2-B）
+
+```http
+GET /api/v1/content-projects/{projectId}/storyboard-handoff
+```
+
+返回该项目最新 `StoryboardHandoffSnapshot`；尚未 `COMPLETE_HANDOFF` 时返回资源不存在。最小字段：`id`、`reviewedScriptBodyVersionId`、`continuityCheckResult`、`sceneCount`、`contentHash`、`capturedAt`、`payload`。
 
 ### 6.2 预检阶段门禁
 
