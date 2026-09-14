@@ -35,6 +35,7 @@ public final class LocalRewriteRequests {
     public record LocalRewriteAdoptRequest(
             Integer contentUnitRevision,
             String contentHash,
-            List<PatchOp> patches
+            List<PatchOp> patches,
+            Long candidateVersionId
     ) {}
 }

@@ -15,7 +15,9 @@ import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.aicp.module.contentproject.mapper.ContentVersionMapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -31,7 +33,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * R2-A.3 局部 AI 改写：创建候选任务 + 服务端 Patch 采用（尾部向前应用，hash 不匹配整批失败）。
+ * R2-A.3 局部 AI 改写：真实 ContentGenerationJob → candidate Patch → 采用校验。
  */
 @Slf4j
 @Service
@@ -42,6 +44,8 @@ public class LocalRewriteService {
     private final ContentVersionMapper versionMapper;
     private final ProjectAccessService accessService;
     private final ContentGenerationJobService generationJobService;
+    private final ContentGenerationExecutor generationExecutor;
+    private final ContentUnitService contentUnitService;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -52,51 +56,53 @@ public class LocalRewriteService {
 
         String plain = currentPlainText(unit);
         validateSelection(plain, request);
+        markStaleCandidatesIfBaseChanged(unitId, request.contentHash());
+
+        String selected = plain.substring(request.startOffset(), request.endOffset());
+        Map<String, Object> rewriteCtx = new LinkedHashMap<>();
+        rewriteCtx.put("startOffset", request.startOffset());
+        rewriteCtx.put("endOffset", request.endOffset());
+        rewriteCtx.put("selectedText", selected);
+        rewriteCtx.put("selectedTextHash", request.selectedTextHash());
+        rewriteCtx.put("operation", request.operation() == null ? "rewrite" : request.operation());
+        rewriteCtx.put("prompt", request.prompt());
+        rewriteCtx.put("model", request.model());
+        rewriteCtx.put("baseVersionId", request.baseVersionId());
+        rewriteCtx.put("baseContentHash", request.contentHash());
+        rewriteCtx.put("contentUnitRevision", request.contentUnitRevision());
+
+        Map<String, Object> strategy = new LinkedHashMap<>();
+        strategy.put("local_rewrite", rewriteCtx);
+        strategy.put("allow_unconfirmed_bible", true);
 
         GenerationJobRequest jobRequest = new GenerationJobRequest(
                 "local_rewrite",
                 "content_unit",
                 unitId,
                 Map.of(),
-                request.operation() == null ? "rewrite" : request.operation(),
+                toJson(strategy),
                 "v1-local-rewrite");
         String idempotencyKey = "local-rewrite-" + unitId + "-" + UUID.randomUUID();
         GenerationJobView job = generationJobService.createJob(
-                userId, unit.getProjectId(), jobRequest, idempotencyKey);
+                userId, unit.getProjectId(), jobRequest, idempotencyKey, false);
 
-        // 候选版本：保存 before/after 与建议 Patch，供前端展示；不直接改正文
-        String selected = plain.substring(request.startOffset(), request.endOffset());
-        String replacement = "[AI改写建议] " + selected;
-        Map<String, Object> candidatePayload = new LinkedHashMap<>();
-        candidatePayload.put("before", selected);
-        candidatePayload.put("after", replacement);
-        candidatePayload.put("baseVersionId", request.baseVersionId());
-        candidatePayload.put("baseContentHash", request.contentHash());
-        candidatePayload.put("patches", List.of(Map.of(
-                "startOffset", request.startOffset(),
-                "endOffset", request.endOffset(),
-                "expectedTextHash", sha256(selected),
-                "replacement", replacement,
-                "reason", request.operation() == null ? "rewrite" : request.operation())));
+        ContentVersion candidate;
+        try {
+            candidate = generationExecutor.completeLocalRewrite(job.id());
+        } catch (Exception e) {
+            generationExecutor.markJobFailed(job.id(), "AI_ERROR");
+            log.error("local rewrite job {} failed", job.id(), e);
+            throw new BizException(ErrorCode.INTERNAL_ERROR, "局部改写生成失败，正文未修改");
+        }
 
-        ContentVersion candidate = new ContentVersion();
-        candidate.setProjectId(unit.getProjectId());
-        candidate.setContentUnitId(unitId);
-        candidate.setVersionNo(0);
-        candidate.setStatus("candidate");
-        candidate.setSource("ai_local_rewrite");
-        candidate.setGenerationJobId(job.id());
-        candidate.setContentJson(toJson(candidatePayload));
-        candidate.setPlainText(replacement);
-        candidate.setContentHash(sha256(toJson(candidatePayload)));
-        candidate.setCreatedBy(userId);
-        versionMapper.insert(candidate);
-
+        Map<String, Object> payload = parseJsonMap(candidate.getContentJson());
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("job", job);
+        result.put("job", generationJobService.getJob(userId, job.id()));
         result.put("candidate_version_id", candidate.getId());
-        result.put("diff", Map.of("before", selected, "after", replacement));
-        result.put("patches", candidatePayload.get("patches"));
+        result.put("diff", Map.of(
+                "before", payload.getOrDefault("before", selected),
+                "after", payload.getOrDefault("after", candidate.getPlainText())));
+        result.put("patches", payload.getOrDefault("patches", List.of()));
         return result;
     }
 
@@ -109,7 +115,27 @@ public class LocalRewriteService {
         String plain = currentPlainText(unit);
         if (request.contentHash() != null && !request.contentHash().isBlank()
                 && !request.contentHash().equals(sha256(plain))) {
+            markStaleCandidatesIfBaseChanged(unitId, sha256(plain));
             throw new BizException(ErrorCode.AI_CANDIDATE_STALE, "正文已变化，候选不可直接采用");
+        }
+
+        if (request.candidateVersionId() != null) {
+            ContentVersion candidate = versionMapper.selectById(request.candidateVersionId());
+            if (candidate == null || !unitId.equals(candidate.getContentUnitId())) {
+                throw new BizException(ErrorCode.NOT_FOUND, "改写候选不存在");
+            }
+            if ("stale".equalsIgnoreCase(candidate.getStatus())
+                    || "discarded".equalsIgnoreCase(candidate.getStatus())) {
+                throw new BizException(ErrorCode.AI_CANDIDATE_STALE, "候选已过期或已丢弃");
+            }
+            Map<String, Object> payload = parseJsonMap(candidate.getContentJson());
+            Object baseHash = payload.get("baseContentHash");
+            if (baseHash != null && request.contentHash() != null
+                    && !String.valueOf(baseHash).equals(request.contentHash())) {
+                candidate.setStatus("stale");
+                versionMapper.updateById(candidate);
+                throw new BizException(ErrorCode.AI_CANDIDATE_STALE, "候选基准 hash 已失效");
+            }
         }
 
         List<PatchOp> patches = request.patches() == null ? List.of() : new ArrayList<>(request.patches());
@@ -123,7 +149,6 @@ public class LocalRewriteService {
             }
         }
 
-        // 从尾部向前应用，避免偏移漂移
         StringBuilder buffer = new StringBuilder(plain);
         List<PatchOp> reverse = new ArrayList<>(patches);
         reverse.sort(Comparator.comparing(PatchOp::startOffset).reversed());
@@ -142,26 +167,13 @@ public class LocalRewriteService {
         }
 
         String nextPlain = buffer.toString();
-        // 结构化剧本正文（episodes/scenes/blocks）由前端按 Patch 回写 content_json；
-        // 服务端只可靠更新 plain_text，避免把 JSON 结构压扁成 wrap。
-        String nextJson = null;
         ContentVersion existingDraft = versionMapper.selectOne(
                 new LambdaQueryWrapper<ContentVersion>()
                         .eq(ContentVersion::getContentUnitId, unitId)
                         .eq(ContentVersion::getStatus, "draft")
                         .last("limit 1"));
-        if (existingDraft != null && existingDraft.getContentJson() != null
-                && !existingDraft.getContentJson().isBlank()) {
-            try {
-                objectMapper.readTree(existingDraft.getContentJson());
-                nextJson = existingDraft.getContentJson();
-            } catch (Exception ignored) {
-                nextJson = null;
-            }
-        }
-        if (nextJson == null) {
-            nextJson = nextPlain;
-        }
+        String nextJson = mergePlainIntoContentJson(
+                existingDraft == null ? null : existingDraft.getContentJson(), plain, nextPlain);
 
         int revision = unit.getRevision() == null ? 0 : unit.getRevision();
         int claimed = unitMapper.update(null, new UpdateWrapper<ContentUnit>()
@@ -169,7 +181,7 @@ public class LocalRewriteService {
                 .eq("revision", revision)
                 .set("revision", revision + 1));
         if (claimed == 0) {
-            throw new BizException(ErrorCode.EDIT_CONFLICT);
+            contentUnitService.raiseEditConflict(unitId, unit, request.contentUnitRevision());
         }
 
         ContentVersion draft = existingDraft;
@@ -186,14 +198,75 @@ public class LocalRewriteService {
             draft.setContentHash(sha256(nextPlain));
             versionMapper.insert(draft);
         } else {
-            // 保留既有 content_json 结构，仅推进 plain_text
+            draft.setContentJson(nextJson);
             draft.setPlainText(nextPlain);
             draft.setContentHash(sha256(nextPlain));
             versionMapper.updateById(draft);
         }
 
+        if (request.candidateVersionId() != null) {
+            versionMapper.update(null, new UpdateWrapper<ContentVersion>()
+                    .eq("id", request.candidateVersionId())
+                    .eq("status", "candidate")
+                    .set("status", "accepted"));
+        }
+
         return new DraftView(draft.getId(), unitId, revision + 1,
                 draft.getContentJson(), draft.getPlainText(), draft.getCreatedAt());
+    }
+
+    private String mergePlainIntoContentJson(String existingJson, String previousPlain, String nextPlain) {
+        if (existingJson == null || existingJson.isBlank()) {
+            return nextPlain;
+        }
+        try {
+            JsonNode root = objectMapper.readTree(existingJson);
+            if (root.isTextual()) {
+                return nextPlain;
+            }
+            if (root.isObject()) {
+                ObjectNode obj = (ObjectNode) root;
+                if (obj.has("plainText") || obj.has("plain_text")) {
+                    if (obj.has("plainText")) {
+                        obj.put("plainText", nextPlain);
+                    }
+                    if (obj.has("plain_text")) {
+                        obj.put("plain_text", nextPlain);
+                    }
+                    return objectMapper.writeValueAsString(obj);
+                }
+                if (obj.has("content") && obj.get("content").isTextual()) {
+                    obj.put("content", nextPlain);
+                    return objectMapper.writeValueAsString(obj);
+                }
+            }
+            // 结构化剧本等：保留结构，由前端随后 persistUnit 回写；此处同步 plain 兜底
+            if (existingJson.equals(previousPlain)) {
+                return nextPlain;
+            }
+            return existingJson;
+        } catch (Exception e) {
+            return nextPlain;
+        }
+    }
+
+    private void markStaleCandidatesIfBaseChanged(Long unitId, String currentHash) {
+        if (currentHash == null || currentHash.isBlank()) {
+            return;
+        }
+        List<ContentVersion> candidates = versionMapper.selectList(
+                new LambdaQueryWrapper<ContentVersion>()
+                        .eq(ContentVersion::getContentUnitId, unitId)
+                        .eq(ContentVersion::getStatus, "candidate")
+                        .eq(ContentVersion::getSource, "ai_local_rewrite"));
+        for (ContentVersion candidate : candidates) {
+            Map<String, Object> payload = parseJsonMap(candidate.getContentJson());
+            Object baseHash = payload.get("baseContentHash");
+            if (baseHash != null && !currentHash.equals(String.valueOf(baseHash))) {
+                candidate.setStatus("stale");
+                versionMapper.updateById(candidate);
+            }
+        }
     }
 
     private void validateSelection(String plain, LocalRewriteRequest request) {
@@ -247,7 +320,18 @@ public class LocalRewriteService {
 
     private void requireRevision(ContentUnit unit, Integer expected) {
         if (expected != null && !expected.equals(unit.getRevision())) {
-            throw new BizException(ErrorCode.EDIT_CONFLICT);
+            contentUnitService.raiseEditConflict(unit.getId(), unit, expected);
+        }
+    }
+
+    private Map<String, Object> parseJsonMap(String json) {
+        if (json == null || json.isBlank()) {
+            return Map.of();
+        }
+        try {
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<>() {});
+        } catch (Exception e) {
+            return Map.of();
         }
     }
 

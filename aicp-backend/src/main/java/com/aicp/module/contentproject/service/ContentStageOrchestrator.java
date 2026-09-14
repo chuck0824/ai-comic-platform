@@ -132,7 +132,21 @@ public class ContentStageOrchestrator {
                 throw new BizException(ErrorCode.PARAM_INVALID, "content_unit 不属于该项目");
             }
             if (!request.contentUnitRevision().equals(unit.getRevision())) {
-                throw new BizException(ErrorCode.EDIT_CONFLICT);
+                ContentVersion draft = contentVersionMapper.selectOne(
+                        new LambdaQueryWrapper<ContentVersion>()
+                                .eq(ContentVersion::getContentUnitId, unit.getId())
+                                .eq(ContentVersion::getStatus, "draft")
+                                .last("limit 1"));
+                Map<String, Object> details = new LinkedHashMap<>();
+                details.put("code", "EDIT_CONFLICT");
+                details.put("server_revision", unit.getRevision());
+                details.put("server_draft_id", draft == null ? null : draft.getId());
+                details.put("base_revision", request.contentUnitRevision());
+                details.put("server_content_hash", draft == null ? null : draft.getContentHash());
+                details.put("comparison_url",
+                        "/api/v1/content-units/" + unit.getId() + "/conflicts?base_revision="
+                                + request.contentUnitRevision());
+                throw new BizException(ErrorCode.EDIT_CONFLICT, ErrorCode.EDIT_CONFLICT.getMessage(), details);
             }
         }
 
@@ -152,7 +166,11 @@ public class ContentStageOrchestrator {
             bumpRevision(source, userId);
             checkpointMapper.updateById(source);
             outboxService.append("GateBlocked", projectId, project.getRevision() == null ? 0 : project.getRevision(),
-                    Map.of("projectId", projectId, "stageKey", sourceKey.value(), "blockers", gate.blockers()));
+                    Map.of(
+                            "projectId", projectId,
+                            "stageKey", sourceKey.value(),
+                            "blockers", gate.blockers(),
+                            "warnings", gate.warnings()));
             throw new BizException(ErrorCode.STAGE_GATE_BLOCKED, "门禁存在阻断项", gateDetails(gate));
         }
 
@@ -192,8 +210,14 @@ public class ContentStageOrchestrator {
                 checkpointMapper.updateById(target);
             }
             resumeKey = targetKey.value();
-        } else if (handoff) {
-            Long handoffId = createHandoffSnapshot(userId, project, source);
+        }
+
+        Long handoffId = null;
+        Long reviewedScriptBodyVersionId = null;
+        if (handoff) {
+            StoryboardHandoffSnapshot handoffSnapshot = createHandoffSnapshot(userId, project, source);
+            handoffId = handoffSnapshot.getId();
+            reviewedScriptBodyVersionId = handoffSnapshot.getReviewedScriptBodyVersionId();
             source.setPrimaryArtifactType("STORYBOARD_HANDOFF");
             source.setPrimaryArtifactId(handoffId);
             bumpRevision(source, userId);
@@ -210,7 +234,19 @@ public class ContentStageOrchestrator {
         payload.put("adoptedVersionId", source.getAdoptedContentVersionId());
         payload.put("inputSnapshotHash", source.getInputSnapshotHash());
         payload.put("targetStageKey", targetKey == null ? null : targetKey.value());
+        if (handoffId != null) {
+            payload.put("handoffSnapshotId", handoffId);
+            payload.put("reviewedScriptBodyVersionId", reviewedScriptBodyVersionId);
+        }
         outboxService.append("StageCompleted", projectId, project.getRevision(), payload);
+        if (handoffId != null) {
+            Map<String, Object> handoffPayload = new LinkedHashMap<>();
+            handoffPayload.put("projectId", projectId);
+            handoffPayload.put("handoffSnapshotId", handoffId);
+            handoffPayload.put("reviewedScriptBodyVersionId", reviewedScriptBodyVersionId);
+            handoffPayload.put("checkpointId", source.getId());
+            outboxService.append("StoryboardHandoffCaptured", projectId, project.getRevision(), handoffPayload);
+        }
 
         return checkpointService.listProjection(userId, projectId);
     }
@@ -402,7 +438,8 @@ public class ContentStageOrchestrator {
                 "locked", lock));
     }
 
-    private Long createHandoffSnapshot(Long userId, ContentProject project, ContentStageCheckpoint textStoryboard) {
+    private StoryboardHandoffSnapshot createHandoffSnapshot(
+            Long userId, ContentProject project, ContentStageCheckpoint textStoryboard) {
         Long reviewedVersionId = resolveReviewedScriptBodyVersionId(project.getId());
         if (reviewedVersionId == null) {
             throw new BizException(ErrorCode.ARTIFACT_NOT_PERSISTED, "缺少审核通过的剧本正文版本，无法交接");
@@ -460,7 +497,7 @@ public class ContentStageOrchestrator {
         snapshot.setCreatedBy(userId);
         snapshot.setCapturedAt(LocalDateTime.now());
         handoffSnapshotMapper.insert(snapshot);
-        return snapshot.getId();
+        return snapshot;
     }
 
     private Long resolveReviewedScriptBodyVersionId(Long projectId) {
@@ -468,7 +505,8 @@ public class ContentStageOrchestrator {
                 new LambdaQueryWrapper<ContentStageCheckpoint>()
                         .eq(ContentStageCheckpoint::getProjectId, projectId)
                         .eq(ContentStageCheckpoint::getStageKey, ScriptStageKey.REVIEW_REVISION.value()));
-        if (review != null && review.getAdoptedContentVersionId() != null) {
+        if (review != null && review.getAdoptedContentVersionId() != null
+                && isApprovedOrLockedVersion(review.getAdoptedContentVersionId())) {
             return review.getAdoptedContentVersionId();
         }
         ContentUnit scriptBody = contentUnitMapper.selectOne(
@@ -483,10 +521,19 @@ public class ContentStageOrchestrator {
         ContentVersion approved = contentVersionMapper.selectOne(
                 new LambdaQueryWrapper<ContentVersion>()
                         .eq(ContentVersion::getContentUnitId, scriptBody.getId())
-                        .in(ContentVersion::getStatus, List.of("approved", "locked"))
+                        .in(ContentVersion::getStatus, List.of("approved", "locked", "accepted"))
                         .orderByDesc(ContentVersion::getVersionNo)
                         .last("limit 1"));
-        return approved != null ? approved.getId() : scriptBody.getCurrentVersionId();
+        return approved != null ? approved.getId() : null;
+    }
+
+    private boolean isApprovedOrLockedVersion(Long versionId) {
+        ContentVersion version = contentVersionMapper.selectById(versionId);
+        if (version == null || version.getStatus() == null) {
+            return false;
+        }
+        String status = version.getStatus().trim().toLowerCase();
+        return "approved".equals(status) || "locked".equals(status) || "accepted".equals(status);
     }
 
     private int estimateSceneCount(String contentJson) {
@@ -523,18 +570,37 @@ public class ContentStageOrchestrator {
                         .eq(ContentUnit::getIsDeleted, 0)
                         .last("limit 1"));
         if (unit == null) {
+            log.warn("REGENERATE skipped: no content unit for project={} stage={}", projectId, stageKey.value());
             return;
+        }
+        ContentStageCheckpoint checkpoint = checkpointService.requireCheckpoint(projectId, stageKey);
+        Map<String, Object> strategy = new LinkedHashMap<>();
+        strategy.put("mode", "stage_regen");
+        strategy.put("stageKey", stageKey.value());
+        strategy.put("draftId", draftId);
+        strategy.put("allow_unconfirmed_bible", true);
+        if (checkpoint.getInputSnapshotJson() != null && !checkpoint.getInputSnapshotJson().isBlank()) {
+            try {
+                strategy.put("inputSnapshot", objectMapper.readValue(
+                        checkpoint.getInputSnapshotJson(), new TypeReference<Map<String, Object>>() {}));
+            } catch (Exception e) {
+                strategy.put("inputSnapshotRaw", checkpoint.getInputSnapshotJson());
+            }
+        }
+        if (checkpoint.getInputSnapshotHash() != null) {
+            strategy.put("inputSnapshotHash", checkpoint.getInputSnapshotHash());
         }
         GenerationJobRequest request = new GenerationJobRequest(
                 stageKey.value() + "_generate",
                 "content_unit",
                 unit.getId(),
                 Map.of(),
-                "stage_regen",
-                "v1");
+                toJson(strategy),
+                "v1-stage-regen");
         String idempotencyKey = "stage-regen-" + projectId + "-" + stageKey.value() + "-" + UUID.randomUUID();
         generationJobService.createJob(userId, projectId, request, idempotencyKey);
-        log.info("Started regen job for project={} stage={} draftId={}", projectId, stageKey.value(), draftId);
+        log.info("Started regen job for project={} stage={} draftId={} inputHash={}",
+                projectId, stageKey.value(), draftId, checkpoint.getInputSnapshotHash());
     }
 
     private List<String> markDownstreamPossiblyStale(

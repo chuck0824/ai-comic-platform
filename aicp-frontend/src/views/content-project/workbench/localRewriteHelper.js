@@ -86,10 +86,11 @@ export function buildLocalRewriteRequest({
   }))
 }
 
-export function buildAdoptPatchesRequest({ contentUnitRevision, plainText, patches }) {
+export function buildAdoptPatchesRequest({ contentUnitRevision, plainText, patches, candidateVersionId }) {
   return sha256Hex(plainText).then(contentHash => ({
     content_unit_revision: contentUnitRevision,
     content_hash: contentHash,
+    candidate_version_id: candidateVersionId ?? null,
     patches: (patches || []).map(patch => ({
       start_offset: patch.startOffset ?? patch.start_offset,
       end_offset: patch.endOffset ?? patch.end_offset,

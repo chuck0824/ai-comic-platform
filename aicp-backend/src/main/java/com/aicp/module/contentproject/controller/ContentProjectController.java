@@ -14,6 +14,7 @@ import com.aicp.module.contentproject.dto.StageCheckpointRequests.StageTransitio
 import com.aicp.module.contentproject.dto.StageCheckpointRequests.StalenessResolutionRequest;
 import com.aicp.module.contentproject.dto.StageCheckpointViews.GateView;
 import com.aicp.module.contentproject.dto.StageCheckpointViews.StageProjection;
+import com.aicp.module.contentproject.dto.StageCheckpointViews.StoryboardHandoffView;
 import com.aicp.module.contentproject.service.ContentProjectService;
 import com.aicp.module.contentproject.service.ContentStageCheckpointService;
 import com.aicp.module.contentproject.service.ContentStageOrchestrator;
@@ -152,6 +153,12 @@ public class ContentProjectController {
             recordStageTruthDiff(id, "stage_checkpoints", stageCheckpoints.toWorkflowView(projection));
         }
         return ApiResponse.success(projection);
+    }
+
+    /** R2-B：最新文字分镜交接快照（须引用审核通过正文版本） */
+    @GetMapping("/{id}/storyboard-handoff")
+    public ApiResponse<StoryboardHandoffView> getStoryboardHandoff(@PathVariable Long id) {
+        return ApiResponse.success(stageCheckpoints.requireLatestHandoff(SecurityUtil.requireCurrentUserId(), id));
     }
 
     @GetMapping("/{id}/stages/{stageKey}/gate")

@@ -246,6 +246,11 @@ class ContentStageOrchestratorTest {
         review.setAdoptedContentVersionId(77L);
         when(checkpointMapper.selectOne(any())).thenReturn(review);
 
+        ContentVersion approved = new ContentVersion();
+        approved.setId(77L);
+        approved.setStatus("approved");
+        when(contentVersionMapper.selectById(77L)).thenReturn(approved);
+
         ContentUnit storyboardUnit = new ContentUnit();
         storyboardUnit.setId(40L);
         storyboardUnit.setProjectId(100L);
@@ -290,6 +295,7 @@ class ContentStageOrchestratorTest {
         assertThat(snapCaptor.getValue().getReviewedScriptBodyVersionId()).isEqualTo(77L);
         assertThat(snapCaptor.getValue().getContinuityCheckResult()).isEqualToIgnoringCase("PASS");
         verify(outboxService, atLeastOnce()).append(eq("StageCompleted"), eq(100L), anyInt(), any());
+        verify(outboxService).append(eq("StoryboardHandoffCaptured"), eq(100L), anyInt(), any());
     }
 
     @Test

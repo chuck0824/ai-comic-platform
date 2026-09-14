@@ -308,6 +308,11 @@ public class ContentUnitService {
         return result;
     }
 
+    /** R2-A §8.2：抛出带对照 URL 的结构化 EDIT_CONFLICT。 */
+    public void raiseEditConflict(Long unitId, ContentUnit unit, Integer baseRevision) {
+        throwEditConflict(unitId, unit, baseRevision);
+    }
+
     private void throwEditConflict(Long unitId, ContentUnit unit, Integer baseRevision) {
         ContentVersion draft = findAnyDraft(unitId);
         Map<String, Object> details = new LinkedHashMap<>();

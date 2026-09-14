@@ -21,6 +21,7 @@ test('conflictActionOptions always offers comparison', () => {
   assert.deepEqual(basic.map(item => item.code), [
     'load_remote_draft',
     'keep_local_retry',
+    'keep_local_as_draft',
     'open_comparison'
   ])
 

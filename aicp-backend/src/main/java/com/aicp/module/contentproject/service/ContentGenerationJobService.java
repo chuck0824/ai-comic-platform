@@ -48,6 +48,15 @@ public class ContentGenerationJobService {
     @Transactional
     public GenerationJobView createJob(Long userId, Long projectId, GenerationJobRequest request,
                                         String idempotencyKey) {
+        return createJob(userId, projectId, request, idempotencyKey, true);
+    }
+
+    /**
+     * @param autoExecute false 时仅创建 pending 任务，由调用方同步完成（如 local_rewrite）。
+     */
+    @Transactional
+    public GenerationJobView createJob(Long userId, Long projectId, GenerationJobRequest request,
+                                        String idempotencyKey, boolean autoExecute) {
         // check idempotency
         ContentGenerationJob existing = jobMapper.selectOne(
                 new LambdaQueryWrapper<ContentGenerationJob>()
@@ -80,29 +89,32 @@ public class ContentGenerationJobService {
         job.setCreatedBy(userId);
         jobMapper.insert(job);
 
-        // Persist generation context snapshot
-        try {
-            GenerationContextSnapshot persisted = new GenerationContextSnapshot();
-            persisted.setGenerationJobId(job.getId());
-            persisted.setProjectId(projectId);
-            persisted.setBibleVersionId(snapshot.bibleVersionId());
-            persisted.setProjectGuideId(snapshot.projectGuideId());
-            persisted.setCharacterGuideIdsJson(
-                    snapshot.characterGuideIds() != null
-                            ? objectMapper.writeValueAsString(snapshot.characterGuideIds())
-                            : null);
-            persisted.setUnitGuideId(snapshot.unitGuideId());
-            persisted.setSelectedVersionsJson(objectMapper.writeValueAsString(snapshot.selectedVersions()));
-            persisted.setResolvedGuideJson(snapshot.resolvedGuideJson());
-            persisted.setPayloadJson(jobSnapshot.payload());
-            persisted.setPayloadHash(jobSnapshot.contentHash());
-            contextSnapshotMapper.insert(persisted);
-        } catch (JsonProcessingException e) {
-            throw new BizException(ErrorCode.INTERNAL_ERROR, "生成上下文快照保存失败");
+        // Persist generation context snapshot（无创作圣经时跳过，避免 NOT NULL 约束阻断 local_rewrite / regen）
+        if (snapshot.bibleVersionId() != null) {
+            try {
+                GenerationContextSnapshot persisted = new GenerationContextSnapshot();
+                persisted.setGenerationJobId(job.getId());
+                persisted.setProjectId(projectId);
+                persisted.setBibleVersionId(snapshot.bibleVersionId());
+                persisted.setProjectGuideId(snapshot.projectGuideId());
+                persisted.setCharacterGuideIdsJson(
+                        snapshot.characterGuideIds() != null
+                                ? objectMapper.writeValueAsString(snapshot.characterGuideIds())
+                                : null);
+                persisted.setUnitGuideId(snapshot.unitGuideId());
+                persisted.setSelectedVersionsJson(objectMapper.writeValueAsString(snapshot.selectedVersions()));
+                persisted.setResolvedGuideJson(snapshot.resolvedGuideJson());
+                persisted.setPayloadJson(jobSnapshot.payload());
+                persisted.setPayloadHash(jobSnapshot.contentHash());
+                contextSnapshotMapper.insert(persisted);
+            } catch (JsonProcessingException e) {
+                throw new BizException(ErrorCode.INTERNAL_ERROR, "生成上下文快照保存失败");
+            }
         }
 
-        // M1: trigger async AI execution
-        executor.execute(job.getId());
+        if (autoExecute) {
+            executor.execute(job.getId());
+        }
 
         return toView(job);
     }
@@ -263,6 +275,22 @@ public class ContentGenerationJobService {
             target.put("revision", unit.getRevision() == null ? 0 : unit.getRevision());
             target.put("current_version_id", unit.getCurrentVersionId());
             payload.put("_generation_target", target);
+            if (request.strategy() != null && !request.strategy().isBlank()) {
+                try {
+                    Object strategyParsed = objectMapper.readValue(request.strategy(), Object.class);
+                    if (strategyParsed instanceof Map<?, ?> sm) {
+                        Object local = sm.get("local_rewrite");
+                        if (local != null) {
+                            payload.put("_local_rewrite", local);
+                        }
+                        if ("stage_regen".equals(String.valueOf(sm.get("mode")))) {
+                            payload.put("_stage_regen", sm);
+                        }
+                    }
+                } catch (Exception ignored) {
+                    payload.put("strategy_raw", request.strategy());
+                }
+            }
             String json = objectMapper.writeValueAsString(payload);
             return new JobSnapshot(json, sha256(json));
         } catch (JsonProcessingException e) {

@@ -10,6 +10,7 @@ import com.aicp.module.contentproject.mapper.ContentProjectMapper;
 import com.aicp.module.contentproject.mapper.ContentStageCheckpointMapper;
 import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.aicp.module.contentproject.mapper.ContentVersionMapper;
+import com.aicp.module.contentproject.mapper.StoryboardHandoffSnapshotMapper;
 import com.aicp.module.contentproject.service.stage.StageGateRegistry;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,6 +35,7 @@ class ContentStageCheckpointServiceMigrationTest {
     @Mock ContentProjectMapper projectMapper;
     @Mock ContentUnitMapper contentUnitMapper;
     @Mock ContentVersionMapper contentVersionMapper;
+    @Mock StoryboardHandoffSnapshotMapper handoffSnapshotMapper;
     @Mock ProjectAccessService accessService;
     @Mock StageGateRegistry gateRegistry;
     @Mock ScriptStageTruthProperties truthProperties;
@@ -49,7 +51,7 @@ class ContentStageCheckpointServiceMigrationTest {
         unitSelects = 0;
         service = new ContentStageCheckpointService(
                 checkpointMapper, projectMapper, contentUnitMapper, contentVersionMapper,
-                accessService, gateRegistry, truthProperties, new ObjectMapper());
+                handoffSnapshotMapper, accessService, gateRegistry, truthProperties, new ObjectMapper());
 
         when(checkpointMapper.selectList(any())).thenAnswer(inv -> new ArrayList<>(store));
         when(checkpointMapper.insert(any(ContentStageCheckpoint.class))).thenAnswer(inv -> {

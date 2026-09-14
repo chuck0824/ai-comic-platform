@@ -172,8 +172,8 @@
     </el-dialog>
     <el-dialog
       v-model="conflictComparisonVisible"
-      title="草稿冲突对照"
-      width="640px"
+      title="草稿冲突三方对照"
+      width="820px"
       @close="conflictComparison = null"
     >
       <template v-if="conflictComparison">
@@ -182,10 +182,20 @@
           · 服务端 revision={{ conflictComparison.server_revision ?? conflictComparison.serverRevision ?? '—' }}
           · hash={{ conflictComparison.server_content_hash ?? conflictComparison.serverContentHash ?? '—' }}
         </p>
-        <pre class="conflict-preview">{{ conflictComparison.server_plain_text || conflictComparison.serverPlainText || conflictComparison.server_content_json || conflictComparison.serverContentJson || '（远端草稿为空）' }}</pre>
+        <div class="conflict-columns">
+          <div>
+            <h4>本地未同步</h4>
+            <pre class="conflict-preview">{{ localConflictPlainText || '（本地为空）' }}</pre>
+          </div>
+          <div>
+            <h4>服务端草稿</h4>
+            <pre class="conflict-preview">{{ conflictComparison.server_plain_text || conflictComparison.serverPlainText || conflictComparison.server_content_json || conflictComparison.serverContentJson || '（远端草稿为空）' }}</pre>
+          </div>
+        </div>
       </template>
       <template #footer>
         <el-button @click="conflictComparisonVisible = false">关闭</el-button>
+        <el-button @click="keepLocalAsDraftVersion(); conflictComparisonVisible = false">保留本地另存草稿</el-button>
         <el-button type="primary" @click="loadRemoteDraftForConflict(); conflictComparisonVisible = false">
           加载远端草稿
         </el-button>
@@ -286,6 +296,7 @@ const stalenessLoading = ref(false)
 const draftSaveQueue = createDraftSaveQueue()
 const conflictComparison = ref(null)
 const conflictComparisonVisible = ref(false)
+const localConflictPlainText = ref('')
 
 const defaultEpisode = () => ({ id: 'EP-001', title: '第 1 集', beats: [], scenes: [] })
 const stageData = reactive({
@@ -405,6 +416,7 @@ function handleGuidanceTarget(action) {
   guidance.value = null
   if (code === 'load_remote_draft') return loadRemoteDraftForConflict()
   if (code === 'keep_local_retry' || code === 'retry_stage_save') return saveCurrentDraft()
+  if (code === 'keep_local_as_draft') return keepLocalAsDraftVersion()
   if (code === 'open_comparison') return openConflictComparison(current?.conflict)
 }
 
@@ -415,6 +427,7 @@ async function openConflictComparison(conflict) {
     return showGuidance({ code: 'UNIT_REQUIRED', title: '内容单元不存在', message: '请刷新后重试。' })
   }
   try {
+    localConflictPlainText.value = currentLocalPlainForStage(stage)
     const data = responseData(await contentProjectApi.getConflicts(unit.id, {
       base_revision: conflict?.base_revision ?? conflict?.baseRevision
     }))
@@ -427,6 +440,64 @@ async function openConflictComparison(conflict) {
       message: caught?.response?.data?.message || caught?.message || '请稍后重试'
     })
   }
+}
+
+function currentLocalPlainForStage(stage) {
+  const keyMap = {
+    creation_settings: 'creationSettings', novel_upload: 'novelUpload', novel_analysis: 'novelAnalysis',
+    adaptation: 'adaptation', structured_script: 'structuredScript', script_body: 'scriptBody',
+    review_revision: 'reviewRevision', text_storyboard: 'textStoryboard'
+  }
+  const field = keyMap[stage]
+  const local = field ? stageData[field] : null
+  if (stage === 'script_body') {
+    return flattenScriptBodyPlainText(stageData.scriptBody).plainText
+  }
+  try {
+    return JSON.stringify(local || {}, null, 2)
+  } catch {
+    return String(local ?? '')
+  }
+}
+
+async function keepLocalAsDraftVersion() {
+  const stage = workbench.activeStage.value
+  const unit = units.value.find(item => item.unit_type === stage)
+  if (!unit) {
+    return showGuidance({ code: 'UNIT_REQUIRED', title: '内容单元不存在', message: '请刷新后重试。' })
+  }
+  try {
+    const draft = responseData(await contentProjectApi.getDraft(unit.id))
+    unit.revision = draft.revision ?? unit.revision
+    const localPayload = currentLocalContentForStage(stage)
+    const plain = currentLocalPlainForStage(stage)
+    const saved = responseData(await contentProjectApi.saveDraft(unit.id, {
+      revision: unit.revision,
+      content_json: typeof localPayload === 'string' ? localPayload : JSON.stringify(localPayload),
+      plain_text: plain
+    }))
+    unit.revision = saved.revision ?? unit.revision
+    ElMessage.success('已将本地内容另存并覆盖服务端草稿')
+    draftSaveQueue.markClean()
+    autosaveState.value = ''
+    guidance.value = null
+  } catch (caught) {
+    showGuidance({
+      code: 'KEEP_LOCAL_DRAFT_FAILED',
+      title: '保留本地另存失败',
+      message: caught?.response?.data?.message || caught?.message || '请稍后重试'
+    })
+  }
+}
+
+function currentLocalContentForStage(stage) {
+  const keyMap = {
+    creation_settings: 'creationSettings', novel_upload: 'novelUpload', novel_analysis: 'novelAnalysis',
+    adaptation: 'adaptation', structured_script: 'structuredScript', script_body: 'scriptBody',
+    review_revision: 'reviewRevision', text_storyboard: 'textStoryboard'
+  }
+  const field = keyMap[stage]
+  return field ? clone(stageData[field]) : {}
 }
 
 async function loadProject() {
@@ -1306,7 +1377,8 @@ async function adoptScriptLocalRewrite({ blockId, candidate, plainText, selected
   const body = await buildAdoptPatchesRequest({
     contentUnitRevision: unit.revision || 0,
     plainText: currentPlain,
-    patches
+    patches,
+    candidateVersionId: candidate?.candidateVersionId ?? candidate?.candidate_version_id ?? null
   })
   const idempotencyKey = (typeof crypto !== 'undefined' && crypto.randomUUID)
     ? crypto.randomUUID()
@@ -1462,5 +1534,21 @@ function statusTagType(status) { return ({ reviewing: 'warning', approved: 'succ
 </script>
 
 <style scoped>
-.workspace{display:flex;height:calc(100vh - var(--topbar-h));min-height:680px}.workspace-main{flex:1;min-width:0;overflow:auto;padding:20px 24px;background:var(--bg-app)}.workspace-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}.workspace-header h1{margin:0 0 8px;font-size:20px}.workspace-meta,.workspace-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.workspace-meta{color:var(--text-secondary);font-size:13px}.workspace-actions{justify-content:flex-end}.model-context{font-size:12px;color:var(--text-secondary);padding:6px 10px;border:1px solid var(--border);border-radius:8px}.workspace-state{display:grid;place-items:center;padding:70px;color:var(--text-secondary)}.stage-card,.shared-panel{padding:20px;margin-bottom:18px}.route-notice{margin-bottom:16px}.conflict-meta{margin:0 0 12px;color:var(--text-secondary);font-size:13px}.conflict-preview{margin:0;max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;padding:12px;border-radius:8px;background:var(--el-fill-color-light);font-size:13px;line-height:1.6}@media(max-width:1000px){.workspace-header{flex-direction:column}.workspace-actions{justify-content:flex-start}}@media(max-width:760px){.workspace{display:block;height:auto}.workspace-main{padding:12px}.workspace-actions{align-items:stretch}.workspace-actions .el-button{margin-left:0}}
+.workspace{display:flex;height:calc(100vh - var(--topbar-h));min-height:680px}
+.workspace-main{flex:1;min-width:0;overflow:auto;padding:20px 24px;background:var(--bg-app)}
+.workspace-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px}
+.workspace-header h1{margin:0 0 8px;font-size:20px}
+.workspace-meta,.workspace-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.workspace-meta{color:var(--text-secondary);font-size:13px}
+.workspace-actions{justify-content:flex-end}
+.model-context{font-size:12px;color:var(--text-secondary);padding:6px 10px;border:1px solid var(--border);border-radius:8px}
+.workspace-state{display:grid;place-items:center;padding:70px;color:var(--text-secondary)}
+.stage-card,.shared-panel{padding:20px;margin-bottom:18px}
+.route-notice{margin-bottom:16px}
+.conflict-meta{margin:0 0 12px;color:var(--text-secondary);font-size:13px}
+.conflict-columns{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.conflict-columns h4{margin:0 0 8px;font-size:13px}
+.conflict-preview{margin:0;max-height:360px;overflow:auto;white-space:pre-wrap;word-break:break-word;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--bg-elevated);font-size:12px;line-height:1.6}
+@media(max-width:1000px){.workspace-header{flex-direction:column}.workspace-actions{justify-content:flex-start}.conflict-columns{grid-template-columns:1fr}}
+@media(max-width:760px){.workspace{display:block;height:auto}.workspace-main{padding:12px}.workspace-actions{align-items:stretch}.workspace-actions .el-button{margin-left:0}}
 </style>

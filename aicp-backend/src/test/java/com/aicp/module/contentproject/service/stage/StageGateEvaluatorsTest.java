@@ -227,6 +227,57 @@ class StageGateEvaluatorsTest {
                 .contains("CONTINUITY_NOT_PASS");
     }
 
+    @Test
+    void novelAnalysisRequiresEntityQuad() throws Exception {
+        ContentProject project = project(8L, null);
+        ContentUnit unit = new ContentUnit();
+        unit.setId(81L);
+        unit.setUnitType("novel_analysis");
+        when(unitMapper.selectOne(any())).thenReturn(unit);
+
+        var draft = new com.aicp.module.contentproject.entity.ContentVersion();
+        draft.setContentJson(objectMapper.writeValueAsString(Map.of(
+                "characters", List.of(),
+                "locations", List.of(Map.of("id", "L1")),
+                "events", List.of(Map.of("id", "E1")),
+                "worldview", "都市异能"
+        )));
+        when(versionMapper.selectOne(any())).thenReturn(draft);
+
+        StageGateResult result = new NovelAnalysisGateEvaluator(support).evaluate(project);
+        assertThat(result.blocked()).isTrue();
+        assertThat(result.blockers()).extracting(m -> m.get("code"))
+                .contains("MAIN_CHARACTERS_REQUIRED");
+    }
+
+    @Test
+    void reviewRevisionRequiresApproval() throws Exception {
+        ContentProject project = project(7L, null);
+        ContentUnit reviewUnit = new ContentUnit();
+        reviewUnit.setId(71L);
+        reviewUnit.setUnitType("review_revision");
+        ContentUnit scriptUnit = new ContentUnit();
+        scriptUnit.setId(72L);
+        scriptUnit.setUnitType("script_body");
+        scriptUnit.setCurrentVersionId(720L);
+        when(unitMapper.selectOne(any())).thenReturn(reviewUnit, scriptUnit);
+
+        var reviewDraft = new com.aicp.module.contentproject.entity.ContentVersion();
+        reviewDraft.setContentJson(objectMapper.writeValueAsString(Map.of(
+                "issues", List.of(Map.of("severity", "BLOCKER", "status", "OPEN", "title", "钩子弱"))
+        )));
+        var scriptVersion = new com.aicp.module.contentproject.entity.ContentVersion();
+        scriptVersion.setId(720L);
+        scriptVersion.setStatus("draft");
+        when(versionMapper.selectOne(any())).thenReturn(reviewDraft);
+        when(versionMapper.selectById(720L)).thenReturn(scriptVersion);
+
+        StageGateResult result = new ReviewRevisionGateEvaluator(support).evaluate(project);
+        assertThat(result.blocked()).isTrue();
+        assertThat(result.blockers()).extracting(m -> m.get("code"))
+                .contains("REVIEW_BLOCKER_OPEN", "REVIEW_APPROVAL_REQUIRED");
+    }
+
     private ContentProject project(Long id, Long parameterVersionId) {
         ContentProject project = new ContentProject();
         project.setId(id);

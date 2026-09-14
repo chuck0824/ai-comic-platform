@@ -187,6 +187,12 @@ public class ContentGenerationExecutor {
     // ===== Prompt Builders =====
 
     private String buildSystemPrompt(String jobType, Map<String, Object> snapshot) {
+        if ("local_rewrite".equals(jobType)) {
+            return "你是资深短剧编剧。请只改写用户给出的选中片段，保持人物口吻与上下文连贯，直接输出改写后的正文，不要解释。";
+        }
+        if (jobType != null && jobType.endsWith("_generate")) {
+            return "你是资深短剧编剧。请根据阶段输入快照与当前草稿上下文重新生成该阶段内容，输出可用的结构化结果。";
+        }
         return switch (jobType) {
             case "story_seed_generate" ->
                 "你是一位资深的短剧编剧。请根据用户提供的创意，扩展成一个完整的故事种子，包括核心冲突、主要人物和故事走向。";
@@ -207,6 +213,9 @@ public class ContentGenerationExecutor {
 
     @SuppressWarnings("unchecked")
     private String buildUserPrompt(String jobType, Map<String, Object> snapshot) {
+        if ("local_rewrite".equals(jobType)) {
+            return buildLocalRewriteUserPrompt(snapshot);
+        }
         StringBuilder sb = new StringBuilder();
 
         // Extract parameter context
@@ -220,7 +229,19 @@ public class ContentGenerationExecutor {
 
         // Extract strategy if present
         Object strategy = snapshot.get("strategy");
-        if (strategy != null) sb.append("策略：").append(strategy).append("\n");
+        if (strategy != null) {
+            sb.append("策略：");
+            if (strategy instanceof Map<?, ?> || strategy instanceof List<?>) {
+                sb.append(toJson(strategy));
+            } else {
+                sb.append(strategy);
+            }
+            sb.append("\n");
+        }
+        Object stageRegen = snapshot.get("_stage_regen");
+        if (stageRegen != null) {
+            sb.append("\n--- stage_regen ---\n").append(toJson(stageRegen)).append("\n");
+        }
 
         // Extract content unit context
         for (Map.Entry<String, Object> entry : snapshot.entrySet()) {
@@ -244,6 +265,224 @@ public class ContentGenerationExecutor {
         }
 
         return sb.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private String buildLocalRewriteUserPrompt(Map<String, Object> snapshot) {
+        Map<String, Object> ctx = extractLocalRewriteContext(snapshot);
+        String selected = String.valueOf(ctx.getOrDefault("selectedText", ""));
+        String operation = String.valueOf(ctx.getOrDefault("operation", "rewrite"));
+        String prompt = ctx.get("prompt") == null ? "" : String.valueOf(ctx.get("prompt"));
+        StringBuilder sb = new StringBuilder();
+        sb.append("操作类型：").append(operation).append("\n");
+        if (!prompt.isBlank()) {
+            sb.append("补充要求：").append(prompt).append("\n");
+        }
+        sb.append("选中原文：\n").append(selected);
+        return sb.toString();
+    }
+
+    /**
+     * 同步完成局部改写任务：调用模型（失败则确定性回退），写入 candidate Patch，标记 job completed。
+     * 失败时标记 job failed，不改正文。
+     */
+    public ContentVersion completeLocalRewrite(Long jobId) {
+        ContentGenerationJob job = jobMapper.selectById(jobId);
+        if (job == null) {
+            throw new IllegalArgumentException("job not found: " + jobId);
+        }
+        if (!"pending".equals(job.getStatus()) && !"processing".equals(job.getStatus())) {
+            ContentVersion existing = versionMapper.selectOne(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ContentVersion>()
+                            .eq(ContentVersion::getGenerationJobId, jobId)
+                            .last("limit 1"));
+            if (existing != null) {
+                return existing;
+            }
+        }
+        jobMapper.update(null, new UpdateWrapper<ContentGenerationJob>()
+                .eq("id", jobId)
+                .in("status", "pending", "processing")
+                .set("status", "processing"));
+
+        Map<String, Object> snapshot = parseSnapshot(job.getInputSnapshotJson());
+        Map<String, Object> ctx = extractLocalRewriteContext(snapshot);
+        String selected = String.valueOf(ctx.getOrDefault("selectedText", ""));
+        String operation = String.valueOf(ctx.getOrDefault("operation", "rewrite"));
+        int start = toInt(ctx.get("startOffset"), 0);
+        int end = toInt(ctx.get("endOffset"), start);
+        String baseHash = ctx.get("baseContentHash") == null ? null : String.valueOf(ctx.get("baseContentHash"));
+        Long baseVersionId = ctx.get("baseVersionId") == null ? null : toLong(ctx.get("baseVersionId"));
+
+        String replacement;
+        try {
+            Map<String, Object> aiParams = new java.util.LinkedHashMap<>();
+            aiParams.put("model", job.getModel() != null ? job.getModel() : "deepseek-v3");
+            aiParams.put("system_prompt", buildSystemPrompt("local_rewrite", snapshot));
+            aiParams.put("prompt", buildLocalRewriteUserPrompt(snapshot));
+            aiParams.put("temperature", 0.4);
+            aiParams.put("max_tokens", 2048);
+            Map<String, Object> aiResult = aiRouter.chatCompletion(aiParams);
+            replacement = sanitizeRewriteOutput(extractContent(aiResult), selected);
+        } catch (Exception e) {
+            log.warn("local_rewrite AI failed for job {}, using deterministic fallback: {}", jobId, e.getMessage());
+            replacement = deterministicRewrite(selected, operation);
+        }
+
+        Map<String, Object> candidatePayload = new java.util.LinkedHashMap<>();
+        candidatePayload.put("before", selected);
+        candidatePayload.put("after", replacement);
+        candidatePayload.put("baseVersionId", baseVersionId);
+        candidatePayload.put("baseContentHash", baseHash);
+        candidatePayload.put("status", "READY");
+        candidatePayload.put("patches", List.of(Map.of(
+                "startOffset", start,
+                "endOffset", end,
+                "expectedTextHash", sha256(selected),
+                "replacement", replacement,
+                "reason", operation)));
+
+        ContentVersion candidate = versionMapper.selectOne(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ContentVersion>()
+                        .eq(ContentVersion::getGenerationJobId, jobId)
+                        .last("limit 1"));
+        if (candidate == null) {
+            List<ContentVersion> existing = versionMapper.selectList(
+                    new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<ContentVersion>()
+                            .eq(ContentVersion::getContentUnitId, job.getTargetId())
+                            .orderByDesc(ContentVersion::getVersionNo)
+                            .last("limit 1"));
+            int nextVersion = existing.isEmpty() || existing.get(0).getVersionNo() == null
+                    ? 1
+                    : Math.max(1, existing.get(0).getVersionNo() + 1);
+            candidate = new ContentVersion();
+            candidate.setProjectId(job.getProjectId());
+            candidate.setContentUnitId(job.getTargetId());
+            candidate.setVersionNo(nextVersion);
+            candidate.setStatus("candidate");
+            candidate.setSource("ai_local_rewrite");
+            candidate.setGenerationJobId(jobId);
+            candidate.setCreatedBy(job.getCreatedBy());
+            candidate.setContentJson(toJson(candidatePayload));
+            candidate.setPlainText(replacement);
+            candidate.setContentHash(sha256(toJson(candidatePayload)));
+            versionMapper.insert(candidate);
+        } else {
+            candidate.setStatus("candidate");
+            candidate.setContentJson(toJson(candidatePayload));
+            candidate.setPlainText(replacement);
+            candidate.setContentHash(sha256(toJson(candidatePayload)));
+            versionMapper.updateById(candidate);
+        }
+
+        jobMapper.update(null, new UpdateWrapper<ContentGenerationJob>()
+                .eq("id", jobId)
+                .eq("status", "processing")
+                .set("status", "completed")
+                .set("actual_credits", estimateTokens(replacement))
+                .set("finished_at", LocalDateTime.now()));
+        return candidate;
+    }
+
+    public void markJobFailed(Long jobId, String errorCode) {
+        markFailedIfProcessing(jobId, errorCode);
+        jobMapper.update(null, new UpdateWrapper<ContentGenerationJob>()
+                .eq("id", jobId)
+                .eq("status", "pending")
+                .set("status", "failed")
+                .set("error_code", errorCode)
+                .set("finished_at", LocalDateTime.now()));
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> extractLocalRewriteContext(Map<String, Object> snapshot) {
+        Object direct = snapshot.get("_local_rewrite");
+        if (direct instanceof Map<?, ?> m) {
+            return (Map<String, Object>) m;
+        }
+        Object strategy = snapshot.get("strategy");
+        if (strategy instanceof String s && !s.isBlank()) {
+            try {
+                Object parsed = objectMapper.readValue(s, Object.class);
+                if (parsed instanceof Map<?, ?> sm) {
+                    Object nested = sm.get("local_rewrite");
+                    if (nested instanceof Map<?, ?> nm) {
+                        return (Map<String, Object>) nm;
+                    }
+                    return (Map<String, Object>) sm;
+                }
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        if (strategy instanceof Map<?, ?> sm) {
+            Object nested = sm.get("local_rewrite");
+            if (nested instanceof Map<?, ?> nm) {
+                return (Map<String, Object>) nm;
+            }
+            return (Map<String, Object>) sm;
+        }
+        return Map.of();
+    }
+
+    private Map<String, Object> parseSnapshot(String snapshotJson) {
+        try {
+            return objectMapper.readValue(snapshotJson == null ? "{}" : snapshotJson,
+                    new com.fasterxml.jackson.core.type.TypeReference<Map<String, Object>>() {});
+        } catch (Exception e) {
+            return Map.of();
+        }
+    }
+
+    private String deterministicRewrite(String selected, String operation) {
+        String op = operation == null ? "rewrite" : operation;
+        return switch (op) {
+            case "strengthen_conflict" -> selected + "（冲突升级：对峙更尖锐，代价更明确。）";
+            case "condense_dialogue" -> selected.replace("，", "，").replaceAll("\\s+", " ").trim();
+            case "rewrite_tone" -> "【语气调整】" + selected;
+            case "continue" -> selected + "……随后局势再度绷紧。";
+            case "check_consistency" -> selected;
+            default -> "【改写】" + selected;
+        };
+    }
+
+    private String sanitizeRewriteOutput(String generated, String fallback) {
+        if (generated == null || generated.isBlank()) {
+            return fallback;
+        }
+        String text = generated.trim();
+        if (text.startsWith("\"") && text.endsWith("\"") && text.length() > 1) {
+            text = text.substring(1, text.length() - 1);
+        }
+        return text.isBlank() ? fallback : text;
+    }
+
+    private int toInt(Object value, int defaultValue) {
+        if (value instanceof Number n) {
+            return n.intValue();
+        }
+        if (value != null) {
+            try {
+                return Integer.parseInt(String.valueOf(value));
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        return defaultValue;
+    }
+
+    private Long toLong(Object value) {
+        if (value instanceof Number n) {
+            return n.longValue();
+        }
+        if (value != null) {
+            try {
+                return Long.parseLong(String.valueOf(value));
+            } catch (Exception ignored) {
+                // fall through
+            }
+        }
+        return null;
     }
 
     // ===== Helpers =====

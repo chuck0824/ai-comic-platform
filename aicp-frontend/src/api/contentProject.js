@@ -13,6 +13,7 @@ export const contentProjectApi = {
   saveResume: (id, data) => request.put(`/content-projects/${id}/resume-position`, data),
   // R2-A stage truth
   listStageCheckpoints: (id) => request.get(`/content-projects/${id}/stage-checkpoints`),
+  getStoryboardHandoff: (id) => request.get(`/content-projects/${id}/storyboard-handoff`),
   previewStageGate: (id, stageKey) => request.get(`/content-projects/${id}/stages/${stageKey}/gate`),
   stageTransition: (id, data, headers = {}) =>
     request.post(`/content-projects/${id}/stage-transitions`, data, { headers }),

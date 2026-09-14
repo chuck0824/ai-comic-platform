@@ -11,14 +11,17 @@ import com.aicp.module.contentproject.dto.ContentProjectViews.WorkflowView;
 import com.aicp.module.contentproject.dto.StageCheckpointViews.GateView;
 import com.aicp.module.contentproject.dto.StageCheckpointViews.StageCheckpointView;
 import com.aicp.module.contentproject.dto.StageCheckpointViews.StageProjection;
+import com.aicp.module.contentproject.dto.StageCheckpointViews.StoryboardHandoffView;
 import com.aicp.module.contentproject.entity.ContentProject;
 import com.aicp.module.contentproject.entity.ContentStageCheckpoint;
 import com.aicp.module.contentproject.entity.ContentUnit;
 import com.aicp.module.contentproject.entity.ContentVersion;
+import com.aicp.module.contentproject.entity.StoryboardHandoffSnapshot;
 import com.aicp.module.contentproject.mapper.ContentProjectMapper;
 import com.aicp.module.contentproject.mapper.ContentStageCheckpointMapper;
 import com.aicp.module.contentproject.mapper.ContentUnitMapper;
 import com.aicp.module.contentproject.mapper.ContentVersionMapper;
+import com.aicp.module.contentproject.mapper.StoryboardHandoffSnapshotMapper;
 import com.aicp.module.contentproject.service.stage.StageGateRegistry;
 import com.aicp.module.contentproject.service.stage.StageGateResult;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -52,6 +55,7 @@ public class ContentStageCheckpointService {
     private final ContentProjectMapper projectMapper;
     private final ContentUnitMapper contentUnitMapper;
     private final ContentVersionMapper contentVersionMapper;
+    private final StoryboardHandoffSnapshotMapper handoffSnapshotMapper;
     private final ProjectAccessService accessService;
     private final StageGateRegistry gateRegistry;
     private final ScriptStageTruthProperties truthProperties;
@@ -82,7 +86,43 @@ public class ContentStageCheckpointService {
                 project.getRevision(),
                 stages,
                 project.getLastStageKey(),
-                truthProperties.isStageTruthEnabled());
+                truthProperties.isStageTruthEnabled(),
+                findLatestHandoffView(projectId));
+    }
+
+    /**
+     * R2-B 消费入口：返回项目最新文字分镜交接快照；不存在则 404。
+     */
+    public StoryboardHandoffView requireLatestHandoff(Long userId, Long projectId) {
+        accessService.require(projectId, userId, Action.VIEW);
+        requireProject(projectId);
+        StoryboardHandoffView view = findLatestHandoffView(projectId);
+        if (view == null) {
+            throw new BizException(ErrorCode.NOT_FOUND, "尚未生成文字分镜交接快照");
+        }
+        return view;
+    }
+
+    public StoryboardHandoffView findLatestHandoffView(Long projectId) {
+        StoryboardHandoffSnapshot row = handoffSnapshotMapper.selectOne(
+                new LambdaQueryWrapper<StoryboardHandoffSnapshot>()
+                        .eq(StoryboardHandoffSnapshot::getProjectId, projectId)
+                        .orderByDesc(StoryboardHandoffSnapshot::getId)
+                        .last("limit 1"));
+        return row == null ? null : toHandoffView(row);
+    }
+
+    private StoryboardHandoffView toHandoffView(StoryboardHandoffSnapshot row) {
+        return new StoryboardHandoffView(
+                row.getId(),
+                row.getProjectId(),
+                row.getCheckpointId(),
+                row.getReviewedScriptBodyVersionId(),
+                row.getContinuityCheckResult(),
+                row.getSceneCount(),
+                row.getContentHash(),
+                row.getCapturedAt() == null ? null : row.getCapturedAt().toString(),
+                parseJsonMap(row.getPayloadJson()));
     }
 
     public GateView previewGate(Long userId, Long projectId, String stageKeyRaw) {
