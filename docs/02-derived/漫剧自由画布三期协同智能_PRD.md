@@ -1,15 +1,15 @@
 # 漫剧自由画布三期协同智能 PRD
 
 > **[superpowers 更新 V1.8]（2026-07-05）**：
-> - **Canvas 生产内核重构**：节点类型从 11 种收敛为 6 种标准类型（text/image/video/audio/script/director）。本文档中涉及 11 种节点类型的描述以 6 种标准类型为准。角色/场景/道具不再作为节点类型。详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md`
+> - **Canvas 生产内核重构**：节点类型从 11 种收敛为 6 种标准类型（text/image/video/audio/script/director）。本文档中涉及 11 种节点类型的描述以 6 种标准类型为准。角色/场景/道具不再作为节点类型。详见 `docs/superpowers/specs/canvas/2026-07-05-canvas-production-kernel-completion-design.md`
 > - **交付模型更新**：素材包交付已升级为 DeliveryManifest + ZIP/EDL/FCPXML。详见 completion-design Section 6
 >
 > **[superpowers 更新 V1.7]（2026-07-04）**：
-> - **浮动编辑器改造**：画布交互模型已升级——右侧属性面板和底部生成栏已由浮动编辑器替代。本文档中涉及"右侧属性面板"、"底部生成栏"、"属性抽屉"的交互描述标注为 `[已废弃-superpowers V1.6]`。新交互模型详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
-> - **Agent 会话统一**：各节点独立 Agent 面板（如"文本节点 Agent"、"分镜 Agent panel"）已由统一 AgentSessionService facade 替代。Agent 交互通过 `/api/v1/agent/sessions` 统一入口。详见 `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
-> - **分镜系统统一**：旧双轨分镜（`storyboard_shots` + `cp_storyboard_*`）已由统一专业分镜编辑器替代（13 维镜头字段 + A/B/C 层级版本 + XLSX 导入导出）。详见 `docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md`
+> - **浮动编辑器改造**：画布交互模型已升级——右侧属性面板和底部生成栏已由浮动编辑器替代。本文档中涉及"右侧属性面板"、"底部生成栏"、"属性抽屉"的交互描述标注为 `[已废弃-superpowers V1.6]`。新交互模型详见 `docs/superpowers/specs/canvas/2026-06-28-canvas-node-floating-editor-design.md`
+> - **Agent 会话统一**：各节点独立 Agent 面板（如"文本节点 Agent"、"分镜 Agent panel"）已由统一 AgentSessionService facade 替代。Agent 交互通过 `/api/v1/agent/sessions` 统一入口。详见 `docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md`
+> - **分镜系统统一**：旧双轨分镜（`storyboard_shots` + `cp_storyboard_*`）已由统一专业分镜编辑器替代（13 维镜头字段 + A/B/C 层级版本 + XLSX 导入导出）。详见 `docs/superpowers/specs/canvas/2026-06-30-storyboard-professional-editor-redesign.md`
 > - **API 前缀统一**：所有 API 端点统一使用 `/api/v1/` 前缀。文档中旧 `/api/` 前缀的引用以新前缀为准。
-> - **Workspace 隔离**：所有私有资源需 `X-Workspace-Id` header。详见 `docs/superpowers/specs/2026-06-28-unified-account-model-billing-design.md`
+> - **Workspace 隔离**：所有私有资源需 `X-Workspace-Id` header。详见 `docs/superpowers/specs/workbench/2026-06-28-unified-account-model-billing-design.md`
 
 ## 1. 文档信息
 
@@ -104,7 +104,7 @@ stateDiagram-v2
     VersionLocked --> Draft: 创建新版本
 ```
 
-## 4. 团队与权限 `[superpowers 更新 V1.7：协作权限由 3001 Workspace 成员资格+8080 项目 RBAC 共同决定。详见 docs/superpowers/specs/2026-06-28-unified-account-model-billing-design.md]`
+## 4. 团队与权限 `[superpowers 更新 V1.7：协作权限由 3001 Workspace 成员资格+8080 项目 RBAC 共同决定。详见 docs/superpowers/specs/workbench/2026-06-28-unified-account-model-billing-design.md]`
 
 ### 4.1 团队空间
 
@@ -391,7 +391,7 @@ stateDiagram-v2
 | 中止执行 | 用户可中止整个工作流 |
 | 执行报告 | 执行后生成成功、失败、耗时、消耗统计 |
 
-## 9. 资产智能检索与推荐 `[superpowers 更新 V1.7：资产搜索统一使用 workspace_assets 模型，详见 docs/superpowers/specs/2026-07-04-asset-generation-history-workbench-design.md]`
+## 9. 资产智能检索与推荐 `[superpowers 更新 V1.7：资产搜索统一使用 workspace_assets 模型，详见 docs/superpowers/specs/workbench/2026-07-04-asset-generation-history-workbench-design.md]`
 
 ### 9.1 资产库分层
 
@@ -479,7 +479,7 @@ stateDiagram-v2
 | 模型维度 | 按模型统计消耗 |
 | 导出记录 | 支持导出消耗明细 |
 
-### 10.4 节点 Agent 成本归因与审计 `[superpowers 更新 V1.7：Agent 审计追踪统一引用 Agent 会话系统（agent_execution_snapshots）。详见 docs/superpowers/specs/2026-07-02-agent-session-completion-design.md]`
+### 10.4 节点 Agent 成本归因与审计 `[superpowers 更新 V1.7：Agent 审计追踪统一引用 Agent 会话系统（agent_execution_snapshots）。详见 docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md]`
 
 三期需要把节点级 Agent 纳入团队成本、权限和审计体系。文本节点 Agent、图片节点 Agent、视频节点 Agent、音频节点 Agent 等所有自然语言辅助修改能力，都必须记录节点上下文和模型消耗，便于项目负责人核算成本、复盘质量和追踪责任。
 

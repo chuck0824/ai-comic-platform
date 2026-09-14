@@ -8,7 +8,7 @@
 
 **Tech Stack:** Java 17, Spring Boot 3.2, MyBatis-Plus 3.5, H2/MySQL, Apache POI 5.2, Vue 3, Vue Router, Element Plus, Pinia-compatible composables, vuedraggable, ECharts, Vitest, Vue Test Utils.
 
-**Design spec:** `docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md`
+**Design spec:** `docs/superpowers/specs/canvas/2026-06-30-storyboard-professional-editor-redesign.md`
 
 ---
 

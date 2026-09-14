@@ -1,17 +1,17 @@
 # 漫剧自由画布二期增强 PRD
 
 > **[superpowers 更新 V1.8]（2026-07-05）**：
-> - **Canvas 生产内核重构**：节点类型从 11 种收敛为 6 种标准类型（text/image/video/audio/script/director）。角色/场景/道具/prompt/参考/工作流/Agent 不再作为节点类型。详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md`
+> - **Canvas 生产内核重构**：节点类型从 11 种收敛为 6 种标准类型（text/image/video/audio/script/director）。角色/场景/道具/prompt/参考/工作流/Agent 不再作为节点类型。详见 `docs/superpowers/specs/canvas/2026-07-05-canvas-production-kernel-completion-design.md`
 > - **音频截取/变速已废弃**：不在 Canvas 产品边界内，由外部音频工具处理。本文档 Section 6.1-6.2 标注为 `[已废弃]`
 > - **音色克隆已废弃**：移交音频资产域，不在 Canvas 内提供。本文档 Section 6.3 标注为 `[已废弃]`
 > - **导演台升级**：Section 9 描述的 DOM/CSS 导演台原型已被 Three.js 导演台替代。详见 `canvas-production-kernel-r2-director.md`
 >
 > **[superpowers 更新 V1.7]（2026-07-04）**：
-> - **浮动编辑器改造**：画布交互模型已升级——右侧属性面板和底部生成栏已由浮动编辑器替代。本文档中涉及"右侧属性面板"、"底部生成栏"、"属性抽屉"的交互描述标注为 `[已废弃-superpowers V1.6]`。新交互模型详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
-> - **Agent 会话统一**：各节点独立 Agent 面板（如"文本节点 Agent"、"分镜 Agent panel"）已由统一 AgentSessionService facade 替代。Agent 交互通过 `/api/v1/agent/sessions` 统一入口。详见 `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
-> - **分镜系统统一**：旧双轨分镜（`storyboard_shots` + `cp_storyboard_*`）已由统一专业分镜编辑器替代（13 维镜头字段 + A/B/C 层级版本 + XLSX 导入导出）。详见 `docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md`
+> - **浮动编辑器改造**：画布交互模型已升级——右侧属性面板和底部生成栏已由浮动编辑器替代。本文档中涉及"右侧属性面板"、"底部生成栏"、"属性抽屉"的交互描述标注为 `[已废弃-superpowers V1.6]`。新交互模型详见 `docs/superpowers/specs/canvas/2026-06-28-canvas-node-floating-editor-design.md`
+> - **Agent 会话统一**：各节点独立 Agent 面板（如"文本节点 Agent"、"分镜 Agent panel"）已由统一 AgentSessionService facade 替代。Agent 交互通过 `/api/v1/agent/sessions` 统一入口。详见 `docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md`
+> - **分镜系统统一**：旧双轨分镜（`storyboard_shots` + `cp_storyboard_*`）已由统一专业分镜编辑器替代（13 维镜头字段 + A/B/C 层级版本 + XLSX 导入导出）。详见 `docs/superpowers/specs/canvas/2026-06-30-storyboard-professional-editor-redesign.md`
 > - **API 前缀统一**：所有 API 端点统一使用 `/api/v1/` 前缀。文档中旧 `/api/` 前缀的引用以新前缀为准。
-> - **Workspace 隔离**：所有私有资源需 `X-Workspace-Id` header。详见 `docs/superpowers/specs/2026-06-28-unified-account-model-billing-design.md`
+> - **Workspace 隔离**：所有私有资源需 `X-Workspace-Id` header。详见 `docs/superpowers/specs/workbench/2026-06-28-unified-account-model-billing-design.md`
 
 ## 1. 文档信息
 
@@ -305,7 +305,7 @@ stateDiagram-v2
 | 水平镜像 | 左右翻转 |
 | 垂直镜像 | 上下翻转 |
 
-#### 4.1.13 分镜组 `[superpowers 更新 V1.7：分镜系统已由统一专业分镜编辑器替代（A/B/C 三级版本）。详见 docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md]`
+#### 4.1.13 分镜组 `[superpowers 更新 V1.7：分镜系统已由统一专业分镜编辑器替代（A/B/C 三级版本）。详见 docs/superpowers/specs/canvas/2026-06-30-storyboard-professional-editor-redesign.md]`
 
 功能说明：将多张图片整合为宫格故事板，统一查看、排序和管理。
 
@@ -347,7 +347,7 @@ stateDiagram-v2
 
 ### 5.2 视频解析
 
-功能说明：对单个视频进行分镜拆解分析，以表格呈现。 `[superpowers 更新 V1.7：分镜系统已由统一专业分镜编辑器替代（A/B/C 三级版本）。详见 docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md]`
+功能说明：对单个视频进行分镜拆解分析，以表格呈现。 `[superpowers 更新 V1.7：分镜系统已由统一专业分镜编辑器替代（A/B/C 三级版本）。详见 docs/superpowers/specs/canvas/2026-06-30-storyboard-professional-editor-redesign.md]`
 
 解析字段：
 
@@ -684,7 +684,7 @@ stateDiagram-v2
 | 封面提取 | 视频自动提取封面 |
 | 媒体元信息 | 记录时长、分辨率、格式、大小 |
 
-### 10.4 节点级 Agent 扩展 `[superpowers 更新 V1.7：Agent 交互已由统一 AgentSessionService facade 替代，不再使用独立节点 Agent 面板。详见 docs/superpowers/specs/2026-07-02-agent-session-completion-design.md]`
+### 10.4 节点级 Agent 扩展 `[superpowers 更新 V1.7：Agent 交互已由统一 AgentSessionService facade 替代，不再使用独立节点 Agent 面板。详见 docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md]`
 
 一期仅实现文本节点 Agent。二期在图片、视频、音频等专业节点中延续同一交互原则：用户点击具体节点后，在节点上下文内弹出 Agent 面板，Agent 只能修改当前节点或当前节点自动创建的下游预设组。
 

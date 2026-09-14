@@ -8,7 +8,7 @@
 
 **Tech Stack:** Java 17, Spring Boot 3.2, Spring MVC/SSE, MyBatis-Plus, H2/MySQL, JUnit 5/Mockito, Vue 3 Composition API, Axios, Element Plus, Node test runner.
 
-**Design spec:** `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
+**Design spec:** `docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md`
 
 ---
 

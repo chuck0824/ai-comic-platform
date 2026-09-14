@@ -1,6 +1,6 @@
 # 企业工作台开发任务安排
 
-> 基于 [设计文档](../specs/2026-07-04-enterprise-workbench-completion-design.md) 和 M0/M1/M2 实施计划，按依赖关系排列可执行开发任务。
+> 基于 [设计文档](../../specs/workbench/2026-07-04-enterprise-workbench-completion-design.md) 和 M0/M1/M2 实施计划，按依赖关系排列可执行开发任务。
 >
 > 日期：2026-07-04
 

@@ -100,7 +100,7 @@
 
 `[superpowers 更新]` **V1.6 架构决策**：`3001` 已确定为账户中心**唯一数据源（Single Source of Truth）**。用户、工作区、成员、角色、余额、API Key、模型目录、计费等所有账户主数据由 `3001` 管理。`8080` 不得维护这些数据的重复副本。`8080` 通过 BFF 适配层调用 `3001` 版本化 API 读取/操作账户数据。
 
-> 当前联调状态（2026-06-27）：端口与服务已分离；统一登录票据、角色映射和账号自动同步为 P0 遗留项。详见 `docs/superpowers/specs/2026-06-28-unified-account-model-billing-design.md`。
+> 当前联调状态（2026-06-27）：端口与服务已分离；统一登录票据、角色映射和账号自动同步为 P0 遗留项。详见 `docs/superpowers/specs/workbench/2026-06-28-unified-account-model-billing-design.md`。
 
 ### 1.2 服务路由
 
@@ -1336,7 +1336,7 @@ DELETE /api/v1/user/api-keys/:id        # 删除
 
 > 🔄 **V1.6 重构**：路由前缀 `/api/v1/enterprise` | 认证要求：JWT + `X-Workspace-Id` + WorkspaceContext 权限码  
 > 企业端点已从 `user-svc` 迁移至 `enterprise-svc`（8080 BFF → 3001 代理）。旧版 5.1–5.4（注册/CRUD/成员/仪表盘）已下线，由以下新端点替代。  
-> 3001 是 Workspace、部门、成员、角色、余额的唯一事实源。完整设计见 `docs/superpowers/specs/2026-07-04-enterprise-workbench-completion-design.md` 第 10 节。
+> 3001 是 Workspace、部门、成员、角色、余额的唯一事实源。完整设计见 `docs/superpowers/specs/workbench/2026-07-04-enterprise-workbench-completion-design.md` 第 10 节。
 
 ### 5.1 企业上下文 `V1.6`
 
@@ -3170,7 +3170,7 @@ GET  /api/v1/script/event-graph/:projectId/export   # 导出图谱(PNG/SVG)
 
 ### 10.19 🆕 Canvas 生产内核 V1.8 `[superpowers 更新 V1.8]`
 
-> 本节新增端点基于 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md` Section 11。所有写接口携带 `Idempotency-Key`；草稿更新携带 `If-Match`。
+> 本节新增端点基于 `docs/superpowers/specs/canvas/2026-07-05-canvas-production-kernel-completion-design.md` Section 11。所有写接口携带 `Idempotency-Key`；草稿更新携带 `If-Match`。
 
 #### 10.19.1 模型请求与候选
 
@@ -3329,7 +3329,7 @@ POST /api/v1/canvas/projects/{projectId}/upgrade             # 确认后执行�
 - **SSE 事件流**：`GET /sessions/{id}/events?after=`，`Last-Event-ID` 支持断线重连
 - **写作/画布集成**：`WritingAgentFacade`（Patch 预览→审批→应用）、`CanvasAgentFacade`（节点 CRUD + 生成任务）
 
-> **详细设计见**：`docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
+> **详细设计见**：`docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md`
 
 以下为 V1.3 原有接口（保留兼容），V1.6 新增端点参见上述 superpowers spec。
 
@@ -4014,7 +4014,7 @@ POST /api/v1/callback/alipay
 | GET | `/context-snapshots/{snapshotId}` | 查看历史生成上下文快照（不可变） |
 | POST | `/impact-reports` | 生成上游变更影响报告 |
 
-> **详细设计见**：`docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`
+> **详细设计见**：`docs/superpowers/specs/script-creation/2026-07-02-script-creation-creative-bible-design.md`
 
 ---
 
@@ -4062,7 +4062,7 @@ POST /api/v1/callback/alipay
 
 所有写操作携带 `revision` 字段（乐观锁），冲突返回 `409 STORYBOARD_REVISION_CONFLICT` + 字段级 diff。
 
-> **详细设计见**：`docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md`
+> **详细设计见**：`docs/superpowers/specs/canvas/2026-06-30-storyboard-professional-editor-redesign.md`
 
 ---
 
@@ -4093,7 +4093,7 @@ POST /api/v1/callback/alipay
 | POST | `/extraction-batches/{batchId}/apply` | 事务写入确认的候选 |
 | POST | `/extraction-batches/{batchId}/retry` | 重试失败的提取 |
 
-> **详细设计见**：`docs/superpowers/specs/2026-06-30-work-editor-evolution-design.md`
+> **详细设计见**：`docs/superpowers/specs/workbench/2026-06-30-work-editor-evolution-design.md`
 
 ---
 

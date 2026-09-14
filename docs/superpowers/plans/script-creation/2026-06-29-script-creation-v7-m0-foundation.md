@@ -1025,7 +1025,7 @@ git commit -m "feat: add adaptive content workspace"
 - Create: `aicp-backend/src/test/java/com/aicp/module/contentproject/OpenApiContractTest.java`
 - Create: `docs/02-derived/script-creation-v7-m0-api-contract.md`
 - Create: `docs/02-derived/openapi/script-creation-v7-m0.yaml`
-- Modify: `docs/superpowers/specs/2026-06-29-script-creation-v7-prd.md` only if implementation exposes an approved-contract correction.
+- Modify: `docs/superpowers/specs/script-creation/2026-06-29-script-creation-v7-prd.md` only if implementation exposes an approved-contract correction.
 
 - [ ] **Step 1: Add the M0 integration scenario**
 

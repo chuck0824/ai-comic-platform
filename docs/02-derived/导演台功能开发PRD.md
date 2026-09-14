@@ -1,16 +1,16 @@
 # 导演台功能开发 PRD
 
 > **[superpowers 更新 V1.8]（2026-07-05）**：
-> - **Three.js 重构**：导演台已从 DOM/CSS 原型升级为基于 Three.js 的真实 3D 工作区。使用 WebGLRenderer、OrbitControls、TransformControls、GLTFLoader、AnimationMixer。详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md` Section 7 和 `docs/superpowers/plans/2026-07-05-canvas-production-kernel-r2-director.md`
+> - **Three.js 重构**：导演台已从 DOM/CSS 原型升级为基于 Three.js 的真实 3D 工作区。使用 WebGLRenderer、OrbitControls、TransformControls、GLTFLoader、AnimationMixer。详见 `docs/superpowers/specs/canvas/2026-07-05-canvas-production-kernel-completion-design.md` Section 7 和 `docs/superpowers/plans/canvas/2026-07-05-canvas-production-kernel-r2-director.md`
 > - **Draft/Revision 版本流**：导演状态从节点 JSON 迁移到独立 `director_drafts`（可变，`row_version` 乐观锁）+ `director_revisions`（不可变，规范化 JSON + SHA-256 哈希）。详见 completion-design Section 4.4
 > - **坐标与时间协议**：领域协议 RH_Y_UP_METERS（右手坐标、Y-up、米制）；半开区间 `[0, duration_ms)`；归一化 Quaternion 持久化。详见 completion-design Section 7.2-7.3
 > - **实用增强包**：机位/镜头运动预设、角色动作片段预设、灯光/材质预设、冻结前自动检查（资产缺失/动作重叠/时间越界/越轴风险/相机穿模/参考职责冲突/模型能力超限）。详见 completion-design Section 7.5
 > - **独立路由**：导演台通过独立路由 `/canvas/:projectId/shot-units/:unitId/director` 访问，由 `DIRECTOR_V2` flag 控制
 >
 > **[superpowers 更新 V1.7]（2026-07-04）**：
-> - **浮动编辑器入口**：画布浮动编辑器改造后，导演节点显示摘要卡片 +「打开导演台」按钮。导演台本身作为独立编辑器打开，不再嵌入右侧属性栏。详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
+> - **浮动编辑器入口**：画布浮动编辑器改造后，导演节点显示摘要卡片 +「打开导演台」按钮。导演台本身作为独立编辑器打开，不再嵌入右侧属性栏。详见 `docs/superpowers/specs/canvas/2026-06-28-canvas-node-floating-editor-design.md`
 > - **乐观锁 + 版本快照**：导演台状态保存补充 `row_version` 乐观锁（409 Conflict 冲突检测）和不可变快照（`capture screenshot` 时创建 `director_desk_snapshot` 记录）。详见跨域规范
-> - **Agent 配置中心**：导演 Agent 纳入 4 系统蓝图（DIRECTOR）。用户可自定义导演 Agent 参数（节奏偏好/视觉风格/可制作性标准）并通过项目绑定生效。详见 `docs/superpowers/specs/2026-07-04-user-configurable-agent-center-design.md`
+> - **Agent 配置中心**：导演 Agent 纳入 4 系统蓝图（DIRECTOR）。用户可自定义导演 Agent 参数（节奏偏好/视觉风格/可制作性标准）并通过项目绑定生效。详见 `docs/superpowers/specs/workbench/2026-07-04-user-configurable-agent-center-design.md`
 
 ## 1. 文档信息
 
@@ -22,7 +22,7 @@
 | 目标版本 | V1.2 / 二期增强 |
 | 最后修订 | 2026-07-02（基于 superpowers 更新） |
 
-> **[superpowers 更新]**：导演节点在画布浮动编辑器中显示摘要 +「打开导演台」入口按钮（非在浮动编辑器内直接操作 3D 场景）。浮动编辑器改造详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
+> **[superpowers 更新]**：导演节点在画布浮动编辑器中显示摘要 +「打开导演台」入口按钮（非在浮动编辑器内直接操作 3D 场景）。浮动编辑器改造详见 `docs/superpowers/specs/canvas/2026-06-28-canvas-node-floating-editor-design.md`
 | 优先级 | P1，MVP 内核心链路按 P0 执行 |
 | 目标读者 | 产品、交互、前端、3D/WebGL、后端、算法、测试 |
 | 输入依据 | `提取自LibTV使用指南(1).pdf` 中 2.4 导演台操作说明；现有画布、节点、资产、API 文档 |

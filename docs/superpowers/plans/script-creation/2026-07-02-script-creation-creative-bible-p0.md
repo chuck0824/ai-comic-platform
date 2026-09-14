@@ -1548,7 +1548,7 @@ git commit -m "feat: enforce creative bible generation readiness"
 - Modify: `aicp-backend/src/main/java/com/aicp/module/contentproject/service/LegacyProjectProjectionService.java`
 - Create: `aicp-backend/src/test/java/com/aicp/module/contentproject/CreativeBibleP0E2ETest.java`
 - Modify: `aicp-frontend/tests/content-project-workflow.test.js`
-- Modify: `docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`
+- Modify: `docs/superpowers/specs/script-creation/2026-07-02-script-creation-creative-bible-design.md`
 
 - [ ] **Step 1: Write failing legacy and E2E tests**
 
@@ -1633,7 +1633,7 @@ Expected: backend and frontend regression suites PASS. `git status --short` show
 git add aicp-backend/src/main/java/com/aicp/module/contentproject/service/LegacyProjectProjectionService.java \
   aicp-backend/src/test/java/com/aicp/module/contentproject/CreativeBibleP0E2ETest.java \
   aicp-frontend/tests/content-project-workflow.test.js \
-  docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md
+  docs/superpowers/specs/script-creation/2026-07-02-script-creation-creative-bible-design.md
 git commit -m "test: verify creative bible P0 workflow"
 ```
 

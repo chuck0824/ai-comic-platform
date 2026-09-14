@@ -138,8 +138,8 @@ env TMPDIR=/private/tmp <bundled-python> /Users/apple/.codex/plugins/cache/opena
 
 **Files:**
 - Keep: `artifacts/AICP产品介绍_客户与投资人版_2026-08-14.docx`
-- Keep: `docs/superpowers/specs/2026-08-13-aicp-product-introduction-design.md`
-- Keep: `docs/superpowers/plans/2026-08-14-aicp-product-introduction.md`
+- Keep: `docs/superpowers/specs/product/2026-08-13-aicp-product-introduction-design.md`
+- Keep: `docs/superpowers/plans/product/2026-08-14-aicp-product-introduction.md`
 
 **Interfaces:**
 - Consumes: 已验证的最终 DOCX。

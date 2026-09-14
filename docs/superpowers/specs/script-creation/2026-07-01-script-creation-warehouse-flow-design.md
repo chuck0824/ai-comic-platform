@@ -400,6 +400,6 @@ POST /api/v1/content-projects/{id}/duplicate
 
 当前 `/api/v1/ai/models` 与本地 registry 提供模型/演示兜底，`/api/v1/credits/estimate`、`actual_credits` 是兼容估算，不是 3001 账务证据。**目标合同（P0 延期）**才是 3001 权威模型目录及预冻结/预消费 → 实际结算 → 失败/取消退款或退回差额；仓库最终应投影 task、`result_version_id`、3001 结算值与流水，幂等重试不重复扣费。
 
-Obsidian 项目库增加 `04-场景资产/00-场景资产索引.md`，用稳定 asset/version/variant/consumer 链接连接剧本与分镜。生产数据库迁移事实到 V17；静态演示中的归档、导出和交接结果不得投影为仓库真实状态。详细合同见 [`../../剧本创作模块_场景资产与八阶段融合说明.md`](../../剧本创作模块_场景资产与八阶段融合说明.md)。
+Obsidian 项目库增加 `04-场景资产/00-场景资产索引.md`，用稳定 asset/version/variant/consumer 链接连接剧本与分镜。生产数据库迁移事实到 V17；静态演示中的归档、导出和交接结果不得投影为仓库真实状态。详细合同见 [`../../../02-derived/剧本创作模块_场景资产与八阶段融合说明.md`](../../../02-derived/剧本创作模块_场景资产与八阶段融合说明.md)。
 
 当前文字分镜“完成并归档”只锁定 storyboard version 并记录本地八阶段完成，不会把仓库项目置为 `ARCHIVED`；项目归档仍须走仓库独立状态动作。

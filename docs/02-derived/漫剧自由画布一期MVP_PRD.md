@@ -1,15 +1,15 @@
 # 漫剧自由画布一期 MVP PRD
 
 > **[superpowers 更新 V1.8]（2026-07-05）**：
-> - **Canvas 生产内核重构**：节点类型从 5 种调整为 6 种标准类型（text/image/video/audio/script/director）。导演台节点作为第 6 种节点类型。角色/场景/道具不再作为节点类型——转为领域资源通过类型化端口引用。详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md`
+> - **Canvas 生产内核重构**：节点类型从 5 种调整为 6 种标准类型（text/image/video/audio/script/director）。导演台节点作为第 6 种节点类型。角色/场景/道具不再作为节点类型——转为领域资源通过类型化端口引用。详见 `docs/superpowers/specs/canvas/2026-07-05-canvas-production-kernel-completion-design.md`
 > - **EXPLORATION/PRODUCTION 双模式**：空白画布默认 EXPLORATION 模式；正式采用/质检/交付前须绑定内容项目和分镜 revision 切换 PRODUCTION 模式
 >
 > **[superpowers 更新 V1.7]（2026-07-04）**：
-> - **浮动编辑器改造**：画布交互模型已升级——右侧属性面板和底部生成栏已由浮动编辑器替代。本文档中涉及"右侧属性面板"、"底部生成栏"、"属性抽屉"的交互描述标注为 `[已废弃-superpowers V1.6]`。新交互模型详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`
-> - **Agent 会话统一**：各节点独立 Agent 面板（如"文本节点 Agent"、"分镜 Agent panel"）已由统一 AgentSessionService facade 替代。Agent 交互通过 `/api/v1/agent/sessions` 统一入口。详见 `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
-> - **分镜系统统一**：旧双轨分镜（`storyboard_shots` + `cp_storyboard_*`）已由统一专业分镜编辑器替代（13 维镜头字段 + A/B/C 层级版本 + XLSX 导入导出）。详见 `docs/superpowers/specs/2026-06-30-storyboard-professional-editor-redesign.md`
+> - **浮动编辑器改造**：画布交互模型已升级——右侧属性面板和底部生成栏已由浮动编辑器替代。本文档中涉及"右侧属性面板"、"底部生成栏"、"属性抽屉"的交互描述标注为 `[已废弃-superpowers V1.6]`。新交互模型详见 `docs/superpowers/specs/canvas/2026-06-28-canvas-node-floating-editor-design.md`
+> - **Agent 会话统一**：各节点独立 Agent 面板（如"文本节点 Agent"、"分镜 Agent panel"）已由统一 AgentSessionService facade 替代。Agent 交互通过 `/api/v1/agent/sessions` 统一入口。详见 `docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md`
+> - **分镜系统统一**：旧双轨分镜（`storyboard_shots` + `cp_storyboard_*`）已由统一专业分镜编辑器替代（13 维镜头字段 + A/B/C 层级版本 + XLSX 导入导出）。详见 `docs/superpowers/specs/canvas/2026-06-30-storyboard-professional-editor-redesign.md`
 > - **API 前缀统一**：所有 API 端点统一使用 `/api/v1/` 前缀。文档中旧 `/api/` 前缀的引用以新前缀为准。
-> - **Workspace 隔离**：所有私有资源需 `X-Workspace-Id` header。详见 `docs/superpowers/specs/2026-06-28-unified-account-model-billing-design.md`
+> - **Workspace 隔离**：所有私有资源需 `X-Workspace-Id` header。详见 `docs/superpowers/specs/workbench/2026-06-28-unified-account-model-billing-design.md`
 
 ## 1. 文档信息
 
@@ -24,9 +24,9 @@
 > **[superpowers 更新] V1.0→V1.6 关键变更**：
 > - 脚本节点：旧 `scripts` 表 → `content_projects` 引用；三种创作模式入口
 > - 画布项目：增加内容项目归属字段（`content_project_id`、`production_unit_type`、`source_content_version_id` 等）
-> - 画布交互：右侧面板/底部生成栏 → 已由浮动编辑器改造取代（详见 `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md`）
+> - 画布交互：右侧面板/底部生成栏 → 已由浮动编辑器改造取代（详见 `docs/superpowers/specs/canvas/2026-06-28-canvas-node-floating-editor-design.md`）
 > - API 前缀：`/api/` → `/api/v1/`
-> - 画布 Agent：文本节点 Agent → 统一 Agent 会话 facade（详见 `docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`）
+> - 画布 Agent：文本节点 Agent → 统一 Agent 会话 facade（详见 `docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md`）
 | 核心目标 | 搭建可用的自由画布创作闭环，完成剧本到分镜图、单镜头视频和素材包交付的最小生产链路 |
 
 ## 2. 一期定位

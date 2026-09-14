@@ -15,7 +15,7 @@
 - The current workspace is dirty with unrelated content-project and generated-static changes. Before Task 1, use `superpowers:using-git-worktrees` and create an isolated worktree from the branch that contains all prerequisite account/workspace changes.
 - Confirm that migration `V5__creative_bible_foundation.sql` has been committed on the execution base. This plan reserves `V6__script_trade_market.sql`; if the base branch has acquired a higher migration, rename only the migration number before implementation and keep its content unchanged.
 - Do not commit `aicp-backend/src/main/resources/static/assets/**`. Build artifacts are deployment output, not source for this feature.
-- Read the approved design before each phase: `docs/superpowers/specs/2026-07-02-script-trading-market-completion-design.md`.
+- Read the approved design before each phase: `docs/superpowers/specs/market-agent/2026-07-02-script-trading-market-completion-design.md`.
 - Money is always `long` cents in Java and `int64` cents in Go. Currency is `CNY`. Never use `double`/`float64` for ledger arithmetic.
 
 ## File responsibility map

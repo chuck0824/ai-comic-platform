@@ -20,7 +20,7 @@
 
 ## 2. 架构基线与口径优先级
 
-本设计以 `docs/superpowers/specs/2026-06-28-unified-account-model-billing-design.md` 为账户与计费基线。该设计明确：
+本设计以 `docs/superpowers/specs/workbench/2026-06-28-unified-account-model-billing-design.md` 为账户与计费基线。该设计明确：
 
 1. `3001` 是账户、组织权限、余额和账单唯一事实源。
 2. `8080` 通过账户中心 API 提供相同操作界面，不写本地账户表。

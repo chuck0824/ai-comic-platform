@@ -338,9 +338,9 @@
 
 - `漫剧视频创作平台_PRD.md`：场景资产实体、页面、字段、流程、验收和里程碑。
 - `剧本创作页面逻辑盘点与补充清单.md`：启动首页、项目工作台和场景资产页面清单。
-- `docs/superpowers/specs/2026-08-06-script-workbench-obsidian-model-billing-design.md`：场景资产 Markdown、版本和积分操作。
-- `docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`：世界观地点到项目场景资产的关系。
-- `docs/superpowers/specs/2026-07-01-script-creation-warehouse-flow-design.md`：启动首页与项目工作台路由职责。
+- `docs/superpowers/specs/script-creation/2026-08-06-script-workbench-obsidian-model-billing-design.md`：场景资产 Markdown、版本和积分操作。
+- `docs/superpowers/specs/script-creation/2026-07-02-script-creation-creative-bible-design.md`：世界观地点到项目场景资产的关系。
+- `docs/superpowers/specs/script-creation/2026-07-01-script-creation-warehouse-flow-design.md`：启动首页与项目工作台路由职责。
 - 新增实施计划与行为验收记录。
 
 ## 11. 实施顺序

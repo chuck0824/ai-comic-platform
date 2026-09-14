@@ -758,9 +758,9 @@ git commit -m "feat: add scene assets to workbench prototype"
 **Files:**
 - Modify: `漫剧视频创作平台_PRD.md`
 - Modify: `剧本创作页面逻辑盘点与补充清单.md`
-- Modify: `docs/superpowers/specs/2026-08-06-script-workbench-obsidian-model-billing-design.md`
-- Modify: `docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`
-- Modify: `docs/superpowers/specs/2026-07-01-script-creation-warehouse-flow-design.md`
+- Modify: `docs/superpowers/specs/script-creation/2026-08-06-script-workbench-obsidian-model-billing-design.md`
+- Modify: `docs/superpowers/specs/script-creation/2026-07-02-script-creation-creative-bible-design.md`
+- Modify: `docs/superpowers/specs/script-creation/2026-07-01-script-creation-warehouse-flow-design.md`
 - Create: `docs/剧本创作模块_场景资产与八阶段融合说明.md`
 - Create: `tests/script-workbench-docs.test.cjs`
 

@@ -229,7 +229,7 @@
 |---|---|
 | `docs/archive/后端产品功能设计_母版_DEPRECATED.md` | 保持归档，不回写新方案；如仍可能被引用，只在顶部增加指向新核心文档的弃用说明 |
 | `new-api/README*.md` | 作为上游开源项目说明保留，不混入 AICP 产品架构；平台定制行为写入本项目核心文档或独立集成说明 |
-| `docs/superpowers/specs/2026-06-28-canvas-node-floating-editor-design.md` | 与账户事实源无关，不修改 |
+| `docs/superpowers/specs/canvas/2026-06-28-canvas-node-floating-editor-design.md` | 与账户事实源无关，不修改 |
 
 ### 12.4 文档更新顺序与一致性检查
 

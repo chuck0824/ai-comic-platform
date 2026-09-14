@@ -749,7 +749,7 @@ V1.5 的 PRD 不只定义“页面有什么”，还必须定义“用户怎么�
 
 ### 5.7 V1.8 新增功能（Canvas 生产内核，10项）`[superpowers 更新 V1.8]`
 
-> 详见 `docs/superpowers/specs/2026-07-05-canvas-production-kernel-completion-design.md`
+> 详见 `docs/superpowers/specs/canvas/2026-07-05-canvas-production-kernel-completion-design.md`
 
 | ID | 模块 | 功能点 | 优先级 |
 |------|------|------|:---:|
@@ -1767,7 +1767,7 @@ V1.5 的 PRD 不只定义“页面有什么”，还必须定义“用户怎么�
 
 ### M10：创作圣经 `[superpowers 更新 V1.6]`
 
-> 优先级：P0 | 版本：V1.6 | 详见：`docs/superpowers/specs/2026-07-02-script-creation-creative-bible-design.md`
+> 优先级：P0 | 版本：V1.6 | 详见：`docs/superpowers/specs/script-creation/2026-07-02-script-creation-creative-bible-design.md`
 
 **用户故事**：作为创作者，我希望在一个地方管理项目的所有世界观设定（生态系统规则、角色/场景/势力/物品设定、写作风格指南），让 AI 始终基于一致的世界观生成内容。
 
@@ -1783,7 +1783,7 @@ V1.5 的 PRD 不只定义“页面有什么”，还必须定义“用户怎么�
 
 ### M11：Agent 会话（项目 AI 协作者）`[superpowers 更新 V1.6]`
 
-> 优先级：P0 | 版本：V1.6 | 详见：`docs/superpowers/specs/2026-07-02-agent-session-completion-design.md`
+> 优先级：P0 | 版本：V1.6 | 详见：`docs/superpowers/specs/market-agent/2026-07-02-agent-session-completion-design.md`
 
 **用户故事**：作为创作者，我希望有一个 AI 协作者能理解我的项目上下文，帮我写大纲、改分镜、调画布节点参数，且所有修改都需要我审批后才会生效。
 
@@ -1800,7 +1800,7 @@ V1.5 的 PRD 不只定义“页面有什么”，还必须定义“用户怎么�
 
 ### M12：脚本交易市场 `[superpowers 更新 V1.6]`
 
-> 优先级：P1 | 版本：V1.6 | 详见：`docs/superpowers/specs/2026-07-02-script-trading-market-completion-design.md`
+> 优先级：P1 | 版本：V1.6 | 详见：`docs/superpowers/specs/market-agent/2026-07-02-script-trading-market-completion-design.md`
 
 **用户故事**：作为创作者，我希望将完成的剧本挂牌出售（选择许可证类型和价格），或购买他人的剧本用于自己的画布生产。
 
@@ -1817,7 +1817,7 @@ V1.5 的 PRD 不只定义“页面有什么”，还必须定义“用户怎么�
 
 ### M13：资产市场完整功能 `[superpowers 更新 V1.6]`
 
-> 优先级：P0 | 版本：V1.6 | 详见：`docs/superpowers/specs/2026-06-30-ai-asset-market-completion-design.md`
+> 优先级：P0 | 版本：V1.6 | 详见：`docs/superpowers/specs/market-agent/2026-06-30-ai-asset-market-completion-design.md`
 
 **用户故事**：作为创作者，我希望在公共市场发现免费风格模型/角色/场景/提示词资产，认领后应用到我的项目中。
 
@@ -1911,7 +1911,7 @@ V1.5 的 PRD 不只定义“页面有什么”，还必须定义“用户怎么�
 
 ### M16：企业工作台（完成）`[superpowers 更新 V1.7]`
 
-> 优先级：P0 | 版本：V1.7 | 详见：`docs/superpowers/specs/2026-07-04-enterprise-workbench-completion-design.md`
+> 优先级：P0 | 版本：V1.7 | 详见：`docs/superpowers/specs/workbench/2026-07-04-enterprise-workbench-completion-design.md`
 
 **用户故事**：作为企业管理员/部门负责人/成员，我希望企业工作台能完整支撑组织管理、预算控制、统一审批和跨域审计四大企业场景。
 
